@@ -10,6 +10,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Banknote, CreditCard, Wallet, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 interface DataSource {
   id: string;
@@ -66,29 +67,42 @@ export function DataSourceList({ dataSources, isLoading, onEdit }: DataSourceLis
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {dataSources.map((source) => (
-        <Card key={source.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-            <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
-            <div className="flex items-center gap-2">
-              {typeIcons[source.accountType]}
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(source)}>
-                <Pencil className="h-4 w-4" />
-                <span className="sr-only">Edit</span>
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="flex-grow pt-2">
-            <p className="text-sm text-muted-foreground">{source.bankName}</p>
-            {source.accountNumber && (
-              <p className="text-sm text-muted-foreground">
-                •••• {source.accountNumber.slice(-4)}
-              </p>
-            )}
-          </CardContent>
-          <CardFooter>
-            {/* Footer can be used for other actions in the future */}
-          </CardFooter>
-        </Card>
+        <div key={source.id} className="relative group">
+          <Link href={`/dashboard/transactions/${source.id}`} className="block h-full">
+            <Card className="flex flex-col shadow-md hover:shadow-lg transition-shadow h-full">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
+                <div className="flex items-center gap-2">
+                  {typeIcons[source.accountType]}
+                </div>
+              </CardHeader>
+              <CardContent className="flex-grow pt-2">
+                <p className="text-sm text-muted-foreground">{source.bankName}</p>
+                {source.accountNumber && (
+                  <p className="text-sm text-muted-foreground">
+                    •••• {source.accountNumber.slice(-4)}
+                  </p>
+                )}
+              </CardContent>
+              <CardFooter>
+                {/* Footer can be used for other actions in the future */}
+              </CardFooter>
+            </Card>
+          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute top-4 right-4 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onEdit(source);
+            }}
+          >
+            <Pencil className="h-4 w-4" />
+            <span className="sr-only">Edit</span>
+          </Button>
+        </div>
       ))}
     </div>
   );
