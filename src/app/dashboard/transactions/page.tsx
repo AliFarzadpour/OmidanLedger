@@ -74,21 +74,7 @@ export default function TransactionsPage() {
       />
       
       {selectedDataSource ? (
-        <div className="flex flex-col gap-8">
-           <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold tracking-tight">Transactions for {selectedDataSource.accountName}</h2>
-              <p className="text-muted-foreground">
-                Showing all transactions from {selectedDataSource.bankName}.
-              </p>
-            </div>
-            <Button>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Statement
-            </Button>
-          </div>
-          <TransactionsTable />
-        </div>
+          <TransactionsTable dataSource={selectedDataSource} />
       ) : (
         <Card className="flex items-center justify-center h-64 border-dashed">
             <CardContent className="pt-6 text-center">

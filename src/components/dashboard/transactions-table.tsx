@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/table';
 import { transactionsData } from '@/lib/data';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Upload } from 'lucide-react';
 
 const categoryColors: Record<string, string> = {
   Groceries: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
@@ -26,12 +28,30 @@ const categoryColors: Record<string, string> = {
   Entertainment: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
 };
 
-export function TransactionsTable() {
+interface DataSource {
+    id: string;
+    accountName: string;
+    bankName: string;
+}
+
+interface TransactionsTableProps {
+    dataSource: DataSource;
+}
+
+export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   return (
     <Card className="h-full shadow-lg">
-      <CardHeader>
-        <CardTitle>Recent Transactions</CardTitle>
-        <CardDescription>A list of your recent financial activities.</CardDescription>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <div>
+          <CardTitle>Transactions for {dataSource.accountName}</CardTitle>
+          <CardDescription>
+            Showing all transactions from {dataSource.bankName}.
+          </CardDescription>
+        </div>
+        <Button>
+          <Upload className="mr-2 h-4 w-4" />
+          Upload Statement
+        </Button>
       </CardHeader>
       <CardContent>
         <Table>
