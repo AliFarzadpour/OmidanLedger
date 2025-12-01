@@ -1,0 +1,197 @@
+/**
+ * Core Philosophy: This ruleset enforces a strict user-ownership security model.
+ * All user-generated data is stored in a hierarchical structure under that specific
+ * user's document, ensuring that only the authenticated owner of that data can
+ * perform any read or write operations.
+ *
+ * Data Structure: The entire database is structured under a top-level `users`
+ * collection. Each user document, identified by their UID, acts as a root for all
+ * their private data, including fiscal years, bank accounts, transactions, and
+ * categories. For example, a user's bank accounts are stored at
+ * `/users/{userId}/bankAccounts/{bankAccountId}`. This path-based ownership is
+ * the cornerstone of the security model.
+ *
+ * Key Security Decisions:
+ * - Default Deny: All operations are denied by default. Access must be
+ *   explicitly granted.
+ * - Strict Ownership: A user can only access documents located within their own
+ *   data tree (i.e., where the path starts with `/users/{their_auth_uid}`).
+ * - No Public Data: There are no publicly readable or listable collections.
+ * - No User Listing: It is not possible to list documents in the top-level
+ *   `/users` collection, preventing enumeration of all application users.
+ * - Relational Integrity: On document creation, rules validate that foreign key
+ *   fields (e.g., `userId`, `bankAccountId`) correctly match the IDs in the
+ *   document path. These fields are enforced as immutable on update to prevent
+ *   re-parenting of data.
+ *
+ * Denormalization for Authorization: The data structure is inherently optimized
+ * for security rules. By nesting all data under a user's ID, authorization
+ * checks are simple and fast (`request.auth.uid == userId`) and do not require
+ * any costly `get()` or `exists()` calls to other documents.
+ *
+ * Structural Segregation: This pattern is fully utilized by siloing each user's
+ * data into their own document tree. This makes list operations on subcollections
+ * (e.g., listing a user's own bank accounts) secure by default, as the rule
+ * can verify ownership based on the path.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for reusable logic
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isExistingOwner(userId) {
+      return isOwner(userId) && resource != null;
+    }
+
+    // Validates that the user document being created has an 'id' field matching the user's UID.
+    function isCreatingOwnUserDoc(userId) {
+      return isOwner(userId) && request.resource.data.id == userId;
+    }
+
+    // Validates that a user-owned sub-document has a 'userId' field matching the user's UID on create.
+    function isCreatingUserChildDoc(userId) {
+      return isOwner(userId) && request.resource.data.userId == userId;
+    }
+
+    // Validates that a nested document has a correct foreign key referencing its parent in the path.
+    function isCreatingNestedChildDoc(userId, parentId, parentKey) {
+      return isOwner(userId) && request.resource.data[parentKey] == parentId;
+    }
+
+    // Ensures critical relational IDs (like owner ID) are not changed after creation.
+    function isIdImmutable(fieldName) {
+      return request.resource.data[fieldName] == resource.data[fieldName];
+    }
+
+
+    /**
+     * @description Manages user profile documents.
+     * @path /users/{userId}
+     * @allow (create) A new user can create their own profile document. `auth.uid` must match `{userId}`.
+     * @allow (get, update, delete) An authenticated user can read, update, or delete their own profile.
+     * @deny (list) Listing all users is forbidden to prevent user enumeration.
+     * @deny (get) An authenticated user cannot read another user's profile.
+     * @principle Restricts access to a user's own data tree and allows self-creation of a root document.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false;
+      allow create: if isCreatingOwnUserDoc(userId);
+      allow update: if isExistingOwner(userId) && isIdImmutable('id');
+      allow delete: if isExistingOwner(userId);
+
+      /**
+       * @description Stores fiscal years for a specific user.
+       * @path /users/{userId}/fiscalYears/{fiscalYearId}
+       * @allow (get, list, create, update, delete) A user can fully manage their own fiscal year documents.
+       * @deny (get) A user cannot access another user's fiscal years.
+       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+       */
+      match /fiscalYears/{fiscalYearId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isCreatingUserChildDoc(userId);
+        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
+        allow delete: if isExistingOwner(userId);
+
+        /**
+         * @description Stores journal entries for a specific fiscal year.
+         * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}
+         * @allow (get, list, create, update, delete) A user can fully manage their own journal entries.
+         * @deny (get) A user cannot access journal entries belonging to another user.
+         * @principle Enforces document ownership and validates the link to the parent fiscalYear document.
+         */
+        match /journalEntries/{journalEntryId} {
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId);
+          allow create: if isCreatingNestedChildDoc(userId, fiscalYearId, 'fiscalYearId');
+          allow update: if isExistingOwner(userId) && isIdImmutable('fiscalYearId');
+          allow delete: if isExistingOwner(userId);
+
+          /**
+           * @description Stores line items for a specific journal entry.
+           * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}
+           * @allow (get, list, create, update, delete) A user can fully manage their own journal entry line items.
+           * @deny (get) A user cannot access line items belonging to another user's journal entry.
+           * @principle Enforces document ownership and validates the link to the parent journalEntry document.
+           */
+          match /lineItems/{lineItemId} {
+            allow get: if isOwner(userId);
+            allow list: if isOwner(userId);
+            allow create: if isCreatingNestedChildDoc(userId, journalEntryId, 'journalEntryId');
+            allow update: if isExistingOwner(userId) && isIdImmutable('journalEntryId');
+            allow delete: if isExistingOwner(userId);
+          }
+        }
+      }
+
+      /**
+       * @description Stores bank accounts for a specific user.
+       * @path /users/{userId}/bankAccounts/{bankAccountId}
+       * @allow (get, list, create, update, delete) A user can fully manage their own bank account documents.
+       * @deny (get) A user cannot access another user's bank accounts.
+       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+       */
+      match /bankAccounts/{bankAccountId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isCreatingUserChildDoc(userId);
+        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
+        allow delete: if isExistingOwner(userId);
+
+        /**
+         * @description Stores transactions for a specific bank account.
+         * @path /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId}
+         * @allow (get, list, create, update, delete) A user can fully manage transactions for their own bank account.
+         * @deny (get) A user cannot access transactions belonging to another user.
+         * @principle Enforces document ownership and validates the link to the parent bankAccount document.
+         */
+        match /transactions/{transactionId} {
+          allow get: if isOwner(userId);
+          allow list: if isOwner(userId);
+          allow create: if isCreatingNestedChildDoc(userId, bankAccountId, 'bankAccountId');
+          allow update: if isExistingOwner(userId) && isIdImmutable('bankAccountId');
+          allow delete: if isExistingOwner(userId);
+        }
+      }
+
+      /**
+       * @description Stores transaction categories for a specific user.
+       * @path /users/{userId}/categories/{categoryId}
+       * @allow (get, list, create, update, delete) A user can fully manage their own category documents.
+       * @deny (get) A user cannot access another user's categories.
+       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+       */
+      match /categories/{categoryId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isCreatingUserChildDoc(userId);
+        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
+        allow delete: if isExistingOwner(userId);
+      }
+
+      /**
+       * @description Stores chart of accounts entries for a specific user.
+       * @path /users/{userId}/accounts/{accountId}
+       * @allow (get, list, create, update, delete) A user can fully manage their own account documents.
+       * @deny (get) A user cannot access another user's accounts.
+       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+       */
+      match /accounts/{accountId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isCreatingUserChildDoc(userId);
+        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
+        allow delete: if isExistingOwner(userId);
+      }
+    }
+  }
+}
