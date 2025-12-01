@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -29,8 +29,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { useAuth, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
 
 const dataSourceSchema = z.object({
   accountName: z.string().min(1, 'Account name is required.'),
@@ -41,15 +41,26 @@ const dataSourceSchema = z.object({
 
 type DataSourceFormValues = z.infer<typeof dataSourceSchema>;
 
-interface AddDataSourceDialogProps {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
+interface DataSource {
+  id: string;
+  accountName: string;
+  bankName: string;
+  accountType: 'checking' | 'savings' | 'credit-card' | 'cash';
+  accountNumber?: string;
 }
 
-export function AddDataSourceDialog({ isOpen, onOpenChange }: AddDataSourceDialogProps) {
+interface DataSourceDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  dataSource?: DataSource | null;
+}
+
+export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourceDialogProps) {
   const auth = useAuth();
   const firestore = useFirestore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const isEditMode = !!dataSource;
 
   const form = useForm<DataSourceFormValues>({
     resolver: zodResolver(dataSourceSchema),
@@ -61,32 +72,48 @@ export function AddDataSourceDialog({ isOpen, onOpenChange }: AddDataSourceDialo
     },
   });
 
+  useEffect(() => {
+    if (dataSource) {
+      form.reset(dataSource);
+    } else {
+      form.reset({
+        accountName: '',
+        bankName: '',
+        accountType: 'checking',
+        accountNumber: '',
+      });
+    }
+  }, [dataSource, form]);
+
   const onSubmit = async (values: DataSourceFormValues) => {
     if (!auth.currentUser || !firestore) return;
 
     setIsSubmitting(true);
     
-    const newAccount = {
-      ...values,
-      userId: auth.currentUser.uid,
-    };
-
-    const bankAccountsCol = collection(firestore, `users/${auth.currentUser.uid}/bankAccounts`);
-    
-    addDocumentNonBlocking(bankAccountsCol, newAccount);
+    if (isEditMode && dataSource) {
+      const docRef = doc(firestore, `users/${auth.currentUser.uid}/bankAccounts`, dataSource.id);
+      const updatedData = { ...dataSource, ...values };
+      setDocumentNonBlocking(docRef, updatedData, { merge: true });
+    } else {
+      const newAccount = {
+        ...values,
+        userId: auth.currentUser.uid,
+      };
+      const bankAccountsCol = collection(firestore, `users/${auth.currentUser.uid}/bankAccounts`);
+      addDocumentNonBlocking(bankAccountsCol, newAccount);
+    }
     
     setIsSubmitting(false);
     onOpenChange(false);
-    form.reset();
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Add New Data Source</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Edit Data Source' : 'Add New Data Source'}</DialogTitle>
           <DialogDescription>
-            Enter the details for your new bank account, credit card, or cash source.
+            {isEditMode ? 'Update the details for your data source.' : 'Enter the details for your new bank account, credit card, or cash source.'}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -158,7 +185,7 @@ export function AddDataSourceDialog({ isOpen, onOpenChange }: AddDataSourceDialo
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Adding...' : 'Add Account'}
+                {isSubmitting ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save Changes' : 'Add Account')}
               </Button>
             </DialogFooter>
           </form>

@@ -1,8 +1,15 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Banknote, CreditCard, Wallet } from 'lucide-react';
+import { Banknote, CreditCard, Wallet, Pencil } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface DataSource {
   id: string;
@@ -15,6 +22,7 @@ interface DataSource {
 interface DataSourceListProps {
   dataSources: DataSource[];
   isLoading: boolean;
+  onEdit: (dataSource: DataSource) => void;
 }
 
 const typeIcons = {
@@ -24,7 +32,7 @@ const typeIcons = {
   cash: <Wallet className="h-6 w-6 text-yellow-500" />,
 };
 
-export function DataSourceList({ dataSources, isLoading }: DataSourceListProps) {
+export function DataSourceList({ dataSources, isLoading, onEdit }: DataSourceListProps) {
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -36,6 +44,9 @@ export function DataSourceList({ dataSources, isLoading }: DataSourceListProps) 
             <CardContent>
               <Skeleton className="h-4 w-1/2" />
             </CardContent>
+            <CardFooter>
+              <Skeleton className="h-8 w-20" />
+            </CardFooter>
           </Card>
         ))}
       </div>
@@ -51,16 +62,16 @@ export function DataSourceList({ dataSources, isLoading }: DataSourceListProps) 
       </Card>
     );
   }
-  
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {dataSources.map((source) => (
-        <Card key={source.id} className="shadow-md hover:shadow-lg transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <Card key={source.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
             <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
             {typeIcons[source.accountType]}
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-grow">
             <p className="text-sm text-muted-foreground">{source.bankName}</p>
             {source.accountNumber && (
               <p className="text-sm text-muted-foreground">
@@ -68,6 +79,12 @@ export function DataSourceList({ dataSources, isLoading }: DataSourceListProps) 
               </p>
             )}
           </CardContent>
+          <CardFooter>
+            <Button variant="outline" size="sm" onClick={() => onEdit(source)}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          </CardFooter>
         </Card>
       ))}
     </div>
