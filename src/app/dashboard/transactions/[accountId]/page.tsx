@@ -31,9 +31,14 @@ export default function AccountTransactionsPage() {
   if (isLoading) {
     return (
       <div className="flex flex-col gap-8">
-        <Skeleton className="h-8 w-1/4" />
-        <Skeleton className="h-4 w-1/2" />
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+             <Skeleton className="h-10 w-10" />
+            <div>
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          </div>
           <Skeleton className="h-10 w-48" />
         </div>
         <Skeleton className="h-96 w-full" />
@@ -42,7 +47,7 @@ export default function AccountTransactionsPage() {
   }
 
   if (!account) {
-    // This will render the not-found.tsx file if the account doesn't exist
+    // This will render the not-found.tsx file if the account doesn't exist after loading
     notFound();
   }
 
