@@ -69,9 +69,15 @@ export function DataSourceList({ dataSources, isLoading, onEdit }: DataSourceLis
         <Card key={source.id} className="flex flex-col shadow-md hover:shadow-lg transition-shadow">
           <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
             <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
-            {typeIcons[source.accountType]}
+            <div className="flex items-center gap-2">
+              {typeIcons[source.accountType]}
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEdit(source)}>
+                <Pencil className="h-4 w-4" />
+                <span className="sr-only">Edit</span>
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="flex-grow">
+          <CardContent className="flex-grow pt-2">
             <p className="text-sm text-muted-foreground">{source.bankName}</p>
             {source.accountNumber && (
               <p className="text-sm text-muted-foreground">
@@ -80,10 +86,7 @@ export function DataSourceList({ dataSources, isLoading, onEdit }: DataSourceLis
             )}
           </CardContent>
           <CardFooter>
-            <Button variant="outline" size="sm" onClick={() => onEdit(source)}>
-              <Pencil className="mr-2 h-4 w-4" />
-              Edit
-            </Button>
+            {/* Footer can be used for other actions in the future */}
           </CardFooter>
         </Card>
       ))}
