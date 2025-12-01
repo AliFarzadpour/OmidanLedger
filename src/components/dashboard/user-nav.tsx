@@ -13,10 +13,26 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { CreditCard, LogOut, Settings, User } from 'lucide-react';
+import { CreditCard, LogOut, Settings, User as UserIcon } from 'lucide-react';
+import { useAuth, useUser } from '@/firebase';
 
 export function UserNav({ isMobile }: { isMobile: boolean }) {
+  const auth = useAuth();
+  const { user } = useUser();
   const userAvatar = PlaceHolderImages.find((img) => img.id === 'user-avatar');
+
+  const handleLogout = () => {
+    auth.signOut();
+  };
+  
+  const getInitials = (email: string | null | undefined) => {
+    if (!email) return '..';
+    const parts = email.split('@')[0];
+    if (parts.includes('.')) {
+      return parts.split('.').map(p => p[0]).join('').toUpperCase();
+    }
+    return parts.substring(0, 2).toUpperCase();
+  };
 
   const trigger = (
     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -28,7 +44,7 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
             data-ai-hint={userAvatar.imageHint}
           />
         )}
-        <AvatarFallback>JD</AvatarFallback>
+        <AvatarFallback>{getInitials(user?.email)}</AvatarFallback>
       </Avatar>
     </Button>
   );
@@ -37,16 +53,16 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     <DropdownMenuContent className="w-56" align="end" forceMount>
       <DropdownMenuLabel className="font-normal">
         <div className="flex flex-col space-y-1">
-          <p className="text-sm font-medium leading-none">John Doe</p>
+          <p className="text-sm font-medium leading-none">{user?.displayName || user?.email?.split('@')[0]}</p>
           <p className="text-xs leading-none text-muted-foreground">
-            john.doe@example.com
+            {user?.email}
           </p>
         </div>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
         <DropdownMenuItem>
-          <User className="mr-2 h-4 w-4" />
+          <UserIcon className="mr-2 h-4 w-4" />
           <span>Profile</span>
         </DropdownMenuItem>
         <DropdownMenuItem>
@@ -59,7 +75,7 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
         </DropdownMenuItem>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
-      <DropdownMenuItem>
+      <DropdownMenuItem onClick={handleLogout}>
         <LogOut className="mr-2 h-4 w-4" />
         <span>Log out</span>
       </DropdownMenuItem>
@@ -77,24 +93,31 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
 
   return (
     <div className={cn("hidden md:block")}>
-      <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-sidebar-accent transition-colors">
-        <Avatar className="h-10 w-10 border-2 border-primary/50">
-          {userAvatar && (
-            <AvatarImage
-              src={userAvatar.imageUrl}
-              alt="User avatar"
-              data-ai-hint={userAvatar.imageHint}
-            />
-          )}
-          <AvatarFallback>JD</AvatarFallback>
-        </Avatar>
-        <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
-          <p className="text-sm font-medium leading-none text-foreground">John Doe</p>
-          <p className="text-xs leading-none text-muted-foreground">
-            john.doe@example.com
-          </p>
-        </div>
-      </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+           <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer">
+              <Avatar className="h-10 w-10 border-2 border-primary/50">
+                {userAvatar && (
+                  <AvatarImage
+                    src={userAvatar.imageUrl}
+                    alt="User avatar"
+                    data-ai-hint={userAvatar.imageHint}
+                  />
+                )}
+                <AvatarFallback>{getInitials(user?.email)}</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
+                <p className="text-sm font-medium leading-none text-foreground">{user?.displayName || user?.email?.split('@')[0]}</p>
+                <p className="text-xs leading-none text-muted-foreground">
+                   {user?.email}
+                </p>
+              </div>
+            </div>
+        </DropdownMenuTrigger>
+        {content}
+      </DropdownMenu>
     </div>
   );
 }
+
+    

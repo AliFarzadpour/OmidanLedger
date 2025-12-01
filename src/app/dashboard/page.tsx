@@ -1,3 +1,6 @@
+'use client';
+
+import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
@@ -5,11 +8,13 @@ import { TransactionsTable } from '@/components/dashboard/transactions-table';
 import { DollarSign, CreditCard, Landmark, Upload } from 'lucide-react';
 
 export default function DashboardPage() {
+  const { user } = useUser();
+
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Welcome Back, John!</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome Back, {user?.email?.split('@')[0] || 'User'}!</h1>
           <p className="text-muted-foreground">Here&apos;s a summary of your financial activity.</p>
         </div>
         <Button>
@@ -50,3 +55,5 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+    
