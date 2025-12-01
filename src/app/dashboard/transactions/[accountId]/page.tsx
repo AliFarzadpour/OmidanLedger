@@ -22,9 +22,9 @@ export default function AccountTransactionsPage() {
   const firestore = useFirestore();
 
   const accountDocRef = useMemoFirebase(() => {
-    if (!firestore || !user || !accountId) return null;
-    return doc(firestore, `users/${user.uid}/bankAccounts`, accountId as string);
-  }, [firestore, user, accountId]);
+    if (!firestore || !user?.uid || !accountId) return null;
+    return doc(firestore, 'users', user.uid, 'bankAccounts', accountId as string);
+  }, [firestore, user?.uid, accountId]);
 
   const { data: account, isLoading } = useDoc<BankAccount>(accountDocRef);
 
