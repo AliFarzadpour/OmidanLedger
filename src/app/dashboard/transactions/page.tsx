@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { PlusCircle } from 'lucide-react';
+import { PlusCircle, Upload } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
+import { TransactionsTable } from '@/components/dashboard/transactions-table';
+import { Card, CardContent } from '@/components/ui/card';
 
 // Define the shape of a data source for type safety
 interface DataSource {
@@ -22,13 +24,14 @@ export default function TransactionsPage() {
   const firestore = useFirestore();
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingDataSource, setEditingDataSource] = useState<DataSource | null>(null);
+  const [selectedDataSource, setSelectedDataSource] = useState<DataSource | null>(null);
 
   const bankAccountsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return collection(firestore, `users/${user.uid}/bankAccounts`);
   }, [firestore, user]);
 
-  const { data: dataSources, isLoading: isLoadingDataSources } = useCollection(bankAccountsQuery);
+  const { data: dataSources, isLoading: isLoadingDataSources } = useCollection<DataSource>(bankAccountsQuery);
 
   const handleAdd = () => {
     setEditingDataSource(null);
@@ -38,6 +41,10 @@ export default function TransactionsPage() {
   const handleEdit = (dataSource: DataSource) => {
     setEditingDataSource(dataSource);
     setDialogOpen(true);
+  };
+  
+  const handleSelectDataSource = (dataSource: DataSource) => {
+    setSelectedDataSource(dataSource);
   };
 
   const handleDialogClose = () => {
@@ -50,7 +57,7 @@ export default function TransactionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-muted-foreground">Manage your data sources and transactions.</p>
+          <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
         </div>
         <Button onClick={handleAdd}>
           <PlusCircle className="mr-2 h-4 w-4" />
@@ -59,11 +66,37 @@ export default function TransactionsPage() {
       </div>
 
       <DataSourceList 
-        dataSources={(dataSources as DataSource[]) || []} 
+        dataSources={dataSources || []} 
         isLoading={isLoadingDataSources}
         onEdit={handleEdit}
+        onSelect={handleSelectDataSource}
+        selectedDataSourceId={selectedDataSource?.id}
       />
       
+      {selectedDataSource ? (
+        <div className="flex flex-col gap-8">
+           <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold tracking-tight">Transactions for {selectedDataSource.accountName}</h2>
+              <p className="text-muted-foreground">
+                Showing all transactions from {selectedDataSource.bankName}.
+              </p>
+            </div>
+            <Button>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Statement
+            </Button>
+          </div>
+          <TransactionsTable />
+        </div>
+      ) : (
+        <Card className="flex items-center justify-center h-64 border-dashed">
+            <CardContent className="pt-6 text-center">
+                 <p className="text-muted-foreground">Select a data source above to view its transactions.</p>
+            </CardContent>
+        </Card>
+      )}
+
       <DataSourceDialog
         isOpen={isDialogOpen}
         onOpenChange={handleDialogClose}

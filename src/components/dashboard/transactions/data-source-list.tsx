@@ -10,7 +10,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Banknote, CreditCard, Wallet, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface DataSource {
   id: string;
@@ -24,6 +24,8 @@ interface DataSourceListProps {
   dataSources: DataSource[];
   isLoading: boolean;
   onEdit: (dataSource: DataSource) => void;
+  onSelect: (dataSource: DataSource) => void;
+  selectedDataSourceId?: string | null;
 }
 
 const typeIcons = {
@@ -33,7 +35,7 @@ const typeIcons = {
   cash: <Wallet className="h-6 w-6 text-yellow-500" />,
 };
 
-export function DataSourceList({ dataSources, isLoading, onEdit }: DataSourceListProps) {
+export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, selectedDataSourceId }: DataSourceListProps) {
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -68,27 +70,31 @@ export function DataSourceList({ dataSources, isLoading, onEdit }: DataSourceLis
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {dataSources.map((source) => (
         <div key={source.id} className="relative group">
-          <Link href={`/dashboard/transactions/${source.id}`} className="block h-full">
-            <Card className="flex flex-col shadow-md hover:shadow-lg transition-shadow h-full">
-              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
-                <div className="flex items-center gap-2">
-                  {typeIcons[source.accountType]}
-                </div>
-              </CardHeader>
-              <CardContent className="flex-grow pt-2">
-                <p className="text-sm text-muted-foreground">{source.bankName}</p>
-                {source.accountNumber && (
-                  <p className="text-sm text-muted-foreground">
-                    •••• {source.accountNumber.slice(-4)}
-                  </p>
-                )}
-              </CardContent>
-              <CardFooter>
-                {/* Footer can be used for other actions in the future */}
-              </CardFooter>
-            </Card>
-          </Link>
+          <Card 
+            className={cn(
+                "flex flex-col shadow-md hover:shadow-lg transition-all h-full cursor-pointer",
+                selectedDataSourceId === source.id && "ring-2 ring-primary"
+            )}
+            onClick={() => onSelect(source)}
+          >
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
+              <div className="flex items-center gap-2">
+                {typeIcons[source.accountType]}
+              </div>
+            </CardHeader>
+            <CardContent className="flex-grow pt-2">
+              <p className="text-sm text-muted-foreground">{source.bankName}</p>
+              {source.accountNumber && (
+                <p className="text-sm text-muted-foreground">
+                  •••• {source.accountNumber.slice(-4)}
+                </p>
+              )}
+            </CardContent>
+            <CardFooter>
+              {/* Footer can be used for other actions in the future */}
+            </CardFooter>
+          </Card>
           <Button
             variant="ghost"
             size="icon"
