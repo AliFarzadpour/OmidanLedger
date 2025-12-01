@@ -50,11 +50,16 @@ export default function SignupPage() {
   }, [user, isUserLoading, router]);
 
   const onSubmit = async (data: SignupFormValues) => {
-    try {
-      initiateEmailSignUp(auth, data.email, data.password);
-    } catch (error: any) {
-      setAuthError(error.message);
-    }
+    setAuthError(null);
+    initiateEmailSignUp(auth, data.email, data.password, (error) => {
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      if (error?.code === 'auth/email-already-in-use') {
+        errorMessage = 'This email is already registered. Please sign in or use a different email.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      setAuthError(errorMessage);
+    });
   };
   
   if (isUserLoading || user) {
@@ -129,5 +134,3 @@ export default function SignupPage() {
     </div>
   );
 }
-
-    

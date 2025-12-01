@@ -51,11 +51,16 @@ export default function LoginPage() {
   }, [user, isUserLoading, router]);
 
   const onSubmit = async (data: LoginFormValues) => {
-    try {
-      initiateEmailSignIn(auth, data.email, data.password);
-    } catch (error: any) {
-      setAuthError(error.message);
-    }
+    setAuthError(null);
+    initiateEmailSignIn(auth, data.email, data.password, (error) => {
+      let errorMessage = 'An unexpected error occurred. Please try again.';
+      if (error?.code === 'auth/invalid-credential' || error?.code === 'auth/user-not-found' || error?.code === 'auth/wrong-password') {
+        errorMessage = 'Invalid email or password. Please check your credentials and try again.';
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+      setAuthError(errorMessage);
+    });
   };
   
   if (isUserLoading || user) {
@@ -135,5 +140,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-    
