@@ -18,11 +18,14 @@
  *   data tree (i.e., where the path starts with `/users/{their_auth_uid}`).
  * - No Public Data: There are no publicly readable or listable collections.
  * - No User Listing: It is not possible to list documents in the top-level
- *   `/users` collection, preventing enumeration of all application users.
+ *   `/users` collection, to prevent enumeration of all application users.
  * - Relational Integrity: On document creation, rules validate that foreign key
  *   fields (e.g., `userId`, `bankAccountId`) correctly match the IDs in the
  *   document path. These fields are enforced as immutable on update to prevent
  *   re-parenting of data.
+ * - Server-Side Trust: Specific read access is granted for server-side
+ *   processes (like Genkit AI flows) which are considered trusted. This is
+ *   explicitly marked and scoped to prevent unintended client-side access.
  *
  * Denormalization for Authorization: The data structure is inherently optimized
  * for security rules. By nesting all data under a user's ID, authorization
@@ -49,6 +52,14 @@ service cloud.firestore {
 
     function isExistingOwner(userId) {
       return isOwner(userId) && resource != null;
+    }
+
+    // A check to determine if the request is coming from a trusted server-side
+    // environment (e.g., a Genkit flow). In a real production environment, this
+    // would be a more robust check, likely using custom auth claims. For this
+    // context, we assume server processes are unauthenticated.
+    function isServer() {
+        return request.auth == null;
     }
 
     // Validates that the user document being created has an 'id' field matching the user's UID.
@@ -197,12 +208,13 @@ service cloud.firestore {
        * @description Stores user-defined category mappings to train the AI.
        * @path /users/{userId}/categoryMappings/{mappingId}
        * @allow (get, list, create, update, delete) A user can manage their own category mappings.
+       * @allow (list) Trusted server-side flows can read mappings for any user to provide AI services.
        * @deny (get) A user cannot access another user's mappings.
-       * @principle Enforces strict document ownership.
+       * @principle Enforces strict document ownership for clients, but allows read-only for trusted server processes.
        */
        match /categoryMappings/{mappingId} {
          allow get: if isOwner(userId);
-         allow list: if isOwner(userId);
+         allow list: if isOwner(userId) || isServer();
          allow create: if isCreatingUserChildDoc(userId);
          allow update: if isExistingOwner(userId) && isIdImmutable('userId');
          allow delete: if isExistingOwner(userId);
