@@ -21,10 +21,14 @@ import { useAuth, useUser, initiateEmailSignUp } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const signupSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  agreeToTerms: z.boolean().refine(val => val === true, {
+    message: 'You must agree to the Privacy Policy.',
+  }),
 });
 
 type SignupFormValues = z.infer<typeof signupSchema>;
@@ -40,6 +44,7 @@ export default function SignupPage() {
     defaultValues: {
       email: '',
       password: '',
+      agreeToTerms: false,
     },
   });
 
@@ -116,6 +121,30 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
+               <FormField
+                control={form.control}
+                name="agreeToTerms"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md py-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel className="text-sm text-muted-foreground">
+                        By checking this box, you agree to our{' '}
+                        <Link href="/privacy" className="underline hover:text-primary">
+                          Privacy Policy
+                        </Link>
+                        .
+                      </FormLabel>
+                      <FormMessage />
+                    </div>
+                  </FormItem>
+                )}
+              />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Creating Account...' : 'Create Account'}
               </Button>
@@ -123,13 +152,6 @@ export default function SignupPage() {
           </Form>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
-          <div className="text-xs text-center text-muted-foreground">
-            By clicking Create Account, you agree to our
-            <Link href="/privacy" className="underline underline-offset-4 ml-1">
-              Privacy Policy
-            </Link>
-            .
-          </div>
           <div className="text-center text-sm">
             Already have an account?{' '}
             <Link href="/login" className="underline">
