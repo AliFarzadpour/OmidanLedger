@@ -1,0 +1,18 @@
+diff --git a/node_modules/@genkit-ai/next/package.json b/node_modules/@genkit-ai/next/package.json
+index 548c775..523ff80 100644
+--- a/node_modules/@genkit-ai/next/package.json
++++ b/node_modules/@genkit-ai/next/package.json
+@@ -37,6 +37,13 @@
+   "license": "Apache-2.0",
+   "bugs": "https://github.com/firebase/genkit/issues",
+   "homepage": "https://firebase.google.com/docs/genkit",
++  "browser": {
++    "crypto": false,
++    "fs": false,
++    "path": false,
++    "util": false,
++    "stream": false
++  },
+   "dependencies": {
+     "@genkit-ai/core": "workspace:^",
+     "zod": "^3.23.8"
