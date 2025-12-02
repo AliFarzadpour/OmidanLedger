@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Upload } from 'lucide-react';
+import { Upload, ArrowUpDown } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -49,6 +49,9 @@ interface Transaction {
   amount: number;
 }
 
+type SortKey = keyof Omit<Transaction, 'id'>;
+type SortDirection = 'ascending' | 'descending';
+
 interface TransactionsTableProps {
   dataSource: DataSource;
 }
@@ -57,6 +60,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
+    key: 'date',
+    direction: 'descending',
+  });
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -64,6 +71,46 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   }, [firestore, user, dataSource]);
 
   const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+
+  const sortedTransactions = useMemo(() => {
+    if (!transactions) return [];
+    const sortableItems = [...transactions];
+    sortableItems.sort((a, b) => {
+      const aValue = a[sortConfig.key];
+      const bValue = b[sortConfig.key];
+
+      let comparison = 0;
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        comparison = aValue.localeCompare(bValue);
+      } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+        comparison = aValue - bValue;
+      } else if (sortConfig.key === 'date') {
+        comparison = new Date(aValue).getTime() - new Date(bValue).getTime();
+      }
+
+      return sortConfig.direction === 'ascending' ? comparison : -comparison;
+    });
+    return sortableItems;
+  }, [transactions, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIcon = (key: SortKey) => {
+    if (sortConfig.key !== key) {
+      return <ArrowUpDown className="ml-2 h-4 w-4" />;
+    }
+    return sortConfig.direction === 'ascending' ? (
+      <ArrowUpDown className="ml-2 h-4 w-4" />
+    ) : (
+      <ArrowUpDown className="ml-2 h-4 w-4" />
+    );
+  };
 
   return (
     <>
@@ -84,18 +131,35 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>
+                   <Button variant="ghost" onClick={() => requestSort('date')}>
+                    Date {getSortIcon('date')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('description')}>
+                    Description {getSortIcon('description')}
+                  </Button>
+                </TableHead>
+                <TableHead>
+                  <Button variant="ghost" onClick={() => requestSort('category')}>
+                    Category {getSortIcon('category')}
+                  </Button>
+                </TableHead>
+                <TableHead className="text-right">
+                  <Button variant="ghost" onClick={() => requestSort('amount')}>
+                    Amount {getSortIcon('amount')}
+                  </Button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell>
                       <Skeleton className="h-5 w-3/4" />
-                      <Skeleton className="mt-1 h-4 w-1/4" />
                     </TableCell>
                     <TableCell>
                       <Skeleton className="h-6 w-20 rounded-full" />
@@ -105,12 +169,14 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     </TableCell>
                   </TableRow>
                 ))
-              ) : transactions && transactions.length > 0 ? (
-                transactions.map((transaction) => (
+              ) : sortedTransactions && sortedTransactions.length > 0 ? (
+                sortedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
+                     <TableCell>
+                        <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{transaction.description}</div>
-                      <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -139,7 +205,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center">
+                  <TableCell colSpan={4} className="h-24 text-center">
                     No transactions found. Upload a statement to get started.
                   </TableCell>
                 </TableRow>
