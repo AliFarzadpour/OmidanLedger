@@ -118,6 +118,9 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
     if (!user) return;
 
     setIsSubmitting(true);
+    // Close the dialog immediately on success, before processing
+    onOpenChange(false);
+
     toast({
       title: 'Connecting Account...',
       description: 'Exchanging token and setting up your account. Please wait.',
@@ -148,7 +151,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
       });
     } finally {
       setIsSubmitting(false);
-      onOpenChange(false);
     }
   };
 
@@ -171,7 +173,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
           <>
             <PlaidLink 
               onSuccess={handlePlaidSuccess}
-              onCloseDialog={() => onOpenChange(false)}
+              onOpenChange={onOpenChange}
             />
             
             <div className="flex items-center gap-4">

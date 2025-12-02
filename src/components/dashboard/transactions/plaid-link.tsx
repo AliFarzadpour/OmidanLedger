@@ -1,18 +1,18 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { Button } from '@/components/ui/button';
 import { createLinkToken } from '@/ai/flows/plaid-flows';
 import { useUser } from '@/firebase';
-import { PlaidLinkOptions } from 'react-plaid-link';
+import { PlaidLinkOptions, PlaidLinkOnExit } from 'react-plaid-link';
 
 interface PlaidLinkProps {
   onSuccess: PlaidLinkOptions['onSuccess'];
-  onCloseDialog: () => void;
+  onOpenChange: (open: boolean) => void;
 }
 
-export function PlaidLink({ onSuccess, onCloseDialog }: PlaidLinkProps) {
+export function PlaidLink({ onSuccess, onOpenChange }: PlaidLinkProps) {
   const { user } = useUser();
   const [linkToken, setLinkToken] = useState<string | null>(null);
 
@@ -30,18 +30,23 @@ export function PlaidLink({ onSuccess, onCloseDialog }: PlaidLinkProps) {
     generateToken();
   }, [user]);
 
+  const onExit = useCallback<PlaidLinkOnExit>(
+    (error, metadata) => {
+      // The user has exited the Plaid modal. It's now safe to close our dialog.
+      onOpenChange(false);
+      console.log('Plaid Link exited:', error, metadata);
+    },
+    [onOpenChange]
+  );
+  
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
+    onExit,
   });
 
-  const handleOpenPlaid = () => {
-    onCloseDialog(); // Close our dialog first
-    open(); // Then open Plaid
-  };
-
   return (
-    <Button onClick={handleOpenPlaid} disabled={!ready || !linkToken} className="w-full">
+    <Button onClick={() => open()} disabled={!ready || !linkToken} className="w-full">
       Connect with Plaid
     </Button>
   );
