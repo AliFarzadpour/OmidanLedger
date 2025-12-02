@@ -52,6 +52,7 @@ interface DataSource {
   bankName: string;
   accountType: 'checking' | 'savings' | 'credit-card' | 'cash';
   accountNumber?: string;
+  plaidAccessToken?: string;
 }
 
 interface DataSourceDialogProps {
@@ -161,88 +162,96 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
              Connect to thousands of banks with Plaid or add a manual account.
           </DialogDescription>
         </DialogHeader>
-
-        <PlaidLink onSuccess={handlePlaidSuccess} />
         
-        <div className="flex items-center gap-4">
-            <Separator className="flex-1" />
-            <span className="text-sm text-muted-foreground">OR</span>
-            <Separator className="flex-1" />
-        </div>
+        {isEditMode && dataSource?.plaidAccessToken ? (
+          <p className="text-sm text-center text-muted-foreground p-4 bg-muted rounded-md">
+            Editing for Plaid-linked accounts is limited. To change account details, please re-link the account.
+          </p>
+        ) : (
+          <>
+            <PlaidLink onSuccess={handlePlaidSuccess} />
+            
+            <div className="flex items-center gap-4">
+                <Separator className="flex-1" />
+                <span className="text-sm text-muted-foreground">OR</span>
+                <Separator className="flex-1" />
+            </div>
 
-        <p className="text-sm text-muted-foreground text-center -mt-2">Add a manual data source for cash or other offline accounts.</p>
+            <p className="text-sm text-muted-foreground text-center -mt-2">Add a manual data source for cash or other offline accounts.</p>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="accountName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Account Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Personal Checking" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="bankName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Bank/Source Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Chase Bank or 'My Wallet'" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="accountType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Account Type</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select an account type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="checking">Checking</SelectItem>
-                      <SelectItem value="savings">Savings</SelectItem>
-                      <SelectItem value="credit-card">Credit Card</SelectItem>
-                      <SelectItem value="cash">Cash</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="accountNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Account Number (Optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Last 4 digits" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Saving...' : 'Save Manual Account'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="accountName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Personal Checking" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="bankName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Bank/Source Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., Chase Bank or 'My Wallet'" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="accountType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Type</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select an account type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="checking">Checking</SelectItem>
+                          <SelectItem value="savings">Savings</SelectItem>
+                          <SelectItem value="credit-card">Credit Card</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 <FormField
+                  control={form.control}
+                  name="accountNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Account Number (Optional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Last 4 digits" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? 'Saving...' : 'Save Manual Account'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

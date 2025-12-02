@@ -54,17 +54,6 @@ const fileToDataUri = (file: File): Promise<string> => {
     });
 };
 
-async function getUserCategoryMappings(firestore: any, userId: string): Promise<string> {
-    const mappingsSnapshot = await getDocs(collection(firestore, `users/${userId}/categoryMappings`));
-    if (mappingsSnapshot.empty) {
-        return "No custom mappings provided.";
-    }
-    const mappings = mappingsSnapshot.docs.map(doc => {
-        const data = doc.data();
-        return `- Description: "${data.transactionDescription}" -> Category: ${data.primaryCategory} > ${data.secondaryCategory} > ${data.subcategory}`;
-    });
-    return mappings.join('\n');
-}
 
 export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: UploadTransactionsDialogProps) {
   const { user } = useUser();
@@ -93,14 +82,12 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
             title: 'Processing Statement',
             description: 'The AI is analyzing your document. This may take a moment...',
         });
-
-        const userMappings = await getUserCategoryMappings(firestore, user.uid);
         
         // AI Categorization from the entire statement
         const result = await categorizeTransactionsFromStatement({
           statementDataUri: dataUri,
           userId: user.uid,
-          userMappings: userMappings,
+          // userMappings will be fetched inside the flow now
         });
 
         if (!result || !result.transactions || result.transactions.length === 0) {

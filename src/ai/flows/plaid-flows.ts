@@ -4,26 +4,22 @@
  * - createLinkToken: Creates a link_token required to initialize Plaid Link.
  * - exchangePublicToken: Exchanges a public_token for an access_token.
  * - createBankAccountFromPlaid: Creates a bank account record in Firestore from Plaid data.
+ * - syncAndCategorizePlaidTransactions: Fetches, categorizes, and saves transactions from Plaid.
  */
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { PlaidApi, Configuration, PlaidEnvironments, TransactionsSyncRequest, RemovedTransaction } from 'plaid';
-import { initializeFirebase, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc } from 'firebase/firestore';
-
-const PlaidConfigSchema = z.object({
-  clientId: z.string(),
-  secret: z.string(),
-  env: z.string().default('sandbox'),
-});
+import { PlaidApi, Configuration, PlaidEnvironments, TransactionsSyncRequest, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
+import { initializeFirebase, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { collection, doc, getDoc, writeBatch } from 'firebase/firestore';
+import { categorizeTransactionsFromStatement } from './categorize-transactions-from-statement';
+import { getUserCategoryMappings } from '../utils';
 
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
 
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
-    console.error('Plaid client ID or secret not set in environment variables.');
-    throw new Error('Plaid integration is not configured. Please add PLAID_CLIENT_ID and PLAID_SECRET to your environment variables.');
+    throw new Error('Plaid client ID or secret not set in environment variables.');
   }
 
   const plaidConfig = new Configuration({
@@ -44,6 +40,11 @@ const CreateLinkTokenInputSchema = z.object({
 });
 
 export async function createLinkToken(input: z.infer<typeof CreateLinkTokenInputSchema>): Promise<string> {
+  const { PLAID_CLIENT_ID, PLAID_SECRET } = process.env;
+  if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
+    console.error('Plaid client ID or secret not set in environment variables.');
+    throw new Error('Plaid integration is not configured. Please add PLAID_CLIENT_ID and PLAID_SECRET to your environment variables.');
+  }
   return createLinkTokenFlow(input);
 }
 
@@ -152,15 +153,121 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
                 accountType: accountData.subtype || 'other',
                 bankName: metadata.institution.name,
                 accountNumber: accountData.mask,
+                plaidSyncCursor: null, // Initialize sync cursor
             };
+            
+            // Plaid can return multiple accounts for a single item. We need to create a document for each.
+            // However, the metadata only contains one account. We will create just that one.
+            // The Plaid item ID is the same for all accounts associated with a single login.
+            // The account ID is unique for each account. We'll use Plaid's account ID as our doc ID.
+            const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, accountData.account_id);
 
-            const bankAccountsCol = collection(firestore, `users/${userId}/bankAccounts`);
             // Note: We are not using a blocking call here.
-            addDocumentNonBlocking(bankAccountsCol, newAccount);
+            setDocumentNonBlocking(bankAccountRef, newAccount, { merge: true });
 
         } catch (error: any) {
             console.error('Error creating bank account from Plaid:', error.response?.data || error.message);
             throw new Error('Could not create bank account from Plaid data.');
         }
     }
+);
+
+const SyncTransactionsInputSchema = z.object({
+  userId: z.string(),
+  bankAccountId: z.string(), // This will be the Firestore document ID, which is the Plaid Account ID
+});
+
+
+export async function syncAndCategorizePlaidTransactions(input: z.infer<typeof SyncTransactionsInputSchema>): Promise<{ count: number }> {
+    return syncAndCategorizePlaidTransactionsFlow(input);
+}
+
+const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
+  {
+    name: 'syncAndCategorizePlaidTransactionsFlow',
+    inputSchema: SyncTransactionsInputSchema,
+    outputSchema: z.object({ count: z.number() }),
+  },
+  async ({ userId, bankAccountId }) => {
+    const { firestore } = initializeFirebase();
+    const plaidClient = getPlaidClient();
+
+    const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, bankAccountId);
+    const bankAccountSnap = await getDoc(bankAccountRef);
+
+    if (!bankAccountSnap.exists()) {
+      throw new Error("Bank account not found.");
+    }
+    const bankAccountData = bankAccountSnap.data();
+    const accessToken = bankAccountData.plaidAccessToken;
+    let cursor = bankAccountData.plaidSyncCursor;
+
+    if (!accessToken) {
+      throw new Error("Plaid access token not found for this account.");
+    }
+
+    let allTransactions: PlaidTransaction[] = [];
+    let hasMore = true;
+
+    while (hasMore) {
+      const request: TransactionsSyncRequest = {
+        access_token: accessToken,
+        cursor: cursor,
+        // Limit the number of transactions to fetch per page to stay within API limits
+        count: 100,
+        // Filter by the specific account ID
+        options: {
+            account_ids: [bankAccountId]
+        }
+      };
+      const response = await plaidClient.transactionsSync(request);
+      const data = response.data;
+      
+      allTransactions = allTransactions.concat(data.added);
+      // We don't handle modified or removed transactions in this implementation for simplicity
+      
+      hasMore = data.has_more;
+      cursor = data.next_cursor;
+    }
+
+    if (allTransactions.length === 0) {
+        return { count: 0 };
+    }
+    
+    // Create a text block of transactions to send to the categorization AI
+    const transactionText = allTransactions.map(t => `${t.date},${t.name},${t.amount}`).join('\n');
+    const fakeCsvDataUri = `data:text/csv;base64,${Buffer.from(transactionText).toString('base64')}`;
+    
+    // Get user's custom mappings
+    const userMappings = await getUserCategoryMappings(firestore, userId);
+
+    // Call the AI to categorize everything
+    const categorizationResult = await categorizeTransactionsFromStatement({
+      statementDataUri: fakeCsvDataUri,
+      userId: userId,
+      userMappings: userMappings,
+    });
+    
+    const categorizedTransactions = categorizationResult.transactions;
+    
+    // Save categorized transactions to Firestore in a batch
+    const batch = writeBatch(firestore);
+    const transactionsColRef = collection(firestore, `users/${userId}/bankAccounts/${bankAccountId}/transactions`);
+    
+    categorizedTransactions.forEach(tx => {
+      const newTransactionDoc = doc(transactionsColRef); // Auto-generate ID
+      batch.set(newTransactionDoc, {
+        ...tx,
+        bankAccountId: bankAccountId,
+        userId: userId,
+      });
+    });
+
+    await batch.commit();
+
+    // After successfully saving, update the sync cursor on the bank account
+    updateDocumentNonBlocking(bankAccountRef, { plaidSyncCursor: cursor });
+
+    return { count: categorizedTransactions.length };
+  }
 );

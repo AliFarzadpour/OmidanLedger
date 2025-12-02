@@ -84,7 +84,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BankAccount",
       "type": "object",
-      "description": "Represents a bank account.",
+      "description": "Represents a bank account, either manually added or linked via Plaid.",
       "properties": {
         "id": {
           "type": "string",
@@ -100,7 +100,7 @@
         },
         "accountNumber": {
           "type": "string",
-          "description": "The account number."
+          "description": "The account number (often masked)."
         },
         "bankName": {
           "type": "string",
@@ -109,13 +109,28 @@
         "accountType": {
           "type": "string",
           "description": "The type of bank account (e.g., checking, savings)."
+        },
+        "plaidAccessToken": {
+            "type": "string",
+            "description": "The Plaid access token for this account. Only present for Plaid-linked accounts."
+        },
+        "plaidItemId": {
+            "type": "string",
+            "description": "The Plaid Item ID for this account. Only present for Plaid-linked accounts."
+        },
+        "plaidAccountId": {
+            "type": "string",
+            "description": "The Plaid Account ID for this specific account. Only present for Plaid-linked accounts."
+        },
+        "plaidSyncCursor": {
+            "type": "string",
+            "description": "The cursor for the last successful Plaid transaction sync."
         }
       },
       "required": [
         "id",
         "userId",
         "accountName",
-        "accountNumber",
         "bankName",
         "accountType"
       ]
@@ -536,5 +551,3 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features, including user authentication, fiscal year management, transaction handling, and expense tracking. It leverages path-based ownership for user-specific data and denormalization where necessary to avoid complex security rules. Each collection is designed with a homogeneous security posture, making rules easier to manage.\n\nUser data is stored under `/users/{userId}`, providing a clear path-based ownership model. Fiscal years, bank accounts, categories, and accounts are subcollections of the user document. Transactions are nested under bank accounts, and journal entries are associated with fiscal years, with journal entry line items then nested under journal entries. This nested structure maintains the relationships while keeping data logically organized. A new collection for `categoryMappings` has been added to store user-specific rules for the AI, also under the user's document to maintain data ownership.\n\nAuthorization Independence is achieved through path-based ownership. For instance, access to data under `/users/{userId}` is controlled by checking `request.auth.uid == userId`. This eliminates the need for `get()` calls in security rules, enabling atomic operations. All reads and writes in the subcollections can securely be governed by this rule, ensuring the user has complete ownership of the data.\n\nThe structure supports required QAPs, such as secure list operations, by segregating data based on ownership.  Listing operations within `/users/{userId}/fiscalYears` only require checking the `userId` against `request.auth.uid`. Similarly, listing transactions requires `request.auth.uid == userId` derived from the path `/users/{userId}/bankAccounts/{bankAccountId}/transactions`. This approach ensures that users can only access the data they own, preventing unauthorized access."
   }
 }
-
-    

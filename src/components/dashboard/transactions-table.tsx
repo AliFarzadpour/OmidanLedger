@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -39,6 +39,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
+import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -54,6 +55,7 @@ interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
+  plaidAccessToken?: string;
 }
 
 interface Transaction {
@@ -80,6 +82,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isClearAlertOpen, setClearAlertOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'date',
     direction: 'descending',
@@ -119,6 +122,36 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         });
     } finally {
         setIsClearing(false);
+    }
+  };
+
+  const handleSyncTransactions = async () => {
+    if (!user || !dataSource.plaidAccessToken) return;
+
+    setIsSyncing(true);
+    toast({
+        title: 'Syncing Transactions...',
+        description: 'Fetching new data from your bank. This may take a moment.',
+    });
+
+    try {
+        const result = await syncAndCategorizePlaidTransactions({
+            userId: user.uid,
+            bankAccountId: dataSource.id,
+        });
+        toast({
+            title: 'Sync Complete!',
+            description: `${result.count} new transactions have been imported and categorized.`,
+        });
+    } catch (error: any) {
+        console.error("Error syncing transactions:", error);
+        toast({
+            variant: "destructive",
+            title: "Sync Failed",
+            description: error.message || "Could not sync transactions from Plaid.",
+        });
+    } finally {
+        setIsSyncing(false);
     }
   };
 
@@ -201,6 +234,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const hasTransactions = transactions && transactions.length > 0;
+  const isPlaidAccount = !!dataSource.plaidAccessToken;
 
   return (
     <>
@@ -213,10 +247,17 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button onClick={() => setUploadDialogOpen(true)}>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Statement
-            </Button>
+            {isPlaidAccount ? (
+              <Button onClick={handleSyncTransactions} disabled={isSyncing}>
+                <RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} />
+                {isSyncing ? 'Syncing...' : 'Sync Transactions'}
+              </Button>
+            ) : (
+              <Button onClick={() => setUploadDialogOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" />
+                Upload Statement
+              </Button>
+            )}
             <Button 
                 variant="destructive" 
                 onClick={() => setClearAlertOpen(true)}
@@ -301,7 +342,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               ) : (
                 <TableRow>
                   <TableCell colSpan={4} className="h-24 text-center">
-                    No transactions found. Upload a statement to get started.
+                    No transactions found. {isPlaidAccount ? 'Sync to fetch transactions.' : 'Upload a statement to get started.'}
                   </TableCell>
                 </TableRow>
               )}

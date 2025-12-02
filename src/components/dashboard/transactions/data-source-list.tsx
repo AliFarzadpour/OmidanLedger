@@ -11,13 +11,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Banknote, CreditCard, Wallet, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
-  accountType: 'checking' | 'savings' | 'credit-card' | 'cash';
+  accountType: 'checking' | 'savings' | 'credit-card' | 'cash' | 'other';
   accountNumber?: string;
+  plaidAccessToken?: string;
 }
 
 interface DataSourceListProps {
@@ -32,7 +34,9 @@ const typeIcons = {
   checking: <Banknote className="h-6 w-6 text-primary" />,
   savings: <Banknote className="h-6 w-6 text-green-500" />,
   'credit-card': <CreditCard className="h-6 w-6 text-blue-500" />,
+  credit: <CreditCard className="h-6 w-6 text-blue-500" />,
   cash: <Wallet className="h-6 w-6 text-yellow-500" />,
+  other: <Wallet className="h-6 w-6 text-gray-500" />,
 };
 
 export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, selectedDataSourceId }: DataSourceListProps) {
@@ -80,7 +84,8 @@ export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, selec
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
               <div className="flex items-center gap-2">
-                {typeIcons[source.accountType]}
+                {source.plaidAccessToken && <Badge variant="secondary">Plaid</Badge>}
+                {typeIcons[source.accountType as keyof typeof typeIcons] || typeIcons.other}
               </div>
             </CardHeader>
             <CardContent className="flex-grow pt-2">
