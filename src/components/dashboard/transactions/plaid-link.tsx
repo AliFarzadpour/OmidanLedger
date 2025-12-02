@@ -9,10 +9,10 @@ import { PlaidLinkOptions } from 'react-plaid-link';
 
 interface PlaidLinkProps {
   onSuccess: PlaidLinkOptions['onSuccess'];
-  onOpen?: PlaidLinkOptions['onOpen'];
+  onCloseDialog: () => void;
 }
 
-export function PlaidLink({ onSuccess, onOpen }: PlaidLinkProps) {
+export function PlaidLink({ onSuccess, onCloseDialog }: PlaidLinkProps) {
   const { user } = useUser();
   const [linkToken, setLinkToken] = useState<string | null>(null);
 
@@ -33,11 +33,15 @@ export function PlaidLink({ onSuccess, onOpen }: PlaidLinkProps) {
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
-    onOpen,
   });
 
+  const handleOpenPlaid = () => {
+    onCloseDialog(); // Close our dialog first
+    open(); // Then open Plaid
+  };
+
   return (
-    <Button onClick={() => open()} disabled={!ready || !linkToken} className="w-full">
+    <Button onClick={handleOpenPlaid} disabled={!ready || !linkToken} className="w-full">
       Connect with Plaid
     </Button>
   );
