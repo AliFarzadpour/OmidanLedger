@@ -29,12 +29,17 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2 } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { Upload, ArrowUpDown, Trash2, Pencil } from 'lucide-react';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
+
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -166,6 +171,32 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       <ArrowUpDown className="ml-2 h-4 w-4" />
     );
   };
+  
+  const handleCategoryChange = (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; }) => {
+    if (!firestore || !user) return;
+
+    const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
+
+    const updatedData = {
+      primaryCategory: newCategories.primaryCategory,
+      secondaryCategory: newCategories.secondaryCategory,
+      subcategory: newCategories.subcategory,
+    };
+
+    updateDocumentNonBlocking(transactionRef, updatedData);
+
+    learnCategoryMapping({
+        transactionDescription: transaction.description,
+        primaryCategory: newCategories.primaryCategory,
+        secondaryCategory: newCategories.secondaryCategory,
+        subcategory: newCategories.subcategory,
+    });
+
+    toast({
+        title: "AI Feedback Received",
+        description: "Your category suggestion has been sent to the AI for future improvements.",
+    });
+  };
 
   const hasTransactions = transactions && transactions.length > 0;
 
@@ -246,20 +277,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                       <div className="font-medium">{transaction.description}</div>
                     </TableCell>
                     <TableCell>
-                       <div className="flex flex-col">
-                        <Badge
-                          variant="outline"
-                          className={cn(
-                            'w-fit border-0 font-semibold',
-                            primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Other']
-                          )}
-                        >
-                          {transaction.primaryCategory}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground pl-1">
-                          {transaction.secondaryCategory} &gt; {transaction.subcategory}
-                        </span>
-                      </div>
+                      <CategoryEditor
+                          transaction={transaction}
+                          onSave={handleCategoryChange}
+                      />
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -313,4 +334,84 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       </AlertDialog>
     </>
   );
+}
+
+
+function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; }) => void }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [primary, setPrimary] = useState(transaction.primaryCategory);
+    const [secondary, setSecondary] = useState(transaction.secondaryCategory);
+    const [sub, setSub] = useState(transaction.subcategory);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSave(transaction, {
+            primaryCategory: primary,
+            secondaryCategory: secondary,
+            subcategory: sub,
+        });
+        setIsOpen(false);
+    };
+    
+    return (
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverTrigger asChild>
+                <div className="flex flex-col cursor-pointer group">
+                    <Badge
+                        variant="outline"
+                        className={cn(
+                            'w-fit border-0 font-semibold',
+                            primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Other']
+                        )}
+                    >
+                        {transaction.primaryCategory}
+                        <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                    </Badge>
+                    <span className="text-xs text-muted-foreground pl-1">
+                        {transaction.secondaryCategory} &gt; {transaction.subcategory}
+                    </span>
+                </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+                <form onSubmit={handleSubmit} className="grid gap-4">
+                    <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Suggest a Correction</h4>
+                        <p className="text-sm text-muted-foreground">
+                           Your feedback helps the AI learn.
+                        </p>
+                    </div>
+                    <div className="grid gap-2">
+                        <div className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor="primary">Primary</Label>
+                            <Input
+                                id="primary"
+                                value={primary}
+                                onChange={(e) => setPrimary(e.target.value)}
+                                className="col-span-2 h-8"
+                            />
+                        </div>
+                        <div className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor="secondary">Secondary</Label>
+                            <Input
+                                id="secondary"
+                                value={secondary}
+                                onChange={(e) => setSecondary(e.target.value)}
+                                className="col-span-2 h-8"
+                            />
+                        </div>
+                        <div className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor="sub">Subcategory</Label>
+                            <Input
+                                id="sub"
+                                value={sub}
+                                onChange={(e) => setSub(e.target.value)}
+                                className="col-span-2 h-8"
+                            />
+                        </div>
+                    </div>
+                    <Button type="submit">Save & Teach AI</Button>
+                </form>
+            </PopoverContent>
+        </Popover>
+    );
 }
