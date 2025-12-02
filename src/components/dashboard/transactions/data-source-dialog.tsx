@@ -29,10 +29,13 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
+import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking, useUser } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { PlaidLink } from './plaid-link';
 import { Separator } from '@/components/ui/separator';
+import { createBankAccountFromPlaid, exchangePublicToken } from '@/ai/flows/plaid-flows';
+import { useToast } from '@/hooks/use-toast';
+import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
 
 const dataSourceSchema = z.object({
   accountName: z.string().min(1, 'Account name is required.'),
@@ -58,8 +61,9 @@ interface DataSourceDialogProps {
 }
 
 export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourceDialogProps) {
-  const auth = useAuth();
+  const { user } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isEditMode = !!dataSource;
@@ -88,20 +92,20 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
   }, [dataSource, form]);
 
   const onSubmit = async (values: DataSourceFormValues) => {
-    if (!auth.currentUser || !firestore) return;
+    if (!user || !firestore) return;
 
     setIsSubmitting(true);
     
     if (isEditMode && dataSource) {
-      const docRef = doc(firestore, `users/${auth.currentUser.uid}/bankAccounts`, dataSource.id);
+      const docRef = doc(firestore, `users/${user.uid}/bankAccounts`, dataSource.id);
       const updatedData = { ...dataSource, ...values };
       setDocumentNonBlocking(docRef, updatedData, { merge: true });
     } else {
       const newAccount = {
         ...values,
-        userId: auth.currentUser.uid,
+        userId: user.uid,
       };
-      const bankAccountsCol = collection(firestore, `users/${auth.currentUser.uid}/bankAccounts`);
+      const bankAccountsCol = collection(firestore, `users/${user.uid}/bankAccounts`);
       addDocumentNonBlocking(bankAccountsCol, newAccount);
     }
     
@@ -109,12 +113,44 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
     onOpenChange(false);
   };
   
-  const handlePlaidSuccess = () => {
-    // This will be implemented in the next step.
-    // It will handle the public_token and create the bank account.
-    console.log('Plaid connection successful! We will handle this in the next step.');
-    onOpenChange(false);
+  const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
+    if (!user) return;
+
+    setIsSubmitting(true);
+    toast({
+      title: 'Connecting Account...',
+      description: 'Exchanging token and setting up your account. Please wait.',
+    });
+
+    try {
+      // Step 1: Exchange public_token for access_token
+      const { accessToken } = await exchangePublicToken({ publicToken: public_token });
+
+      // Step 2: Create a bank account record in Firestore with the access_token
+      await createBankAccountFromPlaid({
+        userId: user.uid,
+        accessToken: accessToken,
+        metadata: metadata,
+      });
+
+      toast({
+        title: 'Account Connected!',
+        description: `${metadata.institution.name} has been successfully linked.`,
+      });
+
+    } catch (error) {
+      console.error('Plaid connection error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Plaid Connection Failed',
+        description: 'There was an error connecting your bank account. Please try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
+      onOpenChange(false);
+    }
   };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
