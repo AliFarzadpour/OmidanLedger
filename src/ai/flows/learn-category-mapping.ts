@@ -8,7 +8,17 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { MasterCategoryFramework } from './category-framework';
+import { getFirestore } from 'firebase-admin/firestore';
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { createHash } from 'crypto';
+
+if (!getApps().length) {
+  initializeApp();
+}
+
+const db = getFirestore();
+const auth = getAuth();
 
 const LearnCategoryMappingInputSchema = z.object({
     transactionDescription: z
@@ -17,6 +27,7 @@ const LearnCategoryMappingInputSchema = z.object({
     primaryCategory: z.string().describe('The user-corrected primary category.'),
     secondaryCategory: z.string().describe('The user-corrected secondary category.'),
     subcategory: z.string().describe('The user-corrected subcategory.'),
+    idToken: z.string().describe('The Firebase ID token of the user.'),
 });
 
 export type LearnCategoryMappingInput = z.infer<typeof LearnCategoryMappingInputSchema>;
@@ -26,27 +37,6 @@ export async function learnCategoryMapping(input: LearnCategoryMappingInput): Pr
 }
 
 
-const learnMappingPrompt = ai.definePrompt({
-    name: 'learnMappingPrompt',
-    input: {schema: LearnCategoryMappingInputSchema},
-    prompt: `You are an AI financial assistant. Your user has provided a correction for a transaction categorization.
-Your most important task is to learn this new mapping and apply it to all future categorization requests.
-
-**Master Category Framework (for context):**
-${MasterCategoryFramework}
-
-**User's Correction:**
-- Transaction Description: "{{transactionDescription}}"
-- Should be categorized as:
-  - Primary: "{{primaryCategory}}"
-  - Secondary: "{{secondaryCategory}}"
-  - Subcategory: "{{subcategory}}"
-
-Acknowledge this new rule. For all future requests to categorize transactions, if you see a description similar to "{{transactionDescription}}", you MUST categorize it as "{{primaryCategory}} > {{secondaryCategory}} > {{subcategory}}". This user-provided correction is the source of truth and overrides any previous logic.
-`,
-});
-
-
 const learnCategoryMappingFlow = ai.defineFlow(
   {
     name: 'learnCategoryMappingFlow',
@@ -54,8 +44,24 @@ const learnCategoryMappingFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    // We call the prompt to "instruct" the model. The output isn't used,
-    // but the instruction within the prompt guides future behavior.
-    await learnMappingPrompt(input);
+    const { transactionDescription, primaryCategory, secondaryCategory, subcategory, idToken } = input;
+    
+    const decodedToken = await auth.verifyIdToken(idToken);
+    const userId = decodedToken.uid;
+
+    // Create a consistent ID based on the content to prevent duplicates
+    const mappingId = createHash('md5').update(userId + transactionDescription).digest('hex');
+
+    const mappingRef = db.collection(`users/${userId}/categoryMappings`).doc(mappingId);
+
+    await mappingRef.set({
+        userId,
+        transactionDescription,
+        primaryCategory,
+        secondaryCategory,
+        subcategory,
+    }, { merge: true });
   }
 );
+
+    

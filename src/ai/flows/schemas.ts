@@ -6,6 +6,8 @@ export const StatementInputSchema = z.object({
     .describe(
       "The full content of the bank or credit card statement file, as a data URI. It must include a MIME type (e.g., 'data:application/pdf;base64,...' or 'data:text/csv;base64,...')."
     ),
+  userId: z.string().describe("The user's Firebase ID token for authentication."),
+  userMappings: z.string().optional().describe("User's custom category mappings."),
 });
 export type StatementInput = z.infer<typeof StatementInputSchema>;
 
@@ -31,3 +33,5 @@ export const StatementOutputSchema = z.object({
   transactions: z.array(CategorizedTransactionSchema),
 });
 export type StatementOutput = z.infer<typeof StatementOutputSchema>;
+
+    

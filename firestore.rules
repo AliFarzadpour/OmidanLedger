@@ -158,7 +158,7 @@ service cloud.firestore {
           allow get: if isOwner(userId);
           allow list: if isOwner(userId);
           allow create: if isCreatingNestedChildDoc(userId, bankAccountId, 'bankAccountId');
-          allow update: if isExistingOwner(userId) && isIdImmutable('bankAccountId');
+          allow update: if isExistingOwner(userId) && isIdImmutable('bankAccountId') && isIdImmutable('userId');
           allow delete: if isExistingOwner(userId);
         }
       }
@@ -192,6 +192,22 @@ service cloud.firestore {
         allow update: if isExistingOwner(userId) && isIdImmutable('userId');
         allow delete: if isExistingOwner(userId);
       }
+        
+      /**
+       * @description Stores user-defined category mappings to train the AI.
+       * @path /users/{userId}/categoryMappings/{mappingId}
+       * @allow (get, list, create, update, delete) A user can manage their own category mappings.
+       * @deny (get) A user cannot access another user's mappings.
+       * @principle Enforces strict document ownership.
+       */
+       match /categoryMappings/{mappingId} {
+         allow get: if isOwner(userId);
+         allow list: if isOwner(userId);
+         allow create: if isCreatingUserChildDoc(userId);
+         allow update: if isExistingOwner(userId) && isIdImmutable('userId');
+         allow delete: if isExistingOwner(userId);
+       }
     }
   }
 }
+    

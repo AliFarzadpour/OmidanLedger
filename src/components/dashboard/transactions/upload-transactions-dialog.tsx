@@ -81,10 +81,13 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
             title: 'Processing Statement',
             description: 'The AI is analyzing your document. This may take a moment...',
         });
+        
+        const idToken = await user.getIdToken();
 
         // AI Categorization from the entire statement
         const result = await categorizeTransactionsFromStatement({
           statementDataUri: dataUri,
+          userId: idToken,
         });
 
         if (!result || !result.transactions || result.transactions.length === 0) {
@@ -181,3 +184,5 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
     </Dialog>
   );
 }
+
+    
