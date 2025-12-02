@@ -4,7 +4,7 @@ import { useUser } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
-import { TransactionsTable } from '@/components/dashboard/transactions-table';
+import { RecentTransactions } from '@/components/dashboard/recent-transactions';
 import { DollarSign, CreditCard, Landmark, Upload } from 'lucide-react';
 
 export default function DashboardPage() {
@@ -17,10 +17,6 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight">Welcome Back, {user?.email?.split('@')[0] || 'User'}!</h1>
           <p className="text-muted-foreground">Here&apos;s a summary of your financial activity.</p>
         </div>
-        <Button>
-          <Upload className="mr-2 h-4 w-4" />
-          Upload Statement
-        </Button>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -49,11 +45,9 @@ export default function DashboardPage() {
           <ExpenseChart />
         </div>
         <div className="lg:col-span-3">
-          <TransactionsTable />
+          <RecentTransactions />
         </div>
       </div>
     </div>
   );
 }
-
-    
