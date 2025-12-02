@@ -67,6 +67,7 @@ const createLinkTokenFlow = ai.defineFlow(
         products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
+        redirect_uri: 'http://localhost/', // Add this to bypass the phone number screen
         transactions: {
             days_requested: 30,
         }
