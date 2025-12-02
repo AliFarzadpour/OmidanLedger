@@ -26,7 +26,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc list-inside pl-4 space-y-1">
               <li><strong>Personal Data:</strong> Personally identifiable information, such as your name, email address, that you voluntarily give to us when you register with the Application.</li>
-              <li><strong>Financial Data from Plaid:</strong> We use Plaid Inc. (&quot;Plaid&quot;) to gather your data from financial institutions. By using our service, you grant us and Plaid the right, power, and authority to act on your behalf to access and transmit your personal and financial information from the relevant financial institution. You agree to your personal and financial information being transferred, stored, and processed by Plaid in accordance with the <a href="https://plaid.com/legal" target="_blank" rel="noopener noreferrer" className="text-primary underline">Plaid Privacy Policy</a>. This includes transaction history, account balances, and account details. We only store information necessary to provide our services, such as transaction descriptions, amounts, and dates. Sensitive information like account numbers and login credentials are not stored by us.</li>
+              <li><strong>Financial Data from Plaid:</strong> We use Plaid Inc. (&quot;Plaid&quot;) to gather your data from financial institutions. By using our service, you grant us and Plaid the right, power, and authority to act on your behalf to access and transmit your personal and financial information from the relevant financial institution. You agree to your personal and financial information being transferred, stored, and processed by Plaid in accordance with the <a href="https://plaid.com/legal" target="_blank" rel="noopener noreferrer" className="text-primary underline">Plaid Privacy Policy</a>. This includes transaction history, account balances, and account details. We only store information necessary to provide our services, such as transaction descriptions, amounts, and dates. Sensitive information like full account numbers are not stored by us.</li>
             </ul>
           </div>
           
@@ -37,9 +37,9 @@ export default function PrivacyPolicyPage() {
             </p>
             <ul className="list-disc list-inside pl-4 space-y-1">
               <li>Create and manage your account.</li>
-              <li>Process your transactions and automatically categorize them.</li>
+              <li>Process and categorize your financial transactions.</li>
               <li>Provide you with financial insights and reports.</li>
-              <li>Email you regarding your account or order.</li>
+              <li>Communicate with you regarding your account.</li>
               <li>Improve the efficiency and operation of the Application.</li>
             </ul>
           </div>
@@ -61,25 +61,44 @@ export default function PrivacyPolicyPage() {
               We use administrative, technical, and physical security measures to help protect your personal information. Our application is built on Google's Firebase platform, which encrypts all data at rest by default. All data in transit is encrypted using Transport Layer Security (TLS). While we have taken reasonable steps to secure the personal information you provide to us, please be aware that despite our efforts, no security measures are perfect or impenetrable, and no method of data transmission can be guaranteed against any interception or other type of misuse.
             </p>
           </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold">5. DATA RETENTION AND DELETION</h2>
+            <p>
+              We have a defined data retention and deletion policy. We retain your personal and financial data for as long as your account is active with us. If you choose to close your account, your data will be deleted in accordance with the following principles:
+            </p>
+            <ul className="list-disc list-inside pl-4 space-y-1">
+                <li><strong>Account Deletion:</strong> You can request the deletion of your account and all associated data at any time.</li>
+                <li><strong>Deletion Process:</strong> Upon receiving a deletion request, we will permanently and irrevocably delete your personal information and financial data from our production systems within 30 days, except as noted below.</li>
+                <li><strong>Exceptions:</strong> We may retain certain information as required by law (e.g., for tax and accounting purposes) or for legitimate business purposes such as fraud prevention, even after you have closed your account. Any such retained data will remain subject to the protections of this Privacy Policy.</li>
+            </ul>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold">6. YOUR DATA RIGHTS</h2>
+            <p>
+             You have certain rights regarding your personal information. You can request to access, correct, or delete your data by contacting us at the email address provided below. We will respond to your request in a timely manner.
+            </p>
+          </div>
           
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold">5. POLICY FOR CHILDREN</h2>
+            <h2 className="text-xl font-semibold">7. POLICY FOR CHILDREN</h2>
             <p>
               We do not knowingly solicit information from or market to children under the age of 13. If you become aware of any data we have collected from children under age 13, please contact us using the contact information provided below.
             </p>
           </div>
           
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold">6. CHANGES TO THIS PRIVACY POLICY</h2>
+            <h2 className="text-xl font-semibold">8. CHANGES TO THIS PRIVACY POLICY</h2>
             <p>
-              We may update this Privacy Policy from time to time. We will notify you of any changes by updating the &quot;Last updated&quot; date of this Privacy Policy.
+              We may update this Privacy Policy from time to time. We will notify you of any changes by updating the &quot;Last updated&quot; date of this Privacy Policy. This policy is subject to periodic review to ensure compliance with applicable laws and regulations.
             </p>
           </div>
           
           <div className="space-y-2">
-            <h2 className="text-xl font-semibold">7. CONTACT US</h2>
+            <h2 className="text-xl font-semibold">9. CONTACT US</h2>
             <p>
-              If you have questions or comments about this Privacy Policy, please contact us at: [Your Contact Email/Address Here].
+              If you have questions, comments, or requests regarding this Privacy Policy or your data, please contact us at: [Your Contact Email Here].
             </p>
           </div>
         </CardContent>
