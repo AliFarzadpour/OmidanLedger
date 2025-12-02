@@ -77,7 +77,8 @@ const createLinkTokenFlow = ai.defineFlow(
       return response.data.link_token;
     } catch (error: any) {
       console.error("Error creating Plaid link token:", error.response?.data || error.message);
-      throw new Error('Could not create Plaid link token.');
+      const errorMessage = error.response?.data?.error_message || error.message || 'Could not create Plaid link token.';
+      throw new Error(errorMessage);
     }
   }
 );
