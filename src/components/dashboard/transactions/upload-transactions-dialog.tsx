@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
 import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
-import { collection, writeBatch } from 'firebase/firestore';
+import { collection, writeBatch, doc } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 
 const uploadSchema = z.object({
@@ -103,7 +103,7 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
             const newTransaction = {
                 ...transaction,
                 bankAccountId: dataSource.id,
-                userId: user.uid, // <-- FIX: Add the userId here
+                userId: user.uid,
             };
             batch.set(newTransactionDoc, newTransaction);
             setUploadProgress(((index + 1) / totalTransactions) * 100);
