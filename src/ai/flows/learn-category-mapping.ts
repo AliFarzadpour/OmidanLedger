@@ -8,7 +8,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { initializeFirebase, setDocumentNonBlocking } from '@/firebase';
+import { setDocumentNonBlocking } from '@/firebase';
+import { initializeServerFirebase } from '@/firebase/server-init';
 import { doc } from 'firebase/firestore';
 import { createHash } from 'crypto';
 import { generalizeTransactionDescription } from './generalize-transaction-description';
@@ -46,7 +47,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
     // Create a consistent ID based on the *generalized* description to prevent duplicates.
     const mappingId = createHash('md5').update(userId + generalizedDescription).digest('hex');
 
-    const { firestore } = initializeFirebase();
+    const { firestore } = initializeServerFirebase();
     const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
 
     // Use the non-blocking client-side function to set the document

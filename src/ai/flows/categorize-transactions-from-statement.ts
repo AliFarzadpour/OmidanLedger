@@ -16,7 +16,7 @@ import {
 import { MasterCategoryFramework } from './category-framework';
 import { getFirestore } from 'firebase/firestore';
 import { collection, getDocs } from 'firebase/firestore';
-import { initializeFirebase } from '@/firebase';
+import { initializeServerFirebase } from '@/firebase/server-init';
 import { getUserCategoryMappings } from '../utils';
 
 
@@ -60,7 +60,7 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
     outputSchema: StatementOutputSchema,
   },
   async (input) => {
-    const { firestore } = initializeFirebase();
+    const { firestore } = initializeServerFirebase();
     const userMappings = await getUserCategoryMappings(firestore, input.userId);
     const flowInput = { ...input, userMappings };
     const { output } = await extractAndCategorizePrompt(flowInput);

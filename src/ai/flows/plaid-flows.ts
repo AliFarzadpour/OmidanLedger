@@ -10,7 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { PlaidApi, Configuration, PlaidEnvironments, TransactionsSyncRequest, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
-import { initializeFirebase, addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
+import { initializeServerFirebase } from '@/firebase/server-init';
 import { collection, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { categorizeTransactionsFromStatement } from './categorize-transactions-from-statement';
 import { getUserCategoryMappings } from '../utils';
@@ -130,7 +131,7 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
         outputSchema: z.void(),
     },
     async ({ userId, accessToken, metadata }) => {
-        const { firestore } = initializeFirebase();
+        const { firestore } = initializeServerFirebase();
         const plaidClient = getPlaidClient();
 
         try {
@@ -189,7 +190,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     outputSchema: z.object({ count: z.number() }),
   },
   async ({ userId, bankAccountId }) => {
-    const { firestore } = initializeFirebase();
+    const { firestore } = initializeServerFirebase();
     const plaidClient = getPlaidClient();
 
     const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, bankAccountId);
