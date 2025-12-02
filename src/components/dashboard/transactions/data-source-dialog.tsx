@@ -157,12 +157,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent 
-        className="sm:max-w-md"
-        onInteractOutside={(e) => {
-            e.preventDefault();
-        }}
-      >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditMode ? 'Edit Data Source' : 'Add New Data Source'}</DialogTitle>
           <DialogDescription>
