@@ -43,7 +43,7 @@ export async function createLinkToken(input: z.infer<typeof CreateLinkTokenInput
   const { PLAID_CLIENT_ID, PLAID_SECRET } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
     console.error('Plaid client ID or secret not set in environment variables.');
-    throw new Error('Plaid integration is not configured. Please add PLAID_CLIENT_ID and PLAID_SECRET to your environment variables.');
+    throw new Error('Plaid integration is not configured. Please create a free Plaid developer account and add your PLAID_CLIENT_ID and PLAID_SECRET to the .env file in your project root.');
   }
   return createLinkTokenFlow(input);
 }
