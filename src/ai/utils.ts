@@ -1,4 +1,3 @@
-'use server';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
