@@ -16,8 +16,7 @@ import {
 import { MasterCategoryFramework } from './category-framework';
 import { getFirestore } from 'firebase/firestore';
 import { collection, getDocs } from 'firebase/firestore';
-import { initializeServerFirebase } from '@/firebase/server-init';
-import { getUserCategoryMappings } from '../utils';
+import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
 
 
 export async function categorizeTransactionsFromStatement(input: StatementInput): Promise<StatementOutput> {

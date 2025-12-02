@@ -11,10 +11,9 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { PlaidApi, Configuration, PlaidEnvironments, TransactionsSyncRequest, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
 import { addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
-import { initializeServerFirebase } from '@/firebase/server-init';
+import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
 import { collection, doc, getDoc, writeBatch } from 'firebase/firestore';
 import { categorizeTransactionsFromStatement } from './categorize-transactions-from-statement';
-import { getUserCategoryMappings } from '../utils';
 
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;

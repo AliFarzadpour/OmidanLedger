@@ -9,7 +9,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { setDocumentNonBlocking } from '@/firebase';
-import { initializeServerFirebase } from '@/firebase/server-init';
+import { initializeServerFirebase } from '@/ai/utils';
 import { doc } from 'firebase/firestore';
 import { createHash } from 'crypto';
 import { generalizeTransactionDescription } from './generalize-transaction-description';
