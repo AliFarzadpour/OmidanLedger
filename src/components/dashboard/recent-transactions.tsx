@@ -26,7 +26,7 @@ const categoryColors: Record<string, string> = {
   'Dining': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
   'Shopping': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300',
   'Entertainment': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-  'Other': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+  'Other': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 

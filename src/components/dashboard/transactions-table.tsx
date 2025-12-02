@@ -46,7 +46,7 @@ const primaryCategoryColors: Record<string, string> = {
   'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   'Operating Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   'Other Expenses': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  'Balance Sheet Categories': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+  'Balance Sheet Categories': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 
@@ -363,7 +363,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                         variant="outline"
                         className={cn(
                             'w-fit border-0 font-semibold',
-                            primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Other']
+                            primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Balance Sheet Categories']
                         )}
                     >
                         {transaction.primaryCategory}
