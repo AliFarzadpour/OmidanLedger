@@ -66,7 +66,7 @@ const createLinkTokenFlow = ai.defineFlow(
         country_codes: ['US'],
         language: 'en',
         transactions: {
-            days_requested: 730,
+            days_requested: 30,
         }
       });
       return response.data.link_token;
