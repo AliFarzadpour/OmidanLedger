@@ -257,15 +257,15 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     const transactionsColRef = collection(firestore, `users/${userId}/bankAccounts/${bankAccountId}/transactions`);
     
     // Match categorized transactions back to Plaid transactions to get the original ID
-    categorizedTransactions.forEach((tx, index) => {
-        const originalPlaidTx = allTransactions.find(ptx => ptx.name === tx.description && ptx.amount === tx.amount && ptx.date === tx.date);
+    categorizedTransactions.forEach((tx) => {
+        const originalPlaidTx = allTransactions.find(ptx => ptx.name === tx.description && ptx.amount === tx.amount);
         const docId = originalPlaidTx?.transaction_id || doc(transactionsColRef).id; // Use Plaid ID if available, otherwise generate new one
         const newTransactionDoc = doc(transactionsColRef, docId);
 
         batch.set(newTransactionDoc, {
             ...tx,
             bankAccountId: bankAccountId,
-            userId: userId, // <-- FIX: Add the userId here
+            userId: userId,
         });
     });
 
