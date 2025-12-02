@@ -17,13 +17,24 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Upload, ArrowUpDown } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection } from 'firebase/firestore';
+import { Upload, ArrowUpDown, Trash2 } from 'lucide-react';
+import { useUser, useFirestore, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { collection, doc, writeBatch, getDocs } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '../ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -60,7 +71,10 @@ interface TransactionsTableProps {
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isClearAlertOpen, setClearAlertOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({
     key: 'date',
     direction: 'descending',
@@ -73,6 +87,37 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
 
   const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
 
+  const handleClearTransactions = async () => {
+    if (!firestore || !user || !dataSource || !transactionsQuery) return;
+
+    setIsClearing(true);
+    setClearAlertOpen(false);
+
+    try {
+        const querySnapshot = await getDocs(transactionsQuery);
+        const batch = writeBatch(firestore);
+        querySnapshot.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        toast({
+            title: "Transactions Cleared",
+            description: `All transactions for ${dataSource.accountName} have been deleted.`,
+        });
+    } catch (error) {
+        console.error("Error clearing transactions:", error);
+        toast({
+            variant: "destructive",
+            title: "Error Clearing Transactions",
+            description: "An unexpected error occurred while clearing transactions.",
+        });
+    } finally {
+        setIsClearing(false);
+    }
+  };
+
+
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
     const sortableItems = [...transactions];
@@ -83,7 +128,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}`;
         bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}`;
       } else if (sortConfig.key === 'date') {
-        // Handle date sorting correctly
         return sortConfig.direction === 'ascending'
           ? new Date(a.date).getTime() - new Date(b.date).getTime()
           : new Date(b.date).getTime() - new Date(a.date).getTime();
@@ -123,41 +167,53 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     );
   };
 
+  const hasTransactions = transactions && transactions.length > 0;
+
   return (
     <>
       <Card className="h-full shadow-lg">
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <CardTitle>Transactions for {dataSource.accountName}</CardTitle>
             <CardDescription>
               Showing all transactions from {dataSource.bankName}.
             </CardDescription>
           </div>
-          <Button onClick={() => setUploadDialogOpen(true)}>
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Statement
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => setUploadDialogOpen(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Statement
+            </Button>
+            <Button 
+                variant="destructive" 
+                onClick={() => setClearAlertOpen(true)}
+                disabled={!hasTransactions || isClearing}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              {isClearing ? 'Clearing...' : 'Clear All'}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>
+                <TableHead className="p-2">
                    <Button variant="ghost" onClick={() => requestSort('date')}>
                     Date {getSortIcon('date')}
                   </Button>
                 </TableHead>
-                <TableHead>
+                <TableHead className="p-2">
                   <Button variant="ghost" onClick={() => requestSort('description')}>
                     Description {getSortIcon('description')}
                   </Button>
                 </TableHead>
-                <TableHead>
+                <TableHead className="p-2">
                   <Button variant="ghost" onClick={() => requestSort('category')}>
                     Category {getSortIcon('category')}
                   </Button>
                 </TableHead>
-                <TableHead className="text-right">
+                <TableHead className="text-right p-2">
                   <Button variant="ghost" onClick={() => requestSort('amount')}>
                     Amount {getSortIcon('amount')}
                   </Button>
@@ -235,6 +291,26 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         onOpenChange={setUploadDialogOpen}
         dataSource={dataSource}
       />
+      <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete all
+              transactions for <strong>{dataSource.accountName}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "destructive" })}
+              onClick={handleClearTransactions}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
