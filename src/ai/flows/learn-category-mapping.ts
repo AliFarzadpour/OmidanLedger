@@ -9,8 +9,9 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { initializeFirebase, setDocumentNonBlocking } from '@/firebase';
-import { doc, collection } from 'firebase/firestore';
+import { doc } from 'firebase/firestore';
 import { createHash } from 'crypto';
+import { generalizeTransactionDescription } from './generalize-transaction-description';
 
 
 const LearnCategoryMappingInputSchema = z.object({
@@ -39,16 +40,20 @@ const learnCategoryMappingFlow = ai.defineFlow(
   async (input) => {
     const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
     
-    // Create a consistent ID based on the content to prevent duplicates
-    const mappingId = createHash('md5').update(userId + transactionDescription).digest('hex');
+    // First, generalize the description to create a better rule.
+    const { generalizedDescription } = await generalizeTransactionDescription({ transactionDescription });
+
+    // Create a consistent ID based on the *generalized* description to prevent duplicates.
+    const mappingId = createHash('md5').update(userId + generalizedDescription).digest('hex');
 
     const { firestore } = initializeFirebase();
     const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
 
     // Use the non-blocking client-side function to set the document
+    // Save the generalized description as the key for the rule.
     setDocumentNonBlocking(mappingRef, {
         userId,
-        transactionDescription,
+        transactionDescription: generalizedDescription,
         primaryCategory,
         secondaryCategory,
         subcategory,
