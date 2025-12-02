@@ -19,7 +19,8 @@ function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
 
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
-    throw new Error('Plaid client ID or secret not set in environment variables.');
+    console.error('Plaid client ID or secret not set in environment variables.');
+    throw new Error('Plaid integration is not configured. Please create a free Plaid developer account and add your PLAID_CLIENT_ID and PLAID_SECRET to the .env file in your project root.');
   }
 
   const plaidConfig = new Configuration({
@@ -40,11 +41,6 @@ const CreateLinkTokenInputSchema = z.object({
 });
 
 export async function createLinkToken(input: z.infer<typeof CreateLinkTokenInputSchema>): Promise<string> {
-  const { PLAID_CLIENT_ID, PLAID_SECRET } = process.env;
-  if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
-    console.error('Plaid client ID or secret not set in environment variables.');
-    throw new Error('Plaid integration is not configured. Please create a free Plaid developer account and add your PLAID_CLIENT_ID and PLAID_SECRET to the .env file in your project root.');
-  }
   return createLinkTokenFlow(input);
 }
 
