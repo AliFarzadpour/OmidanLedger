@@ -23,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth, useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
 import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
 import { collection } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
@@ -55,7 +55,7 @@ const fileToDataUri = (file: File): Promise<string> => {
 };
 
 export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: UploadTransactionsDialogProps) {
-  const { user } = useAuth();
+  const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
