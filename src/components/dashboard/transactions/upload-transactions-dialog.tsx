@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import Papa from 'papaparse';
 import {
   Dialog,
   DialogContent,
@@ -25,12 +24,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth, useFirestore, addDocumentNonBlocking } from '@/firebase';
-import { categorizeTransactions } from '@/ai/flows/categorize-transactions';
+import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
 import { collection } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 
 const uploadSchema = z.object({
-  file: z.instanceof(FileList).refine((files) => files?.length === 1, 'A CSV file is required.'),
+  file: z.instanceof(FileList).refine((files) => files?.length === 1, 'A CSV or PDF file is required.'),
 });
 
 type UploadFormValues = z.infer<typeof uploadSchema>;
@@ -46,6 +45,15 @@ interface UploadTransactionsDialogProps {
   dataSource: DataSource;
 }
 
+const fileToDataUri = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+};
+
 export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: UploadTransactionsDialogProps) {
   const { user } = useAuth();
   const firestore = useFirestore();
@@ -59,68 +67,62 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
 
   const onSubmit = async (values: UploadFormValues) => {
     if (!user || !firestore) return;
+    
+    const file = values.file[0];
+    if (!file) return;
+
     setIsUploading(true);
     setUploadProgress(0);
 
-    const file = values.file[0];
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: async (results) => {
-        const transactions = results.data as { Date: string; Description: string; Amount: string }[];
-        const transactionsCol = collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
+    try {
+        const dataUri = await fileToDataUri(file);
         
+        toast({
+            title: 'Processing Statement',
+            description: 'The AI is analyzing your document. This may take a moment...',
+        });
+
+        // AI Categorization from the entire statement
+        const result = await categorizeTransactionsFromStatement({
+          statementDataUri: dataUri,
+        });
+
+        if (!result || !result.transactions || result.transactions.length === 0) {
+            throw new Error("The AI could not find any transactions in the document.");
+        }
+
+        const transactionsCol = collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
+        const totalTransactions = result.transactions.length;
         let processedCount = 0;
 
-        for (const record of transactions) {
-          try {
-            // Basic validation
-            if (!record.Date || !record.Description || !record.Amount) continue;
-
-            const amount = parseFloat(record.Amount);
-            if (isNaN(amount)) continue;
-
-            // AI Categorization
-            const categorization = await categorizeTransactions({
-              transactionDescription: record.Description,
-            });
-
+        for (const transaction of result.transactions) {
             const newTransaction = {
-              date: new Date(record.Date).toISOString(),
-              description: record.Description,
-              amount: amount,
-              category: categorization.category || 'Other',
-              bankAccountId: dataSource.id,
-              userId: user.uid,
+                ...transaction,
+                bankAccountId: dataSource.id,
+                userId: user.uid,
             };
-
             addDocumentNonBlocking(transactionsCol, newTransaction);
-
-          } catch (error) {
-            console.error("Error processing transaction:", error);
-          }
-          processedCount++;
-          setUploadProgress((processedCount / transactions.length) * 100);
+            processedCount++;
+            setUploadProgress((processedCount / totalTransactions) * 100);
         }
         
         toast({
           title: 'Upload Complete',
           description: `${processedCount} transactions have been successfully imported and categorized.`,
         });
+
+    } catch (error: any) {
+        console.error("Error processing statement:", error);
+        toast({
+          variant: 'destructive',
+          title: 'Processing Failed',
+          description: error.message || 'An unexpected error occurred while processing the statement.',
+        });
+    } finally {
         setIsUploading(false);
         onOpenChange(false);
         form.reset();
-      },
-      error: (error) => {
-        toast({
-          variant: 'destructive',
-          title: 'Upload Failed',
-          description: `An error occurred while parsing the CSV file: ${error.message}`,
-        });
-        setIsUploading(false);
-      }
-    });
+    }
   };
 
   return (
@@ -134,8 +136,7 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
         <DialogHeader>
           <DialogTitle>Upload Transaction Statement</DialogTitle>
           <DialogDescription>
-            Select a CSV file to upload for the account: <strong>{dataSource.accountName}</strong>.
-            The CSV should have 'Date', 'Description', and 'Amount' columns.
+            Select a CSV or PDF file to upload for the account: <strong>{dataSource.accountName}</strong>.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -145,11 +146,11 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
               name="file"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>CSV File</FormLabel>
+                  <FormLabel>Statement File</FormLabel>
                   <FormControl>
                     <Input 
                       type="file" 
-                      accept=".csv"
+                      accept=".csv,.pdf"
                       disabled={isUploading}
                       {...form.register('file')}
                     />
@@ -171,7 +172,7 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
                 Cancel
               </Button>
               <Button type="submit" disabled={isUploading}>
-                {isUploading ? 'Uploading...' : 'Upload & Categorize'}
+                {isUploading ? 'Processing...' : 'Upload & Categorize'}
               </Button>
             </DialogFooter>
           </form>
