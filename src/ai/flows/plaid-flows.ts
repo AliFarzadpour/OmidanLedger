@@ -5,24 +5,8 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
-
-if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
-  throw new Error('Plaid client ID or secret not set in environment variables.');
-}
-
-const plaidConfig = new Configuration({
-  basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
-  baseOptions: {
-    headers: {
-      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
-      'PLAID-SECRET': process.env.PLAID_SECRET,
-    },
-  },
-});
-
-const plaidClient = new PlaidApi(plaidConfig);
 
 const CreateLinkTokenInputSchema = z.object({
   userId: z.string().describe('The unique identifier for the user.'),
@@ -39,6 +23,23 @@ const createLinkTokenFlow = ai.defineFlow(
     outputSchema: z.string(),
   },
   async ({ userId }) => {
+    if (!process.env.PLAID_CLIENT_ID || !process.env.PLAID_SECRET) {
+      console.error('Plaid client ID or secret not set in environment variables.');
+      throw new Error('Plaid integration is not configured. Please add PLAID_CLIENT_ID and PLAID_SECRET to your environment variables.');
+    }
+
+    const plaidConfig = new Configuration({
+      basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
+      baseOptions: {
+        headers: {
+          'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID,
+          'PLAID-SECRET': process.env.PLAID_SECRET,
+        },
+      },
+    });
+
+    const plaidClient = new PlaidApi(plaidConfig);
+
     try {
       const response = await plaidClient.linkTokenCreate({
         user: {
