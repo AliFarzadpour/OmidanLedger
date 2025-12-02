@@ -178,7 +178,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
 
     const updatedData = {
-      ...transaction, // Keep existing transaction data
       primaryCategory: newCategories.primaryCategory,
       secondaryCategory: newCategories.secondaryCategory,
       subcategory: newCategories.subcategory,
@@ -187,13 +186,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     // Update the document in Firestore
     setDocumentNonBlocking(transactionRef, updatedData, { merge: true });
 
-    const idToken = await user.getIdToken();
     learnCategoryMapping({
         transactionDescription: transaction.description,
         primaryCategory: newCategories.primaryCategory,
         secondaryCategory: newCategories.secondaryCategory,
         subcategory: newCategories.subcategory,
-        idToken: idToken,
+        userId: user.uid,
     });
 
     toast({
@@ -311,11 +309,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           </Table>
         </CardContent>
       </Card>
-      <UploadTransactionsDialog
+      {dataSource && <UploadTransactionsDialog
         isOpen={isUploadDialogOpen}
         onOpenChange={setUploadDialogOpen}
         dataSource={dataSource}
-      />
+      />}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -419,5 +417,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    

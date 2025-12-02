@@ -8,17 +8,10 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeApp, getApps } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { initializeFirebase, setDocumentNonBlocking } from '@/firebase';
+import { doc, collection } from 'firebase/firestore';
 import { createHash } from 'crypto';
 
-if (!getApps().length) {
-  initializeApp();
-}
-
-const db = getFirestore();
-const auth = getAuth();
 
 const LearnCategoryMappingInputSchema = z.object({
     transactionDescription: z
@@ -27,7 +20,7 @@ const LearnCategoryMappingInputSchema = z.object({
     primaryCategory: z.string().describe('The user-corrected primary category.'),
     secondaryCategory: z.string().describe('The user-corrected secondary category.'),
     subcategory: z.string().describe('The user-corrected subcategory.'),
-    idToken: z.string().describe('The Firebase ID token of the user.'),
+    userId: z.string().describe('The Firebase UID of the user.'),
 });
 
 export type LearnCategoryMappingInput = z.infer<typeof LearnCategoryMappingInputSchema>;
@@ -44,17 +37,16 @@ const learnCategoryMappingFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    const { transactionDescription, primaryCategory, secondaryCategory, subcategory, idToken } = input;
+    const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
     
-    const decodedToken = await auth.verifyIdToken(idToken);
-    const userId = decodedToken.uid;
-
     // Create a consistent ID based on the content to prevent duplicates
     const mappingId = createHash('md5').update(userId + transactionDescription).digest('hex');
 
-    const mappingRef = db.collection(`users/${userId}/categoryMappings`).doc(mappingId);
+    const { firestore } = initializeFirebase();
+    const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
 
-    await mappingRef.set({
+    // Use the non-blocking client-side function to set the document
+    setDocumentNonBlocking(mappingRef, {
         userId,
         transactionDescription,
         primaryCategory,
@@ -63,5 +55,3 @@ const learnCategoryMappingFlow = ai.defineFlow(
     }, { merge: true });
   }
 );
-
-    

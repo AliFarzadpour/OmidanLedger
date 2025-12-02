@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
 import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
-import { collection } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 
 const uploadSchema = z.object({
@@ -54,6 +54,18 @@ const fileToDataUri = (file: File): Promise<string> => {
     });
 };
 
+async function getUserCategoryMappings(firestore: any, userId: string): Promise<string> {
+    const mappingsSnapshot = await getDocs(collection(firestore, `users/${userId}/categoryMappings`));
+    if (mappingsSnapshot.empty) {
+        return "No custom mappings provided.";
+    }
+    const mappings = mappingsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return `- Description: "${data.transactionDescription}" -> Category: ${data.primaryCategory} > ${data.secondaryCategory} > ${data.subcategory}`;
+    });
+    return mappings.join('\n');
+}
+
 export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: UploadTransactionsDialogProps) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -81,17 +93,18 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
             title: 'Processing Statement',
             description: 'The AI is analyzing your document. This may take a moment...',
         });
-        
-        const idToken = await user.getIdToken();
 
+        const userMappings = await getUserCategoryMappings(firestore, user.uid);
+        
         // AI Categorization from the entire statement
         const result = await categorizeTransactionsFromStatement({
           statementDataUri: dataUri,
-          userId: idToken,
+          userId: user.uid,
+          userMappings: userMappings,
         });
 
         if (!result || !result.transactions || result.transactions.length === 0) {
-            throw new Error("The AI could not find any transactions in the document.");
+            throw new Error("The AI failed to extract data from the document. This can happen if the file is password-protected, corrupted, or in an unsupported format. Please check the file and try again. If the problem persists on a valid document, the AI service may be temporarily unavailable.");
         }
 
         const transactionsCol = collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
@@ -184,5 +197,3 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
     </Dialog>
   );
 }
-
-    
