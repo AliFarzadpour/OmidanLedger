@@ -231,6 +231,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
 
     if (allTransactions.length === 0) {
+        // Still update the cursor even if there are no new transactions
+        updateDocumentNonBlocking(bankAccountRef, { plaidSyncCursor: cursor });
         return { count: 0 };
     }
     
@@ -254,13 +256,17 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     const batch = writeBatch(firestore);
     const transactionsColRef = collection(firestore, `users/${userId}/bankAccounts/${bankAccountId}/transactions`);
     
-    categorizedTransactions.forEach(tx => {
-      const newTransactionDoc = doc(transactionsColRef); // Auto-generate ID
-      batch.set(newTransactionDoc, {
-        ...tx,
-        bankAccountId: bankAccountId,
-        userId: userId,
-      });
+    // Match categorized transactions back to Plaid transactions to get the original ID
+    categorizedTransactions.forEach((tx, index) => {
+        const originalPlaidTx = allTransactions.find(ptx => ptx.name === tx.description && ptx.amount === tx.amount && ptx.date === tx.date);
+        const docId = originalPlaidTx?.transaction_id || doc(transactionsColRef).id; // Use Plaid ID if available, otherwise generate new one
+        const newTransactionDoc = doc(transactionsColRef, docId);
+
+        batch.set(newTransactionDoc, {
+            ...tx,
+            bankAccountId: bankAccountId,
+            userId: userId, // <-- FIX: Add the userId here
+        });
     });
 
     await batch.commit();

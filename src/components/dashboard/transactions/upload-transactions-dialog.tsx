@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
 import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, writeBatch } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
 
 const uploadSchema = z.object({
@@ -93,25 +93,27 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
         if (!result || !result.transactions || result.transactions.length === 0) {
             throw new Error("The AI failed to extract data from the document. This can happen if the file is password-protected, corrupted, or in an unsupported format. Please check the file and try again. If the problem persists on a valid document, the AI service may be temporarily unavailable.");
         }
-
+        
+        const batch = writeBatch(firestore);
         const transactionsCol = collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
         const totalTransactions = result.transactions.length;
-        let processedCount = 0;
 
-        for (const transaction of result.transactions) {
+        result.transactions.forEach((transaction, index) => {
+            const newTransactionDoc = doc(transactionsCol); // Auto-generate ID
             const newTransaction = {
                 ...transaction,
                 bankAccountId: dataSource.id,
-                userId: user.uid,
+                userId: user.uid, // <-- FIX: Add the userId here
             };
-            addDocumentNonBlocking(transactionsCol, newTransaction);
-            processedCount++;
-            setUploadProgress((processedCount / totalTransactions) * 100);
-        }
+            batch.set(newTransactionDoc, newTransaction);
+            setUploadProgress(((index + 1) / totalTransactions) * 100);
+        });
+        
+        await batch.commit();
         
         toast({
           title: 'Upload Complete',
-          description: `${processedCount} transactions have been successfully imported and categorized.`,
+          description: `${totalTransactions} transactions have been successfully imported and categorized.`,
         });
 
     } catch (error: any) {
