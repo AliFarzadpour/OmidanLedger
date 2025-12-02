@@ -31,6 +31,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { useAuth, useFirestore, addDocumentNonBlocking, setDocumentNonBlocking } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
+import { PlaidLink } from './plaid-link';
+import { Separator } from '@/components/ui/separator';
 
 const dataSourceSchema = z.object({
   accountName: z.string().min(1, 'Account name is required.'),
@@ -106,16 +108,34 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
     setIsSubmitting(false);
     onOpenChange(false);
   };
+  
+  const handlePlaidSuccess = () => {
+    // This will be implemented in the next step.
+    // It will handle the public_token and create the bank account.
+    console.log('Plaid connection successful! We will handle this in the next step.');
+    onOpenChange(false);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditMode ? 'Edit Data Source' : 'Add New Data Source'}</DialogTitle>
           <DialogDescription>
-            {isEditMode ? 'Update the details for your data source.' : 'Enter the details for your new bank account, credit card, or cash source.'}
+             Connect to thousands of banks with Plaid or add a manual account.
           </DialogDescription>
         </DialogHeader>
+
+        <PlaidLink onSuccess={handlePlaidSuccess} />
+        
+        <div className="flex items-center gap-4">
+            <Separator className="flex-1" />
+            <span className="text-sm text-muted-foreground">OR</span>
+            <Separator className="flex-1" />
+        </div>
+
+        <p className="text-sm text-muted-foreground text-center -mt-2">Add a manual data source for cash or other offline accounts.</p>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -181,11 +201,8 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (isEditMode ? 'Saving...' : 'Adding...') : (isEditMode ? 'Save Changes' : 'Add Account')}
+                {isSubmitting ? 'Saving...' : 'Save Manual Account'}
               </Button>
             </DialogFooter>
           </form>
