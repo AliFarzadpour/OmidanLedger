@@ -6,6 +6,8 @@
  * - createBankAccountFromPlaid: Creates a bank account record in Firestore from Plaid data.
  * - syncAndCategorizePlaidTransactions: Fetches, categorizes, and saves transactions from Plaid.
  */
+import { config } from 'dotenv';
+config();
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
