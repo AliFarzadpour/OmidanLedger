@@ -123,6 +123,13 @@ export default function SignupPage() {
           </Form>
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
+          <div className="text-xs text-center text-muted-foreground">
+            By clicking Create Account, you agree to our
+            <Link href="/privacy" className="underline underline-offset-4 ml-1">
+              Privacy Policy
+            </Link>
+            .
+          </div>
           <div className="text-center text-sm">
             Already have an account?{' '}
             <Link href="/login" className="underline">
