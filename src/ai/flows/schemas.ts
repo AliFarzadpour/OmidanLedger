@@ -17,11 +17,11 @@ export const CategorizedTransactionSchema = z.object({
     .describe(
       'The transaction amount. Positive for income, negative for expenses.'
     ),
-  category: z
-    .string()
-    .describe(
-      'The category of the transaction (e.g., Groceries, Utilities, Dining, Travel, Entertainment, Shopping, Bills, Income, Other).'
-    ),
+  primaryCategory: z.string().describe('The top-level category (e.g., "Operating Expenses").'),
+  secondaryCategory: z.string().describe('The second-level category (e.g., "Marketing & Advertising").'),
+  subcategory: z.string().describe('The most specific, third-level category (e.g., "Google Ads").'),
+  confidence: z.number().describe('The confidence score (0-1) of the categorization.'),
+  notes: z.string().describe('A brief note explaining the categorization reasoning.'),
 });
 export type CategorizedTransaction = z.infer<
   typeof CategorizedTransactionSchema

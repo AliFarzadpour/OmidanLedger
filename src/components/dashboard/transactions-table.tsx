@@ -25,15 +25,14 @@ import { collection } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '../ui/skeleton';
 
-const categoryColors: Record<string, string> = {
-  Groceries: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  Income: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  Bills: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-  Dining: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  Shopping: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300',
-  Entertainment: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-  Other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+const primaryCategoryColors: Record<string, string> = {
+  'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'Operating Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Other Expenses': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+  'Balance Sheet Categories': 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 };
+
 
 interface DataSource {
   id: string;
@@ -45,11 +44,13 @@ interface Transaction {
   id: string;
   date: string;
   description: string;
-  category: string;
+  primaryCategory: string;
+  secondaryCategory: string;
+  subcategory: string;
   amount: number;
 }
 
-type SortKey = keyof Omit<Transaction, 'id'>;
+type SortKey = 'date' | 'description' | 'category' | 'amount';
 type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
@@ -76,18 +77,28 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!transactions) return [];
     const sortableItems = [...transactions];
     sortableItems.sort((a, b) => {
-      const aValue = a[sortConfig.key];
-      const bValue = b[sortConfig.key];
+      let aValue: string | number, bValue: string | number;
 
+      if (sortConfig.key === 'category') {
+        aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}`;
+        bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}`;
+      } else if (sortConfig.key === 'date') {
+        // Handle date sorting correctly
+        return sortConfig.direction === 'ascending'
+          ? new Date(a.date).getTime() - new Date(b.date).getTime()
+          : new Date(b.date).getTime() - new Date(a.date).getTime();
+      } else {
+        aValue = a[sortConfig.key as keyof Omit<Transaction, 'id' | 'date'>];
+        bValue = b[sortConfig.key as keyof Omit<Transaction, 'id' | 'date'>];
+      }
+      
       let comparison = 0;
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         comparison = aValue.localeCompare(bValue);
       } else if (typeof aValue === 'number' && typeof bValue === 'number') {
         comparison = aValue - bValue;
-      } else if (sortConfig.key === 'date') {
-        comparison = new Date(aValue).getTime() - new Date(bValue).getTime();
       }
-
+      
       return sortConfig.direction === 'ascending' ? comparison : -comparison;
     });
     return sortableItems;
@@ -162,7 +173,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                       <Skeleton className="h-5 w-3/4" />
                     </TableCell>
                     <TableCell>
-                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="h-6 w-40 rounded-full" />
                     </TableCell>
                     <TableCell className="text-right">
                       <Skeleton className="h-5 w-16 ml-auto" />
@@ -179,15 +190,20 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                       <div className="font-medium">{transaction.description}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'border-0',
-                          categoryColors[transaction.category] || categoryColors['Other']
-                        )}
-                      >
-                        {transaction.category}
-                      </Badge>
+                       <div className="flex flex-col">
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            'w-fit border-0 font-semibold',
+                            primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Other']
+                          )}
+                        >
+                          {transaction.primaryCategory}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground pl-1">
+                          {transaction.secondaryCategory} &gt; {transaction.subcategory}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell
                       className={cn(
