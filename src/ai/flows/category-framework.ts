@@ -1,3 +1,4 @@
+
 export const MasterCategoryFramework = `
 1. Income (Revenue)
   1.1 Operating Income
@@ -32,11 +33,8 @@ export const MasterCategoryFramework = `
     - Warehousing Fees
     - Customs / Import Duties
     - Manufacturing Costs
-    - Merchant Fees (if directly tied to sales)
   2.2 Service-Based COGS
     - Subcontractor / Freelancer Payments
-    - Software Used for Service Delivery
-    - Labor Directly Tied to Revenue
     - Supplies Used in Service Delivery
   2.3 Ecommerce COGS
     - Amazon FBA Fees
@@ -55,44 +53,37 @@ export const MasterCategoryFramework = `
     - Bank Fees
     - Credit Card Interest
     - Telephone / Mobile
-    - Software Subscriptions (SaaS)
     - Printing / Stationery
     - Repairs & Maintenance
     - Furniture & Equipment (expensed)
     - Cleaning Services
     - Storage Unit Fees
   3.2 Marketing & Advertising
-    - Google Ads
-    - Facebook Ads
-    - Instagram / TikTok Ads
+    - Digital Advertising (Google, Facebook, etc.)
     - SEO Services
-    - Website Hosting
+    - Website Hosting & Domains
     - Graphic Design
     - Influencer Payments
     - Promotional Materials
     - Sponsorships
     - Events / Trade Shows
   3.3 Payroll & Employee Expenses
-    - Salaries
-    - Wages
+    - Salaries & Wages
     - Payroll Taxes
     - Employee Benefits (Health, Vision, Dental)
     - Employee Reimbursements
-    - Contractor / Freelancer Payments (non-COGS)
     - Recruitment Costs
   3.4 Professional Services
     - Accounting & Bookkeeping
     - Legal Fees
-    - Consulting Fees
+    - Business Consulting Fees
     - Tax Preparation
     - Compliance Fees
     - Registered Agent Fees
+    - Contractor Payments (non-COGS)
   3.5 Technology & Software
+    - Software & SaaS Subscriptions (e.g., CRM, Project Mgmt)
     - Cloud Hosting (AWS, GCP, Firebase)
-    - Domain Registration
-    - Email Hosting (Google Workspace, Microsoft 365)
-    - CRM Software
-    - Project Management Software
     - API Services
     - System Integrations
   3.6 Vehicle & Travel
@@ -108,8 +99,6 @@ export const MasterCategoryFramework = `
     - General Liability
     - Workers' Compensation
     - Professional Liability (E&O)
-    - Commercial Auto
-    - Health Insurance Employer Portion
     - Cybersecurity Insurance
   3.8 Taxes & Licensing
     - Business Licenses
