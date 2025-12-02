@@ -169,7 +169,10 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
           </p>
         ) : (
           <>
-            <PlaidLink onSuccess={handlePlaidSuccess} />
+            <PlaidLink 
+              onSuccess={handlePlaidSuccess}
+              onOpen={() => onOpenChange(false)}
+            />
             
             <div className="flex items-center gap-4">
                 <Separator className="flex-1" />

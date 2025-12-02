@@ -5,12 +5,14 @@ import { usePlaidLink } from 'react-plaid-link';
 import { Button } from '@/components/ui/button';
 import { createLinkToken } from '@/ai/flows/plaid-flows';
 import { useUser } from '@/firebase';
+import { PlaidLinkOptions } from 'react-plaid-link';
 
 interface PlaidLinkProps {
-  onSuccess: (public_token: string, metadata: any) => void;
+  onSuccess: PlaidLinkOptions['onSuccess'];
+  onOpen?: PlaidLinkOptions['onOpen'];
 }
 
-export function PlaidLink({ onSuccess }: PlaidLinkProps) {
+export function PlaidLink({ onSuccess, onOpen }: PlaidLinkProps) {
   const { user } = useUser();
   const [linkToken, setLinkToken] = useState<string | null>(null);
 
@@ -31,6 +33,7 @@ export function PlaidLink({ onSuccess }: PlaidLinkProps) {
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
+    onOpen,
   });
 
   return (
