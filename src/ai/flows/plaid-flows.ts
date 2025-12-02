@@ -18,10 +18,14 @@ import { categorizeTransactionsFromStatement } from './categorize-transactions-f
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
 
-  if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
-    // This is the critical error message that will guide the user.
+  if (!PLAID_CLIENT_ID || PLAID_CLIENT_ID === 'YOUR_PLAID_CLIENT_ID') {
     throw new Error(
-      'Plaid integration is not configured. Please create a free Plaid developer account at https://plaid.com/, then add your PLAID_CLIENT_ID and PLAID_SECRET to the .env file in the root of your project.'
+      'Plaid integration is not configured. Please add your PLAID_CLIENT_ID to the .env file.'
+    );
+  }
+   if (!PLAID_SECRET || PLAID_SECRET === 'YOUR_PLAID_SECRET') {
+    throw new Error(
+      'Plaid integration is not configured. Please add your PLAID_SECRET to the .env file.'
     );
   }
 
