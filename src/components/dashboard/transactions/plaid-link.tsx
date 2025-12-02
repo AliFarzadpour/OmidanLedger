@@ -9,13 +9,11 @@ import { PlaidLinkOptions, PlaidLinkOnExit, PlaidLinkOnSuccess } from 'react-pla
 
 interface PlaidLinkProps {
   onSuccess: PlaidLinkOnSuccess;
-  onOpenChange: (open: boolean) => void;
 }
 
-export function PlaidLink({ onSuccess, onOpenChange }: PlaidLinkProps) {
+export function PlaidLink({ onSuccess }: PlaidLinkProps) {
   const { user } = useUser();
   const [linkToken, setLinkToken] = useState<string | null>(null);
-  const [shouldOpen, setShouldOpen] = useState(false);
 
   useEffect(() => {
     async function generateToken() {
@@ -30,36 +28,14 @@ export function PlaidLink({ onSuccess, onOpenChange }: PlaidLinkProps) {
     }
     generateToken();
   }, [user]);
-
-  const onExit = useCallback<PlaidLinkOnExit>(
-    (error, metadata) => {
-      onOpenChange(false);
-      console.log('Plaid Link exited:', error, metadata);
-    },
-    [onOpenChange]
-  );
   
   const { open, ready } = usePlaidLink({
     token: linkToken,
     onSuccess,
-    onExit,
   });
 
-  useEffect(() => {
-    if (shouldOpen && ready) {
-      // Use a timeout to ensure the dialog has had time to close and unmount
-      setTimeout(() => open(), 0);
-      setShouldOpen(false); // Reset the trigger
-    }
-  }, [shouldOpen, ready, open]);
-
-  const handleOpenPlaid = () => {
-    onOpenChange(false); // Close the dialog first
-    setShouldOpen(true);  // Set state to trigger opening Plaid Link in useEffect
-  };
-
   return (
-    <Button onClick={handleOpenPlaid} disabled={!ready || !linkToken} className="w-full">
+    <Button onClick={() => open()} disabled={!ready || !linkToken} className="w-full">
       Connect with Plaid
     </Button>
   );
