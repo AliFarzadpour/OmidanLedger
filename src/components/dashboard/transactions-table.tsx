@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import {
   Card,
@@ -14,10 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { transactionsData } from '@/lib/data';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Upload } from 'lucide-react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
+import { Skeleton } from '../ui/skeleton';
 
 const categoryColors: Record<string, string> = {
   Groceries: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
@@ -26,77 +32,127 @@ const categoryColors: Record<string, string> = {
   Dining: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
   Shopping: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300',
   Entertainment: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  Other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 };
 
 interface DataSource {
-    id: string;
-    accountName: string;
-    bankName: string;
+  id: string;
+  accountName: string;
+  bankName: string;
+}
+
+interface Transaction {
+  id: string;
+  date: string;
+  description: string;
+  category: string;
+  amount: number;
 }
 
 interface TransactionsTableProps {
-    dataSource: DataSource;
+  dataSource: DataSource;
 }
 
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user || !dataSource) return null;
+    return collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
+  }, [firestore, user, dataSource]);
+
+  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+
   return (
-    <Card className="h-full shadow-lg">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>Transactions for {dataSource.accountName}</CardTitle>
-          <CardDescription>
-            Showing all transactions from {dataSource.bankName}.
-          </CardDescription>
-        </div>
-        <Button>
-          <Upload className="mr-2 h-4 w-4" />
-          Upload Statement
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Description</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {transactionsData.map((transaction) => (
-              <TableRow key={transaction.id}>
-                <TableCell>
-                  <div className="font-medium">{transaction.description}</div>
-                  <div className="text-sm text-muted-foreground">{transaction.date}</div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={cn(
-                      'border-0',
-                      categoryColors[transaction.category] || 'bg-gray-100 text-gray-800'
-                    )}
-                  >
-                    {transaction.category}
-                  </Badge>
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    'text-right font-medium',
-                    transaction.amount > 0 ? 'text-green-600' : 'text-foreground'
-                  )}
-                >
-                  {transaction.amount > 0 ? '+' : ''}
-                  {new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                  }).format(transaction.amount)}
-                </TableCell>
+    <>
+      <Card className="h-full shadow-lg">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Transactions for {dataSource.accountName}</CardTitle>
+            <CardDescription>
+              Showing all transactions from {dataSource.bankName}.
+            </CardDescription>
+          </div>
+          <Button onClick={() => setUploadDialogOpen(true)}>
+            <Upload className="mr-2 h-4 w-4" />
+            Upload Statement
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Description</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {isLoading ? (
+                [...Array(5)].map((_, i) => (
+                  <TableRow key={i}>
+                    <TableCell>
+                      <Skeleton className="h-5 w-3/4" />
+                      <Skeleton className="mt-1 h-4 w-1/4" />
+                    </TableCell>
+                    <TableCell>
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Skeleton className="h-5 w-16 ml-auto" />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : transactions && transactions.length > 0 ? (
+                transactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>
+                      <div className="font-medium">{transaction.description}</div>
+                      <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'border-0',
+                          categoryColors[transaction.category] || categoryColors['Other']
+                        )}
+                      >
+                        {transaction.category}
+                      </Badge>
+                    </TableCell>
+                    <TableCell
+                      className={cn(
+                        'text-right font-medium',
+                        transaction.amount > 0 ? 'text-green-600' : 'text-foreground'
+                      )}
+                    >
+                      {transaction.amount > 0 ? '+' : ''}
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: 'USD',
+                      }).format(transaction.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={3} className="h-24 text-center">
+                    No transactions found. Upload a statement to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+      <UploadTransactionsDialog
+        isOpen={isUploadDialogOpen}
+        onOpenChange={setUploadDialogOpen}
+        dataSource={dataSource}
+      />
+    </>
   );
 }
