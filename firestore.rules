@@ -107,40 +107,28 @@ service cloud.firestore {
        * @principle Enforces document ownership for all operations and validates relational integrity on writes.
        */
       match /fiscalYears/{fiscalYearId} {
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId);
-        allow create: if isCreatingUserChildDoc(userId);
-        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read, write: if isOwner(userId);
+      }
 
+      /**
+       * @description Stores journal entries for a specific fiscal year.
+       * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}
+       * @allow (get, list, create, update, delete) A user can fully manage their own journal entries.
+       * @deny (get) A user cannot access journal entries belonging to another user.
+       * @principle Enforces document ownership and validates the link to the parent fiscalYear document.
+       */
+      match /fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId} {
+        allow read, write: if isOwner(userId);
+        
         /**
-         * @description Stores journal entries for a specific fiscal year.
-         * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}
-         * @allow (get, list, create, update, delete) A user can fully manage their own journal entries.
-         * @deny (get) A user cannot access journal entries belonging to another user.
-         * @principle Enforces document ownership and validates the link to the parent fiscalYear document.
+         * @description Stores line items for a specific journal entry.
+         * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}
+         * @allow (get, list, create, update, delete) A user can fully manage their own journal entry line items.
+         * @deny (get) A user cannot access line items belonging to another user's journal entry.
+         * @principle Enforces document ownership and validates the link to the parent journalEntry document.
          */
-        match /journalEntries/{journalEntryId} {
-          allow get: if isOwner(userId);
-          allow list: if isOwner(userId);
-          allow create: if isCreatingNestedChildDoc(userId, fiscalYearId, 'fiscalYearId');
-          allow update: if isExistingOwner(userId) && isIdImmutable('fiscalYearId');
-          allow delete: if isExistingOwner(userId);
-
-          /**
-           * @description Stores line items for a specific journal entry.
-           * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}
-           * @allow (get, list, create, update, delete) A user can fully manage their own journal entry line items.
-           * @deny (get) A user cannot access line items belonging to another user's journal entry.
-           * @principle Enforces document ownership and validates the link to the parent journalEntry document.
-           */
-          match /lineItems/{lineItemId} {
-            allow get: if isOwner(userId);
-            allow list: if isOwner(userId);
-            allow create: if isCreatingNestedChildDoc(userId, journalEntryId, 'journalEntryId');
-            allow update: if isExistingOwner(userId) && isIdImmutable('journalEntryId');
-            allow delete: if isExistingOwner(userId);
-          }
+        match /lineItems/{lineItemId} {
+          allow read, write: if isOwner(userId);
         }
       }
 
@@ -152,11 +140,7 @@ service cloud.firestore {
        * @principle Enforces document ownership for all operations and validates relational integrity on writes.
        */
       match /bankAccounts/{bankAccountId} {
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId);
-        allow create: if isCreatingUserChildDoc(userId);
-        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read, write: if isOwner(userId);
 
         /**
          * @description Stores transactions for a specific bank account.
@@ -166,11 +150,7 @@ service cloud.firestore {
          * @principle Enforces document ownership and validates the link to the parent bankAccount document.
          */
         match /transactions/{transactionId} {
-          allow get: if isOwner(userId);
-          allow list: if isOwner(userId);
-          allow create: if isCreatingNestedChildDoc(userId, bankAccountId, 'bankAccountId');
-          allow update: if isExistingOwner(userId) && isIdImmutable('bankAccountId') && isIdImmutable('userId');
-          allow delete: if isExistingOwner(userId);
+          allow read, write: if isOwner(userId);
         }
       }
 
@@ -182,26 +162,20 @@ service cloud.firestore {
        * @principle Enforces document ownership for all operations and validates relational integrity on writes.
        */
       match /categories/{categoryId} {
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId);
-        allow create: if isCreatingUserChildDoc(userId);
-        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read, write: if isOwner(userId);
       }
 
       /**
        * @description Manages the collection of accounts for a user's chart of accounts.
        * @path /users/{userId}/accounts/{accountId}
-       * @allow (list, get) A user can list and read the accounts they own.
-       * @allow (create, update, delete) A user can manage their own account documents.
+       * @allow (read) A user can list and read the accounts they own.
+       * @allow (write) A user can manage their own account documents.
        * @deny (get) A user cannot access another user's account.
        * @principle Enforces document ownership for all operations and validates relational integrity on writes.
        */
       match /accounts/{accountId} {
-        allow list, get: if isOwner(userId);
-        allow create: if isCreatingUserChildDoc(userId);
-        allow update: if isExistingOwner(userId) && isIdImmutable('userId');
-        allow delete: if isExistingOwner(userId);
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
       }
         
       /**
@@ -222,6 +196,3 @@ service cloud.firestore {
     }
   }
 }
-    
-
-    
