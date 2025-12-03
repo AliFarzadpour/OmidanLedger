@@ -25,40 +25,6 @@ const GenerateFinancialReportInputSchema = z.object({
 });
 export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
-// Define the schema for the prompt's input.
-const FinancialReportPromptSchema = z.object({
-    userQuery: z.string(),
-    transactionData: z.string(),
-    currentDate: z.string(),
-});
-
-// Define the prompt at the module level.
-const reportingPrompt = ai.definePrompt({
-    name: 'financialReportPrompt',
-    input: {
-        schema: FinancialReportPromptSchema,
-    },
-    prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
-The data is in CSV format: 'date, description, amount, category_path'.
-
-Today's Date: {{{currentDate}}}
-
-User's Question:
-"{{{userQuery}}}"
-
-Transaction Data:
----
-{{{transactionData}}}
----
-
-Based on the data, provide a clear, concise answer to the user's question.
-- Perform calculations if necessary (e.g., summing totals, finding averages).
-- Format your answer in clear, readable Markdown. Use tables, lists, and bold text to improve readability.
-- If the data is insufficient to answer the question, state that clearly and explain what information is missing.
-- Do not invent data. Your entire analysis must be based *only* on the transaction data provided.`,
-});
-
-
 export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
   return generateFinancialReportFlow(input);
 }
@@ -89,13 +55,30 @@ const generateFinancialReportFlow = ai.defineFlow(
       .map(t => `${t.date},${t.description},${t.amount.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`)
       .join('\n');
     
-    // 3. Call the prompt with the received input, ensuring it matches the prompt's schema.
-    const { output } = await reportingPrompt({
-        userQuery,
-        transactionData: transactionData,
-        currentDate: new Date().toISOString().split('T')[0],
+    const currentDate = new Date().toISOString().split('T')[0];
+
+    // 3. Use ai.generate() directly with a template literal prompt
+    const response = await ai.generate({
+      prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
+The data is in CSV format: 'date,description,amount,category_path'.
+
+Today's Date: ${currentDate}
+
+User's Question:
+"${userQuery}"
+
+Transaction Data:
+---
+${transactionData}
+---
+
+Based on the data, provide a clear, concise answer to the user's question.
+- Perform calculations if necessary (e.g., summing totals, finding averages).
+- Format your answer in clear, readable Markdown. Use tables, lists, and bold text to improve readability.
+- If the data is insufficient to answer the question, state that clearly and explain what information is missing.
+- Do not invent data. Your entire analysis must be based *only* on the transaction data provided.`
     });
     
-    return output || "I was unable to generate a report based on your request. Please try rephrasing your question.";
+    return response.text;
   }
 );
