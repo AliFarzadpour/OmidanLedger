@@ -13,14 +13,17 @@ const GenerateFinancialReportInputSchema = z.object({
 });
 export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
+// Define the schema for the prompt's input.
+const FinancialReportPromptSchema = z.object({
+    userQuery: z.string(),
+    transactionData: z.string(),
+});
+
 // Define the prompt at the module level.
 const reportingPrompt = ai.definePrompt({
     name: 'financialReportPrompt',
     input: {
-        schema: z.object({
-            userQuery: z.string(),
-            transactionData: z.string(),
-        }),
+        schema: FinancialReportPromptSchema,
     },
     prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
 The data is in CSV format: 'date, description, amount, category_path'.
@@ -55,7 +58,7 @@ const generateFinancialReportFlow = ai.defineFlow(
   },
   async ({ userQuery, transactionData }) => {
     
-    // Call the prompt with the received input.
+    // Call the prompt with the received input, ensuring it matches the prompt's schema.
     const { output } = await reportingPrompt({
         userQuery,
         transactionData,
