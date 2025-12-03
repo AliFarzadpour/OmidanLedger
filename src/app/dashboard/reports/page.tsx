@@ -2,10 +2,16 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, FileText, BarChart, Database } from 'lucide-react';
+import { ArrowRight, FileText, BarChart, BookOpen } from 'lucide-react';
 import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 const reports = [
+  {
+    title: 'General Ledger',
+    description: 'View a detailed history of all transactions for each bank account.',
+    href: '/dashboard/reports/general-ledger',
+    icon: BookOpen,
+  },
   {
     title: 'Expense Summary',
     description: 'A breakdown of your expenses by category.',
