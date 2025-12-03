@@ -192,14 +192,13 @@ service cloud.firestore {
       /**
        * @description Manages the collection of accounts for a user's chart of accounts.
        * @path /users/{userId}/accounts/{accountId}
-       * @allow (list) A user can list all the accounts they own.
-       * @allow (get, create, update, delete) A user can manage their own account documents.
+       * @allow (list, get) A user can list and read the accounts they own.
+       * @allow (create, update, delete) A user can manage their own account documents.
        * @deny (get) A user cannot access another user's account.
        * @principle Enforces document ownership for all operations and validates relational integrity on writes.
        */
       match /accounts/{accountId} {
-        allow list: if isOwner(userId);
-        allow get: if isOwner(userId);
+        allow list, get: if isOwner(userId);
         allow create: if isCreatingUserChildDoc(userId);
         allow update: if isExistingOwner(userId) && isIdImmutable('userId');
         allow delete: if isExistingOwner(userId);
@@ -223,4 +222,6 @@ service cloud.firestore {
     }
   }
 }
+    
+
     
