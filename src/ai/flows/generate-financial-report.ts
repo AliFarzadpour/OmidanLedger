@@ -2,8 +2,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { initializeServerFirebase } from '@/ai/utils';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import { db } from '@/lib/firebase-admin';
+import { collectionGroup, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 
 // Represents a transaction document in Firestore
 interface Transaction {
@@ -14,6 +14,7 @@ interface Transaction {
   primaryCategory: string;
   secondaryCategory: string;
   subcategory: string;
+  userId: string;
 }
 
 // 1. Input Schema Change: Now only accepts userId and the user's query.
@@ -29,11 +30,12 @@ export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialRepor
  */
 async function fetchAndFormatTransactions(userId: string): Promise<string> {
   try {
-    const { firestore } = initializeServerFirebase();
-
-    // Query the subcollection directly for a specific user
+    // Note: We use the Client SDK syntax here, but because we initialize with admin
+    // credentials on the server, it has the necessary permissions.
+    // This maintains syntax consistency with client-side queries.
     const transactionsQuery = query(
-      collection(firestore, `users/${userId}/transactions`),
+      collectionGroup(db, 'transactions'),
+      where('userId', '==', userId),
       orderBy('date', 'desc'), // Order by date
       limit(500) // Limit to the last 500 transactions to manage token count
     );
@@ -53,6 +55,7 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     const csvString = transactions
       .map((t) => {
         const amt = typeof t.amount === 'number' ? t.amount : Number(t.amount ?? 0);
+        // Sanitize description for CSV: remove commas and newlines
         const safeDescription = (t.description ?? '').replace(/,/g, ' ').replace(/\n/g, ' ');
         return `${t.date},${safeDescription},${amt.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`;
       })
@@ -66,6 +69,7 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     throw new Error("Could not fetch transaction history from the database. Please check server logs and Firestore permissions.");
   }
 }
+
 
 // The main Server Action that can be called from the client.
 export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
