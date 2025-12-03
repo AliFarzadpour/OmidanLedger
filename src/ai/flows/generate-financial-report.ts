@@ -17,8 +17,8 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
   try {
     console.log(`[AI-FLOW] Fetching transactions for user: ${userId}`);
     
-    // CORRECT SYNTAX: Method chaining (db.collection().doc()...)
-    // Do NOT use "collection(db, ...)" functions here.
+    // Perform a collection group query filtered by userId.
+    // Sorting and limiting will be done in the code to avoid needing a composite index.
     const snapshot = await db
       .collectionGroup('transactions')
       .where('userId', '==', userId)
