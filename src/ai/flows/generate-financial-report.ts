@@ -13,28 +13,16 @@ const GenerateFinancialReportInputSchema = z.object({
 });
 export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
-export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
-  return generateFinancialReportFlow(input);
-}
-
-const generateFinancialReportFlow = ai.defineFlow(
-  {
-    name: 'generateFinancialReportFlow',
-    inputSchema: GenerateFinancialReportInputSchema,
-    outputSchema: z.string(),
-  },
-  async ({ userQuery, transactionData }) => {
-    
-    // Define the LLM prompt. It now receives the transaction data directly.
-    const reportingPrompt = ai.definePrompt({
-        name: 'financialReportPrompt',
-        input: {
-            schema: z.object({
-                userQuery: z.string(),
-                transactionData: z.string(),
-            }),
-        },
-        prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
+// Define the prompt at the module level.
+const reportingPrompt = ai.definePrompt({
+    name: 'financialReportPrompt',
+    input: {
+        schema: z.object({
+            userQuery: z.string(),
+            transactionData: z.string(),
+        }),
+    },
+    prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
 The data is in CSV format: 'date, description, amount, category_path'.
 
 Today's Date: ${new Date().toISOString().split('T')[0]}
@@ -52,8 +40,22 @@ Based on the data, provide a clear, concise answer to the user's question.
 - Format your answer in clear, readable Markdown. Use tables, lists, and bold text to improve readability.
 - If the data is insufficient to answer the question, state that clearly and explain what information is missing.
 - Do not invent data. Your entire analysis must be based *only* on the transaction data provided.`,
-    });
+});
 
+
+export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
+  return generateFinancialReportFlow(input);
+}
+
+const generateFinancialReportFlow = ai.defineFlow(
+  {
+    name: 'generateFinancialReportFlow',
+    inputSchema: GenerateFinancialReportInputSchema,
+    outputSchema: z.string(),
+  },
+  async ({ userQuery, transactionData }) => {
+    
+    // Call the prompt with the received input.
     const { output } = await reportingPrompt({
         userQuery,
         transactionData,
