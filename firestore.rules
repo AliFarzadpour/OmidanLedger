@@ -142,9 +142,9 @@ service cloud.firestore {
     /**
      * @description Manages the collection of accounts for a user's chart of accounts.
      * @path /users/{userId}/accounts/{accountId}
-     * @allow (read, write) A user can read and write to their own accounts. The `read` permission covers both `get` and `list`.
+     * @allow (read, write) A user can read, list, and write to their own accounts.
      * @deny (any) A user cannot access another user's accounts.
-     * @principle Enforces document ownership for all operations. `read` allows collection queries, `write` allows document modifications.
+     * @principle Enforces document ownership for all operations. `read` allows get and list queries, `write` allows document modifications.
      */
     match /users/{userId}/accounts/{accountId} {
       allow read, write: if isOwner(userId);
