@@ -203,10 +203,12 @@ service cloud.firestore {
          * @principle Enforces document ownership for all operations and validates relational integrity on writes.
          */
         allow get: if isOwner(userId);
-        allow list: if isOwner(userId);
         allow create: if isCreatingUserChildDoc(userId);
         allow update: if isExistingOwner(userId) && isIdImmutable('userId');
         allow delete: if isExistingOwner(userId);
+      }
+      match /accounts {
+          allow list: if isOwner(userId);
       }
         
       /**
