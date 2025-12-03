@@ -2,31 +2,19 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BookText, Scale, Files, FileText } from 'lucide-react';
+import { ArrowRight, FileText, BarChart } from 'lucide-react';
 
 const reports = [
   {
-    title: 'General Ledger',
-    description: 'View a detailed list of all transactions for each account.',
-    href: '/dashboard/reports/general-ledger',
-    icon: BookText,
+    title: 'Expense Summary',
+    description: 'A breakdown of your expenses by category.',
+    href: '/dashboard/reports/expense-summary',
+    icon: BarChart,
   },
   {
-    title: 'Chart of Accounts',
-    description: 'See the complete list of all accounts in your accounting system.',
-    href: '/dashboard/reports/chart-of-accounts',
-    icon: Files,
-  },
-  {
-    title: 'Trial Balance',
-    description: 'A summary of debits and credits to verify bookkeeping accuracy.',
-    href: '/dashboard/reports/trial-balance',
-    icon: Scale,
-  },
-  {
-    title: 'Journal Entries',
-    description: 'Review all manual journal entries recorded in the system.',
-    href: '/dashboard/reports/journal-entries',
+    title: 'Income Statement',
+    description: 'A summary of your revenues and expenses over a period.',
+    href: '/dashboard/reports/income-statement',
     icon: FileText,
   },
 ];
@@ -37,7 +25,7 @@ export default function ReportsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
         <p className="text-muted-foreground">
-          Generate and view standard bookkeeping and transaction reports.
+          Generate and view reports based on your transaction data.
         </p>
       </div>
 

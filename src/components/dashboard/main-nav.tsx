@@ -19,9 +19,10 @@ import Link from 'next/link';
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/dashboard/transactions', label: 'Transactions', icon: ArrowLeftRight },
-  { href: '/dashboard/accounts', label: 'Accounts', icon: Wallet },
+  // The 'Accounts' page can be re-purposed later for bank accounts
+  // { href: '/dashboard/accounts', label: 'Accounts', icon: Wallet },
   { href: '/dashboard/reports', label: 'Reports', icon: BookCopy },
-  { href: '/dashboard/budgets', label: 'Budgets', icon: Target },
+  // { href: '/dashboard/budgets', label: 'Budgets', icon: Target },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
