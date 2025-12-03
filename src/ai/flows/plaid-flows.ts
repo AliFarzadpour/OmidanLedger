@@ -22,12 +22,12 @@ function getPlaidClient() {
 
   if (!PLAID_CLIENT_ID || PLAID_CLIENT_ID === 'YOUR_PLAID_CLIENT_ID') {
     throw new Error(
-      'Plaid integration is not configured. Please add your PLAID_CLIENT_ID to the .env file.'
+      'Plaid integration is not configured. Please add your PLAID_CLIENT_ID from your Plaid dashboard to the .env file.'
     );
   }
    if (!PLAID_SECRET || PLAID_SECRET === 'YOUR_PLAID_SECRET') {
     throw new Error(
-      'Plaid integration is not configured. Please add your PLAID_SECRET to the .env file.'
+      'Plaid integration is not configured. Please add your PLAID_SECRET from your Plaid dashboard to the .env file.'
     );
   }
 
