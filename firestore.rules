@@ -33,7 +33,8 @@ service cloud.firestore {
     // This rule allows a signed-in user to query the 'transactions' collection group
     // across all their bank accounts, but only for documents where the 'userId' field
     // matches their own UID. This is essential for reports like the General Ledger
-    // and Chart of Accounts.
+    // and Chart of Accounts, as well as for server-side AI flows that need to
+    // query a user's complete transaction history.
     match /{path=**}/transactions/{transactionId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
