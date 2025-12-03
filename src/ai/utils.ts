@@ -1,21 +1,11 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, collection, getDocs, query } from 'firebase/firestore';
-import { firebaseConfig } from '@/firebase/config';
+// This file is now updated to use the Admin SDK for server-side operations.
+import { db as adminDb } from '@/lib/firebase-admin';
+import { Firestore, collection, getDocs, query } from 'firebase/firestore';
 
-// This is a server-only Firebase initialization function.
-// It is safe to be called from Server Components and Genkit flows.
+// This function now returns the admin Firestore instance.
 export function initializeServerFirebase() {
-  if (!getApps().length) {
-    const firebaseApp = initializeApp(firebaseConfig);
-    return getSdks(firebaseApp);
-  }
-  return getSdks(getApp());
-}
-
-function getSdks(firebaseApp: FirebaseApp) {
   return {
-    firebaseApp,
-    firestore: getFirestore(firebaseApp)
+    firestore: adminDb,
   };
 }
 
