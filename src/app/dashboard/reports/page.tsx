@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, FileText, BarChart } from 'lucide-react';
+import { ArrowRight, FileText, BarChart, Database } from 'lucide-react';
+import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 const reports = [
   {
@@ -25,11 +26,12 @@ export default function ReportsPage() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
         <p className="text-muted-foreground">
-          Generate and view reports based on your transaction data.
+          Generate reports and review your application's data structure.
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <DatabaseStructureCard />
         {reports.map((report) => (
           <Link href={report.href} key={report.title} className="group">
             <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
