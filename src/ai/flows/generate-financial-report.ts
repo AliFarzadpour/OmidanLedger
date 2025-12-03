@@ -18,11 +18,13 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
   try {
     console.log(`[AI-FLOW] Fetching transactions for user: ${userId}`);
     
-    // Perform a collection group query filtered by userId.
-    // Sorting and limiting will be done in the code to avoid needing a composite index.
+    // Perform a collection group query filtered by userId and ordered by date.
+    // This query is now supported by the firestore.indexes.json file.
     const snapshot = await db
       .collectionGroup('transactions')
       .where('userId', '==', userId)
+      .orderBy('date', 'desc')
+      .limit(500) // Limit to the 500 most recent transactions
       .get();
 
     if (snapshot.empty) {
@@ -31,17 +33,11 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     }
     
     let transactions = snapshot.docs.map(doc => doc.data());
-    
-    // Sort transactions by date descending in code to avoid needing a composite index
-    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    // Limit the number of transactions to avoid oversized prompts
-    const limitedTransactions = transactions.slice(0, 500);
 
-    console.log(`[AI-FLOW] Fetched and processed ${limitedTransactions.length} transactions for user ${userId}.`);
+    console.log(`[AI-FLOW] Fetched and processed ${transactions.length} transactions for user ${userId}.`);
 
     // Convert to CSV string
-    const csvString = limitedTransactions
+    const csvString = transactions
       .map((t) => {
         const amt = typeof t.amount === 'number' ? t.amount : Number(t.amount ?? 0);
         // Sanitize description for CSV: remove commas and newlines
@@ -110,7 +106,8 @@ Based on the data, provide a clear, concise answer to the user's question.
 export async function generateFinancialReport(input: GenerateFinancialReportInput) {
   try {
     return await generateFinancialReportFlow(input);
-  } catch (error: any) {
+  } catch (error: any)
+{
     console.error("Critical Failure:", error);
     throw new Error(error.message);
   }
