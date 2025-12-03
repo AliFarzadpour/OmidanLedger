@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useUser } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { generateFinancialReport } from '@/ai/flows/generate-financial-report';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { marked } from 'marked';
+import { collection, getDocs, query } from 'firebase/firestore';
 
 // A simple component to render markdown content
 function MarkdownReport({ content }: { content: string }) {
@@ -25,6 +26,7 @@ function MarkdownReport({ content }: { content: string }) {
 
 export function AIReportGenerator() {
   const { user } = useUser();
+  const firestore = useFirestore(); // Get firestore instance
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -45,7 +47,8 @@ export function AIReportGenerator() {
     setReport(null);
 
     try {
-      // Call the AI flow with just the user's query and ID
+      // Call the AI flow with just the user's query and ID.
+      // The server will handle fetching the data.
       const result = await generateFinancialReport({
         userQuery: query,
         userId: user.uid,

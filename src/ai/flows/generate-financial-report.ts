@@ -1,14 +1,11 @@
 'use server';
 
-/**
- * @fileOverview An AI flow to generate financial reports based on user queries.
- */
-
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { initializeServerFirebase } from '@/ai/utils';
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 
+// Represents a transaction document in Firestore
 interface Transaction {
   id: string;
   date: string;
@@ -19,16 +16,61 @@ interface Transaction {
   subcategory: string;
 }
 
+// 1. Input Schema Change: Now only accepts userId and the user's query.
 const GenerateFinancialReportInputSchema = z.object({
   userQuery: z.string().describe("The user's natural language question or report request."),
-  userId: z.string().describe("The user's unique ID."),
+  userId: z.string().describe("The user's unique ID to fetch data for."),
 });
 export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
+/**
+ * 2. Database Fetch & 3. Data Optimization
+ * Fetches transaction history for a user and formats it into a CSV string.
+ */
+async function fetchAndFormatTransactions(userId: string): Promise<string> {
+  try {
+    const { firestore } = initializeServerFirebase();
+
+    // Query the subcollection directly for a specific user
+    const transactionsQuery = query(
+      collection(firestore, `users/${userId}/transactions`),
+      orderBy('date', 'desc'), // Order by date
+      limit(500) // Limit to the last 500 transactions to manage token count
+    );
+
+    const snapshot = await getDocs(transactionsQuery);
+
+    if (snapshot.empty) {
+      return ''; // Return empty string if no transactions are found
+    }
+
+    const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
+
+    // Convert to CSV string
+    const csvString = transactions
+      .map((t) => {
+        const amt = typeof t.amount === 'number' ? t.amount : Number(t.amount ?? 0);
+        const safeDescription = (t.description ?? '').replace(/,/g, ' ').replace(/\n/g, ' ');
+        return `${t.date},${safeDescription},${amt.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`;
+      })
+      .join('\n');
+      
+    return csvString;
+
+  } catch (error) {
+    console.error("Error fetching transaction history:", error);
+    throw new Error("Could not fetch transaction history from the database. Please check server logs.");
+  }
+}
+
+// The main Server Action that can be called from the client.
 export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
   return generateFinancialReportFlow(input);
 }
 
+/**
+ * 4. Flow Logic: The Genkit flow that orchestrates the RAG process.
+ */
 const generateFinancialReportFlow = ai.defineFlow(
   {
     name: 'generateFinancialReportFlow',
@@ -37,38 +79,20 @@ const generateFinancialReportFlow = ai.defineFlow(
   },
   async ({ userQuery, userId }) => {
     
-    // 1. Fetch data on the server
-    const { firestore } = initializeServerFirebase();
-    const transactionsQuery = query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', userId)
-    );
-    const snapshot = await getDocs(transactionsQuery);
-    const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
+    // Step 1: Fetch and format the data from Firestore.
+    const transactionData = await fetchAndFormatTransactions(userId);
 
-    if (transactions.length === 0) {
+    // Step 2: Check if there is data to analyze.
+    if (!transactionData) {
       return "I couldn't find any transaction data to analyze. Please add some transactions and try again.";
     }
 
-    // Optionally limit to recent N transactions to avoid token limits
-    const MAX_ROWS = 500;
-    const limitedTransactions = transactions.slice(-MAX_ROWS);
-
-    // 2. Format data for the AI as CSV
-    const transactionData = limitedTransactions
-      .map((t) => {
-        // Be defensive about amount in case Firestore stored it as a string.
-        const amt = typeof t.amount === 'number' ? t.amount : Number(t.amount ?? 0);
-        const safeDescription = (t.description ?? '').replace(/\n/g, ' ');
-        return `${t.date},${safeDescription},${amt.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`;
-      })
-      .join('\n');
-    
     const currentDate = new Date().toISOString().split('T')[0];
 
+    // Step 3: Construct the prompt with the retrieved data.
     const prompt = `
 You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
-The data is in CSV format: "date, description, amount, category_path".
+The data is in CSV format: "date,description,amount,category_path".
 
 Today's Date: ${currentDate}
 
@@ -87,14 +111,16 @@ Based on the data, provide a clear, concise answer to the user's question.
 - Do not invent data. Your entire analysis must be based *only* on the transaction data provided.
     `.trim();
 
+    // Step 4: Call the AI model.
     try {
-        const { text } = await ai.generate({
-            prompt,
-        });
-        return text;
+      const { text } = await ai.generate({
+        prompt,
+      });
+      return text;
     } catch (e: any) {
-        console.error("AI Generation Error:", e);
-        return "There was a problem communicating with the AI. Please check the server logs for more details.";
+      console.error("AI Generation Error:", e);
+      // 5. Error Handling
+      return "There was a problem communicating with the AI. Please check the server logs for more details.";
     }
   }
 );
