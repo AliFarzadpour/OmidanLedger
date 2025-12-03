@@ -6,10 +6,22 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
+import { initializeServerFirebase } from '@/ai/utils';
+import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
+
+interface Transaction {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  primaryCategory: string;
+  secondaryCategory: string;
+  subcategory: string;
+}
 
 const GenerateFinancialReportInputSchema = z.object({
-  userQuery: z.string().describe('The user\'s natural language question or report request.'),
-  transactionData: z.string().describe('A string containing the user\'s transaction data in CSV format.'),
+  userQuery: z.string().describe("The user's natural language question or report request."),
+  userId: z.string().describe("The user's unique ID."),
 });
 export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
@@ -56,12 +68,30 @@ const generateFinancialReportFlow = ai.defineFlow(
     inputSchema: GenerateFinancialReportInputSchema,
     outputSchema: z.string(),
   },
-  async ({ userQuery, transactionData }) => {
+  async ({ userQuery, userId }) => {
     
-    // Call the prompt with the received input, ensuring it matches the prompt's schema.
+    // 1. Fetch data on the server
+    const { firestore } = initializeServerFirebase();
+    const transactionsQuery = query(
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', userId)
+    );
+    const snapshot = await getDocs(transactionsQuery);
+    const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
+
+    if (transactions.length === 0) {
+      return "I couldn't find any transaction data to analyze. Please add some transactions and try again.";
+    }
+
+    // 2. Format data for the AI
+    const transactionDataString = transactions
+      .map(t => `${t.date},${t.description},${t.amount.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`)
+      .join('\n');
+    
+    // 3. Call the prompt with the received input, ensuring it matches the prompt's schema.
     const { output } = await reportingPrompt({
         userQuery,
-        transactionData,
+        transactionData: transactionDataString,
     });
     
     return output || "I was unable to generate a report based on your request. Please try rephrasing your question.";

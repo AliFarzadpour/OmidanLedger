@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser } from '@/firebase';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,6 @@ import { generateFinancialReport } from '@/ai/flows/generate-financial-report';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { marked } from 'marked';
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
 
 // A simple component to render markdown content
 function MarkdownReport({ content }: { content: string }) {
@@ -24,19 +23,8 @@ function MarkdownReport({ content }: { content: string }) {
   );
 }
 
-interface Transaction {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-  primaryCategory: string;
-  secondaryCategory: string;
-  subcategory: string;
-}
-
 export function AIReportGenerator() {
   const { user } = useUser();
-  const firestore = useFirestore();
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -44,7 +32,7 @@ export function AIReportGenerator() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim() || !user || !firestore) {
+    if (!query.trim() || !user) {
       toast({
         variant: 'destructive',
         title: 'Input Required',
@@ -57,29 +45,10 @@ export function AIReportGenerator() {
     setReport(null);
 
     try {
-      // 1. Fetch data on the client
-      const transactionsQuery = query(
-        collectionGroup(firestore, 'transactions'),
-        where('userId', '==', user.uid)
-      );
-      const snapshot = await getDocs(transactionsQuery);
-      const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
-
-      if (transactions.length === 0) {
-        setReport("I couldn't find any transaction data to analyze. Please add some transactions and try again.");
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Format data for the AI
-      const transactionDataString = transactions
-        .map(t => `${t.date},${t.description},${t.amount.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`)
-        .join('\n');
-
-      // 3. Call the AI flow with the data
+      // Call the AI flow with just the user's query and ID
       const result = await generateFinancialReport({
         userQuery: query,
-        transactionData: transactionDataString,
+        userId: user.uid,
       });
       setReport(result);
     } catch (error) {
