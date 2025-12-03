@@ -71,30 +71,30 @@ service cloud.firestore {
       allow get, update, delete: if isOwner(userId);
       allow create: if isOwner(userId);
       allow list: if false;
-    }
-    
-    /**
-     * @description Stores bank accounts for a specific user.
-     * @path /users/{userId}/bankAccounts/{bankAccountId}
-     * @allow (read, write) A user can fully manage their own bank account documents.
-     * @deny (any) A user cannot access another user's bank accounts.
-     * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-     */
-    match /users/{userId}/bankAccounts/{bankAccountId} {
-      allow read, write: if isOwner(userId);
-    }
-    
-    /**
-     * @description Stores transactions for a specific bank account.
-     * @path /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId}
-     * @allow (read, write) A user can fully manage transactions for their own bank account.
-     * @deny (any) A user cannot access transactions belonging to another user.
-     * @principle Enforces document ownership and validates the link to the parent bankAccount document.
-     */
-    match /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId} {
-      allow read, write: if isOwner(userId);
-    }
 
+        /**
+         * @description Stores bank accounts for a specific user.
+         * @path /users/{userId}/bankAccounts/{bankAccountId}
+         * @allow (read, write) A user can fully manage their own bank account documents.
+         * @deny (any) A user cannot access another user's bank accounts.
+         * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+         */
+        match /bankAccounts/{bankAccountId} {
+          allow read, write: if isOwner(userId);
+
+            /**
+             * @description Stores transactions for a specific bank account.
+             * @path /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId}
+             * @allow (read, write) A user can fully manage transactions for their own bank account.
+             * @deny (any) A user cannot access transactions belonging to another user.
+             * @principle Enforces document ownership and validates the link to the parent bankAccount document.
+             */
+            match /transactions/{transactionId} {
+                allow read, write: if isOwner(userId);
+            }
+        }
+    }
+    
     // Rules for Collection Group Queries
     match /{path=**}/transactions/{transactionId} {
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
