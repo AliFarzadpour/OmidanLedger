@@ -1,7 +1,7 @@
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, getDocs, Timestamp, getDoc, collectionGroup } from 'firebase/firestore';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, query, orderBy, getDocs, Timestamp, collectionGroup } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -32,6 +32,7 @@ interface JournalEntryLineItem {
     accountId: string;
     debit: number;
     credit: number;
+    journalEntryId: string; // Add parent ID for easier mapping
 }
 
 interface JournalEntry {
@@ -60,6 +61,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
     }, 0);
   };
 
+  let runningBalance = 0;
   const balance = calculateBalance(entries, account.normalBalance);
 
   return (
@@ -85,8 +87,12 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries.map((entry, index) => {
-                const runningBalance = calculateBalance(entries.slice(0, index + 1), account.normalBalance);
+              {entries.map((entry) => {
+                if (account.normalBalance === 'debit') {
+                    runningBalance += entry.debit - entry.credit;
+                } else {
+                    runningBalance += entry.credit - entry.debit;
+                }
                 return (
                   <TableRow key={entry.id}>
                     <TableCell>{entry.date.toLocaleDateString()}</TableCell>
@@ -135,35 +141,41 @@ export function GeneralLedgerReport() {
         const fetchedAccounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(fetchedAccounts);
 
-        // Step 2: Fetch all line items for the user using a collectionGroup query
-        const allEntries: LedgerEntry[] = [];
+        // Step 2: Fetch all journal entries for the user
+        const journalEntriesQuery = query(collectionGroup(firestore, 'journalEntries'));
+        const journalEntriesSnapshot = await getDocs(journalEntriesQuery);
+        const journalEntriesMap = new Map<string, JournalEntry>();
+        journalEntriesSnapshot.docs.forEach(doc => {
+            if (doc.ref.path.startsWith(`users/${user.uid}/`)) {
+                 journalEntriesMap.set(doc.id, { id: doc.id, ...doc.data() } as JournalEntry);
+            }
+        });
+
+        // Step 3: Fetch all line items for the user
         const lineItemsQuery = query(collectionGroup(firestore, 'lineItems'));
         const lineItemsSnapshot = await getDocs(lineItemsQuery);
+        const allLedgerEntries: LedgerEntry[] = [];
+        lineItemsSnapshot.docs.forEach(doc => {
+             if (doc.ref.path.startsWith(`users/${user.uid}/`)) {
+                const lineItemData = doc.data() as Omit<JournalEntryLineItem, 'id'>;
+                const journalEntryId = doc.ref.parent.parent?.id;
+                const journalEntry = journalEntryId ? journalEntriesMap.get(journalEntryId) : undefined;
 
-        for (const lineItemDoc of lineItemsSnapshot.docs) {
-          // Ensure the line item belongs to the current user by checking the path
-          if (lineItemDoc.ref.path.startsWith(`users/${user.uid}/`)) {
-            const lineItemData = lineItemDoc.data() as JournalEntryLineItem;
-            const journalEntryRef = lineItemDoc.ref.parent.parent;
-            
-            if (journalEntryRef) {
-              const journalEntrySnap = await getDoc(journalEntryRef);
-              if (journalEntrySnap.exists()) {
-                const journalEntryData = journalEntrySnap.data() as JournalEntry;
-                allEntries.push({
-                  id: lineItemDoc.id,
-                  journalEntryId: journalEntryRef.id,
-                  accountId: lineItemData.accountId,
-                  date: journalEntryData.date.toDate(),
-                  description: journalEntryData.description,
-                  debit: lineItemData.debit || 0,
-                  credit: lineItemData.credit || 0,
-                });
-              }
-            }
-          }
-        }
-        setLedgerEntries(allEntries);
+                if (journalEntry) {
+                    allLedgerEntries.push({
+                        id: doc.id,
+                        journalEntryId: journalEntry.id,
+                        accountId: lineItemData.accountId,
+                        date: journalEntry.date.toDate(),
+                        description: journalEntry.description,
+                        debit: lineItemData.debit || 0,
+                        credit: lineItemData.credit || 0,
+                    });
+                }
+             }
+        });
+        
+        setLedgerEntries(allLedgerEntries);
 
       } catch (error) {
           console.error("Error fetching general ledger data:", error);
@@ -177,18 +189,14 @@ export function GeneralLedgerReport() {
 
   const ledgerEntriesByAccount = useMemo(() => {
     const map = new Map<string, LedgerEntry[]>();
-    if (accounts.length === 0 || ledgerEntries.length === 0) return map;
-
     // Initialize map for all accounts
     for (const account of accounts) {
         map.set(account.id, []);
     }
-    
     // Distribute ledger entries into the map
     for (const entry of ledgerEntries) {
-      const accountEntries = map.get(entry.accountId);
-      if (accountEntries) {
-          accountEntries.push(entry);
+      if(map.has(entry.accountId)) {
+        map.get(entry.accountId)?.push(entry);
       }
     }
     return map;
@@ -217,7 +225,7 @@ export function GeneralLedgerReport() {
         <CardDescription>Review all transactions organized by account for the current period.</CardDescription>
       </CardHeader>
       <CardContent>
-        <Accordion type="single" collapsible className="w-full">
+        <Accordion type="multiple" className="w-full">
             {(accounts && accounts.length > 0) ? (
                 accounts.map((account) => (
                    <AccountLedger 

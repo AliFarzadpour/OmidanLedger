@@ -162,5 +162,14 @@ service cloud.firestore {
        allow read, write: if isOwner(userId);
        allow list: if isServer(); // Server-side list for AI flows
      }
+
+    // Rules for Collection Group Queries
+    match /{path=**}/journalEntries/{entry} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /{path=**}/lineItems/{item} {
+      allow read: if isSignedIn() && get(/databases/$(database)/documents/$(path)).data.userId == request.auth.uid;
+    }
   }
 }
