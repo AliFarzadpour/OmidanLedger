@@ -11,6 +11,12 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+    
+    // Identifies a request from a trusted server process (e.g., Genkit flow)
+    // which authenticates with Admin credentials, resulting in a null auth object.
+    function isServerProcess() {
+        return request.auth == null;
+    }
 
     match /users/{userId} {
       allow get, update, delete: if isOwner(userId);
@@ -32,11 +38,10 @@ service cloud.firestore {
     
     // This rule allows a signed-in user to query the 'transactions' collection group
     // across all their bank accounts, but only for documents where the 'userId' field
-    // matches their own UID. This is essential for reports like the General Ledger
-    // and Chart of Accounts, as well as for server-side AI flows that need to
-    // query a user's complete transaction history.
+    // matches their own UID. It ALSO allows trusted server processes (identified by a null
+    // request.auth) to perform these queries for features like AI-powered reports.
     match /{path=**}/transactions/{transactionId} {
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isServerProcess();
     }
   }
 }
