@@ -1,7 +1,7 @@
 'use client';
 
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy, getDocs, Timestamp, where } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, Timestamp, getDoc, collectionGroup } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -31,41 +31,21 @@ interface JournalEntryLineItem {
     accountId: string;
     debit: number;
     credit: number;
+    parent: any; // Reference to the parent JournalEntry document
 }
 
 interface JournalEntry {
     id: string;
     date: Timestamp;
     description: string;
-    lineItems: JournalEntryLineItem[];
 }
 
 
 // A component to render the details for a single account
 function AccountLedger({ account, allLedgerEntries }: { account: Account, allLedgerEntries: LedgerEntry[] }) {
-    const [entries, setEntries] = useState<LedgerEntry[]>([]);
-
-    useEffect(() => {
-        // Filter the pre-fetched entries for the current account
-        const accountEntries = allLedgerEntries
-            .filter(entry => {
-                // This filtering is tricky because a line item only has the accountId,
-                // but the ledger entry is built from the journal entry. 
-                // We'll assume for now that if we got here, it's the right account.
-                // The filtering should happen at a higher level.
-                // For now, we will re-filter based on the journal entries the line items came from.
-                // This is a bit of a workaround because we don't have accountId directly on LedgerEntry.
-                // A better data model would help.
-                return true; // We'll rely on the parent component's filtering.
-            })
-            .sort((a, b) => a.date.getTime() - b.date.getTime());
-        
-        // This is a placeholder for a more complex filtering logic if needed.
-        // The parent now provides the correct entries.
-        const filteredEntries = allLedgerEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
-        setEntries(filteredEntries);
-
-    }, [allLedgerEntries, account.id]);
+  const entries = useMemo(() => {
+    return allLedgerEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [allLedgerEntries]);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -87,7 +67,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
       <AccordionTrigger className="hover:bg-muted/50 px-4 rounded-md">
         <div className="flex justify-between w-full pr-4">
           <span className="font-semibold">{account.name}</span>
-          <span className={cn('font-mono', balance >= 0 ? 'text-green-600' : 'text-red-600')}>
+          <span className={cn('font-mono', balance >= 0 ? 'text-foreground' : 'text-destructive')}>
             {formatCurrency(balance)}
           </span>
         </div>
@@ -121,7 +101,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
             <TableFooter>
               <TableRow>
                 <TableCell colSpan={4} className="text-right font-bold">Ending Balance</TableCell>
-                <TableCell className={cn("text-right font-bold font-mono", balance >= 0 ? 'text-green-600' : 'text-red-600')}>
+                <TableCell className={cn("text-right font-bold font-mono", balance >= 0 ? 'text-foreground' : 'text-destructive')}>
                   {formatCurrency(balance)}
                 </TableCell>
               </TableRow>
@@ -139,7 +119,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
 export function GeneralLedgerReport() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [journalEntries, setJournalEntries] = useState<JournalEntry[]>([]);
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [isLoadingEntries, setIsLoadingEntries] = useState(true);
 
   const accountsQuery = useMemoFirebase(() => {
@@ -150,58 +130,67 @@ export function GeneralLedgerReport() {
   const { data: accounts, isLoading: isLoadingAccounts } = useCollection<Account>(accountsQuery);
 
   useEffect(() => {
-    const fetchAllJournalEntries = async () => {
-        if (!user || !firestore) return;
-        setIsLoadingEntries(true);
-        const allJournalEntries: JournalEntry[] = [];
-        const fiscalYearsSnapshot = await getDocs(collection(firestore, `users/${user.uid}/fiscalYears`));
+    const fetchLedgerEntries = async () => {
+      if (!user || !firestore) return;
+      setIsLoadingEntries(true);
+      const allEntries: LedgerEntry[] = [];
+      
+      try {
+        const lineItemsQuery = query(collectionGroup(firestore, 'lineItems'));
+        const lineItemsSnapshot = await getDocs(lineItemsQuery);
 
-        for (const fiscalYearDoc of fiscalYearsSnapshot.docs) {
-            const journalEntriesSnapshot = await getDocs(collection(fiscalYearDoc.ref, 'journalEntries'));
-            for (const journalEntryDoc of journalEntriesSnapshot.docs) {
-                const lineItemsSnapshot = await getDocs(collection(journalEntryDoc.ref, 'lineItems'));
-                const lineItems = lineItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JournalEntryLineItem));
-                
-                const journalEntryData = journalEntryDoc.data();
-                allJournalEntries.push({
-                    id: journalEntryDoc.id,
-                    date: journalEntryData.date,
-                    description: journalEntryData.description,
-                    lineItems: lineItems,
-                });
+        for (const lineItemDoc of lineItemsSnapshot.docs) {
+          const lineItemData = lineItemDoc.data() as JournalEntryLineItem;
+          
+          // Ensure the line item belongs to the current user by checking the path
+          if (lineItemDoc.ref.path.startsWith(`users/${user.uid}/`)) {
+            const journalEntryRef = lineItemDoc.ref.parent.parent;
+            if (journalEntryRef) {
+              const journalEntrySnap = await getDoc(journalEntryRef);
+              if (journalEntrySnap.exists()) {
+                const journalEntryData = journalEntrySnap.data() as JournalEntry;
+                allEntries.push({
+                  id: lineItemDoc.id,
+                  journalEntryId: journalEntryRef.id,
+                  accountId: lineItemData.accountId,
+                  date: journalEntryData.date.toDate(),
+                  description: journalEntryData.description,
+                  debit: lineItemData.debit || 0,
+                  credit: lineItemData.credit || 0,
+                } as LedgerEntry & { accountId: string });
+              }
             }
+          }
         }
-        setJournalEntries(allJournalEntries);
+        setLedgerEntries(allEntries);
+      } catch (error) {
+          console.error("Error fetching ledger entries:", error);
+      } finally {
         setIsLoadingEntries(false);
+      }
     };
-    fetchAllJournalEntries();
+
+    fetchLedgerEntries();
   }, [user, firestore]);
 
   const ledgerEntriesByAccount = useMemo(() => {
     const map = new Map<string, LedgerEntry[]>();
-    if (!accounts || !journalEntries) return map;
+    if (!accounts || ledgerEntries.length === 0) return map;
 
+    // Initialize map for all accounts
     for (const account of accounts) {
         map.set(account.id, []);
     }
     
-    for (const je of journalEntries) {
-        for (const li of je.lineItems) {
-            if (map.has(li.accountId)) {
-                map.get(li.accountId)!.push({
-                    id: li.id,
-                    journalEntryId: je.id,
-                    // Correctly convert Firestore Timestamp to JS Date
-                    date: je.date.toDate(), 
-                    description: je.description,
-                    debit: li.debit || 0,
-                    credit: li.credit || 0,
-                });
-            }
-        }
+    // Distribute ledger entries into the map
+    for (const entry of ledgerEntries) {
+      const accountEntries = map.get((entry as any).accountId);
+      if (accountEntries) {
+          accountEntries.push(entry);
+      }
     }
     return map;
-  }, [accounts, journalEntries]);
+  }, [accounts, ledgerEntries]);
 
   const isLoading = isLoadingAccounts || isLoadingEntries;
 
@@ -229,14 +218,17 @@ export function GeneralLedgerReport() {
       </CardHeader>
       <CardContent>
         <Accordion type="single" collapsible className="w-full">
-            {(accounts || []).map((account) => (
-               <AccountLedger 
-                    key={account.id} 
-                    account={account} 
-                    allLedgerEntries={ledgerEntriesByAccount.get(account.id) || []}
-                />
-            ))}
-            {accounts?.length === 0 && <p className="p-4 text-center text-muted-foreground">No accounts found. Create accounts to see the General Ledger.</p>}
+            {(accounts && accounts.length > 0) ? (
+                accounts.map((account) => (
+                   <AccountLedger 
+                        key={account.id} 
+                        account={account} 
+                        allLedgerEntries={ledgerEntriesByAccount.get(account.id) || []}
+                    />
+                ))
+            ) : (
+                <p className="p-4 text-center text-muted-foreground">No accounts found. Create accounts to see the General Ledger.</p>
+            )}
         </Accordion>
       </CardContent>
     </Card>
