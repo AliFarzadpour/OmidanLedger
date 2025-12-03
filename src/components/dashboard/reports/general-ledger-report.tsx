@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useUser, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
+import { useUser, useFirestore, useCollection } from '@/firebase';
 import { collection, getDocs, query, orderBy, collectionGroup, where } from 'firebase/firestore';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,13 +33,13 @@ export function GeneralLedgerReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const accountsQuery = useMemoFirebase(() => {
+  const accountsQuery = useMemo(() => {
     if (!user || !firestore) return null;
     return collection(firestore, `users/${user.uid}/bankAccounts`);
   }, [user, firestore]);
   const { data: accounts, isLoading: isLoadingAccounts } = useCollection<BankAccount>(accountsQuery);
 
-  const transactionsQuery = useMemoFirebase(() => {
+  const transactionsQuery = useMemo(() => {
     if (!user || !firestore) return null;
     return query(
       collectionGroup(firestore, 'transactions'),

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useCollection } from '@/firebase';
 import { collectionGroup, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -28,7 +28,7 @@ export function ChartOfAccountsReport() {
   const firestore = useFirestore();
 
   // We perform a collectionGroup query to get all transactions for the user.
-  const transactionsQuery = useMemoFirebase(() => {
+  const transactionsQuery = useMemo(() => {
     if (!user || !firestore) {
       return null;
     }
