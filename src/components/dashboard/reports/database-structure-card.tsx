@@ -24,8 +24,6 @@ export function DatabaseStructureCard() {
                    <li className="pt-2"><p className="text-foreground">/transactions/{'{transactionId}'}</p></li>
                 </ul>
               </li>
-              <li className="pt-2"><p className="text-foreground">/categories/{'{categoryId}'}</p></li>
-              <li className="pt-2"><p className="text-foreground">/categoryMappings/{'{mappingId}'}</p></li>
             </ul>
           </li>
         </ul>

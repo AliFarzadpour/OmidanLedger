@@ -2,28 +2,61 @@
 
 import { useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, orderBy } from 'firebase/firestore';
+import { collectionGroup, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Types matching the database structure
-interface Category {
+// This interface represents a transaction, which is where categories are stored.
+interface Transaction {
   id: string;
-  name: string;
-  description: string;
+  primaryCategory: string;
+  secondaryCategory: string;
+  subcategory: string;
+}
+
+// This represents a unique account in our derived Chart of Accounts.
+interface Account {
+  id: string;
+  primary: string;
+  secondary: string;
+  sub: string;
 }
 
 export function ChartOfAccountsReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const categoriesQuery = useMemoFirebase(() => {
+  // We perform a collectionGroup query to get all transactions for the user.
+  const transactionsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    return query(collection(firestore, `users/${user.uid}/categories`), orderBy('name', 'asc'));
+    return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
   }, [user, firestore]);
 
-  const { data: categories, isLoading } = useCollection<Category>(categoriesQuery);
+  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+
+  // We derive the unique accounts from the transaction data.
+  const accounts = useMemo((): Account[] => {
+    if (!transactions) return [];
+    
+    const uniqueAccounts = new Map<string, Account>();
+
+    transactions.forEach(tx => {
+      const key = `${tx.primaryCategory}-${tx.secondaryCategory}-${tx.subcategory}`;
+      if (!uniqueAccounts.has(key)) {
+        uniqueAccounts.set(key, {
+          id: key,
+          primary: tx.primaryCategory,
+          secondary: tx.secondaryCategory,
+          sub: tx.subcategory,
+        });
+      }
+    });
+
+    // Sort the accounts for consistent display
+    return Array.from(uniqueAccounts.values()).sort((a, b) => a.id.localeCompare(b.id));
+  }, [transactions]);
+
 
   if (isLoading) {
     return (
@@ -48,7 +81,7 @@ export function ChartOfAccountsReport() {
     );
   }
 
-  if (!categories || categories.length === 0) {
+  if (!accounts || accounts.length === 0) {
     return (
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Chart of Accounts</h1>
@@ -56,7 +89,7 @@ export function ChartOfAccountsReport() {
         <Card className="mt-8">
           <CardContent className="pt-6">
             <p className="text-center text-muted-foreground">
-              No categories found. You can define categories when uploading transactions or manually.
+              No categories found. Once you have categorized transactions, your Chart of Accounts will appear here.
             </p>
           </CardContent>
         </Card>
@@ -68,7 +101,7 @@ export function ChartOfAccountsReport() {
     <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Chart of Accounts</h1>
-        <p className="text-muted-foreground">A list of all categories used to classify your transactions.</p>
+        <p className="text-muted-foreground">A list of all categories derived from your transactions.</p>
       </div>
 
       <Card>
@@ -76,15 +109,17 @@ export function ChartOfAccountsReport() {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Category Name</TableHead>
-                        <TableHead>Description</TableHead>
+                        <TableHead>Primary Category</TableHead>
+                        <TableHead>Secondary Category</TableHead>
+                        <TableHead>Subcategory</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {categories.map((category) => (
-                        <TableRow key={category.id}>
-                            <TableCell className="font-medium">{category.name}</TableCell>
-                            <TableCell>{category.description}</TableCell>
+                    {accounts.map((account) => (
+                        <TableRow key={account.id}>
+                            <TableCell className="font-medium">{account.primary}</TableCell>
+                            <TableCell>{account.secondary}</TableCell>
+                            <TableCell>{account.sub}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

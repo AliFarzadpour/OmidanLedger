@@ -72,39 +72,6 @@ service cloud.firestore {
       allow create: if isOwner(userId);
       allow list: if false;
     }
-
-    /**
-     * @description Stores fiscal years for a specific user.
-     * @path /users/{userId}/fiscalYears/{fiscalYearId}
-     * @allow (read, write) A user can fully manage their own fiscal year documents.
-     * @deny (any) A user cannot access another user's fiscal years.
-     * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-     */
-    match /users/{userId}/fiscalYears/{fiscalYearId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    /**
-     * @description Stores journal entries for a specific fiscal year.
-     * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}
-     * @allow (read, write) A user can fully manage their own journal entries.
-     * @deny (any) A user cannot access journal entries belonging to another user.
-     * @principle Enforces document ownership and validates the link to the parent fiscalYear document.
-     */
-    match /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    /**
-     * @description Stores line items for a specific journal entry.
-     * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}
-     * @allow (read, write) A user can fully manage their own journal entry line items.
-     * @deny (any) A user cannot access line items belonging to another user's journal entry.
-     * @principle Enforces document ownership and validates the link to the parent journalEntry document.
-     */
-    match /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId} {
-      allow read, write: if isOwner(userId);
-    }
     
     /**
      * @description Stores bank accounts for a specific user.
@@ -128,50 +95,9 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
-    /**
-     * @description Stores transaction categories for a specific user.
-     * @path /users/{userId}/categories/{categoryId}
-     * @allow (read, write) A user can fully manage their own category documents.
-     * @deny (any) A user cannot access another user's categories.
-     * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-     */
-    match /users/{userId}/categories/{categoryId} {
-      allow read, write: if isOwner(userId);
-    }
-
-    /**
-     * @description Manages the collection of accounts for a user's chart of accounts.
-     * @path /users/{userId}/accounts/{accountId}
-     * @allow (read, write) A user can read, list, and write to their own accounts.
-     * @deny (any) A user cannot access another user's accounts.
-     * @principle Enforces document ownership for all operations. `read` allows get and list queries, `write` allows document modifications.
-     */
-    match /users/{userId}/accounts/{accountId} {
-      allow read, write: if isOwner(userId);
-    }
-      
-    /**
-     * @description Stores user-defined category mappings to train the AI.
-     * @path /users/{userId}/categoryMappings/{mappingId}
-     * @allow (read, write) A user can manage their own category mappings.
-     * @allow (list) Trusted server-side flows can read mappings for any user to provide AI services.
-     * @deny (get) A user cannot access another user's mappings.
-     * @principle Enforces strict document ownership for clients, but allows read-only for trusted server processes.
-     */
-     match /users/{userId}/categoryMappings/{mappingId} {
-       allow read, write: if isOwner(userId);
-       allow list: if isServer(); // Server-side list for AI flows
-     }
-
     // Rules for Collection Group Queries
-    match /{path=**}/journalEntries/{entry} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-    }
-
-    match /{path=**}/lineItems/{item} {
-      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    match /{path=**}/transactions/{transactionId} {
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }
-
-    

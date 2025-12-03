@@ -43,43 +43,6 @@
         "updatedAt"
       ]
     },
-    "FiscalYear": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "FiscalYear",
-      "type": "object",
-      "description": "Represents a fiscal year for a user.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the FiscalYear entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N FiscalYear)"
-        },
-        "year": {
-          "type": "number",
-          "description": "The year of the fiscal year."
-        },
-        "startDate": {
-          "type": "string",
-          "description": "The start date of the fiscal year.",
-          "format": "date-time"
-        },
-        "endDate": {
-          "type": "string",
-          "description": "The end date of the fiscal year.",
-          "format": "date-time"
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "year",
-        "startDate",
-        "endDate"
-      ]
-    },
     "BankAccount": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "BankAccount",
@@ -145,6 +108,10 @@
           "type": "string",
           "description": "Unique identifier for the Transaction entity."
         },
+        "userId": {
+          "type": "string",
+          "description": "Denormalized reference to User for efficient querying."
+        },
         "bankAccountId": {
           "type": "string",
           "description": "Reference to BankAccount. (Relationship: BankAccount 1:N Transaction)"
@@ -162,196 +129,26 @@
           "type": "number",
           "description": "The amount of the transaction."
         },
-        "categoryId": {
+        "primaryCategory": {
           "type": "string",
-          "description": "Reference to Category. (Relationship: Category 1:N Transaction)"
+          "description": "The top-level category."
+        },
+        "secondaryCategory": {
+          "type": "string",
+          "description": "The second-level category."
+        },
+        "subcategory": {
+          "type": "string",
+          "description": "The most specific, third-level category."
         }
       },
       "required": [
         "id",
+        "userId",
         "bankAccountId",
         "date",
         "description",
         "amount",
-        "categoryId"
-      ]
-    },
-    "Category": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Category",
-      "type": "object",
-      "description": "Represents a category for classifying transactions.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Category entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N Category)"
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the category."
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the category."
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "name",
-        "description"
-      ]
-    },
-    "JournalEntry": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "JournalEntry",
-      "type": "object",
-      "description": "Represents a journal entry.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the JournalEntry entity."
-        },
-        "fiscalYearId": {
-          "type": "string",
-          "description": "Reference to FiscalYear. (Relationship: FiscalYear 1:N JournalEntry)"
-        },
-        "userId": {
-          "type": "string",
-          "description": "Denormalized reference to User for efficient querying."
-        },
-        "date": {
-          "type": "string",
-          "description": "Date of the journal entry.",
-          "format": "date-time"
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the journal entry."
-        }
-      },
-      "required": [
-        "id",
-        "fiscalYearId",
-        "userId",
-        "date",
-        "description"
-      ]
-    },
-    "JournalEntryLineItem": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "JournalEntryLineItem",
-      "type": "object",
-      "description": "Represents a line item in a journal entry.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the JournalEntryLineItem entity."
-        },
-        "journalEntryId": {
-          "type": "string",
-          "description": "Reference to JournalEntry. (Relationship: JournalEntry 1:N JournalEntryLineItem)"
-        },
-        "userId": {
-          "type": "string",
-          "description": "Denormalized reference to User for efficient querying."
-        },
-        "accountId": {
-          "type": "string",
-          "description": "Reference to Account. (Relationship: Account 1:N JournalEntryLineItem)"
-        },
-        "debit": {
-          "type": "number",
-          "description": "Debit amount for the line item."
-        },
-        "credit": {
-          "type": "number",
-          "description": "Credit amount for the line item."
-        }
-      },
-      "required": [
-        "id",
-        "journalEntryId",
-        "userId",
-        "accountId",
-        "debit",
-        "credit"
-      ]
-    },
-    "Account": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Account",
-      "type": "object",
-      "description": "Represents an account in the chart of accounts.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Account entity."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to User. (Relationship: User 1:N Account)"
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the account."
-        },
-        "accountType": {
-          "type": "string",
-          "description": "Type of account (e.g., asset, liability, equity, revenue, expense)."
-        },
-        "normalBalance": {
-          "type": "string",
-          "description": "Normal balance of the account (debit or credit)."
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "name",
-        "accountType",
-        "normalBalance"
-      ]
-    },
-    "CategoryMapping": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "CategoryMapping",
-      "type": "object",
-      "description": "Stores a user's custom mapping from a transaction description to a category.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the mapping."
-        },
-        "userId": {
-          "type": "string",
-          "description": "The ID of the user who owns this mapping."
-        },
-        "transactionDescription": {
-          "type": "string",
-          "description": "The original transaction description from the bank statement."
-        },
-        "primaryCategory": {
-          "type": "string",
-          "description": "The user-defined primary category."
-        },
-        "secondaryCategory": {
-          "type": "string",
-          "description": "The user-defined secondary category."
-        },
-        "subcategory": {
-          "type": "string",
-          "description": "The user-defined subcategory."
-        }
-      },
-      "required": [
-        "id",
-        "userId",
-        "transactionDescription",
         "primaryCategory",
         "secondaryCategory",
         "subcategory"
@@ -377,26 +174,6 @@
             {
               "name": "userId",
               "description": "The unique ID of the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/fiscalYears/{fiscalYearId}",
-        "definition": {
-          "entityName": "FiscalYear",
-          "schema": {
-            "$ref": "#/backend/entities/FiscalYear"
-          },
-          "description": "Stores fiscal years for each user. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user."
-            },
-            {
-              "name": "fiscalYearId",
-              "description": "The unique ID of the fiscal year."
             }
           ]
         }
@@ -444,122 +221,8 @@
             }
           ]
         }
-      },
-      {
-        "path": "/users/{userId}/categories/{categoryId}",
-        "definition": {
-          "entityName": "Category",
-          "schema": {
-            "$ref": "#/backend/entities/Category"
-          },
-          "description": "Stores categories for each user. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user."
-            },
-            {
-              "name": "categoryId",
-              "description": "The unique ID of the category."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}",
-        "definition": {
-          "entityName": "JournalEntry",
-          "schema": {
-            "$ref": "#/backend/entities/JournalEntry"
-          },
-          "description": "Stores journal entries for each fiscal year. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user."
-            },
-            {
-              "name": "fiscalYearId",
-              "description": "The unique ID of the fiscal year."
-            },
-            {
-              "name": "journalEntryId",
-              "description": "The unique ID of the journal entry."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}",
-        "definition": {
-          "entityName": "JournalEntryLineItem",
-          "schema": {
-            "$ref": "#/backend/entities/JournalEntryLineItem"
-          },
-          "description": "Stores journal entry line items for each journal entry. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user."
-            },
-            {
-              "name": "fiscalYearId",
-              "description": "The unique ID of the fiscal year."
-            },
-            {
-              "name": "journalEntryId",
-              "description": "The unique ID of the journal entry."
-            },
-            {
-              "name": "lineItemId",
-              "description": "The unique ID of the journal entry line item."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/accounts/{accountId}",
-        "definition": {
-          "entityName": "Account",
-          "schema": {
-            "$ref": "#/backend/entities/Account"
-          },
-          "description": "Stores accounts for each user. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user."
-            },
-            {
-              "name": "accountId",
-              "description": "The unique ID of the account."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/categoryMappings/{mappingId}",
-        "definition": {
-          "entityName": "CategoryMapping",
-          "schema": {
-            "$ref": "#/backend/entities/CategoryMapping"
-          },
-          "description": "Stores user-defined category mappings. Access is restricted to the user themselves.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user."
-            },
-            {
-              "name": "mappingId",
-              "description": "The unique ID of the mapping."
-            }
-          ]
-        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features, including user authentication, fiscal year management, transaction handling, and expense tracking. It leverages path-based ownership for user-specific data and denormalization where necessary to avoid complex security rules. Each collection is designed with a homogeneous security posture, making rules easier to manage.\n\nUser data is stored under `/users/{userId}`, providing a clear path-based ownership model. Fiscal years, bank accounts, categories, and accounts are subcollections of the user document. Transactions are nested under bank accounts, and journal entries are associated with fiscal years, with journal entry line items then nested under journal entries. This nested structure maintains the relationships while keeping data logically organized. A new collection for `categoryMappings` has been added to store user-specific rules for the AI, also under the user's document to maintain data ownership.\n\nAuthorization Independence is achieved through path-based ownership. For instance, access to data under `/users/{userId}` is controlled by checking `request.auth.uid == userId`. This eliminates the need for `get()` calls in security rules, enabling atomic operations. All reads and writes in the subcollections can securely be governed by this rule, ensuring the user has complete ownership of the data.\n\nThe structure supports required QAPs, such as secure list operations, by segregating data based on ownership.  Listing operations within `/users/{userId}/fiscalYears` only require checking the `userId` against `request.auth.uid`. Similarly, listing transactions requires `request.auth.uid == userId` derived from the path `/users/{userId}/bankAccounts/{bankAccountId}/transactions`. This approach ensures that users can only access the data they own, preventing unauthorized access."
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features, including user authentication and transaction management. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This nested structure maintains the relationships while keeping data logically organized. The Transaction entity now includes `userId` for efficient collection group queries and `primaryCategory`, `secondaryCategory`, and `subcategory` fields directly, removing the need for a separate `categories` collection."
   }
 }
-
-    
