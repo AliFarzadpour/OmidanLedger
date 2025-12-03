@@ -29,6 +29,7 @@ export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialRepor
 const FinancialReportPromptSchema = z.object({
     userQuery: z.string(),
     transactionData: z.string(),
+    currentDate: z.string(),
 });
 
 // Define the prompt at the module level.
@@ -40,7 +41,7 @@ const reportingPrompt = ai.definePrompt({
     prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
 The data is in CSV format: 'date, description, amount, category_path'.
 
-Today's Date: ${new Date().toISOString().split('T')[0]}
+Today's Date: {{{currentDate}}}
 
 User's Question:
 "{{{userQuery}}}"
@@ -92,6 +93,7 @@ const generateFinancialReportFlow = ai.defineFlow(
     const { output } = await reportingPrompt({
         userQuery,
         transactionData: transactionData,
+        currentDate: new Date().toISOString().split('T')[0],
     });
     
     return output || "I was unable to generate a report based on your request. Please try rephrasing your question.";
