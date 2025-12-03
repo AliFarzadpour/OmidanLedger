@@ -138,10 +138,14 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
             const accountsResponse = await plaidClient.accountsGet({
                 access_token: accessToken,
             });
-            const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === metadata.account_id);
+            
+            // Correctly get the account ID from the metadata object
+            const selectedAccountId = metadata.account.id;
+
+            const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === selectedAccountId);
 
             if (!accountData) {
-                throw new Error(`Account with ID ${metadata.account_id} not found in Plaid response.`);
+                throw new Error(`Account with ID ${selectedAccountId} not found in Plaid response.`);
             }
 
             const newAccount = {
