@@ -169,7 +169,9 @@ service cloud.firestore {
     }
 
     match /{path=**}/lineItems/{item} {
-      allow read: if isSignedIn() && get(/databases/$(database)/documents/$(path)).data.userId == request.auth.uid;
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }
+
+    

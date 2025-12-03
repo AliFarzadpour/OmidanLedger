@@ -20,6 +20,7 @@ interface JournalEntryLineItem {
     accountId: string;
     debit: number;
     credit: number;
+    userId: string;
 }
 
 interface AccountWithBalance extends Account {
@@ -38,50 +39,50 @@ export function TrialBalanceReport() {
             setIsLoading(true);
 
             try {
-                // 1. Fetch all accounts
+                // 1. Fetch all accounts for the current user
                 const accountsQuery = query(collection(firestore, `users/${user.uid}/accounts`), orderBy('name'));
                 const accountsSnapshot = await getDocs(accountsQuery);
                 const accounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
 
-                // 2. Fetch all relevant journal entry line items
-                const journalEntriesQuery = query(
-                    collectionGroup(firestore, 'journalEntries'),
+                if (accounts.length === 0) {
+                    setAccountsWithBalances([]);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // 2. Fetch all line items for the user in a single collectionGroup query
+                const lineItemsQuery = query(
+                    collectionGroup(firestore, 'lineItems'),
                     where('userId', '==', user.uid)
                 );
-                const journalEntriesSnapshot = await getDocs(journalEntriesQuery);
-                const journalEntryIds = journalEntriesSnapshot.docs.map(doc => doc.id);
+                const lineItemsSnapshot = await getDocs(lineItemsQuery);
+                const allLineItems = lineItemsSnapshot.docs.map(doc => doc.data() as JournalEntryLineItem);
 
-                let allLineItems: JournalEntryLineItem[] = [];
-
-                if (journalEntryIds.length > 0) {
-                    // Firestore 'in' queries are limited to 30 items. We might need to batch this.
-                    // For simplicity, assuming less than 30 journal entries for now. A more robust
-                    // solution would chunk the journalEntryIds array.
-                    const lineItemsQuery = query(
-                        collectionGroup(firestore, 'lineItems'),
-                        where('journalEntryId', 'in', journalEntryIds.slice(0, 30))
-                    );
-                    const lineItemsSnapshot = await getDocs(lineItemsQuery);
-                    allLineItems = lineItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JournalEntryLineItem));
-                }
-                
                 // 3. Calculate balances for each account
-                const balances = new Map<string, number>();
-                allLineItems.forEach(item => {
-                    const currentDebit = balances.get(`${item.accountId}_debit`) || 0;
-                    const currentCredit = balances.get(`${item.accountId}_credit`) || 0;
-                    balances.set(`${item.accountId}_debit`, currentDebit + (item.debit || 0));
-                    balances.set(`${item.accountId}_credit`, currentCredit + (item.credit || 0));
+                const balances = new Map<string, { debit: number; credit: number }>();
+
+                // Initialize balances for all accounts to zero
+                accounts.forEach(account => {
+                    balances.set(account.id, { debit: 0, credit: 0 });
                 });
-                
+
+                // Aggregate debits and credits from line items
+                allLineItems.forEach(item => {
+                    if (balances.has(item.accountId)) {
+                        const current = balances.get(item.accountId)!;
+                        current.debit += item.debit || 0;
+                        current.credit += item.credit || 0;
+                    }
+                });
+
+                // 4. Determine final balance for each account based on normal balance
                 const calculatedAccounts = accounts.map(account => {
-                    const totalDebits = balances.get(`${account.id}_debit`) || 0;
-                    const totalCredits = balances.get(`${account.id}_credit`) || 0;
+                    const { debit, credit } = balances.get(account.id)!;
                     let balance = 0;
                     if (account.normalBalance === 'debit') {
-                        balance = totalDebits - totalCredits;
+                        balance = debit - credit;
                     } else {
-                        balance = totalCredits - totalDebits;
+                        balance = credit - debit;
                     }
                     return { ...account, balance };
                 });
@@ -101,18 +102,17 @@ export function TrialBalanceReport() {
     const totals = useMemo(() => {
         return accountsWithBalances.reduce(
           (acc, account) => {
-            if (account.balance > 0) {
+            if (account.balance >= 0) {
                 if (account.normalBalance === 'debit') {
                     acc.debit += account.balance;
                 } else {
                     acc.credit += account.balance;
                 }
-            } else if (account.balance < 0) {
-                // If balance is negative, it adds to the opposite side
+            } else { // Negative balance appears on the opposite side
                 if (account.normalBalance === 'debit') {
-                    acc.credit += -account.balance;
+                    acc.credit += Math.abs(account.balance);
                 } else {
-                    acc.debit += -account.balance;
+                    acc.debit += Math.abs(account.balance);
                 }
             }
             return acc;
@@ -174,20 +174,31 @@ export function TrialBalanceReport() {
                     <TableBody>
                         {accountsWithBalances.length > 0 ? (
                             accountsWithBalances.map((account) => {
-                                const isDebit = account.normalBalance === 'debit';
-                                const showDebit = account.balance > 0 && isDebit || account.balance < 0 && !isDebit;
-                                const showCredit = account.balance > 0 && !isDebit || account.balance < 0 && isDebit;
+                                const isDebitNormal = account.normalBalance === 'debit';
+                                let debitAmount = 0;
+                                let creditAmount = 0;
+
+                                if (account.balance >= 0) {
+                                    if(isDebitNormal) debitAmount = account.balance;
+                                    else creditAmount = account.balance;
+                                } else {
+                                    if(isDebitNormal) creditAmount = Math.abs(account.balance);
+                                    else debitAmount = Math.abs(account.balance);
+                                }
+
 
                                 return (
-                                    <TableRow key={account.id}>
-                                        <TableCell className="font-medium">{account.name}</TableCell>
-                                        <TableCell className="text-right font-mono">
-                                            {showDebit ? formatCurrency(Math.abs(account.balance)) : '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-mono">
-                                            {showCredit ? formatCurrency(Math.abs(account.balance)) : '-'}
-                                        </TableCell>
-                                    </TableRow>
+                                    (debitAmount > 0 || creditAmount > 0) && (
+                                        <TableRow key={account.id}>
+                                            <TableCell className="font-medium">{account.name}</TableCell>
+                                            <TableCell className="text-right font-mono">
+                                                {debitAmount > 0 ? formatCurrency(debitAmount) : '-'}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono">
+                                                {creditAmount > 0 ? formatCurrency(creditAmount) : '-'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )
                                 );
                             })
                         ) : (
@@ -200,7 +211,7 @@ export function TrialBalanceReport() {
                     </TableBody>
                     <TableFooter>
                         <TableRow className="bg-muted/50">
-                            <TableHead className="text-right">Totals</TableHead>
+                            <TableHead className="text-right font-bold">Totals</TableHead>
                             <TableHead className="text-right font-bold font-mono">{formatCurrency(totals.debit)}</TableHead>
                             <TableHead className={cn("text-right font-bold font-mono", totals.debit !== totals.credit && "text-destructive")}>{formatCurrency(totals.credit)}</TableHead>
                         </TableRow>
@@ -217,3 +228,5 @@ export function TrialBalanceReport() {
         </Card>
     );
 }
+
+    

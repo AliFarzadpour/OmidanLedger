@@ -9,12 +9,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useEffect, useState, useMemo } from 'react';
 
-// Represents a line item combined with its parent journal entry's data
 interface LedgerEntry {
   id: string;
   journalEntryId: string;
   accountId: string;
-  date: Date; // Use Date object
+  date: Date;
   description: string;
   debit: number;
   credit: number;
@@ -36,16 +35,17 @@ interface JournalEntry {
 
 interface JournalEntryLineItem {
     id: string;
+    journalEntryId: string;
     accountId: string;
     debit: number;
     credit: number;
+    userId: string;
 }
 
-// A component to render the details for a single account
-function AccountLedger({ account, allLedgerEntries }: { account: Account, allLedgerEntries: LedgerEntry[] }) {
-  const entries = useMemo(() => {
-    return allLedgerEntries.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [allLedgerEntries]);
+function AccountLedger({ account, entries }: { account: Account, entries: LedgerEntry[] }) {
+  const sortedEntries = useMemo(() => {
+    return entries.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [entries]);
   
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
@@ -61,7 +61,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
   };
 
   let runningBalance = 0;
-  const balance = calculateBalance(entries, account.normalBalance);
+  const balance = calculateBalance(sortedEntries, account.normalBalance);
 
   return (
     <AccordionItem value={account.id} key={account.id}>
@@ -74,7 +74,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
         </div>
       </AccordionTrigger>
       <AccordionContent>
-        {entries.length > 0 ? (
+        {sortedEntries.length > 0 ? (
           <Table>
             <TableHeader>
               <TableRow>
@@ -86,7 +86,7 @@ function AccountLedger({ account, allLedgerEntries }: { account: Account, allLed
               </TableRow>
             </TableHeader>
             <TableBody>
-              {entries.map((entry) => {
+              {sortedEntries.map((entry) => {
                 if (account.normalBalance === 'debit') {
                     runningBalance += entry.debit - entry.credit;
                 } else {
@@ -134,44 +134,38 @@ export function GeneralLedgerReport() {
       setIsLoading(true);
       
       try {
-        // Step 1: Fetch all accounts
         const accountsQuery = query(collection(firestore, `users/${user.uid}/accounts`), orderBy('name'));
-        const accountsSnapshot = await getDocs(accountsQuery);
+        const journalEntriesQuery = query(collectionGroup(firestore, 'journalEntries'), where('userId', '==', user.uid));
+        const lineItemsQuery = query(collectionGroup(firestore, 'lineItems'), where('userId', '==', user.uid));
+
+        const [accountsSnapshot, journalEntriesSnapshot, lineItemsSnapshot] = await Promise.all([
+            getDocs(accountsQuery),
+            getDocs(journalEntriesQuery),
+            getDocs(lineItemsQuery)
+        ]);
+
         const fetchedAccounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(fetchedAccounts);
 
-        // Step 2: Fetch all journal entries for the user using a collectionGroup query
-        const journalEntriesQuery = query(
-            collectionGroup(firestore, 'journalEntries'),
-            where('userId', '==', user.uid)
-        );
-        const journalEntriesSnapshot = await getDocs(journalEntriesQuery);
         const journalEntriesMap = new Map<string, JournalEntry>();
         journalEntriesSnapshot.docs.forEach(doc => {
             journalEntriesMap.set(doc.id, { id: doc.id, ...doc.data() } as JournalEntry);
         });
 
-        // Step 3: Fetch all line items for the user
-        const lineItemsQuery = query(collectionGroup(firestore, 'lineItems'));
-        const lineItemsSnapshot = await getDocs(lineItemsQuery);
+        const allLineItems = lineItemsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as JournalEntryLineItem));
+
         const allLedgerEntries: LedgerEntry[] = [];
-        
-        lineItemsSnapshot.forEach(doc => {
-            // Because lineItems is nested, we get its parent journal entry's ID
-            const journalEntryId = doc.ref.parent.parent?.id;
-
-            if (journalEntryId && journalEntriesMap.has(journalEntryId)) {
-                const lineItemData = doc.data() as JournalEntryLineItem;
-                const journalEntry = journalEntriesMap.get(journalEntryId)!;
-
+        allLineItems.forEach(lineItem => {
+            const journalEntry = journalEntriesMap.get(lineItem.journalEntryId);
+            if (journalEntry) {
                 allLedgerEntries.push({
-                    id: doc.id,
+                    id: lineItem.id,
                     journalEntryId: journalEntry.id,
-                    accountId: lineItemData.accountId,
+                    accountId: lineItem.accountId,
                     date: journalEntry.date.toDate(),
                     description: journalEntry.description,
-                    debit: lineItemData.debit || 0,
-                    credit: lineItemData.credit || 0,
+                    debit: lineItem.debit || 0,
+                    credit: lineItem.credit || 0,
                 });
             }
         });
@@ -190,16 +184,12 @@ export function GeneralLedgerReport() {
 
   const ledgerEntriesByAccount = useMemo(() => {
     const map = new Map<string, LedgerEntry[]>();
-    // Initialize map for all accounts to ensure every account is rendered
-    for (const account of accounts) {
-        map.set(account.id, []);
-    }
-    // Distribute ledger entries into the map
-    for (const entry of ledgerEntries) {
-      if(map.has(entry.accountId)) {
-        map.get(entry.accountId)?.push(entry);
+    accounts.forEach(account => map.set(account.id, []));
+    ledgerEntries.forEach(entry => {
+      if (map.has(entry.accountId)) {
+        map.get(entry.accountId)!.push(entry);
       }
-    }
+    });
     return map;
   }, [accounts, ledgerEntries]);
 
@@ -232,12 +222,12 @@ export function GeneralLedgerReport() {
                    <AccountLedger 
                         key={account.id} 
                         account={account} 
-                        allLedgerEntries={ledgerEntriesByAccount.get(account.id) || []}
+                        entries={ledgerEntriesByAccount.get(account.id) || []}
                     />
                 ))
             ) : (
                 <div className="text-center py-10">
-                    <p className="text-muted-foreground">No accounts found. Create accounts to see the General Ledger.</p>
+                    <p className="text-muted-foreground">No accounts found. Create accounts and journal entries to see the General Ledger.</p>
                 </div>
             )}
         </Accordion>
@@ -245,3 +235,5 @@ export function GeneralLedgerReport() {
     </Card>
   );
 }
+
+    
