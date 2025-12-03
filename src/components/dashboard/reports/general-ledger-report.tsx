@@ -1,7 +1,7 @@
 'use client';
 
 import { useUser, useFirestore } from '@/firebase';
-import { collection, query, orderBy, getDocs, Timestamp, collectionGroup } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, Timestamp, collectionGroup, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -27,20 +27,19 @@ interface Account {
   normalBalance: 'debit' | 'credit';
 }
 
+interface JournalEntry {
+    id: string;
+    date: Timestamp;
+    description: string;
+    userId: string;
+}
+
 interface JournalEntryLineItem {
     id: string;
     accountId: string;
     debit: number;
     credit: number;
-    journalEntryId: string; // Add parent ID for easier mapping
 }
-
-interface JournalEntry {
-    id: string;
-    date: Timestamp;
-    description: string;
-}
-
 
 // A component to render the details for a single account
 function AccountLedger({ account, allLedgerEntries }: { account: Account, allLedgerEntries: LedgerEntry[] }) {
@@ -141,38 +140,40 @@ export function GeneralLedgerReport() {
         const fetchedAccounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
         setAccounts(fetchedAccounts);
 
-        // Step 2: Fetch all journal entries for the user
-        const journalEntriesQuery = query(collectionGroup(firestore, 'journalEntries'));
+        // Step 2: Fetch all journal entries for the user using a collectionGroup query
+        const journalEntriesQuery = query(
+            collectionGroup(firestore, 'journalEntries'),
+            where('userId', '==', user.uid)
+        );
         const journalEntriesSnapshot = await getDocs(journalEntriesQuery);
         const journalEntriesMap = new Map<string, JournalEntry>();
         journalEntriesSnapshot.docs.forEach(doc => {
-            if (doc.ref.path.startsWith(`users/${user.uid}/`)) {
-                 journalEntriesMap.set(doc.id, { id: doc.id, ...doc.data() } as JournalEntry);
-            }
+            journalEntriesMap.set(doc.id, { id: doc.id, ...doc.data() } as JournalEntry);
         });
 
         // Step 3: Fetch all line items for the user
         const lineItemsQuery = query(collectionGroup(firestore, 'lineItems'));
         const lineItemsSnapshot = await getDocs(lineItemsQuery);
         const allLedgerEntries: LedgerEntry[] = [];
-        lineItemsSnapshot.docs.forEach(doc => {
-             if (doc.ref.path.startsWith(`users/${user.uid}/`)) {
-                const lineItemData = doc.data() as Omit<JournalEntryLineItem, 'id'>;
-                const journalEntryId = doc.ref.parent.parent?.id;
-                const journalEntry = journalEntryId ? journalEntriesMap.get(journalEntryId) : undefined;
+        
+        lineItemsSnapshot.forEach(doc => {
+            // Because lineItems is nested, we get its parent journal entry's ID
+            const journalEntryId = doc.ref.parent.parent?.id;
 
-                if (journalEntry) {
-                    allLedgerEntries.push({
-                        id: doc.id,
-                        journalEntryId: journalEntry.id,
-                        accountId: lineItemData.accountId,
-                        date: journalEntry.date.toDate(),
-                        description: journalEntry.description,
-                        debit: lineItemData.debit || 0,
-                        credit: lineItemData.credit || 0,
-                    });
-                }
-             }
+            if (journalEntryId && journalEntriesMap.has(journalEntryId)) {
+                const lineItemData = doc.data() as JournalEntryLineItem;
+                const journalEntry = journalEntriesMap.get(journalEntryId)!;
+
+                allLedgerEntries.push({
+                    id: doc.id,
+                    journalEntryId: journalEntry.id,
+                    accountId: lineItemData.accountId,
+                    date: journalEntry.date.toDate(),
+                    description: journalEntry.description,
+                    debit: lineItemData.debit || 0,
+                    credit: lineItemData.credit || 0,
+                });
+            }
         });
         
         setLedgerEntries(allLedgerEntries);
@@ -189,7 +190,7 @@ export function GeneralLedgerReport() {
 
   const ledgerEntriesByAccount = useMemo(() => {
     const map = new Map<string, LedgerEntry[]>();
-    // Initialize map for all accounts
+    // Initialize map for all accounts to ensure every account is rendered
     for (const account of accounts) {
         map.set(account.id, []);
     }
@@ -235,7 +236,9 @@ export function GeneralLedgerReport() {
                     />
                 ))
             ) : (
-                <p className="p-4 text-center text-muted-foreground">No accounts found. Create accounts to see the General Ledger.</p>
+                <div className="text-center py-10">
+                    <p className="text-muted-foreground">No accounts found. Create accounts to see the General Ledger.</p>
+                </div>
             )}
         </Accordion>
       </CardContent>

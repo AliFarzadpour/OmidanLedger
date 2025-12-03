@@ -50,9 +50,8 @@ const learnCategoryMappingFlow = ai.defineFlow(
     const { firestore } = initializeServerFirebase();
     const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
 
-    // Use the non-blocking client-side function to set the document
     // Save the generalized description as the key for the rule.
-    setDocumentNonBlocking(mappingRef, {
+    await setDoc(mappingRef, {
         userId,
         transactionDescription: generalizedDescription,
         primaryCategory,
