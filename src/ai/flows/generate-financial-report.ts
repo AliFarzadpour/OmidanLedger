@@ -84,14 +84,14 @@ const generateFinancialReportFlow = ai.defineFlow(
     }
 
     // 2. Format data for the AI
-    const transactionDataString = transactions
+    const transactionData = transactions
       .map(t => `${t.date},${t.description},${t.amount.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`)
       .join('\n');
     
     // 3. Call the prompt with the received input, ensuring it matches the prompt's schema.
     const { output } = await reportingPrompt({
         userQuery,
-        transactionData: transactionDataString,
+        transactionData: transactionData,
     });
     
     return output || "I was unable to generate a report based on your request. Please try rephrasing your question.";
