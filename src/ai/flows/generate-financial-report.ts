@@ -22,8 +22,6 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     const snapshot = await db
       .collectionGroup('transactions')
       .where('userId', '==', userId)
-      .orderBy('date', 'desc')
-      .limit(500) 
       .get();
 
     if (snapshot.empty) {
@@ -31,12 +29,18 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
       return "";
     }
     
-    const transactions = snapshot.docs.map(doc => doc.data());
+    let transactions = snapshot.docs.map(doc => doc.data());
+    
+    // Sort transactions by date descending in code to avoid needing a composite index
+    transactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    // Limit the number of transactions to avoid oversized prompts
+    const limitedTransactions = transactions.slice(0, 500);
 
-    console.log(`[AI-FLOW] Fetched ${transactions.length} transactions for user ${userId}.`);
+    console.log(`[AI-FLOW] Fetched and processed ${limitedTransactions.length} transactions for user ${userId}.`);
 
     // Convert to CSV string
-    const csvString = transactions
+    const csvString = limitedTransactions
       .map((t) => {
         const amt = typeof t.amount === 'number' ? t.amount : Number(t.amount ?? 0);
         // Sanitize description for CSV: remove commas and newlines
@@ -53,30 +57,6 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     throw new Error(`Database Error: ${error.message}`);
   }
 }
-
-// Define the Prompt
-const reportingPrompt = ai.definePrompt({
-  name: 'financialReportPrompt',
-  input: {
-    schema: z.object({
-      userQuery: z.string(),
-      transactionData: z.string(),
-      currentDate: z.string(),
-    }),
-  },
-  prompt: `You are an expert financial analyst.
-  
-Today: {{{currentDate}}}
-
-User Question: "{{{userQuery}}}"
-
-Data (CSV):
----
-{{{transactionData}}}
----
-
-Answer concise and use Markdown. If data is empty, say so.`,
-});
 
 // Main Flow
 export const generateFinancialReportFlow = ai.defineFlow(
