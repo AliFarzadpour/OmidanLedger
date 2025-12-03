@@ -95,12 +95,15 @@ service cloud.firestore {
         }
     }
     
-    // Rules for Collection Group Queries
+    /**
+     * @description Collection group rule for querying transactions across all bank accounts.
+     * This is essential for user-wide reporting features like the General Ledger and AI reports.
+     * @path /{path=**}/transactions/{transactionId}
+     * @allow (list) An authenticated user can list all transactions where the `userId` field matches their UID.
+     * @allow (list) A trusted server process (identified by `isServer()`) can list transactions to generate reports.
+     * @principle Enables efficient, secure, cross-cutting queries for reporting while respecting user data ownership.
+     */
     match /{path=**}/transactions/{transactionId} {
-      // This rule allows a logged-in user to query the 'transactions' collection group.
-      // It also allows a trusted server process to perform the same query.
-      // It ensures that clients can only list transactions that have a 'userId' field
-      // matching their own authentication UID. This is crucial for reports.
       allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isServer();
     }
   }
