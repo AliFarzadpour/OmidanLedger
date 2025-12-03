@@ -97,6 +97,9 @@ service cloud.firestore {
     
     // Rules for Collection Group Queries
     match /{path=**}/transactions/{transactionId} {
+      // This rule allows a logged-in user to query the 'transactions' collection group.
+      // It ensures that they can only list transactions that have a 'userId' field
+      // matching their own authentication UID. This is crucial for reports.
       allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
