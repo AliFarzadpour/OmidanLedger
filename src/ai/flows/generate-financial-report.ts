@@ -41,10 +41,13 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     const snapshot = await getDocs(transactionsQuery);
 
     if (snapshot.empty) {
+      console.log(`[AI-FLOW] No transactions found for user ${userId}.`);
       return ''; // Return empty string if no transactions are found
     }
 
     const transactions = snapshot.docs.map(doc => doc.data() as Transaction);
+
+    console.log(`[AI-FLOW] Fetched ${transactions.length} transactions for user ${userId}.`);
 
     // Convert to CSV string
     const csvString = transactions
@@ -58,14 +61,24 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
     return csvString;
 
   } catch (error) {
-    console.error("Error fetching transaction history:", error);
-    throw new Error("Could not fetch transaction history from the database. Please check server logs.");
+    console.error("[AI-FLOW] Error fetching transaction history:", error);
+    // Propagate a more specific error.
+    throw new Error("Could not fetch transaction history from the database. Please check server logs and Firestore permissions.");
   }
 }
 
 // The main Server Action that can be called from the client.
 export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
-  return generateFinancialReportFlow(input);
+  console.log('[AI-FLOW] Starting generateFinancialReport...');
+  try {
+    const result = await generateFinancialReportFlow(input);
+    console.log('[AI-FLOW] generateFinancialReport successful.');
+    return result;
+  } catch (error: any) {
+    console.error('[AI-FLOW] A critical error occurred in the generateFinancialReport flow:', error);
+    // Rethrow the error so the client's catch block can handle it.
+    throw new Error(`Failed to generate report: ${error.message}`);
+  }
 }
 
 /**
@@ -78,7 +91,14 @@ const generateFinancialReportFlow = ai.defineFlow(
     outputSchema: z.string(),
   },
   async ({ userQuery, userId }) => {
-    
+    console.log(`[AI-FLOW] generateFinancialReportFlow invoked for user: ${userId}`);
+
+    // API Key Check
+    if (!process.env.GEMINI_API_KEY) {
+        console.error('[AI-FLOW] Server API Key is missing.');
+        throw new Error('Server API Key is not configured. Please set the GEMINI_API_KEY environment variable.');
+    }
+
     // Step 1: Fetch and format the data from Firestore.
     const transactionData = await fetchAndFormatTransactions(userId);
 
@@ -86,6 +106,8 @@ const generateFinancialReportFlow = ai.defineFlow(
     if (!transactionData) {
       return "I couldn't find any transaction data to analyze. Please add some transactions and try again.";
     }
+    console.log(`[AI-FLOW] Transaction data length: ${transactionData.length} characters.`);
+
 
     const currentDate = new Date().toISOString().split('T')[0];
 
@@ -113,14 +135,22 @@ Based on the data, provide a clear, concise answer to the user's question.
 
     // Step 4: Call the AI model.
     try {
+      console.log('[AI-FLOW] Calling AI.generate()...');
       const { text } = await ai.generate({
         prompt,
       });
+
+      if (!text) {
+        console.warn('[AI-FLOW] AI response text is null or undefined.');
+        throw new Error('The AI returned an empty response.');
+      }
+
+      console.log('[AI-FLOW] AI generation successful.');
       return text;
     } catch (e: any) {
-      console.error("AI Generation Error:", e);
-      // 5. Error Handling
-      return "There was a problem communicating with the AI. Please check the server logs for more details.";
+      console.error("[AI-FLOW] AI Generation Error:", e);
+      // 5. Error Handling - Propagate a clear message.
+      throw new Error(`There was a problem communicating with the AI. Details: ${e.message}`);
     }
   }
 );

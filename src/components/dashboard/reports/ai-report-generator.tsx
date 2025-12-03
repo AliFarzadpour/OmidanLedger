@@ -54,12 +54,13 @@ export function AIReportGenerator() {
         userId: user.uid,
       });
       setReport(result);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating AI report:', error);
       toast({
         variant: 'destructive',
         title: 'Error Generating Report',
-        description: 'There was a problem communicating with the AI. Please try again.',
+        // Display the specific error message from the server.
+        description: error.message || 'An unknown error occurred. Please check the server logs.',
       });
     } finally {
       setIsLoading(false);
