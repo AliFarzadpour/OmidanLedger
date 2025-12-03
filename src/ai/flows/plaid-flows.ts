@@ -6,8 +6,6 @@
  * - createBankAccountFromPlaid: Creates a bank account record in Firestore from Plaid data.
  * - syncAndCategorizePlaidTransactions: Fetches, categorizes, and saves transactions from Plaid.
  */
-import { config } from 'dotenv';
-config();
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
@@ -69,7 +67,7 @@ const createLinkTokenFlow = ai.defineFlow(
         products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
-        redirect_uri: 'http://localhost/',
+        institution_id: 'ins_109508', // Force First Platypus Bank (non-OAuth)
       });
       return response.data.link_token;
     } catch (error: any) {
