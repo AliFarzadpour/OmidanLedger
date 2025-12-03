@@ -6,28 +6,15 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { initializeServerFirebase } from '@/ai/utils';
-import { collectionGroup, getDocs, query, where } from 'firebase/firestore';
 
 const GenerateFinancialReportInputSchema = z.object({
-  userId: z.string().describe('The ID of the user requesting the report.'),
-  query: z.string().describe('The user\'s natural language question or report request.'),
+  userQuery: z.string().describe('The user\'s natural language question or report request.'),
+  transactionData: z.string().describe('A string containing the user\'s transaction data in CSV format.'),
 });
 export type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
 export async function generateFinancialReport(input: GenerateFinancialReportInput): Promise<string> {
   return generateFinancialReportFlow(input);
-}
-
-// Internal type for transactions fetched from Firestore
-interface Transaction {
-  id: string;
-  date: string;
-  description: string;
-  amount: number;
-  primaryCategory: string;
-  secondaryCategory: string;
-  subcategory: string;
 }
 
 const generateFinancialReportFlow = ai.defineFlow(
@@ -36,22 +23,9 @@ const generateFinancialReportFlow = ai.defineFlow(
     inputSchema: GenerateFinancialReportInputSchema,
     outputSchema: z.string(),
   },
-  async ({ userId, query: userQuery }) => {
-    // 1. Fetch user's transaction data from Firestore
-    const { firestore } = initializeServerFirebase();
-    const transactionsQuery = query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', userId)
-    );
-    const snapshot = await getDocs(transactionsQuery);
-    const transactions: Transaction[] = snapshot.docs.map(doc => doc.data() as Transaction);
-
-    // 2. Format the data into a simple string for the LLM
-    const transactionDataString = transactions
-        .map(t => `${t.date}, ${t.description}, ${t.amount.toFixed(2)}, ${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`)
-        .join('\n');
+  async ({ userQuery, transactionData }) => {
     
-    // 3. Define and call the LLM prompt
+    // Define the LLM prompt. It now receives the transaction data directly.
     const reportingPrompt = ai.definePrompt({
         name: 'financialReportPrompt',
         input: {
@@ -82,7 +56,7 @@ Based on the data, provide a clear, concise answer to the user's question.
 
     const { output } = await reportingPrompt({
         userQuery,
-        transactionData: transactionDataString,
+        transactionData,
     });
     
     return output || "I was unable to generate a report based on your request. Please try rephrasing your question.";
