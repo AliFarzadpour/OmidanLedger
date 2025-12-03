@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, FileText, BarChart, BookOpen, List } from 'lucide-react';
+import { ArrowRight, FileText, BarChart, BookOpen, List, BrainCircuit } from 'lucide-react';
 import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 const reports = [
@@ -44,6 +44,20 @@ export default function ReportsPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <DatabaseStructureCard />
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+                <CardTitle className="text-xl">AI Report</CardTitle>
+                <BrainCircuit className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <CardDescription>View AI-powered insights and analysis.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center text-sm font-medium text-muted-foreground">
+              Coming Soon
+            </div>
+          </CardContent>
+        </Card>
         {reports.map((report) => (
           <Link href={report.href} key={report.title} className="group">
             <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
