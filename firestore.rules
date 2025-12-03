@@ -1,42 +1,4 @@
-/**
- * Core Philosophy: This ruleset enforces a strict user-ownership security model.
- * All user-generated data is stored in a hierarchical structure under that specific
- * user's document, ensuring that only the authenticated owner of that data can
- * perform any read or write operations.
- *
- * Data Structure: The entire database is structured under a top-level `users`
- * collection. Each user document, identified by their UID, acts as a root for all
- * their private data, including fiscal years, bank accounts, transactions, and
- * categories. For example, a user's bank accounts are stored at
- * `/users/{userId}/bankAccounts/{bankAccountId}`. This path-based ownership is
- * the cornerstone of the security model.
- *
- * Key Security Decisions:
- * - Default Deny: All operations are denied by default. Access must be
- *   explicitly granted.
- * - Strict Ownership: A user can only access documents located within their own
- *   data tree (i.e., where the path starts with `/users/{their_auth_uid}`).
- * - No Public Data: There are no publicly readable or listable collections.
- * - No User Listing: It is not possible to list documents in the top-level
- *   `/users` collection, to prevent enumeration of all application users.
- * - Relational Integrity: On document creation, rules validate that foreign key
- *   fields (e.g., `userId`, `bankAccountId`) correctly match the IDs in the
- *   document path. These fields are enforced as immutable on update to prevent
- *   re-parenting of data.
- * - Server-Side Trust: Specific read access is granted for server-side
- *   processes (like Genkit AI flows) which are considered trusted. This is
- *   explicitly marked and scoped to prevent unintended client-side access.
- *
- * Denormalization for Authorization: The data structure is inherently optimized
- * for security rules. By nesting all data under a user's ID, authorization
- * checks are simple and fast (`request.auth.uid == userId`) and do not require
- * any costly `get()` or `exists()` calls to other documents.
- *
- * Structural Segregation: This pattern is fully utilized by siloing each user's
- * data into their own document tree. This makes list operations on subcollections
- * (e.g., listing a user's own bank accounts) secure by default, as the rule
- * can verify ownership based on the path.
- */
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -49,62 +11,27 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-    
-    // A check to determine if the request is coming from a trusted server-side
-    // environment (e.g., a Genkit flow). In a real production environment, this
-    // would be a more robust check, likely using custom auth claims. For this
-    // context, we assume server processes are unauthenticated.
-    function isServer() {
-        return request.auth == null;
-    }
 
-    /**
-     * @description Manages user profile documents.
-     * @path /users/{userId}
-     * @allow (create) A new user can create their own profile document. `auth.uid` must match `{userId}`.
-     * @allow (get, update, delete) An authenticated user can read, update, or delete their own profile.
-     * @deny (list) Listing all users is forbidden to prevent user enumeration.
-     * @deny (get) An authenticated user cannot read another user's profile.
-     * @principle Restricts access to a user's own data tree and allows self-creation of a root document.
-     */
     match /users/{userId} {
       allow get, update, delete: if isOwner(userId);
       allow create: if isOwner(userId);
       allow list: if false;
 
-        /**
-         * @description Stores bank accounts for a specific user.
-         * @path /users/{userId}/bankAccounts/{bankAccountId}
-         * @allow (read, write) A user can fully manage their own bank account documents.
-         * @deny (any) A user cannot access another user's bank accounts.
-         * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-         */
         match /bankAccounts/{bankAccountId} {
           allow read, write: if isOwner(userId);
 
-            /**
-             * @description Stores transactions for a specific bank account.
-             * @path /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId}
-             * @allow (read, write) A user can fully manage transactions for their own bank account.
-             * @deny (any) A user cannot access transactions belonging to another user.
-             * @principle Enforces document ownership and validates the link to the parent bankAccount document.
-             */
             match /transactions/{transactionId} {
                 allow read, write: if isOwner(userId);
             }
         }
+        
+        match /categoryMappings/{mappingId} {
+            allow read, write: if isOwner(userId);
+        }
     }
     
-    /**
-     * @description Collection group rule for querying transactions across all bank accounts.
-     * This is essential for user-wide reporting features like the General Ledger and AI reports.
-     * @path /{path=**}/transactions/{transactionId}
-     * @allow (list) An authenticated user can list all transactions where the `userId` field matches their UID.
-     * @allow (list) A trusted server process (identified by `isServer()`) can list transactions to generate reports.
-     * @principle Enables efficient, secure, cross-cutting queries for reporting while respecting user data ownership.
-     */
     match /{path=**}/transactions/{transactionId} {
-      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isServer();
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
   }
 }

@@ -1,4 +1,4 @@
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, Firestore } from 'firebase/firestore';
 import { firebaseConfig } from '@/firebase/config';
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
@@ -35,7 +35,7 @@ function getSdks(firebaseApp: FirebaseApp) {
 }
 
 
-export async function getUserCategoryMappings(firestore: any, userId: string): Promise<string> {
+export async function getUserCategoryMappings(firestore: Firestore, userId: string): Promise<string> {
     if (!firestore || !userId) {
         return "No custom mappings provided.";
     }

@@ -30,8 +30,8 @@ import {
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase, setDocumentNonBlocking } from '@/firebase';
-import { collection, doc, writeBatch, getDocs } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '../ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -216,10 +216,9 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       subcategory: newCategories.subcategory,
     };
     
-    // Update the document in Firestore
-    setDocumentNonBlocking(transactionRef, updatedData, { merge: true });
+    await setDoc(transactionRef, updatedData, { merge: true });
 
-    learnCategoryMapping({
+    await learnCategoryMapping({
         transactionDescription: transaction.description,
         primaryCategory: newCategories.primaryCategory,
         secondaryCategory: newCategories.secondaryCategory,

@@ -23,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, addDocumentNonBlocking } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
 import { collection, writeBatch, doc } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
@@ -83,11 +83,9 @@ export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: U
             description: 'The AI is analyzing your document. This may take a moment...',
         });
         
-        // AI Categorization from the entire statement
         const result = await categorizeTransactionsFromStatement({
           statementDataUri: dataUri,
           userId: user.uid,
-          // userMappings will be fetched inside the flow now
         });
 
         if (!result || !result.transactions || result.transactions.length === 0) {

@@ -14,8 +14,6 @@ import {
     StatementOutputSchema,
 } from './schemas';
 import { MasterCategoryFramework } from './category-framework';
-import { getFirestore } from 'firebase/firestore';
-import { collection, getDocs } from 'firebase/firestore';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
 
 

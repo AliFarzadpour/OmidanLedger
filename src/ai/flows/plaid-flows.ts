@@ -10,9 +10,8 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { PlaidApi, Configuration, PlaidEnvironments, TransactionsSyncRequest, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
-import { addDocumentNonBlocking, setDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
-import { collection, doc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, writeBatch, setDoc, updateDoc } from 'firebase/firestore';
 import { categorizeTransactionsFromStatement } from './categorize-transactions-from-statement';
 
 function getPlaidClient() {
@@ -160,14 +159,9 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
                 plaidSyncCursor: null, // Initialize sync cursor
             };
             
-            // Plaid can return multiple accounts for a single item. We need to create a document for each.
-            // However, the metadata only contains one account. We will create just that one.
-            // The Plaid item ID is the same for all accounts associated with a single login.
-            // The account ID is unique for each account. We'll use Plaid's account ID as our doc ID.
             const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, accountData.account_id);
 
-            // Note: We are not using a blocking call here.
-            setDocumentNonBlocking(bankAccountRef, newAccount, { merge: true });
+            await setDoc(bankAccountRef, newAccount, { merge: true });
 
         } catch (error: any) {
             console.error('Error creating bank account from Plaid:', error.response?.data || error.message);
@@ -217,9 +211,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
       const request: TransactionsSyncRequest = {
         access_token: accessToken,
         cursor: cursor,
-        // Limit the number of transactions to fetch per page to stay within API limits
         count: 100,
-        // Filter by the specific account ID
         options: {
             account_ids: [bankAccountId]
         }
@@ -228,26 +220,21 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
       const data = response.data;
       
       allTransactions = allTransactions.concat(data.added);
-      // We don't handle modified or removed transactions in this implementation for simplicity
       
       hasMore = data.has_more;
       cursor = data.next_cursor;
     }
 
     if (allTransactions.length === 0) {
-        // Still update the cursor even if there are no new transactions
-        updateDocumentNonBlocking(bankAccountRef, { plaidSyncCursor: cursor });
+        await updateDoc(bankAccountRef, { plaidSyncCursor: cursor });
         return { count: 0 };
     }
     
-    // Create a text block of transactions to send to the categorization AI
     const transactionText = allTransactions.map(t => `${t.date},${t.name},${t.amount}`).join('\n');
     const fakeCsvDataUri = `data:text/csv;base64,${Buffer.from(transactionText).toString('base64')}`;
     
-    // Get user's custom mappings
     const userMappings = await getUserCategoryMappings(firestore, userId);
 
-    // Call the AI to categorize everything
     const categorizationResult = await categorizeTransactionsFromStatement({
       statementDataUri: fakeCsvDataUri,
       userId: userId,
@@ -256,14 +243,12 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     
     const categorizedTransactions = categorizationResult.transactions;
     
-    // Save categorized transactions to Firestore in a batch
     const batch = writeBatch(firestore);
     const transactionsColRef = collection(firestore, `users/${userId}/bankAccounts/${bankAccountId}/transactions`);
     
-    // Match categorized transactions back to Plaid transactions to get the original ID
     categorizedTransactions.forEach((tx) => {
         const originalPlaidTx = allTransactions.find(ptx => ptx.name === tx.description && ptx.amount === tx.amount);
-        const docId = originalPlaidTx?.transaction_id || doc(transactionsColRef).id; // Use Plaid ID if available, otherwise generate new one
+        const docId = originalPlaidTx?.transaction_id || doc(transactionsColRef).id;
         const newTransactionDoc = doc(transactionsColRef, docId);
 
         batch.set(newTransactionDoc, {
@@ -275,8 +260,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
     await batch.commit();
 
-    // After successfully saving, update the sync cursor on the bank account
-    updateDocumentNonBlocking(bankAccountRef, { plaidSyncCursor: cursor });
+    await updateDoc(bankAccountRef, { plaidSyncCursor: cursor });
 
     return { count: categorizedTransactions.length };
   }
