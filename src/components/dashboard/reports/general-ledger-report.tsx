@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useUser, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { useUser, useFirestore, useMemoFirebase, useCollection } from '@/firebase';
+import { collection, getDocs, query, orderBy, collectionGroup, where } from 'firebase/firestore';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -21,6 +21,7 @@ interface Transaction {
   date: string; // Assuming date is a string like 'YYYY-MM-DD'
   description: string;
   amount: number;
+  bankAccountId: string;
 }
 
 interface LedgerData {
@@ -29,68 +30,35 @@ interface LedgerData {
 }
 
 export function GeneralLedgerReport() {
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const firestore = useFirestore();
-  const [ledgerData, setLedgerData] = useState<LedgerData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // CRITICAL: Wait for both user and firestore to be available.
-    if (!user || !firestore) {
-      // If we are not in an initial loading state, it means there's no user.
-      if (!isUserLoading) {
-        setIsLoading(false);
-      }
-      return;
-    }
+  const accountsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return collection(firestore, `users/${user.uid}/bankAccounts`);
+  }, [user, firestore]);
+  const { data: accounts, isLoading: isLoadingAccounts } = useCollection<BankAccount>(accountsQuery);
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      try {
-        // 1. Fetch all bank accounts
-        const accountsRef = collection(firestore, `users/${user.uid}/bankAccounts`);
-        const accountsSnapshot = await getDocs(accountsRef);
-        const accounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as BankAccount[];
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', user.uid),
+      orderBy('date', 'asc')
+    );
+  }, [user, firestore]);
+  const { data: transactions, isLoading: isLoadingTransactions } = useCollection<Transaction>(transactionsQuery);
 
-        if (accounts.length === 0) {
-            setLedgerData([]);
-            setIsLoading(false);
-            return;
-        }
+  const ledgerData = useMemo((): LedgerData[] => {
+    if (!accounts || !transactions) return [];
 
-        // 2. Fetch transactions for each account
-        const allLedgerData: LedgerData[] = await Promise.all(
-          accounts.map(async (account) => {
-            const transactionsQuery = query(
-              collection(firestore, `users/${user.uid}/bankAccounts/${account.id}/transactions`),
-              orderBy('date', 'asc')
-            );
-            const transactionsSnapshot = await getDocs(transactionsQuery);
-            const transactions = transactionsSnapshot.docs.map(doc => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                // Ensure date is a string. If it's a Firestore Timestamp, convert it.
-                date: data.date?.toDate ? data.date.toDate().toISOString().split('T')[0] : data.date,
-                description: data.description,
-                amount: data.amount,
-              };
-            }) as Transaction[];
-
-            return { account, transactions };
-          })
-        );
-
-        setLedgerData(allLedgerData);
-      } catch (error) {
-        console.error("Error fetching general ledger data:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [user, firestore, isUserLoading]);
+    return accounts.map(account => {
+      const accountTransactions = transactions.filter(tx => tx.bankAccountId === account.id);
+      return { account, transactions: accountTransactions };
+    });
+  }, [accounts, transactions]);
+  
+  const isLoading = isLoadingAccounts || isLoadingTransactions;
 
   if (isLoading) {
     return (

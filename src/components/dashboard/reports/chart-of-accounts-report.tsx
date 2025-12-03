@@ -24,19 +24,18 @@ interface Account {
 }
 
 export function ChartOfAccountsReport() {
-  const { user, isUserLoading } = useUser();
+  const { user } = useUser();
   const firestore = useFirestore();
 
   // We perform a collectionGroup query to get all transactions for the user.
   const transactionsQuery = useMemoFirebase(() => {
-    // CRITICAL: Wait for both user and firestore to be available.
     if (!user || !firestore) {
       return null;
     }
     return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
   }, [user, firestore]);
 
-  const { data: transactions, isLoading: isLoadingTransactions } = useCollection<Transaction>(transactionsQuery);
+  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
 
   // We derive the unique accounts from the transaction data.
   const accounts = useMemo((): Account[] => {
@@ -62,8 +61,6 @@ export function ChartOfAccountsReport() {
     // Sort the accounts for consistent display
     return Array.from(uniqueAccounts.values()).sort((a, b) => a.id.localeCompare(b.id));
   }, [transactions]);
-
-  const isLoading = isUserLoading || (transactionsQuery && isLoadingTransactions);
 
   if (isLoading) {
     return (
