@@ -50,7 +50,7 @@ async function fetchAndFormatTransactions(userId: string): Promise<string> {
       })
       .join('\n');
       
-    return csvString;
+    return `date,description,amount,category_path\n${csvString}`;
 
   } catch (error: any) {
     console.error("[AI-FLOW] Database Error:", error);
