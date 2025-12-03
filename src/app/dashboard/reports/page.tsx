@@ -14,20 +14,20 @@ const reports = [
   },
   {
     title: 'Chart of Accounts',
-    description: 'View all transaction categories you have defined.',
+    description: 'View all transaction categories derived from your transaction history.',
     href: '/dashboard/reports/chart-of-accounts',
     icon: List,
   },
   {
     title: 'Expense Summary',
     description: 'A breakdown of your expenses by category.',
-    href: '/dashboard/reports/expense-summary',
+    href: '#', // To be implemented
     icon: BarChart,
   },
   {
     title: 'Income Statement',
     description: 'A summary of your revenues and expenses over a period.',
-    href: '/dashboard/reports/income-statement',
+    href: '#', // To be implemented
     icon: FileText,
   },
 ];
@@ -44,20 +44,23 @@ export default function ReportsPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <DatabaseStructureCard />
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-                <CardTitle className="text-xl">AI Report</CardTitle>
-                <BrainCircuit className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <CardDescription>View AI-powered insights and analysis.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center text-sm font-medium text-muted-foreground">
-              Coming Soon
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/dashboard/reports/ai-report" className="group">
+            <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-xl">AI Report</CardTitle>
+                    <BrainCircuit className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <CardDescription>Use AI to ask questions about your financial data.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
+                  Generate Report
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </div>
+              </CardContent>
+            </Card>
+        </Link>
         {reports.map((report) => (
           <Link href={report.href} key={report.title} className="group">
             <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
@@ -69,10 +72,16 @@ export default function ReportsPage() {
                 <CardDescription>{report.description}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
-                  View Report
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </div>
+                {report.href === '#' ? (
+                     <div className="flex items-center text-sm font-medium text-muted-foreground">
+                        Coming Soon
+                     </div>
+                ) : (
+                    <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
+                        View Report
+                        <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </div>
+                )}
               </CardContent>
             </Card>
           </Link>
