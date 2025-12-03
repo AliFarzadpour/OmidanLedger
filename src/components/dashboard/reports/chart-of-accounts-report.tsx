@@ -24,16 +24,19 @@ interface Account {
 }
 
 export function ChartOfAccountsReport() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
 
   // We perform a collectionGroup query to get all transactions for the user.
   const transactionsQuery = useMemoFirebase(() => {
-    if (!user || !firestore) return null;
+    // CRITICAL: Wait for both user and firestore to be available.
+    if (!user || !firestore) {
+      return null;
+    }
     return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
   }, [user, firestore]);
 
-  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+  const { data: transactions, isLoading: isLoadingTransactions } = useCollection<Transaction>(transactionsQuery);
 
   // We derive the unique accounts from the transaction data.
   const accounts = useMemo((): Account[] => {
@@ -42,14 +45,17 @@ export function ChartOfAccountsReport() {
     const uniqueAccounts = new Map<string, Account>();
 
     transactions.forEach(tx => {
-      const key = `${tx.primaryCategory}-${tx.secondaryCategory}-${tx.subcategory}`;
-      if (!uniqueAccounts.has(key)) {
-        uniqueAccounts.set(key, {
-          id: key,
-          primary: tx.primaryCategory,
-          secondary: tx.secondaryCategory,
-          sub: tx.subcategory,
-        });
+      // Ensure all category levels exist to prevent errors
+      if (tx.primaryCategory && tx.secondaryCategory && tx.subcategory) {
+        const key = `${tx.primaryCategory}-${tx.secondaryCategory}-${tx.subcategory}`;
+        if (!uniqueAccounts.has(key)) {
+          uniqueAccounts.set(key, {
+            id: key,
+            primary: tx.primaryCategory,
+            secondary: tx.secondaryCategory,
+            sub: tx.subcategory,
+          });
+        }
       }
     });
 
@@ -57,6 +63,7 @@ export function ChartOfAccountsReport() {
     return Array.from(uniqueAccounts.values()).sort((a, b) => a.id.localeCompare(b.id));
   }, [transactions]);
 
+  const isLoading = isUserLoading || (transactionsQuery && isLoadingTransactions);
 
   if (isLoading) {
     return (

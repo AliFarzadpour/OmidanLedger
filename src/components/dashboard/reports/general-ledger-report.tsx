@@ -29,13 +29,20 @@ interface LedgerData {
 }
 
 export function GeneralLedgerReport() {
-  const { user } = useUser();
+  const { user, isUserLoading } = useUser();
   const firestore = useFirestore();
   const [ledgerData, setLedgerData] = useState<LedgerData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !firestore) return;
+    // CRITICAL: Wait for both user and firestore to be available.
+    if (!user || !firestore) {
+      // If we are not in an initial loading state, it means there's no user.
+      if (!isUserLoading) {
+        setIsLoading(false);
+      }
+      return;
+    }
 
     const fetchData = async () => {
       setIsLoading(true);
@@ -45,6 +52,12 @@ export function GeneralLedgerReport() {
         const accountsSnapshot = await getDocs(accountsRef);
         const accounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as BankAccount[];
 
+        if (accounts.length === 0) {
+            setLedgerData([]);
+            setIsLoading(false);
+            return;
+        }
+
         // 2. Fetch transactions for each account
         const allLedgerData: LedgerData[] = await Promise.all(
           accounts.map(async (account) => {
@@ -53,10 +66,16 @@ export function GeneralLedgerReport() {
               orderBy('date', 'asc')
             );
             const transactionsSnapshot = await getDocs(transactionsQuery);
-            const transactions = transactionsSnapshot.docs.map(doc => ({
-              id: doc.id,
-              ...doc.data(),
-            })) as Transaction[];
+            const transactions = transactionsSnapshot.docs.map(doc => {
+              const data = doc.data();
+              return {
+                id: doc.id,
+                // Ensure date is a string. If it's a Firestore Timestamp, convert it.
+                date: data.date?.toDate ? data.date.toDate().toISOString().split('T')[0] : data.date,
+                description: data.description,
+                amount: data.amount,
+              };
+            }) as Transaction[];
 
             return { account, transactions };
           })
@@ -71,7 +90,7 @@ export function GeneralLedgerReport() {
     };
 
     fetchData();
-  }, [user, firestore]);
+  }, [user, firestore, isUserLoading]);
 
   if (isLoading) {
     return (
