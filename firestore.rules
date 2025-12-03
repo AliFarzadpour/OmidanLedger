@@ -49,11 +49,7 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
-
-    function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
-    }
-
+    
     // A check to determine if the request is coming from a trusted server-side
     // environment (e.g., a Genkit flow). In a real production environment, this
     // would be a more robust check, likely using custom auth claims. For this
@@ -61,27 +57,6 @@ service cloud.firestore {
     function isServer() {
         return request.auth == null;
     }
-
-    // Validates that the user document being created has an 'id' field matching the user's UID.
-    function isCreatingOwnUserDoc(userId) {
-      return isOwner(userId) && request.resource.data.id == userId;
-    }
-
-    // Validates that a user-owned sub-document has a 'userId' field matching the user's UID on create.
-    function isCreatingUserChildDoc(userId) {
-      return isOwner(userId) && request.resource.data.userId == userId;
-    }
-
-    // Validates that a nested document has a correct foreign key referencing its parent in the path.
-    function isCreatingNestedChildDoc(userId, parentId, parentKey) {
-      return isOwner(userId) && request.resource.data[parentKey] == parentId;
-    }
-
-    // Ensures critical relational IDs (like owner ID) are not changed after creation.
-    function isIdImmutable(fieldName) {
-      return request.resource.data[fieldName] == resource.data[fieldName];
-    }
-
 
     /**
      * @description Manages user profile documents.
@@ -93,105 +68,99 @@ service cloud.firestore {
      * @principle Restricts access to a user's own data tree and allows self-creation of a root document.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
+      allow get, update, delete: if isOwner(userId);
+      allow create: if isOwner(userId);
       allow list: if false;
-      allow create: if isCreatingOwnUserDoc(userId);
-      allow update: if isExistingOwner(userId) && isIdImmutable('id');
-      allow delete: if isExistingOwner(userId);
-
-      /**
-       * @description Stores fiscal years for a specific user.
-       * @path /users/{userId}/fiscalYears/{fiscalYearId}
-       * @allow (get, list, create, update, delete) A user can fully manage their own fiscal year documents.
-       * @deny (get) A user cannot access another user's fiscal years.
-       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-       */
-      match /fiscalYears/{fiscalYearId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      /**
-       * @description Stores journal entries for a specific fiscal year.
-       * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}
-       * @allow (get, list, create, update, delete) A user can fully manage their own journal entries.
-       * @deny (get) A user cannot access journal entries belonging to another user.
-       * @principle Enforces document ownership and validates the link to the parent fiscalYear document.
-       */
-      match /fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId} {
-        allow read, write: if isOwner(userId);
-        
-        /**
-         * @description Stores line items for a specific journal entry.
-         * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}
-         * @allow (get, list, create, update, delete) A user can fully manage their own journal entry line items.
-         * @deny (get) A user cannot access line items belonging to another user's journal entry.
-         * @principle Enforces document ownership and validates the link to the parent journalEntry document.
-         */
-        match /lineItems/{lineItemId} {
-          allow read, write: if isOwner(userId);
-        }
-      }
-
-      /**
-       * @description Stores bank accounts for a specific user.
-       * @path /users/{userId}/bankAccounts/{bankAccountId}
-       * @allow (get, list, create, update, delete) A user can fully manage their own bank account documents.
-       * @deny (get) A user cannot access another user's bank accounts.
-       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-       */
-      match /bankAccounts/{bankAccountId} {
-        allow read, write: if isOwner(userId);
-
-        /**
-         * @description Stores transactions for a specific bank account.
-         * @path /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId}
-         * @allow (get, list, create, update, delete) A user can fully manage transactions for their own bank account.
-         * @deny (get) A user cannot access transactions belonging to another user.
-         * @principle Enforces document ownership and validates the link to the parent bankAccount document.
-         */
-        match /transactions/{transactionId} {
-          allow read, write: if isOwner(userId);
-        }
-      }
-
-      /**
-       * @description Stores transaction categories for a specific user.
-       * @path /users/{userId}/categories/{categoryId}
-       * @allow (get, list, create, update, delete) A user can fully manage their own category documents.
-       * @deny (get) A user cannot access another user's categories.
-       * @principle Enforces document ownership for all operations and validates relational integrity on writes.
-       */
-      match /categories/{categoryId} {
-        allow read, write: if isOwner(userId);
-      }
-
-      /**
-       * @description Manages the collection of accounts for a user's chart of accounts.
-       * @path /users/{userId}/accounts/{accountId}
-       * @allow (read, write) A user can read and write to their own accounts. The `read` permission covers both `get` and `list`.
-       * @deny (any) A user cannot access another user's accounts.
-       * @principle Enforces document ownership for all operations. `read` allows collection queries, `write` allows document modifications.
-       */
-      match /accounts/{accountId} {
-        allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-      }
-        
-      /**
-       * @description Stores user-defined category mappings to train the AI.
-       * @path /users/{userId}/categoryMappings/{mappingId}
-       * @allow (get, list, create, update, delete) A user can manage their own category mappings.
-       * @allow (list) Trusted server-side flows can read mappings for any user to provide AI services.
-       * @deny (get) A user cannot access another user's mappings.
-       * @principle Enforces strict document ownership for clients, but allows read-only for trusted server processes.
-       */
-       match /categoryMappings/{mappingId} {
-         allow get: if isOwner(userId);
-         allow list: if isOwner(userId) || isServer();
-         allow create: if isCreatingUserChildDoc(userId);
-         allow update: if isExistingOwner(userId) && isIdImmutable('userId');
-         allow delete: if isExistingOwner(userId);
-       }
     }
+
+    /**
+     * @description Stores fiscal years for a specific user.
+     * @path /users/{userId}/fiscalYears/{fiscalYearId}
+     * @allow (read, write) A user can fully manage their own fiscal year documents.
+     * @deny (any) A user cannot access another user's fiscal years.
+     * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+     */
+    match /users/{userId}/fiscalYears/{fiscalYearId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    /**
+     * @description Stores journal entries for a specific fiscal year.
+     * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}
+     * @allow (read, write) A user can fully manage their own journal entries.
+     * @deny (any) A user cannot access journal entries belonging to another user.
+     * @principle Enforces document ownership and validates the link to the parent fiscalYear document.
+     */
+    match /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    /**
+     * @description Stores line items for a specific journal entry.
+     * @path /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId}
+     * @allow (read, write) A user can fully manage their own journal entry line items.
+     * @deny (any) A user cannot access line items belonging to another user's journal entry.
+     * @principle Enforces document ownership and validates the link to the parent journalEntry document.
+     */
+    match /users/{userId}/fiscalYears/{fiscalYearId}/journalEntries/{journalEntryId}/lineItems/{lineItemId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    /**
+     * @description Stores bank accounts for a specific user.
+     * @path /users/{userId}/bankAccounts/{bankAccountId}
+     * @allow (read, write) A user can fully manage their own bank account documents.
+     * @deny (any) A user cannot access another user's bank accounts.
+     * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+     */
+    match /users/{userId}/bankAccounts/{bankAccountId} {
+      allow read, write: if isOwner(userId);
+    }
+    
+    /**
+     * @description Stores transactions for a specific bank account.
+     * @path /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId}
+     * @allow (read, write) A user can fully manage transactions for their own bank account.
+     * @deny (any) A user cannot access transactions belonging to another user.
+     * @principle Enforces document ownership and validates the link to the parent bankAccount document.
+     */
+    match /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    /**
+     * @description Stores transaction categories for a specific user.
+     * @path /users/{userId}/categories/{categoryId}
+     * @allow (read, write) A user can fully manage their own category documents.
+     * @deny (any) A user cannot access another user's categories.
+     * @principle Enforces document ownership for all operations and validates relational integrity on writes.
+     */
+    match /users/{userId}/categories/{categoryId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    /**
+     * @description Manages the collection of accounts for a user's chart of accounts.
+     * @path /users/{userId}/accounts/{accountId}
+     * @allow (read, write) A user can read and write to their own accounts. The `read` permission covers both `get` and `list`.
+     * @deny (any) A user cannot access another user's accounts.
+     * @principle Enforces document ownership for all operations. `read` allows collection queries, `write` allows document modifications.
+     */
+    match /users/{userId}/accounts/{accountId} {
+      allow read, write: if isOwner(userId);
+    }
+      
+    /**
+     * @description Stores user-defined category mappings to train the AI.
+     * @path /users/{userId}/categoryMappings/{mappingId}
+     * @allow (read, write) A user can manage their own category mappings.
+     * @allow (list) Trusted server-side flows can read mappings for any user to provide AI services.
+     * @deny (get) A user cannot access another user's mappings.
+     * @principle Enforces strict document ownership for clients, but allows read-only for trusted server processes.
+     */
+     match /users/{userId}/categoryMappings/{mappingId} {
+       allow read, write: if isOwner(userId);
+       allow list: if isServer(); // Server-side list for AI flows
+     }
   }
 }
