@@ -13,6 +13,7 @@ import { useEffect, useState, useMemo } from 'react';
 interface LedgerEntry {
   id: string;
   journalEntryId: string;
+  accountId: string;
   date: Date; // Use Date object
   description: string;
   debit: number;
@@ -31,7 +32,6 @@ interface JournalEntryLineItem {
     accountId: string;
     debit: number;
     credit: number;
-    parent: any; // Reference to the parent JournalEntry document
 }
 
 interface JournalEntry {
@@ -120,31 +120,32 @@ export function GeneralLedgerReport() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
-  const [isLoadingEntries, setIsLoadingEntries] = useState(true);
-
-  const accountsQuery = useMemoFirebase(() => {
-    if (!firestore || !user) return null;
-    return query(collection(firestore, `users/${user.uid}/accounts`), orderBy('name'));
-  }, [firestore, user]);
-
-  const { data: accounts, isLoading: isLoadingAccounts } = useCollection<Account>(accountsQuery);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchLedgerEntries = async () => {
+    const fetchAllData = async () => {
       if (!user || !firestore) return;
-      setIsLoadingEntries(true);
-      const allEntries: LedgerEntry[] = [];
+      setIsLoading(true);
       
       try {
+        // Step 1: Fetch all accounts
+        const accountsQuery = query(collection(firestore, `users/${user.uid}/accounts`), orderBy('name'));
+        const accountsSnapshot = await getDocs(accountsQuery);
+        const fetchedAccounts = accountsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Account));
+        setAccounts(fetchedAccounts);
+
+        // Step 2: Fetch all line items for the user using a collectionGroup query
+        const allEntries: LedgerEntry[] = [];
         const lineItemsQuery = query(collectionGroup(firestore, 'lineItems'));
         const lineItemsSnapshot = await getDocs(lineItemsQuery);
 
         for (const lineItemDoc of lineItemsSnapshot.docs) {
-          const lineItemData = lineItemDoc.data() as JournalEntryLineItem;
-          
           // Ensure the line item belongs to the current user by checking the path
           if (lineItemDoc.ref.path.startsWith(`users/${user.uid}/`)) {
+            const lineItemData = lineItemDoc.data() as JournalEntryLineItem;
             const journalEntryRef = lineItemDoc.ref.parent.parent;
+            
             if (journalEntryRef) {
               const journalEntrySnap = await getDoc(journalEntryRef);
               if (journalEntrySnap.exists()) {
@@ -157,25 +158,26 @@ export function GeneralLedgerReport() {
                   description: journalEntryData.description,
                   debit: lineItemData.debit || 0,
                   credit: lineItemData.credit || 0,
-                } as LedgerEntry & { accountId: string });
+                });
               }
             }
           }
         }
         setLedgerEntries(allEntries);
+
       } catch (error) {
-          console.error("Error fetching ledger entries:", error);
+          console.error("Error fetching general ledger data:", error);
       } finally {
-        setIsLoadingEntries(false);
+        setIsLoading(false);
       }
     };
 
-    fetchLedgerEntries();
+    fetchAllData();
   }, [user, firestore]);
 
   const ledgerEntriesByAccount = useMemo(() => {
     const map = new Map<string, LedgerEntry[]>();
-    if (!accounts || ledgerEntries.length === 0) return map;
+    if (accounts.length === 0 || ledgerEntries.length === 0) return map;
 
     // Initialize map for all accounts
     for (const account of accounts) {
@@ -184,15 +186,13 @@ export function GeneralLedgerReport() {
     
     // Distribute ledger entries into the map
     for (const entry of ledgerEntries) {
-      const accountEntries = map.get((entry as any).accountId);
+      const accountEntries = map.get(entry.accountId);
       if (accountEntries) {
           accountEntries.push(entry);
       }
     }
     return map;
   }, [accounts, ledgerEntries]);
-
-  const isLoading = isLoadingAccounts || isLoadingEntries;
 
   if (isLoading) {
     return (
