@@ -67,7 +67,6 @@ const createLinkTokenFlow = ai.defineFlow(
         products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
-        institution_id: 'ins_109508', // Force First Platypus Bank (non-OAuth)
       });
       return response.data.link_token;
     } catch (error: any) {
