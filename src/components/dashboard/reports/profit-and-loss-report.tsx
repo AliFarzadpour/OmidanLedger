@@ -79,27 +79,23 @@ export function ProfitAndLossReport() {
     let totalExpenses = 0;
 
     transactions.forEach((txn) => {
-      switch (txn.primaryCategory) {
-        case 'Income (Revenue)':
+      // Use includes for more flexible matching
+      const primaryCategory = txn.primaryCategory || '';
+      
+      if (primaryCategory.includes('Income')) {
           totalIncome += txn.amount;
-          incomeMap.set(txn.primaryCategory, (incomeMap.get(txn.primaryCategory) || 0) + txn.amount);
-          break;
-        case 'Cost of Goods Sold (COGS)':
+          incomeMap.set(primaryCategory, (incomeMap.get(primaryCategory) || 0) + txn.amount);
+      } else if (primaryCategory.includes('COGS') || primaryCategory.includes('Cost of Goods Sold')) {
           totalCogs += txn.amount;
-          cogsMap.set(txn.primaryCategory, (cogsMap.get(txn.primaryCategory) || 0) + txn.amount);
-          break;
-        case 'Operating Expenses':
-        case 'Other Expenses':
+          cogsMap.set(primaryCategory, (cogsMap.get(primaryCategory) || 0) + txn.amount);
+      } else if (primaryCategory.includes('Expense')) { // Catches "Operating Expenses" and "Other Expenses"
           totalExpenses += txn.amount;
-          expenseMap.set(txn.primaryCategory, (expenseMap.get(txn.primaryCategory) || 0) + txn.amount);
-          break;
-        default:
-          break;
+          expenseMap.set(primaryCategory, (expenseMap.get(primaryCategory) || 0) + txn.amount);
       }
     });
 
-    const grossProfit = totalIncome + totalCogs;
-    const netIncome = grossProfit + totalExpenses;
+    const grossProfit = totalIncome + totalCogs; // COGS is negative
+    const netIncome = grossProfit + totalExpenses; // Expenses are negative
 
     const toArray = (map: Map<string, number>) => Array.from(map, ([name, total]) => ({ name, total }));
 
