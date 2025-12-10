@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser } from 'lucide-react';
+import { ArrowRight, BrainCircuit, BookUser, FileText } from 'lucide-react';
 
 export default function ReportsPage() {
   return (
@@ -40,6 +40,23 @@ export default function ReportsPage() {
                     <BookUser className="h-6 w-6 text-muted-foreground" />
                 </div>
                 <CardDescription>A summary of total income and expenses by category.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
+                  View Report
+                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </div>
+              </CardContent>
+            </Card>
+        </Link>
+        <Link href="/dashboard/reports/profit-and-loss" className="group">
+            <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                    <CardTitle className="text-xl">Profit & Loss</CardTitle>
+                    <FileText className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <CardDescription>View your income, expenses, and net profit over a period.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
