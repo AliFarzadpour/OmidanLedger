@@ -3,7 +3,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db } from '@/lib/firebase-admin'; // Ensure this path matches your file structure
+import { db } from '@/lib/firebase-admin'; 
+import { Query, Timestamp } from 'firebase-admin/firestore';
 
 // Input Schema
 const GenerateFinancialReportInputSchema = z.object({
@@ -13,46 +14,48 @@ const GenerateFinancialReportInputSchema = z.object({
 
 type GenerateFinancialReportInput = z.infer<typeof GenerateFinancialReportInputSchema>;
 
-// Helper: Fetch transactions using ADMIN SDK syntax (db.collection)
-async function fetchAndFormatTransactions(userId: string): Promise<string> {
-  try {
+
+type Transaction = {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    primaryCategory: string;
+    secondaryCategory?: string;
+    subcategory?: string;
+    userId: string;
+};
+  
+async function fetchTransactions(userId: string): Promise<Transaction[]> {
     console.log(`[AI-FLOW] Fetching transactions for user: ${userId}`);
-    
-    // Perform a collection group query filtered by userId and ordered by date.
-    // This query is now supported by the firestore.indexes.json file.
     const snapshot = await db
-      .collectionGroup('transactions')
-      .where('userId', '==', userId)
-      .orderBy('date', 'desc')
-      .limit(500) // Limit to the 500 most recent transactions
-      .get();
+        .collectionGroup('transactions')
+        .where('userId', '==', userId)
+        .orderBy('date', 'desc')
+        .limit(1000) // Fetch up to 1000 recent transactions
+        .get();
 
     if (snapshot.empty) {
-      console.log("[AI-FLOW] No transactions found.");
-      return "";
+        console.log("[AI-FLOW] No transactions found.");
+        return [];
     }
-    
-    let transactions = snapshot.docs.map(doc => doc.data());
 
-    console.log(`[AI-FLOW] Fetched and processed ${transactions.length} transactions for user ${userId}.`);
+    const transactions = snapshot.docs.map(doc => {
+        const data = doc.data();
+        // Ensure date is a string in YYYY-MM-DD format
+        let dateStr = data.date;
+        if (data.date instanceof Timestamp) {
+            dateStr = data.date.toDate().toISOString().split('T')[0];
+        }
+        return {
+            id: doc.id,
+            ...data,
+            date: dateStr,
+        } as Transaction;
+    });
 
-    // Convert to CSV string
-    const csvString = transactions
-      .map((t) => {
-        const amt = typeof t.amount === 'number' ? t.amount : Number(t.amount ?? 0);
-        // Sanitize description for CSV: remove commas and newlines
-        const safeDescription = (t.description ?? '').replace(/,/g, ' ').replace(/\n/g, ' ');
-        return `${t.date},${safeDescription},${amt.toFixed(2)},${t.primaryCategory} > ${t.secondaryCategory} > ${t.subcategory}`;
-      })
-      .join('\n');
-      
-    return `date,description,amount,category_path\n${csvString}`;
-
-  } catch (error: any) {
-    console.error("[AI-FLOW] Database Error:", error);
-    // Throwing a simple error string helps the UI show a clean message
-    throw new Error(`Database Error: ${error.message}`);
-  }
+    console.log(`[AI-FLOW] Fetched and processed ${transactions.length} transactions.`);
+    return transactions;
 }
 
 // Main Flow
@@ -63,39 +66,41 @@ export const generateFinancialReportFlow = ai.defineFlow(
     outputSchema: z.string(),
   },
   async ({ userQuery, userId }) => {
-    // 1. Fetch Data
-    const transactionData = await fetchAndFormatTransactions(userId);
+    // 1. Fetch Data (Calculator step)
+    const transactions = await fetchTransactions(userId);
 
-    if (!transactionData) {
-      return "I couldn't find any transactions for this account.";
+    if (transactions.length === 0) {
+      return "I couldn't find any transactions for this account. Please add some transactions to generate a report.";
     }
 
-    // 2. Generate Report
+    // 2. Generate Report (Analyst step)
     const { text } = await ai.generate({
         prompt: `You are an expert financial analyst AI. Your task is to answer a user's question based on the provided transaction data.
-The data is in CSV format: "date,description,amount,category_path".
+The user's transaction history is provided as a JSON array. Each transaction has a date, description, amount, and a three-level category path.
 
 Today's Date: ${new Date().toISOString().split('T')[0]}
 
 User's Question:
 "${userQuery}"
 
-Transaction Data:
+Transaction Data (JSON):
 ---
-${transactionData}
+${JSON.stringify(transactions, null, 2)}
 ---
 
-Based on the data, provide a clear, concise answer to the user's question.
-- Perform calculations if necessary (e.g., summing totals, finding averages).
+Based on the data, provide a clear, concise, and insightful answer to the user's question.
+- Perform calculations if necessary (e.g., summing totals, finding averages, identifying trends).
+- If the question involves a specific time period (e.g., "last month," "this quarter"), filter the data accordingly before performing calculations.
 - Format your answer in clear, readable Markdown. Use tables, lists, and **bold** text to improve readability.
-- If the data is insufficient to answer the question, state that clearly and explain what information is missing.
+- If the data is insufficient to answer the question fully, state that clearly and explain what information is missing.
 - Do not invent data. Your entire analysis must be based *only* on the transaction data provided.
+- Your final response should be just the Markdown report. Do not include introductory phrases like "Here is the report".
     `.trim(),
     });
 
 
     if (!text) {
-        throw new Error("The AI returned an empty response.");
+        throw new Error("The AI returned an empty response. It might be having trouble with the request.");
     }
     
     return text;
@@ -106,9 +111,9 @@ Based on the data, provide a clear, concise answer to the user's question.
 export async function generateFinancialReport(input: GenerateFinancialReportInput) {
   try {
     return await generateFinancialReportFlow(input);
-  } catch (error: any)
-{
-    console.error("Critical Failure:", error);
-    throw new Error(error.message);
+  } catch (error: any) {
+    console.error("Critical Failure in generateFinancialReport flow:", error);
+    // Provide a more user-friendly error message to the client.
+    throw new Error(error.message || 'An unexpected error occurred while generating the report.');
   }
 }
