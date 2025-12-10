@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { DateRange } from 'react-day-picker';
-import { addDays, format } from 'date-fns';
+import { format } from 'date-fns';
 import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, PlayCircle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,17 +34,21 @@ type ReportSection = {
 export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+
+  // pendingDateRange is for the UI picker
+  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
+  
+  // activeDateRange is what's submitted to the query
+  const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
 
   const transactionsQuery = useMemo(() => {
-    if (!user || !firestore || !dateRange?.from || !dateRange?.to) return null;
+    if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
-    // Ensure the dates are in 'YYYY-MM-DD' string format for Firestore query
-    const startDate = format(dateRange.from, 'yyyy-MM-dd');
-    const endDate = format(dateRange.to, 'yyyy-MM-dd');
+    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
+    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
 
     return query(
       collectionGroup(firestore, 'transactions'),
@@ -53,9 +57,13 @@ export function ProfitAndLossReport() {
       where('date', '<=', endDate),
       orderBy('date', 'desc')
     );
-  }, [user, firestore, dateRange]);
+  }, [user, firestore, activeDateRange]);
 
   const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
+
+  const handleRunReport = () => {
+    setActiveDateRange(pendingDateRange);
+  };
 
   const { income, cogs, expenses, netIncome, grossProfit } = useMemo(() => {
     if (!transactions) {
@@ -77,13 +85,11 @@ export function ProfitAndLossReport() {
           incomeMap.set(txn.primaryCategory, (incomeMap.get(txn.primaryCategory) || 0) + txn.amount);
           break;
         case 'Cost of Goods Sold (COGS)':
-          // COGS amounts are typically negative, so we sum them up.
           totalCogs += txn.amount;
           cogsMap.set(txn.primaryCategory, (cogsMap.get(txn.primaryCategory) || 0) + txn.amount);
           break;
         case 'Operating Expenses':
         case 'Other Expenses':
-           // Expenses are also negative
           totalExpenses += txn.amount;
           expenseMap.set(txn.primaryCategory, (expenseMap.get(txn.primaryCategory) || 0) + txn.amount);
           break;
@@ -92,8 +98,8 @@ export function ProfitAndLossReport() {
       }
     });
 
-    const grossProfit = totalIncome + totalCogs; // COGS is negative, so it's effectively subtraction
-    const netIncome = grossProfit + totalExpenses; // Expenses are negative
+    const grossProfit = totalIncome + totalCogs;
+    const netIncome = grossProfit + totalExpenses;
 
     const toArray = (map: Map<string, number>) => Array.from(map, ([name, total]) => ({ name, total }));
 
@@ -122,6 +128,13 @@ export function ProfitAndLossReport() {
           <AlertDescription>{error.message}</AlertDescription>
         </Alert>
       );
+    }
+    if (!activeDateRange) {
+         return (
+            <p className="py-8 text-center text-muted-foreground">
+                Please select a date range and click "Run Report" to generate your Profit & Loss statement.
+            </p>
+        );
     }
     if (!transactions || transactions.length === 0) {
       return (
@@ -159,49 +172,57 @@ export function ProfitAndLossReport() {
                 <h1 className="text-3xl font-bold tracking-tight">Profit & Loss Statement</h1>
                 <p className="text-muted-foreground">Review your income, expenses, and profitability.</p>
             </div>
-             <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "w-[300px] justify-start text-left font-normal",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date</span>
-                  )}
+            <div className="flex items-center gap-2">
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn(
+                        "w-[300px] justify-start text-left font-normal",
+                        !pendingDateRange && "text-muted-foreground"
+                        )}
+                    >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {pendingDateRange?.from ? (
+                        pendingDateRange.to ? (
+                            <>
+                            {format(pendingDateRange.from, "LLL dd, y")} -{" "}
+                            {format(pendingDateRange.to, "LLL dd, y")}
+                            </>
+                        ) : (
+                            format(pendingDateRange.from, "LLL dd, y")
+                        )
+                        ) : (
+                        <span>Pick a date</span>
+                        )}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                    <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={pendingDateRange?.from}
+                        selected={pendingDateRange}
+                        onSelect={setPendingDateRange}
+                        numberOfMonths={2}
+                    />
+                    </PopoverContent>
+                </Popover>
+                <Button onClick={handleRunReport} disabled={isLoading}>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    {isLoading ? 'Loading...' : 'Run Report'}
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={2}
-                />
-              </PopoverContent>
-            </Popover>
+            </div>
        </div>
 
         <Card>
             <CardHeader className="text-center">
                 <CardTitle className="text-2xl">{companyName}</CardTitle>
                 <CardDescription>
-                    For the period from {dateRange?.from ? format(dateRange.from, 'MMMM d, yyyy') : '...'} to {dateRange?.to ? format(dateRange.to, 'MMMM d, yyyy') : '...'}
+                    {activeDateRange ? (
+                         <>For the period from {activeDateRange.from ? format(activeDateRange.from, 'MMMM d, yyyy') : '...'} to {activeDateRange.to ? format(activeDateRange.to, 'MMMM d, yyyy') : '...'}</>
+                    ) : 'No period selected'}
                 </CardDescription>
             </CardHeader>
             <CardContent>
