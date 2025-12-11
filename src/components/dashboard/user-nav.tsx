@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { CreditCard, LogOut, Settings, User as UserIcon } from 'lucide-react';
 import { useAuth, useUser } from '@/firebase';
+import Link from 'next/link';
 
 export function UserNav({ isMobile }: { isMobile: boolean }) {
   const auth = useAuth();
@@ -61,17 +62,21 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuGroup>
-        <DropdownMenuItem>
-          <UserIcon className="mr-2 h-4 w-4" />
-          <span>Profile</span>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/settings">
+            <UserIcon className="mr-2 h-4 w-4" />
+            <span>Profile</span>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem>
           <CreditCard className="mr-2 h-4 w-4" />
           <span>Billing</span>
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>Settings</span>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/settings">
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
+          </Link>
         </DropdownMenuItem>
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
@@ -119,5 +124,3 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     </div>
   );
 }
-
-    

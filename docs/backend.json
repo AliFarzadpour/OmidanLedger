@@ -32,15 +32,44 @@
           "type": "string",
           "description": "Date and time when the user account was last updated.",
           "format": "date-time"
+        },
+        "businessProfile": {
+          "type": "object",
+          "description": "Stores information about the user's business.",
+          "properties": {
+            "businessName": {
+              "type": "string"
+            },
+            "businessType": {
+              "type": "string"
+            },
+            "industry": {
+              "type": "string"
+            },
+            "address": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "zip": {
+              "type": "string"
+            },
+            "country": {
+              "type": "string"
+            },
+            "taxId": {
+              "type": "string"
+            }
+          }
         }
       },
       "required": [
         "id",
-        "email",
-        "firstName",
-        "lastName",
-        "createdAt",
-        "updatedAt"
+        "email"
       ]
     },
     "BankAccount": {

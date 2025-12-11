@@ -19,7 +19,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get, update, delete: if isOwner(userId);
+      allow get, update, delete: if isOwner(userId) || (request.resource.data.businessProfile != null && request.resource.data.businessProfile.diff(resource.data.businessProfile).affectedKeys().hasOnly(['businessName', 'businessType', 'industry', 'address', 'city', 'state', 'zip', 'country', 'taxId']));
       allow create: if isOwner(userId);
       allow list: if false;
 
