@@ -20,12 +20,13 @@ service cloud.firestore {
 
     match /users/{userId} {
       // Allow user to read their own doc.
-      // Allow user to update their own document, but prevent them from changing their ID or creation date.
       allow get: if isOwner(userId);
+      // Allow user to create their own profile, ensuring the ID matches.
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      // Allow user to update their own document, but prevent them from changing their ID or creation date.
       allow update: if isOwner(userId)
                     && request.resource.data.id == resource.data.id
                     && request.resource.data.createdAt == resource.data.createdAt;
-      allow create: if isOwner(userId); // Allow user to create their own profile.
       allow list, delete: if false; // Never allow listing or deleting users.
 
         match /bankAccounts/{bankAccountId} {
