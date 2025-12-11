@@ -14,7 +14,7 @@ import { marked } from 'marked';
 import jsPDF from 'jspdf';
 import { Logo } from '@/components/logo';
 
-// A simple component to render markdown content
+// A simple component to render markdown content in the app
 function MarkdownReport({ content }: { content: string }) {
   const htmlContent = marked.parse(content);
   return (
@@ -32,7 +32,7 @@ export function AIReportGenerator() {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [report, setReport] = useState<string | null>(null);
-  const reportContentRef = useRef<HTMLDivElement>(null);
+  const reportContentRef = useRef<HTMLDivElement>(null); // still used for screen display only
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -41,6 +41,7 @@ export function AIReportGenerator() {
 
   const { data: userData } = useDoc<{ businessProfile?: { businessName?: string; logoUrl?: string } }>(userDocRef);
 
+  // ---------- NEW / IMPROVED PDF GENERATION ----------
   const handleDownloadPdf = async () => {
     if (!report) return;
 
@@ -76,40 +77,37 @@ export function AIReportGenerator() {
       const addHeaderFooter = (pageNumber: number, totalPages: number) => {
         pdf.setPage(pageNumber);
 
-        // Header bar
+        // Header
         pdf.setFont('helvetica', 'normal');
         pdf.setFontSize(9);
         pdf.setTextColor(120, 120, 120);
         pdf.text(companyName, margin, margin / 2);
 
-        // Top divider
+        // Divider
         pdf.setDrawColor(220, 220, 220);
         pdf.setLineWidth(0.5);
         pdf.line(margin, margin / 2 + 10, pdfWidth - margin, margin / 2 + 10);
 
-        // Footer text
+        // Footer
         pdf.setFontSize(9);
         pdf.setTextColor(160, 160, 160);
         const footerY = pdfHeight - margin / 2;
 
         pdf.text(`Generated on: ${generatedDate}`, margin, footerY);
-        pdf.text(
-          `Page ${pageNumber} of ${totalPages}`,
-          pdfWidth - margin,
-          footerY,
-          { align: 'right' }
-        );
+        pdf.text(`Page ${pageNumber} of ${totalPages}`, pdfWidth - margin, footerY, {
+          align: 'right',
+        });
       };
 
       // -------------------------
       // 1) COVER PAGE
       // -------------------------
-      // Background blocks for a more modern look
-      pdf.setFillColor(248, 250, 252); // light background
+      pdf.setFillColor(248, 250, 252);
       pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
 
-      pdf.setFillColor(59, 130, 246); // primary band
-      pdf.rect(0, pdfHeight * 0.2, pdfWidth, pdfHeight * 0.15, 'F');
+      // Accent band
+      pdf.setFillColor(59, 130, 246);
+      pdf.rect(0, pdfHeight * 0.18, pdfWidth, pdfHeight * 0.14, 'F');
 
       // Logo (if available)
       const logoUrl = userData?.businessProfile?.logoUrl;
@@ -120,13 +118,13 @@ export function AIReportGenerator() {
           const reader = new FileReader();
           await new Promise<void>((resolve, reject) => {
             reader.onload = () => {
-              const imgWidth = 90;
-              const imgHeight = 90;
+              const imgWidth = 80;
+              const imgHeight = 80;
               pdf.addImage(
                 reader.result as string,
                 'PNG',
                 pdfWidth / 2 - imgWidth / 2,
-                pdfHeight * 0.12,
+                pdfHeight * 0.11,
                 imgWidth,
                 imgHeight
               );
@@ -144,65 +142,164 @@ export function AIReportGenerator() {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(24);
       pdf.setTextColor(17, 24, 39);
-      pdf.text(companyName, pdfWidth / 2, pdfHeight * 0.4, { align: 'center' });
+      pdf.text(companyName, pdfWidth / 2, pdfHeight * 0.38, { align: 'center' });
 
       // Report Title (based on query)
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(16);
       pdf.setTextColor(55, 65, 81);
-      pdf.text(shortQuery, pdfWidth / 2, pdfHeight * 0.45, { align: 'center', maxWidth: pdfWidth - margin * 2 });
+      pdf.text(shortQuery, pdfWidth / 2, pdfHeight * 0.43, {
+        align: 'center',
+        maxWidth: pdfWidth - margin * 2,
+      });
 
       // Subtitle
       pdf.setFontSize(11);
       pdf.setTextColor(100, 116, 139);
-      pdf.text('AI-Generated Financial Report', pdfWidth / 2, pdfHeight * 0.5, { align: 'center' });
+      pdf.text('AI-Generated Financial Report', pdfWidth / 2, pdfHeight * 0.48, { align: 'center' });
 
       // Date
       pdf.setFontSize(10);
       pdf.setTextColor(148, 163, 184);
-      pdf.text(`Generated on ${generatedDate}`, pdfWidth / 2, pdfHeight * 0.55, { align: 'center' });
+      pdf.text(`Generated on ${generatedDate}`, pdfWidth / 2, pdfHeight * 0.53, {
+        align: 'center',
+      });
 
-      // Optional small text at bottom
+      // Footnote
       pdf.setFontSize(9);
       pdf.setTextColor(156, 163, 175);
       pdf.text(
-        'This report is generated automatically based on your transaction data.',
+        'This report is generated automatically based on your recorded transaction data.',
         pdfWidth / 2,
         pdfHeight - margin * 0.8,
-        { align: 'center', maxWidth: pdfWidth - margin * 2 }
+        {
+          align: 'center',
+          maxWidth: pdfWidth - margin * 2,
+        }
       );
 
       // -------------------------
-      // 2) CONTENT PAGES
+      // 2) CONTENT PAGES (NEW TEMPLATE)
       // -------------------------
-      if (reportContentRef.current) {
-        pdf.addPage();
+      // Build a clean, print-focused HTML with its own styling,
+      // instead of using the on-screen DOM.
+      const styledHtml = `
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+            color: #111827;
+            font-size: 11pt;
+            line-height: 1.5;
+          }
+          h1, h2, h3 {
+            color: #111827;
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-weight: 600;
+          }
+          h1 { font-size: 18pt; }
+          h2 { font-size: 15pt; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+          h3 { font-size: 13pt; }
+          p {
+            margin: 4px 0;
+          }
+          strong, b {
+            font-weight: 600;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            margin-bottom: 14px;
+          }
+          th, td {
+            border-bottom: 1px solid #e5e7eb;
+            padding: 6px 8px;
+            font-size: 10pt;
+          }
+          th {
+            background-color: #f3f4f6;
+            text-align: left;
+          }
+          ul, ol {
+            margin: 6px 0 6px 18px;
+          }
+          li {
+            margin-bottom: 2px;
+          }
+          .report-header {
+            margin-bottom: 12px;
+          }
+          .report-header-title {
+            font-size: 14pt;
+            font-weight: 600;
+            color: #111827;
+          }
+          .report-header-sub {
+            font-size: 9pt;
+            color: #6b7280;
+            margin-top: 4px;
+          }
+          .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 8.5pt;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            margin-top: 4px;
+          }
+          .section-separator {
+            margin: 18px 0;
+            border-top: 1px solid #e5e7eb;
+          }
+        </style>
+        <div class="report-root">
+          <div class="report-header">
+            <div class="report-header-title">${companyName} – Financial Overview</div>
+            <div class="report-header-sub">
+              Based on your question:
+              <span style="font-style: italic;">"${shortQuery}"</span>
+            </div>
+            <div class="pill">AI-generated analysis</div>
+          </div>
+          <div class="section-separator"></div>
+          ${marked.parse(report)}
+        </div>
+      `;
 
-        // Render HTML from the markdown report
-        await pdf.html(reportContentRef.current, {
-          x: margin,
-          y: margin,
-          width: pdfWidth - margin * 2,
-          windowWidth: pdfWidth - margin * 2,
-          autoPaging: 'text',
-          html2canvas: {
-            // Slightly higher scale for sharper text
-            scale: 0.8,
-          },
-          callback: (doc) => {
-            const totalPages = doc.internal.getNumberOfPages();
+      // Create an off-screen container for jsPDF.html
+      const container = document.createElement('div');
+      container.style.position = 'fixed';
+      container.style.left = '-10000px';
+      container.style.top = '0';
+      container.style.width = `${pdfWidth - margin * 2}px`;
+      container.innerHTML = styledHtml;
+      document.body.appendChild(container);
 
-            // Add header/footer to all pages except the cover (page 1)
-            for (let i = 2; i <= totalPages; i++) {
-              addHeaderFooter(i, totalPages);
-            }
+      pdf.addPage(); // first content page (page 2 overall)
 
-            doc.save(fileName);
-          },
-        });
-      } else {
-        pdf.save(fileName);
-      }
+      await pdf.html(container, {
+        x: margin,
+        y: margin,
+        width: pdfWidth - margin * 2,
+        windowWidth: pdfWidth - margin * 2,
+        autoPaging: 'text',
+        html2canvas: {
+          scale: 0.9,
+        },
+        callback: (doc) => {
+          const totalPages = doc.internal.getNumberOfPages();
+
+          // Add header/footer to all non-cover pages
+          for (let i = 2; i <= totalPages; i++) {
+            addHeaderFooter(i, totalPages);
+          }
+
+          document.body.removeChild(container);
+          doc.save(fileName);
+        },
+      });
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
@@ -212,6 +309,7 @@ export function AIReportGenerator() {
       });
     }
   };
+  // ---------- END PDF CODE ----------
 
   const handleDownloadCsv = () => {
     if (!report) return;
@@ -222,7 +320,6 @@ export function AIReportGenerator() {
     const lines = report.split('\n');
 
     lines.forEach((line) => {
-      // Handle markdown table rows
       if (line.startsWith('|') && line.endsWith('|')) {
         const cells = line
           .split('|')
@@ -231,14 +328,10 @@ export function AIReportGenerator() {
         if (cells.length > 0 && !line.includes('---')) {
           csvContent += cells.join(',') + '\r\n';
         }
-      }
-      // Handle list items
-      else if (line.match(/^(\*|-|\d+\.)\s/)) {
+      } else if (line.match(/^(\*|-|\d+\.)\s/)) {
         const item = `"${line.replace(/^(\*|-|\d+\.)\s/, '').trim().replace(/"/g, '""')}"`;
         csvContent += item + '\r\n';
-      }
-      // Headings and plain text
-      else if (line.trim().length > 0) {
+      } else if (line.trim().length > 0) {
         const text = `"${line.replace(/#/g, '').trim().replace(/"/g, '""')}"`;
         csvContent += text + '\r\n';
       }
@@ -379,7 +472,6 @@ export function AIReportGenerator() {
             <CardDescription>Based on your question: "{query}"</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* This is what jsPDF.html uses as the HTML source */}
             <div ref={reportContentRef}>
               <MarkdownReport content={report} />
             </div>
