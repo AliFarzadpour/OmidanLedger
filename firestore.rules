@@ -21,12 +21,17 @@ service cloud.firestore {
     match /users/{userId} {
       // Allow user to read their own doc.
       allow get: if isOwner(userId);
+      
       // Allow user to create their own profile, ensuring the ID matches.
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      // Allow user to update their own document, but prevent them from changing their ID or creation date.
+      
+      // Allow user to update their own document.
+      // - They cannot change their ID or creation date.
+      // - They ARE allowed to change the businessProfile and other potential fields.
       allow update: if isOwner(userId)
                     && request.resource.data.id == resource.data.id
                     && request.resource.data.createdAt == resource.data.createdAt;
+
       allow list, delete: if false; // Never allow listing or deleting users.
 
         match /bankAccounts/{bankAccountId} {
