@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { BrainCircuit, Sparkles, FileDown } from 'lucide-react';
+import { BrainCircuit, Sparkles, FileDown, ClipboardCopy } from 'lucide-react';
 import { generateFinancialReport } from '@/ai/flows/generate-financial-report';
 import { Skeleton } from '@/components/ui/skeleton';
 import { marked } from 'marked';
@@ -192,6 +192,15 @@ export function AIReportGenerator() {
     link.click();
     document.body.removeChild(link);
   };
+  
+  const handleCopy = () => {
+    if (!report) return;
+    navigator.clipboard.writeText(report);
+    toast({
+      title: 'Copied to Clipboard',
+      description: 'The report content has been copied.',
+    });
+  };
 
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -294,6 +303,10 @@ export function AIReportGenerator() {
                 <CardTitle>AI Generated Report</CardTitle>
               </div>
               <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={handleCopy}>
+                  <ClipboardCopy className="mr-2 h-4 w-4" />
+                  Copy
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Download PDF
