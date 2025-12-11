@@ -33,6 +33,7 @@ import { ref, getDownloadURL } from 'firebase/storage';
 import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
+// FIX 1: Update schema to allow empty strings for logoUrl
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
   businessType: z.string().optional(),
@@ -43,7 +44,8 @@ const businessProfileSchema = z.object({
   state: z.string().optional(),
   zip: z.string().optional(),
   country: z.string().optional(),
-  logoUrl: z.string().url().optional(),
+  // This allows the field to be a valid URL, OR an exact empty string, OR undefined.
+  logoUrl: z.union([z.literal(''), z.string().trim().url()]).optional(),
 });
 
 type BusinessProfileFormValues = z.infer<typeof businessProfileSchema>;
@@ -95,9 +97,11 @@ export function BusinessProfileForm() {
     if (!userDocRef) return;
 
     try {
-      // The `setDoc` function with `merge: true` will create the document if it doesn't exist,
-      // or update it if it does. It only overwrites the fields specified in the data object.
-      await setDoc(userDocRef, { businessProfile: data }, { merge: true });
+      // FIX 2: Sanitize data to remove 'undefined' values before sending to Firestore
+      const sanitizedData = JSON.parse(JSON.stringify(data));
+
+      await setDoc(userDocRef, { businessProfile: sanitizedData }, { merge: true });
+      
       toast({
         title: 'Profile Updated',
         description: 'Your business information has been saved.',
@@ -123,10 +127,9 @@ export function BusinessProfileForm() {
       const snapshot = await uploadFile(storageRef, file);
       if (snapshot) {
         const downloadURL = await getDownloadURL(snapshot.ref);
-        form.setValue('logoUrl', downloadURL, { shouldDirty: true }); // Mark form as dirty
+        form.setValue('logoUrl', downloadURL, { shouldDirty: true });
         
         // After getting the URL, programmatically submit the form
-        // to save the logoUrl along with any other changes.
         await form.handleSubmit(onSubmit)();
 
         toast({
