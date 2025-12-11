@@ -43,7 +43,7 @@ export function AIReportGenerator() {
   }>(userDocRef);
 
   // ===========================================================
-  // 🚀 FIXED PDF GENERATOR
+  // 🚀 FIXED PDF GENERATOR WITH FOOTER (Page X of Y + Date)
   // ===========================================================
   const handleDownloadPdf = async () => {
     if (!report) return;
@@ -60,6 +60,7 @@ export function AIReportGenerator() {
 
       // A4 Size in points: 595.28 x 841.89
       const pdfWidth = 595.28; 
+      const pdfHeight = 841.89;
       const margin = 40;
       const contentWidth = pdfWidth - (margin * 2);
 
@@ -72,6 +73,7 @@ export function AIReportGenerator() {
         query.length > 80 ? query.substring(0, 77) + '...' : query || 'Financial Analysis';
 
       const generatedDate = new Date().toLocaleDateString();
+      const generatedTime = new Date().toLocaleTimeString();
       const fileName = `ai-report-${new Date().toISOString().slice(0, 10)}.pdf`;
 
       // 2. Create stylized HTML template
@@ -102,7 +104,7 @@ export function AIReportGenerator() {
             <div class="header">
               <h1>${companyName}</h1>
               <div class="meta"><strong>Topic:</strong> ${shortQuery}</div>
-              <div class="meta"><strong>Date:</strong> ${generatedDate}</div>
+              <div class="meta"><strong>Generated:</strong> ${generatedDate} at ${generatedTime}</div>
               <div class="badge">AI GENERATED REPORT</div>
             </div>
 
@@ -116,30 +118,47 @@ export function AIReportGenerator() {
       const container = document.createElement('div');
       container.innerHTML = styledHtml;
       
-      // FIX: Do NOT use left: -10000px. Browsers won't render it.
-      // Instead, use absolute positioning with a low z-index so it's "behind" the app.
       container.style.position = 'fixed';
       container.style.top = '0';
       container.style.left = '0';
       container.style.zIndex = '-9999';
-      container.style.background = 'white'; // Ensure background is white
-      container.style.width = `${contentWidth}px`; // Force exact width
+      container.style.background = 'white'; 
+      container.style.width = `${contentWidth}px`; 
       
       document.body.appendChild(container);
 
-      // 4. Generate PDF using the .html() method
+      // 4. Generate PDF
       await pdf.html(container, {
         x: margin,
         y: margin,
         width: contentWidth,
-        windowWidth: contentWidth, // Important for responsive layouts
-        autoPaging: 'text', // Prevents cutting text lines in half
+        windowWidth: contentWidth, 
+        autoPaging: 'text', 
         html2canvas: {
-            scale: 1, // Higher scale creates larger file size, 1 is usually sufficient for text
+            scale: 1, 
             logging: false,
-            useCORS: true // vital if you have external images
+            useCORS: true 
         },
         callback: (doc) => {
+          // 5. Add Footer to ALL pages
+          const totalPages = doc.getNumberOfPages();
+          const footerFontSize = 9;
+          
+          for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(footerFontSize);
+            doc.setTextColor(150); // Light gray color
+
+            const footerText = `Page ${i} of ${totalPages} | Generated on ${generatedDate}`;
+            const textWidth = doc.getTextWidth(footerText);
+            
+            // Center footer at the bottom
+            const xPos = (pdfWidth - textWidth) / 2;
+            const yPos = pdfHeight - 20; // 20pt from bottom
+
+            doc.text(footerText, xPos, yPos);
+          }
+
           doc.save(fileName);
           document.body.removeChild(container);
         },
@@ -156,7 +175,7 @@ export function AIReportGenerator() {
   };
 
   // ===========================================================
-  // CSV EXPORT
+  // CSV EXPORT (Unchanged)
   // ===========================================================
   const handleDownloadCsv = () => {
     if (!report) return;
