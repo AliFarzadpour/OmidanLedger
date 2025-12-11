@@ -95,6 +95,8 @@ export function BusinessProfileForm() {
     if (!userDocRef) return;
 
     try {
+      // The `setDoc` function with `merge: true` will create the document if it doesn't exist,
+      // or update it if it does. It only overwrites the fields specified in the data object.
       await setDoc(userDocRef, { businessProfile: data }, { merge: true });
       toast({
         title: 'Profile Updated',
@@ -121,8 +123,12 @@ export function BusinessProfileForm() {
       const snapshot = await uploadFile(storageRef, file);
       if (snapshot) {
         const downloadURL = await getDownloadURL(snapshot.ref);
-        form.setValue('logoUrl', downloadURL);
-        await onSubmit(form.getValues()); // Save the form with the new logo URL
+        form.setValue('logoUrl', downloadURL, { shouldDirty: true }); // Mark form as dirty
+        
+        // After getting the URL, programmatically submit the form
+        // to save the logoUrl along with any other changes.
+        await form.handleSubmit(onSubmit)();
+
         toast({
           title: 'Logo Uploaded',
           description: 'Your new business logo has been saved.',
@@ -133,7 +139,7 @@ export function BusinessProfileForm() {
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: 'Could not upload your logo.',
+        description: uploadError?.message || 'Could not upload your logo.',
       });
     }
   };
@@ -224,7 +230,7 @@ export function BusinessProfileForm() {
                   <FormItem>
                     <FormLabel>Business Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Acme Inc." {...field} />
+                      <Input placeholder="e.g., Acme Inc." {...field} value={field.value || ''}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -236,7 +242,7 @@ export function BusinessProfileForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value || ''}>
                         <FormControl>
                             <SelectTrigger>
                             <SelectValue placeholder="Select a business type" />
