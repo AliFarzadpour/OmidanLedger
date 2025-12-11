@@ -43,7 +43,7 @@ export function AIReportGenerator() {
   }>(userDocRef);
 
   // ===========================================================
-  // 🚀 IMPROVED PDF GENERATOR — NO EMPTY PAGES, FULL PRO LAYOUT
+  // 🚀 FIXED PDF GENERATOR
   // ===========================================================
   const handleDownloadPdf = async () => {
     if (!report) return;
@@ -51,111 +51,100 @@ export function AIReportGenerator() {
     toast({ title: 'Generating PDF...', description: 'Please wait a moment.' });
 
     try {
+      // 1. Setup PDF document
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'pt',
         format: 'a4',
       });
 
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const margin = 48;
+      // A4 Size in points: 595.28 x 841.89
+      const pdfWidth = 595.28; 
+      const margin = 40;
+      const contentWidth = pdfWidth - (margin * 2);
 
       const companyName =
         userData?.businessProfile?.businessName ||
         user?.displayName ||
-        user?.email?.split('@')[0] ||
         'Financial Report';
 
       const shortQuery =
         query.length > 80 ? query.substring(0, 77) + '...' : query || 'Financial Analysis';
 
       const generatedDate = new Date().toLocaleDateString();
-      const fileName = `ai-financial-report-${new Date()
-        .toISOString()
-        .slice(0, 10)}.pdf`;
+      const fileName = `ai-report-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-      // ----------------------------------------------------------
-      // 🎨 A CLEAN, PROFESSIONAL HTML TEMPLATE JUST FOR THE PDF
-      // ----------------------------------------------------------
+      // 2. Create stylized HTML template
       const styledHtml = `
-        <style>
-          body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-            color: #111827;
-            font-size: 11pt;
-            line-height: 1.5;
-          }
-          h1 { font-size: 20pt; font-weight: 700; margin: 0 0 12px 0; }
-          h2 { font-size: 16pt; margin-top: 18px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-          h3 { font-size: 14pt; margin-top: 14px; }
-          p { margin: 6px 0; }
-          table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 12px;
-            margin-bottom: 16px;
-          }
-          th, td {
-            border-bottom: 1px solid #e5e7eb;
-            padding: 6px 8px;
-          }
-          th {
-            background: #f3f4f6;
-            font-weight: 600;
-          }
-          ul, ol { margin-left: 20px; }
-          li { margin-bottom: 4px; }
-          .header-block {
-            margin-bottom: 20px;
-            padding-bottom: 14px;
-            border-bottom: 1px solid #e5e7eb;
-          }
-          .meta-text {
-            font-size: 10pt;
-            color: #6b7280;
-            margin-top: 6px;
-          }
-          .pill {
-            display: inline-block;
-            padding: 4px 10px;
-            font-size: 9pt;
-            border-radius: 999px;
-            background: #eff6ff;
-            color: #1d4ed8;
-            margin-top: 8px;
-          }
-        </style>
+        <div style="width: ${contentWidth}px; font-family: sans-serif; color: #111;">
+            <style>
+              h1 { font-size: 22px; font-weight: 700; margin-bottom: 5px; color: #000; }
+              h2 { font-size: 16px; margin-top: 20px; border-bottom: 2px solid #eee; padding-bottom: 5px; color: #333; }
+              h3 { font-size: 14px; margin-top: 15px; font-weight: 600; color: #444; }
+              p { font-size: 11px; line-height: 1.5; margin-bottom: 8px; color: #333; }
+              ul, ol { margin-left: 20px; margin-bottom: 10px; }
+              li { font-size: 11px; margin-bottom: 4px; }
+              
+              /* Table Styling */
+              table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; }
+              th { background-color: #f3f4f6; text-align: left; padding: 6px; border: 1px solid #ddd; font-weight: bold; }
+              td { padding: 6px; border: 1px solid #ddd; }
+              
+              /* Header Block */
+              .header { margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #000; }
+              .meta { font-size: 10px; color: #666; margin-top: 4px; }
+              .badge { 
+                display: inline-block; background: #e0f2fe; color: #0369a1; 
+                padding: 4px 8px; border-radius: 4px; font-size: 9px; font-weight: bold; margin-top: 8px;
+              }
+            </style>
 
-        <div class="header-block">
-          <h1>${companyName}</h1>
-          <div class="meta-text"><strong>Query:</strong> ${shortQuery}</div>
-          <div class="meta-text"><strong>Date:</strong> ${generatedDate}</div>
-          <div class="pill">AI-Generated Financial Report</div>
+            <div class="header">
+              <h1>${companyName}</h1>
+              <div class="meta"><strong>Topic:</strong> ${shortQuery}</div>
+              <div class="meta"><strong>Date:</strong> ${generatedDate}</div>
+              <div class="badge">AI GENERATED REPORT</div>
+            </div>
+
+            <div class="content">
+              ${marked.parse(report)}
+            </div>
         </div>
-
-        ${marked.parse(report)}
       `;
 
-      // Add to DOM for jsPDF.html
+      // 3. Create a temporary container
       const container = document.createElement('div');
-      container.style.position = 'fixed';
-      container.style.left = '-10000px';
-      container.style.width = `${pdfWidth - margin * 2}px`;
       container.innerHTML = styledHtml;
+      
+      // FIX: Do NOT use left: -10000px. Browsers won't render it.
+      // Instead, use absolute positioning with a low z-index so it's "behind" the app.
+      container.style.position = 'fixed';
+      container.style.top = '0';
+      container.style.left = '0';
+      container.style.zIndex = '-9999';
+      container.style.background = 'white'; // Ensure background is white
+      container.style.width = `${contentWidth}px`; // Force exact width
+      
       document.body.appendChild(container);
 
-      // Render HTML into PDF
+      // 4. Generate PDF using the .html() method
       await pdf.html(container, {
         x: margin,
         y: margin,
-        width: pdfWidth - margin * 2,
-        windowWidth: pdfWidth - margin * 2,
-        html2canvas: { scale: 0.9 },
+        width: contentWidth,
+        windowWidth: contentWidth, // Important for responsive layouts
+        autoPaging: 'text', // Prevents cutting text lines in half
+        html2canvas: {
+            scale: 1, // Higher scale creates larger file size, 1 is usually sufficient for text
+            logging: false,
+            useCORS: true // vital if you have external images
+        },
         callback: (doc) => {
-          document.body.removeChild(container);
           doc.save(fileName);
+          document.body.removeChild(container);
         },
       });
+
     } catch (error) {
       console.error('PDF Error:', error);
       toast({
