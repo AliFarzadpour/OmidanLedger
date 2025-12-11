@@ -19,9 +19,12 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get, update, delete: if isOwner(userId) || (request.resource.data.businessProfile != null && request.resource.data.businessProfile.diff(resource.data.businessProfile).affectedKeys().hasOnly(['businessName', 'businessType', 'industry', 'address', 'city', 'state', 'zip', 'country', 'taxId']));
-      allow create: if isOwner(userId);
-      allow list: if false;
+      // Allow user to read their own doc.
+      // Allow update only if the user is the owner AND they are only changing the businessProfile.
+      allow get: if isOwner(userId);
+      allow update: if isOwner(userId) && request.resource.data.keys().hasOnly(['businessProfile', 'email', 'id', 'firstName', 'lastName', 'createdAt', 'updatedAt']);
+      allow create: if isOwner(userId); // Allow user to create their own profile.
+      allow list, delete: if false; // Never allow listing or deleting users.
 
         match /bankAccounts/{bankAccountId} {
           allow read, write: if isOwner(userId);

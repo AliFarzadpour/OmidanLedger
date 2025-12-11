@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useUser, useFirestore, useDoc } from '@/firebase';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { useEffect } from 'react';
@@ -47,7 +47,11 @@ export function BusinessProfileForm() {
   const firestore = useFirestore();
   const { toast } = useToast();
   
-  const userDocRef = user ? doc(firestore, 'users', user.uid) : null;
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
   const { data: userData, isLoading: isLoadingUser } = useDoc<{ businessProfile?: BusinessProfileFormValues }>(userDocRef);
 
   const form = useForm<BusinessProfileFormValues>({
@@ -176,7 +180,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>Industry</FormLabel>
                         <FormControl>
-                        <Input placeholder="e.g., Software, Retail" {...field} />
+                        <Input placeholder="e.g., Software, Retail" {...field} value={field.value || ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -189,7 +193,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>Tax ID / EIN</FormLabel>
                         <FormControl>
-                        <Input placeholder="XX-XXXXXXX" {...field} />
+                        <Input placeholder="XX-XXXXXXX" {...field} value={field.value || ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -203,7 +207,7 @@ export function BusinessProfileForm() {
                   <FormItem>
                     <FormLabel>Street Address</FormLabel>
                     <FormControl>
-                      <Input placeholder="123 Main St" {...field} />
+                      <Input placeholder="123 Main St" {...field} value={field.value || ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -217,7 +221,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>City</FormLabel>
                         <FormControl>
-                        <Input placeholder="San Francisco" {...field} />
+                        <Input placeholder="San Francisco" {...field} value={field.value || ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -230,7 +234,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>State / Province</FormLabel>
                         <FormControl>
-                        <Input placeholder="CA" {...field} />
+                        <Input placeholder="CA" {...field} value={field.value || ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -243,7 +247,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>ZIP / Postal Code</FormLabel>
                         <FormControl>
-                        <Input placeholder="94103" {...field} />
+                        <Input placeholder="94103" {...field} value={field.value || ''} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
