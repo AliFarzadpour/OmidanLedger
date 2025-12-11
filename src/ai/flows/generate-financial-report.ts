@@ -32,7 +32,7 @@ async function fetchTransactions(userId: string): Promise<Transaction[]> {
         .collectionGroup('transactions')
         .where('userId', '==', userId)
         .orderBy('date', 'desc')
-        .limit(1000) // Fetch up to 1000 recent transactions
+        .limit(5000) // Fetch up to 5000 recent transactions
         .get();
 
     if (snapshot.empty) {
