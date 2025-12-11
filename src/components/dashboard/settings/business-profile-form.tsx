@@ -25,8 +25,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useStorage, useUploadFile } from '@/firebase/storage/use-storage';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { Building2, Upload } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
@@ -38,6 +43,7 @@ const businessProfileSchema = z.object({
   state: z.string().optional(),
   zip: z.string().optional(),
   country: z.string().optional(),
+  logoUrl: z.string().url().optional(),
 });
 
 type BusinessProfileFormValues = z.infer<typeof businessProfileSchema>;
@@ -45,7 +51,16 @@ type BusinessProfileFormValues = z.infer<typeof businessProfileSchema>;
 export function BusinessProfileForm() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const {
+    uploadFile,
+    isUploading,
+    progress,
+    error: uploadError,
+  } = useUploadFile();
   
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -66,6 +81,7 @@ export function BusinessProfileForm() {
       state: '',
       zip: '',
       country: 'USA',
+      logoUrl: '',
     },
   });
 
@@ -90,6 +106,34 @@ export function BusinessProfileForm() {
         variant: 'destructive',
         title: 'Update Failed',
         description: 'Could not save your business information.',
+      });
+    }
+  };
+
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !storage || !event.target.files || event.target.files.length === 0) {
+      return;
+    }
+    const file = event.target.files[0];
+    const storageRef = ref(storage, `logos/${user.uid}/${file.name}`);
+
+    try {
+      const snapshot = await uploadFile(storageRef, file);
+      if (snapshot) {
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        form.setValue('logoUrl', downloadURL);
+        await onSubmit(form.getValues()); // Save the form with the new logo URL
+        toast({
+          title: 'Logo Uploaded',
+          description: 'Your new business logo has been saved.',
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Upload Failed',
+        description: 'Could not upload your logo.',
       });
     }
   };
@@ -122,16 +166,56 @@ export function BusinessProfileForm() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Business Profile</CardTitle>
-        <CardDescription>
-          This information will be used for generating reports and other official documents.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>Business Logo</CardTitle>
+            <CardDescription>
+              Upload your company logo. This will appear on reports.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex items-center gap-6">
+            <Avatar className="h-24 w-24 rounded-lg">
+                <AvatarImage src={form.watch('logoUrl')} alt="Business Logo" />
+                <AvatarFallback className="rounded-lg">
+                    <Building2 className="h-10 w-10 text-muted-foreground" />
+                </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {isUploading ? 'Uploading...' : 'Upload Logo'}
+                </Button>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleLogoUpload}
+                    className="hidden"
+                    accept="image/png, image/jpeg, image/gif, image/webp"
+                />
+                <p className="text-xs text-muted-foreground">
+                    Recommended size: 256x256px. PNG, JPG, or GIF.
+                </p>
+                {isUploading && <Progress value={progress} className="w-full" />}
+                {uploadError && <p className="text-xs text-destructive">{uploadError.message}</p>}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Business Profile</CardTitle>
+            <CardDescription>
+              This information will be used for generating reports and other official documents.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-8">
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -260,9 +344,9 @@ export function BusinessProfileForm() {
                 {form.formState.isSubmitting ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
-          </form>
-        </Form>
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      </form>
+    </Form>
   );
 }
