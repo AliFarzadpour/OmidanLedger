@@ -11,7 +11,8 @@ import { generateFinancialReport } from '@/ai/flows/generate-financial-report';
 import { Skeleton } from '@/components/ui/skeleton';
 import { marked } from 'marked';
 import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
+import { Logo } from '@/components/logo';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 // A simple component to render markdown content
 function MarkdownReport({ content }: { content: string }) {
@@ -38,20 +39,82 @@ export function AIReportGenerator() {
     toast({ title: 'Generating PDF...', description: 'Please wait a moment.' });
 
     try {
-      const canvas = await html2canvas(reportContentRef.current, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: null,
-      });
+        const pdf = new jsPDF({
+            orientation: 'p',
+            unit: 'pt',
+            format: 'a4',
+        });
 
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF({
-        orientation: 'portrait',
-        unit: 'px',
-        format: [canvas.width, canvas.height],
-      });
-      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
-      pdf.save('ai-financial-report.pdf');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfMargin = 40;
+
+        // Header
+        const addHeader = () => {
+            const logoSvgString = renderToStaticMarkup(<Logo showText={false} />);
+            const svgMatch = logoSvgString.match(/<svg.*<\/svg>/s);
+            if (svgMatch) {
+                // Cannot add raw SVG, must draw to canvas first then add as image
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                const svg = new Blob([svgMatch[0]], { type: 'image/svg+xml;charset=utf-8' });
+                const url = URL.createObjectURL(svg);
+                
+                img.onload = () => {
+                    canvas.width = 30 * (img.width / img.height);
+                    canvas.height = 30;
+                    ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    URL.revokeObjectURL(url);
+                    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', pdfMargin, pdfMargin - 10, canvas.width, canvas.height);
+                    
+                    pdf.setFontSize(18);
+                    pdf.text('AI-Generated Financial Report', pdfMargin + canvas.width + 10, pdfMargin + 12);
+                };
+                img.src = url;
+
+            } else {
+                 pdf.setFontSize(18);
+                 pdf.text('AI-Generated Financial Report', pdfMargin, pdfMargin + 12);
+            }
+
+
+            pdf.setFontSize(10);
+            pdf.setTextColor(150);
+            pdf.text(new Date().toLocaleDateString(), pdfWidth - pdfMargin, pdfMargin + 12, { align: 'right' });
+            pdf.setDrawColor(200);
+            pdf.line(pdfMargin, pdfMargin + 25, pdfWidth - pdfMargin, pdfMargin + 25);
+        };
+        
+        // Footer
+        const addFooter = () => {
+            const pageCount = pdf.internal.getNumberOfPages();
+            pdf.setFontSize(10);
+            pdf.setTextColor(150);
+            for (let i = 1; i <= pageCount; i++) {
+                pdf.setPage(i);
+                pdf.text(
+                    `Page ${i} of ${pageCount}`,
+                    pdf.internal.pageSize.getWidth() / 2,
+                    pdf.internal.pageSize.getHeight() - pdfMargin + 20,
+                    { align: 'center' }
+                );
+            }
+        };
+
+        addHeader();
+
+        // Content
+        await pdf.html(reportContentRef.current, {
+            x: pdfMargin,
+            y: pdfMargin + 40,
+            width: pdfWidth - (pdfMargin * 2),
+            windowWidth: pdfWidth - (pdfMargin * 2),
+            autoPaging: 'text',
+        });
+
+        addFooter();
+        pdf.save('ai-financial-report.pdf');
+
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
@@ -75,7 +138,7 @@ export function AIReportGenerator() {
         // Handle markdown table rows
         if (line.startsWith('|') && line.endsWith('|')) {
             const cells = line.split('|').slice(1, -1).map(cell => `"${cell.trim().replace(/"/g, '""')}"`);
-            if (cells.length > 0) {
+            if (cells.length > 0 && !line.includes('---')) { // ignore separator lines
                  csvContent += cells.join(',') + "\r\n";
             }
         }
@@ -213,11 +276,15 @@ export function AIReportGenerator() {
             </div>
             <CardDescription>Based on your question: "{query}"</CardDescription>
           </CardHeader>
-          <CardContent ref={reportContentRef}>
-            <MarkdownReport content={report} />
+          <CardContent>
+            <div ref={reportContentRef}>
+                <MarkdownReport content={report} />
+            </div>
           </CardContent>
         </Card>
       )}
     </div>
   );
 }
+
+    
