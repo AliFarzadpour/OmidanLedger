@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef } from 'react';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -39,8 +39,7 @@ export function AIReportGenerator() {
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
 
-  const { data: userData } = useDoc<{ businessProfile?: { businessName?: string, logoUrl?: string } }>(userDocRef);
-
+  const { data: userData } = useDoc<{ businessProfile?: { businessName?: string; logoUrl?: string } }>(userDocRef);
 
   const handleDownloadPdf = async () => {
     if (!report) return;
@@ -48,103 +47,162 @@ export function AIReportGenerator() {
     toast({ title: 'Generating PDF...', description: 'Please wait a moment.' });
 
     try {
-        const pdf = new jsPDF({
-            orientation: 'p',
-            unit: 'pt',
-            format: 'a4',
-        });
-        
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const margin = 40;
+      const pdf = new jsPDF({
+        orientation: 'p',
+        unit: 'pt',
+        format: 'a4',
+      });
 
-        // --- COVER PAGE ---
-        pdf.setFillColor(248, 250, 252); // Light gray background
-        pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
-        
-        // Logo
-        const logoUrl = userData?.businessProfile?.logoUrl;
-        if (logoUrl) {
-            try {
-                // jsPDF needs image data, not just a URL. Fetch and convert.
-                const response = await fetch(logoUrl);
-                const blob = await response.blob();
-                const reader = new FileReader();
-                await new Promise<void>((resolve, reject) => {
-                    reader.onload = () => {
-                        pdf.addImage(reader.result as string, 'PNG', pdfWidth / 2 - 50, margin * 2, 100, 100);
-                        resolve();
-                    };
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-            } catch (e) {
-                console.error("Could not load logo image for PDF", e);
-            }
-        } else {
-             // Fallback if no logo - maybe render a placeholder?
-        }
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 48;
 
+      const companyName =
+        userData?.businessProfile?.businessName ||
+        user?.displayName ||
+        user?.email?.split('@')[0] ||
+        'AI Financial Report';
 
-        // Company Name
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(26);
-        pdf.setTextColor(17, 24, 39);
-        const companyName = userData?.businessProfile?.businessName || user?.displayName || user?.email?.split('@')[0] || 'Financial Report';
-        pdf.text(companyName, pdfWidth / 2, margin * 2 + 140, { align: 'center' });
+      const shortQuery = query.trim().length
+        ? query.trim().length > 80
+          ? `${query.trim().slice(0, 77)}...`
+          : query.trim()
+        : 'AI-Generated Financial Insights';
 
-        // Report Title
+      const generatedDate = new Date().toLocaleDateString();
+      const fileName = `ai-financial-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+      // Helper: header & footer for non-cover pages
+      const addHeaderFooter = (pageNumber: number, totalPages: number) => {
+        pdf.setPage(pageNumber);
+
+        // Header bar
         pdf.setFont('helvetica', 'normal');
-        pdf.setFontSize(18);
-        pdf.setTextColor(107, 114, 128);
-        const reportTitle = query.length > 50 ? query.substring(0, 50) + '...' : query;
-        pdf.text(reportTitle, pdfWidth / 2, margin * 2 + 170, { align: 'center' });
-        
-        // Subtitle
-        pdf.setFontSize(12);
-        pdf.text('AI-Generated Financial Insights', pdfWidth / 2, margin * 2 + 190, { align: 'center' });
+        pdf.setFontSize(9);
+        pdf.setTextColor(120, 120, 120);
+        pdf.text(companyName, margin, margin / 2);
 
+        // Top divider
+        pdf.setDrawColor(220, 220, 220);
+        pdf.setLineWidth(0.5);
+        pdf.line(margin, margin / 2 + 10, pdfWidth - margin, margin / 2 + 10);
 
-        // Generated Date
-        pdf.setFontSize(10);
-        pdf.setTextColor(156, 163, 175);
-        pdf.text(`Generated on: ${new Date().toLocaleDateString()}`, pdfWidth / 2, pdfHeight - margin, { align: 'center' });
+        // Footer text
+        pdf.setFontSize(9);
+        pdf.setTextColor(160, 160, 160);
+        const footerY = pdfHeight - margin / 2;
 
-        // --- CONTENT PAGES ---
-        if (reportContentRef.current) {
-            pdf.addPage();
-            // Header for content pages
-            const addHeader = (pageNum: number) => {
-                pdf.setPage(pageNum);
-                pdf.setFontSize(10);
-                pdf.setTextColor(150);
-                pdf.text(companyName, margin, margin / 2);
-                pdf.text(`Page ${pageNum}`, pdfWidth - margin, margin / 2, { align: 'right' });
-                pdf.setDrawColor(220);
-                pdf.line(margin, margin / 2 + 10, pdfWidth - margin, margin / 2 + 10);
+        pdf.text(`Generated on: ${generatedDate}`, margin, footerY);
+        pdf.text(
+          `Page ${pageNumber} of ${totalPages}`,
+          pdfWidth - margin,
+          footerY,
+          { align: 'right' }
+        );
+      };
+
+      // -------------------------
+      // 1) COVER PAGE
+      // -------------------------
+      // Background blocks for a more modern look
+      pdf.setFillColor(248, 250, 252); // light background
+      pdf.rect(0, 0, pdfWidth, pdfHeight, 'F');
+
+      pdf.setFillColor(59, 130, 246); // primary band
+      pdf.rect(0, pdfHeight * 0.2, pdfWidth, pdfHeight * 0.15, 'F');
+
+      // Logo (if available)
+      const logoUrl = userData?.businessProfile?.logoUrl;
+      if (logoUrl) {
+        try {
+          const response = await fetch(logoUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          await new Promise<void>((resolve, reject) => {
+            reader.onload = () => {
+              const imgWidth = 90;
+              const imgHeight = 90;
+              pdf.addImage(
+                reader.result as string,
+                'PNG',
+                pdfWidth / 2 - imgWidth / 2,
+                pdfHeight * 0.12,
+                imgWidth,
+                imgHeight
+              );
+              resolve();
             };
-
-            // Using html method for content
-             await pdf.html(reportContentRef.current, {
-                x: margin,
-                y: margin,
-                width: pdfWidth - (margin * 2),
-                windowWidth: pdfWidth - (margin * 2),
-                autoPaging: 'text',
-                callback: (doc) => {
-                    const pageCount = doc.internal.getNumberOfPages();
-                    // Start from page 2 for headers
-                    for (let i = 2; i <= pageCount; i++) {
-                        addHeader(i);
-                    }
-                    doc.save('ai-financial-report.pdf');
-                }
-            });
-        } else {
-             pdf.save('ai-financial-report.pdf');
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (e) {
+          console.error('Could not load logo image for PDF', e);
         }
+      }
 
+      // Company Name
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(24);
+      pdf.setTextColor(17, 24, 39);
+      pdf.text(companyName, pdfWidth / 2, pdfHeight * 0.4, { align: 'center' });
 
+      // Report Title (based on query)
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(16);
+      pdf.setTextColor(55, 65, 81);
+      pdf.text(shortQuery, pdfWidth / 2, pdfHeight * 0.45, { align: 'center', maxWidth: pdfWidth - margin * 2 });
+
+      // Subtitle
+      pdf.setFontSize(11);
+      pdf.setTextColor(100, 116, 139);
+      pdf.text('AI-Generated Financial Report', pdfWidth / 2, pdfHeight * 0.5, { align: 'center' });
+
+      // Date
+      pdf.setFontSize(10);
+      pdf.setTextColor(148, 163, 184);
+      pdf.text(`Generated on ${generatedDate}`, pdfWidth / 2, pdfHeight * 0.55, { align: 'center' });
+
+      // Optional small text at bottom
+      pdf.setFontSize(9);
+      pdf.setTextColor(156, 163, 175);
+      pdf.text(
+        'This report is generated automatically based on your transaction data.',
+        pdfWidth / 2,
+        pdfHeight - margin * 0.8,
+        { align: 'center', maxWidth: pdfWidth - margin * 2 }
+      );
+
+      // -------------------------
+      // 2) CONTENT PAGES
+      // -------------------------
+      if (reportContentRef.current) {
+        pdf.addPage();
+
+        // Render HTML from the markdown report
+        await pdf.html(reportContentRef.current, {
+          x: margin,
+          y: margin,
+          width: pdfWidth - margin * 2,
+          windowWidth: pdfWidth - margin * 2,
+          autoPaging: 'text',
+          html2canvas: {
+            // Slightly higher scale for sharper text
+            scale: 0.8,
+          },
+          callback: (doc) => {
+            const totalPages = doc.internal.getNumberOfPages();
+
+            // Add header/footer to all pages except the cover (page 1)
+            for (let i = 2; i <= totalPages; i++) {
+              addHeaderFooter(i, totalPages);
+            }
+
+            doc.save(fileName);
+          },
+        });
+      } else {
+        pdf.save(fileName);
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       toast({
@@ -160,39 +218,41 @@ export function AIReportGenerator() {
 
     toast({ title: 'Generating CSV...', description: 'Your download will begin shortly.' });
 
-    // Basic conversion from Markdown to CSV. This is a best-effort approach.
-    // It assumes simple structures like tables and lists.
-    let csvContent = "data:text/csv;charset=utf-8,";
+    let csvContent = 'data:text/csv;charset=utf-8,';
     const lines = report.split('\n');
-    lines.forEach(line => {
-        // Handle markdown table rows
-        if (line.startsWith('|') && line.endsWith('|')) {
-            const cells = line.split('|').slice(1, -1).map(cell => `"${cell.trim().replace(/"/g, '""')}"`);
-            if (cells.length > 0 && !line.includes('---')) { // ignore separator lines
-                 csvContent += cells.join(',') + "\r\n";
-            }
+
+    lines.forEach((line) => {
+      // Handle markdown table rows
+      if (line.startsWith('|') && line.endsWith('|')) {
+        const cells = line
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => `"${cell.trim().replace(/"/g, '""')}"`);
+        if (cells.length > 0 && !line.includes('---')) {
+          csvContent += cells.join(',') + '\r\n';
         }
-        // Handle list items
-        else if (line.match(/^(\*|-|\d+\.)\s/)) {
-            const item = `"${line.replace(/^(\*|-|\d+\.)\s/, '').trim().replace(/"/g, '""')}"`;
-            csvContent += item + "\r\n";
-        }
-        // Handle headings and plain text
-        else if (line.trim().length > 0) {
-             const text = `"${line.replace(/#/g, '').trim().replace(/"/g, '""')}"`;
-             csvContent += text + "\r\n";
-        }
+      }
+      // Handle list items
+      else if (line.match(/^(\*|-|\d+\.)\s/)) {
+        const item = `"${line.replace(/^(\*|-|\d+\.)\s/, '').trim().replace(/"/g, '""')}"`;
+        csvContent += item + '\r\n';
+      }
+      // Headings and plain text
+      else if (line.trim().length > 0) {
+        const text = `"${line.replace(/#/g, '').trim().replace(/"/g, '""')}"`;
+        csvContent += text + '\r\n';
+      }
     });
 
     const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "ai-financial-report.csv");
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', 'ai-financial-report.csv');
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
-  
+
   const handleCopy = () => {
     if (!report) return;
     navigator.clipboard.writeText(report);
@@ -201,7 +261,6 @@ export function AIReportGenerator() {
       description: 'The report content has been copied.',
     });
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -236,10 +295,10 @@ export function AIReportGenerator() {
   };
 
   const exampleQueries = [
-    "What was my total income last month?",
+    'What was my total income last month?',
     "Show me all expenses related to 'Software'.",
-    "List my top 5 spending categories in July 2024.",
-    "Generate a profit and loss statement for the last quarter."
+    'List my top 5 spending categories in July 2024.',
+    'Generate a profit and loss statement for the last quarter.',
   ];
 
   return (
@@ -311,7 +370,7 @@ export function AIReportGenerator() {
                   <FileDown className="mr-2 h-4 w-4" />
                   Download PDF
                 </Button>
-                 <Button variant="outline" size="sm" onClick={handleDownloadCsv}>
+                <Button variant="outline" size="sm" onClick={handleDownloadCsv}>
                   <FileDown className="mr-2 h-4 w-4" />
                   Download CSV
                 </Button>
@@ -320,8 +379,9 @@ export function AIReportGenerator() {
             <CardDescription>Based on your question: "{query}"</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* This is what jsPDF.html uses as the HTML source */}
             <div ref={reportContentRef}>
-                <MarkdownReport content={report} />
+              <MarkdownReport content={report} />
             </div>
           </CardContent>
         </Card>
