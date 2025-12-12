@@ -44,7 +44,7 @@ export function AIReportGenerator() {
   }>(userDocRef);
 
   // ===========================================================
-  // 🚀 PROFESSIONAL NATIVE PDF GENERATOR
+  // 🚀 FINAL PROFESSIONAL PDF (Cleaned Markdown + Alignment)
   // ===========================================================
   const handleDownloadPdf = () => {
     if (!report) return;
@@ -58,121 +58,166 @@ export function AIReportGenerator() {
     const companyName = userData?.businessProfile?.businessName || user?.displayName || 'Financial Report';
     const reportDate = new Date().toLocaleDateString();
     
-    // Company Name (Top Left)
+    // Company Name
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(40, 40, 40);
     doc.text(companyName, 14, 20);
 
-    // Report Title/Query (Below Name)
+    // Query Title
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 100, 100);
     const splitTitle = doc.splitTextToSize(`Query: ${query}`, pageWidth - 100);
     doc.text(splitTitle, 14, 28);
 
-    // "AI Generated" Badge (Top Right)
-    doc.setFillColor(230, 240, 255); // Light Blue background
+    // Badge
+    doc.setFillColor(230, 240, 255); 
     doc.roundedRect(pageWidth - 50, 12, 36, 10, 2, 2, 'F');
     doc.setFontSize(8);
-    doc.setTextColor(0, 80, 180); // Dark Blue text
+    doc.setTextColor(0, 80, 180); 
     doc.text('AI GENERATED', pageWidth - 46, 18);
     doc.setTextColor(100);
     doc.text(reportDate, pageWidth - 46, 24);
 
-    // Separator Line
+    // Line
     doc.setDrawColor(200, 200, 200);
     doc.line(14, 35, pageWidth - 14, 35);
 
-    // --- 2. PARSE MARKDOWN CONTENT ---
-    // We split the AI response into "Text Paragraphs" and "Tables"
+    // --- 2. PARSE & CLEAN MARKDOWN ---
     const lines = report.split('\n');
-    let currentY = 45; // Start position for body content
+    let currentY = 45;
 
-    let tableData: string[][] = [];
+    let tableHeaders: string[] = [];
+    let tableBody: string[][] = [];
     let isCollectingTable = false;
 
     lines.forEach((line) => {
-      // Check if line is part of a markdown table
-      if (line.trim().startsWith('|')) {
-        isCollectingTable = true;
-        // Clean the markdown row (remove outer pipes and trim)
-        const row = line
-          .split('|')
-          .slice(1, -1) // Remove first and last empty elements from split
-          .map((cell) => cell.trim());
-        tableData.push(row);
-      } else {
-        // If we were collecting a table and hit a text line, DRAW THE TABLE
-        if (isCollectingTable && tableData.length > 0) {
-          const headers = tableData[0]; // First row is header
-          const body = tableData.slice(2); // Skip header and divider row (---|---)
+      const trimmedLine = line.trim();
 
+      // CASE A: Table Row
+      if (trimmedLine.startsWith('|')) {
+        isCollectingTable = true;
+        // Split by pipe, remove first/last empty items, trim whitespace
+        const row = trimmedLine
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => cell.trim());
+
+        // Detect if it's a Header row (contains dashes like "---")
+        if (row.some(cell => cell.includes('---'))) {
+             // Skip divider rows
+             return; 
+        }
+
+        // Logic: The first row found is the Header, subsequent are Body
+        if (tableHeaders.length === 0) {
+            tableHeaders = row.map(cell => cell.replace(/\*\*/g, '')); // Clean headers immediately
+        } else {
+            tableBody.push(row);
+        }
+      } 
+      else {
+        // CASE B: Not a table row (Text or Gap)
+        
+        // If we just finished a table, DRAW IT now
+        if (isCollectingTable && tableBody.length > 0) {
           autoTable(doc, {
             startY: currentY,
-            head: [headers],
-            body: body,
-            theme: 'striped',
-            headStyles: { fillColor: [41, 41, 41], textColor: 255, fontStyle: 'bold' },
-            styles: { fontSize: 9, cellPadding: 3 },
-            margin: { left: 14, right: 14 },
+            head: [tableHeaders],
+            body: tableBody,
+            theme: 'grid', // 'grid' looks better for financial data than 'striped'
+            headStyles: { fillColor: [41, 41, 41], textColor: 255, fontStyle: 'bold', halign: 'center' },
+            styles: { fontSize: 9, cellPadding: 4, lineColor: [200, 200, 200] },
+            // Logic to style specific columns
+            columnStyles: {
+                // Assuming the last column is usually the "Amount" or financial number
+                [tableHeaders.length - 1]: { halign: 'right', font: 'courier' } 
+            },
+            // Logic to Clean Content & Apply Bold
+            didParseCell: (data) => {
+                const rawText = data.cell.raw as string;
+                // Check if the original text had markdown bold markers
+                if (typeof rawText === 'string' && rawText.includes('**')) {
+                    data.cell.styles.fontStyle = 'bold';
+                    // Strip the asterisks for the final display
+                    data.cell.text = [rawText.replace(/\*\*/g, '')]; 
+                }
+                // Check for "Total" or "Net Income" to verify bolding
+                if (typeof rawText === 'string' && (rawText.includes('Total') || rawText.includes('NET'))) {
+                     data.cell.styles.fontStyle = 'bold';
+                     // Optional: Light gray background for total rows
+                     data.cell.styles.fillColor = [245, 245, 245];
+                }
+            }
           });
 
-          // Update Y position to after the table
-          currentY = (doc as any).lastAutoTable.finalY + 10;
-          tableData = [];
+          currentY = (doc as any).lastAutoTable.finalY + 12;
+          tableHeaders = [];
+          tableBody = [];
           isCollectingTable = false;
         }
 
-        // DRAW PLAIN TEXT (Headings or Paragraphs)
-        if (line.trim() !== '') {
-            // Check if it's a Heading (starts with #)
-            if (line.startsWith('##')) {
+        // Draw Regular Text
+        if (trimmedLine !== '') {
+            // Heading 2 (##)
+            if (trimmedLine.startsWith('##')) {
                 doc.setFontSize(13);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(0, 0, 0);
-                const text = line.replace(/#/g, '').trim();
-                doc.text(text, 14, currentY);
+                doc.text(trimmedLine.replace(/#/g, '').trim(), 14, currentY);
                 currentY += 8;
             } 
-            else if (line.startsWith('###')) {
-                doc.setFontSize(11);
+            // Heading 3 (###) or Bullet Points
+            else if (trimmedLine.startsWith('###') || trimmedLine.startsWith('*')) {
+                doc.setFontSize(10);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(50, 50, 50);
-                const text = line.replace(/#/g, '').trim();
-                doc.text(text, 14, currentY);
+                doc.text(trimmedLine.replace(/#/g, '').replace(/\*/g, '•').trim(), 14, currentY);
                 currentY += 6;
             }
+            // Regular Paragraph
             else {
-                // Regular Paragraph
                 doc.setFontSize(10);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(60, 60, 60);
-                const text = line.replace(/\*\*/g, ''); // Remove bold markdown for clean PDF
-                const splitText = doc.splitTextToSize(text, pageWidth - 28);
+                // Remove bold markers from plain text paragraphs too
+                const cleanText = trimmedLine.replace(/\*\*/g, '');
+                const splitText = doc.splitTextToSize(cleanText, pageWidth - 28);
                 doc.text(splitText, 14, currentY);
-                // Increase Y based on how many lines the text took up
-                currentY += (splitText.length * 5) + 2; 
+                currentY += (splitText.length * 5) + 3; 
             }
         }
       }
     });
 
-    // Catch-all: If the report ends with a table, draw it
-    if (tableData.length > 0) {
-        const headers = tableData[0];
-        const body = tableData.slice(2);
+    // Catch-all: If report ended with a table
+    if (tableBody.length > 0) {
         autoTable(doc, {
             startY: currentY,
-            head: [headers],
-            body: body,
-            theme: 'striped',
-            headStyles: { fillColor: [41, 41, 41] },
-            margin: { left: 14, right: 14 },
+            head: [tableHeaders],
+            body: tableBody,
+            theme: 'grid',
+            headStyles: { fillColor: [41, 41, 41], textColor: 255, fontStyle: 'bold', halign: 'center' },
+            styles: { fontSize: 9, cellPadding: 4, lineColor: [200, 200, 200] },
+            columnStyles: {
+                [tableHeaders.length - 1]: { halign: 'right', font: 'courier' } 
+            },
+            didParseCell: (data) => {
+                const rawText = data.cell.raw as string;
+                if (typeof rawText === 'string' && rawText.includes('**')) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.text = [rawText.replace(/\*\*/g, '')]; 
+                }
+                if (typeof rawText === 'string' && (rawText.includes('Total') || rawText.includes('NET'))) {
+                     data.cell.styles.fontStyle = 'bold';
+                     data.cell.styles.fillColor = [245, 245, 245];
+                }
+            }
         });
     }
 
-    // --- 3. FOOTER (Page Numbers) ---
+    // --- 3. FOOTER ---
     const totalPages = doc.internal.getNumberOfPages();
     for (let i = 1; i <= totalPages; i++) {
       doc.setPage(i);
@@ -183,13 +228,9 @@ export function AIReportGenerator() {
       doc.text(footerText, (pageWidth - textWidth) / 2, pageHeight - 10);
     }
 
-    // Save
     doc.save(`Financial_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  // ===========================================================
-  // CSV EXPORT
-  // ===========================================================
   const handleDownloadCsv = () => {
     if (!report) return;
 
@@ -219,7 +260,6 @@ export function AIReportGenerator() {
     document.body.removeChild(link);
   };
 
-
   const handleCopy = () => {
     if (!report) return;
     navigator.clipboard.writeText(report);
@@ -229,9 +269,6 @@ export function AIReportGenerator() {
     });
   };
 
-  // ===========================================================
-  // SUBMIT AI QUERY
-  // ===========================================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || !user) {
@@ -342,7 +379,6 @@ export function AIReportGenerator() {
                 <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
                   <FileDown className="mr-2 h-4 w-4" /> PDF
                 </Button>
-                {/* Fixed: Re-added CSV button logic here if needed, or remove if unused */}
                  <Button variant="outline" size="sm" onClick={handleDownloadCsv}>
                   <FileDown className="mr-2 h-4 w-4" /> CSV
                 </Button>
