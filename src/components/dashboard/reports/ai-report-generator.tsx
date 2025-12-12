@@ -43,7 +43,7 @@ export function AIReportGenerator() {
   }>(userDocRef);
 
   // ===========================================================
-  // 🚀 FIXED PDF GENERATOR WITH FOOTER (Page X of Y + Date)
+  // 🚀 IMPROVED PDF GENERATOR (Fixed margins, compact tables)
   // ===========================================================
   const handleDownloadPdf = async () => {
     if (!report) return;
@@ -51,24 +51,26 @@ export function AIReportGenerator() {
     toast({ title: 'Generating PDF...', description: 'Please wait a moment.' });
 
     try {
-      // 1. Setup PDF document
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'pt',
         format: 'a4',
       });
 
-      // A4 Size in points: 595.28 x 841.89
-      const pdfWidth = 595.28; 
+      // A4 dimensions: 595.28 x 841.89 pt
+      const pdfWidth = 595.28;
       const pdfHeight = 841.89;
-      const margin = 40;
-      const contentWidth = pdfWidth - (margin * 2);
+      
+      // MARGINS: Top, Left, Bottom (Large enough for footer), Right
+      const margin = { top: 40, right: 40, bottom: 60, left: 40 };
+      const contentWidth = pdfWidth - margin.left - margin.right;
 
       const companyName =
         userData?.businessProfile?.businessName ||
         user?.displayName ||
         'Financial Report';
 
+      // Clean up query length for display
       const shortQuery =
         query.length > 80 ? query.substring(0, 77) + '...' : query || 'Financial Analysis';
 
@@ -76,36 +78,84 @@ export function AIReportGenerator() {
       const generatedTime = new Date().toLocaleTimeString();
       const fileName = `ai-report-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-      // 2. Create stylized HTML template
+      // ------------------------------------------------------------
+      // 🎨 CSS STYLING FIXES
+      // ------------------------------------------------------------
       const styledHtml = `
-        <div style="width: ${contentWidth}px; font-family: sans-serif; color: #111;">
+        <div style="width: ${contentWidth}px; font-family: 'Helvetica', sans-serif; color: #111;">
             <style>
-              h1 { font-size: 22px; font-weight: 700; margin-bottom: 5px; color: #000; }
-              h2 { font-size: 16px; margin-top: 20px; border-bottom: 2px solid #eee; padding-bottom: 5px; color: #333; }
-              h3 { font-size: 14px; margin-top: 15px; font-weight: 600; color: #444; }
-              p { font-size: 11px; line-height: 1.5; margin-bottom: 8px; color: #333; }
-              ul, ol { margin-left: 20px; margin-bottom: 10px; }
-              li { font-size: 11px; margin-bottom: 4px; }
+              /* General Text */
+              h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px 0; color: #000; }
+              h2 { font-size: 14px; margin-top: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 4px; color: #333; }
+              h3 { font-size: 12px; margin-top: 12px; font-weight: 600; color: #444; }
+              p { font-size: 10px; line-height: 1.4; margin-bottom: 6px; color: #333; }
               
-              /* Table Styling */
-              table { width: 100%; border-collapse: collapse; margin-bottom: 15px; font-size: 10px; }
-              th { background-color: #f3f4f6; text-align: left; padding: 6px; border: 1px solid #ddd; font-weight: bold; }
-              td { padding: 6px; border: 1px solid #ddd; }
+              /* Lists */
+              ul, ol { margin-left: 15px; margin-bottom: 8px; }
+              li { font-size: 10px; margin-bottom: 2px; }
               
-              /* Header Block */
-              .header { margin-bottom: 25px; padding-bottom: 15px; border-bottom: 2px solid #000; }
-              .meta { font-size: 10px; color: #666; margin-top: 4px; }
+              /* COMPACT TABLE STYLING */
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin-bottom: 10px; 
+                font-size: 9px; /* Smaller font for data */
+                table-layout: fixed; /* Helps keep columns stable */
+              }
+              
+              th { 
+                background-color: #f3f4f6; 
+                color: #111;
+                text-align: left; 
+                padding: 4px 6px; 
+                border: 1px solid #d1d5db; 
+                font-weight: bold; 
+              }
+              
+              td { 
+                padding: 4px 6px; 
+                border: 1px solid #e5e7eb; 
+                vertical-align: top;
+                word-wrap: break-word; /* Wrap long text */
+              }
+
+              /* PREVENT DATE WRAPPING */
+              td:first-child {
+                white-space: nowrap;
+                width: 60px; /* Fixed width for date column */
+              }
+
+              /* Header Block - More Compact */
+              .header-container {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 2px solid #000;
+                padding-bottom: 10px;
+                margin-bottom: 15px;
+              }
+              .header-left { flex: 1; }
+              .header-right { text-align: right; }
+              
+              .meta { font-size: 9px; color: #666; margin-top: 2px; }
               .badge { 
-                display: inline-block; background: #e0f2fe; color: #0369a1; 
-                padding: 4px 8px; border-radius: 4px; font-size: 9px; font-weight: bold; margin-top: 8px;
+                background: #e0f2fe; color: #0369a1; 
+                padding: 3px 6px; border-radius: 4px; 
+                font-size: 8px; font-weight: bold; 
+                text-transform: uppercase;
+                display: inline-block;
               }
             </style>
 
-            <div class="header">
-              <h1>${companyName}</h1>
-              <div class="meta"><strong>Topic:</strong> ${shortQuery}</div>
-              <div class="meta"><strong>Generated:</strong> ${generatedDate} at ${generatedTime}</div>
-              <div class="badge">AI GENERATED REPORT</div>
+            <div class="header-container">
+              <div class="header-left">
+                <h1>${companyName}</h1>
+                <div class="meta"><strong>Topic:</strong> ${shortQuery}</div>
+              </div>
+              <div class="header-right">
+                <div class="badge">AI Generated Report</div>
+                <div class="meta"><strong>Date:</strong> ${generatedDate} ${generatedTime}</div>
+              </div>
             </div>
 
             <div class="content">
@@ -114,49 +164,58 @@ export function AIReportGenerator() {
         </div>
       `;
 
-      // 3. Create a temporary container
+      // Hidden Container for Rendering
       const container = document.createElement('div');
       container.innerHTML = styledHtml;
-      
       container.style.position = 'fixed';
       container.style.top = '0';
       container.style.left = '0';
+      // Low z-index prevents it from blocking UI, but keeps it "visible" to the renderer
       container.style.zIndex = '-9999';
       container.style.background = 'white'; 
       container.style.width = `${contentWidth}px`; 
       
       document.body.appendChild(container);
 
-      // 4. Generate PDF
+      // Generate PDF
       await pdf.html(container, {
-        x: margin,
-        y: margin,
+        x: margin.left,
+        y: margin.top,
         width: contentWidth,
-        windowWidth: contentWidth, 
+        windowWidth: contentWidth,
+        // Crucial: This marginBottom ensures auto-paging stops BEFORE hitting the footer area
+        margin: [margin.top, margin.right, margin.bottom, margin.left],
         autoPaging: 'text', 
         html2canvas: {
-            scale: 1, 
+            scale: 2, // Higher scale = sharper text
             logging: false,
             useCORS: true 
         },
         callback: (doc) => {
-          // 5. Add Footer to ALL pages
+          // Add Footer to ALL pages
           const totalPages = doc.getNumberOfPages();
           const footerFontSize = 9;
           
           for (let i = 1; i <= totalPages; i++) {
             doc.setPage(i);
             doc.setFontSize(footerFontSize);
-            doc.setTextColor(150); // Light gray color
+            doc.setTextColor(100); // Gray
 
-            const footerText = `Page ${i} of ${totalPages} | Generated on ${generatedDate}`;
-            const textWidth = doc.getTextWidth(footerText);
+            // Divider Line
+            doc.setDrawColor(200); 
+            doc.setLineWidth(0.5);
+            doc.line(margin.left, pdfHeight - 30, pdfWidth - margin.right, pdfHeight - 30);
+
+            // Footer Text
+            const pageText = `Page ${i} of ${totalPages}`;
+            const dateText = `Generated on ${generatedDate}`;
             
-            // Center footer at the bottom
-            const xPos = (pdfWidth - textWidth) / 2;
-            const yPos = pdfHeight - 20; // 20pt from bottom
-
-            doc.text(footerText, xPos, yPos);
+            // Left aligned date
+            doc.text(dateText, margin.left, pdfHeight - 15);
+            
+            // Right aligned page number
+            const PageTextWidth = doc.getTextWidth(pageText);
+            doc.text(pageText, pdfWidth - margin.right - PageTextWidth, pdfHeight - 15);
           }
 
           doc.save(fileName);
@@ -174,9 +233,7 @@ export function AIReportGenerator() {
     }
   };
 
-  // ===========================================================
-  // CSV EXPORT (Unchanged)
-  // ===========================================================
+  // ... (Keep handleDownloadCsv, handleCopy, handleSubmit, etc. exactly as they were)
   const handleDownloadCsv = () => {
     if (!report) return;
 
@@ -215,9 +272,6 @@ export function AIReportGenerator() {
     });
   };
 
-  // ===========================================================
-  // SUBMIT AI QUERY
-  // ===========================================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || !user) {
@@ -258,12 +312,8 @@ export function AIReportGenerator() {
     'What subscriptions am I paying for?',
   ];
 
-  // ===========================================================
-  // UI
-  // ===========================================================
   return (
     <div className="flex flex-col gap-6">
-      {/* Query Input */}
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -300,7 +350,6 @@ export function AIReportGenerator() {
         </CardContent>
       </Card>
 
-      {/* Loading Skeleton */}
       {isLoading && (
         <Card>
           <CardHeader>
@@ -314,7 +363,6 @@ export function AIReportGenerator() {
         </Card>
       )}
 
-      {/* Report Output */}
       {report && (
         <Card className="animate-in fade-in-50">
           <CardHeader>
