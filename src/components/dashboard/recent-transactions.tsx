@@ -17,28 +17,39 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
-import { transactionsData } from '@/lib/data'; // Using placeholder data for now
+import { Skeleton } from '../ui/skeleton';
 
-const categoryColors: Record<string, string> = {
+const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'Groceries': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Bills': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-  'Dining': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  'Shopping': 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300',
-  'Entertainment': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-  'Other': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'Operating Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Other Expenses': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+  'Balance Sheet Categories': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'Uncategorized': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
 };
 
+interface Transaction {
+    id: string;
+    date: string;
+    description: string;
+    primaryCategory: string;
+    amount: number;
+}
 
-export function RecentTransactions() {
-  const recentTransactions = transactionsData.slice(0, 5); // Show first 5 for summary
+interface RecentTransactionsProps {
+    transactions: Transaction[];
+    isLoading?: boolean;
+}
+
+export function RecentTransactions({ transactions, isLoading }: RecentTransactionsProps) {
+  const recentTransactions = transactions.slice(0, 5); // Show first 5 for summary
 
   return (
     <Card className="h-full shadow-lg">
       <CardHeader>
         <CardTitle>Recent Transactions</CardTitle>
         <CardDescription>
-          Here are your most recent transactions from all accounts.
+          Here are your most recent transactions for the selected period.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -51,37 +62,53 @@ export function RecentTransactions() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {recentTransactions.map((transaction) => (
-              <TableRow key={transaction.id}>
-                <TableCell>
-                  <div className="font-medium">{transaction.description}</div>
-                  <div className="text-sm text-muted-foreground">{transaction.date}</div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
+            {isLoading ? (
+                 [...Array(5)].map((_, i) => (
+                    <TableRow key={i}>
+                        <TableCell colSpan={3}>
+                            <Skeleton className="h-5 w-full" />
+                        </TableCell>
+                    </TableRow>
+                 ))
+            ) : recentTransactions.length > 0 ? (
+              recentTransactions.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell>
+                    <div className="font-medium">{transaction.description}</div>
+                    <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        'border-0',
+                        primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Uncategorized']
+                      )}
+                    >
+                      {transaction.primaryCategory}
+                    </Badge>
+                  </TableCell>
+                  <TableCell
                     className={cn(
-                      'border-0',
-                      categoryColors[transaction.category] || categoryColors['Other']
+                      'text-right font-medium',
+                      transaction.amount > 0 ? 'text-green-600' : 'text-foreground'
                     )}
                   >
-                    {transaction.category}
-                  </Badge>
-                </TableCell>
-                <TableCell
-                  className={cn(
-                    'text-right font-medium',
-                    transaction.amount > 0 ? 'text-green-600' : 'text-foreground'
-                  )}
-                >
-                  {transaction.amount > 0 ? '+' : ''}
-                  {new Intl.NumberFormat('en-US', {
-                    style: 'currency',
-                    currency: 'USD',
-                  }).format(transaction.amount)}
-                </TableCell>
-              </TableRow>
-            ))}
+                    {transaction.amount > 0 ? '+' : ''}
+                    {new Intl.NumberFormat('en-US', {
+                      style: 'currency',
+                      currency: 'USD',
+                    }).format(transaction.amount)}
+                  </TableCell>
+                </TableRow>
+              ))
+            ) : (
+                <TableRow>
+                    <TableCell colSpan={3} className="text-center h-24">
+                        No transactions for this period.
+                    </TableCell>
+                </TableRow>
+            )}
           </TableBody>
         </Table>
       </CardContent>
