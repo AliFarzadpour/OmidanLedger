@@ -43,12 +43,6 @@ function AccountList({
   onRemove: (id: string) => void,
   onChange: (id: string, field: keyof BalanceItem, value: string) => void
 }) {
-  const liabilitySubtypes = [
-        { val: 'credit_card', label: 'Credit Card Balance' },
-        { val: 'loan', label: 'Business Loan' },
-        { val: 'payable', label: 'Unpaid Bills (Payable)' },
-        { val: 'tax', label: 'Tax Owed' },
-    ];
 
   return (
     <div className="space-y-4">
@@ -120,7 +114,44 @@ function AccountList({
                         </SelectGroup>
                      </>
                   ) : (
-                    liabilitySubtypes.map(s => <SelectItem key={s.val} value={s.val}>{s.label}</SelectItem>)
+                    <>
+                        <SelectGroup>
+                            <SelectLabel>💳 Credit Cards</SelectLabel>
+                            <SelectItem value="credit_card">Credit Card</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>📄 Accounts Payable</SelectLabel>
+                            <SelectItem value="vendor_bills_due">Vendor Bills Due</SelectItem>
+                            <SelectItem value="supplier_invoices">Supplier Invoices</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>💵 Loans & Financing</SelectLabel>
+                            <SelectItem value="business_loan">Business Loan</SelectItem>
+                            <SelectItem value="sba_loan">SBA Loan</SelectItem>
+                            <SelectItem value="equipment_loan">Equipment Loan</SelectItem>
+                            <SelectItem value="vehicle_loan">Vehicle Loan</SelectItem>
+                            <SelectItem value="line_of_credit">Line of Credit</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>🏦 Taxes & Payroll</SelectLabel>
+                            <SelectItem value="sales_tax_payable">Sales Tax Payable</SelectItem>
+                            <SelectItem value="income_tax_payable">Income Tax Payable</SelectItem>
+                            <SelectItem value="payroll_taxes_payable">Payroll Taxes Payable</SelectItem>
+                            <SelectItem value="benefits_payable">Benefits Payable</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>🧾 Accrued Expenses</SelectLabel>
+                            <SelectItem value="accrued_rent">Accrued Rent</SelectItem>
+                            <SelectItem value="accrued_interest">Accrued Interest</SelectItem>
+                            <SelectItem value="accrued_utilities">Accrued Utilities</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>📦 Customer Liabilities</SelectLabel>
+                            <SelectItem value="customer_deposits">Customer Deposits</SelectItem>
+                            <SelectItem value="deferred_revenue">Deferred Revenue</SelectItem>
+                            <SelectItem value="gift_cards_outstanding">Gift Cards Outstanding</SelectItem>
+                        </SelectGroup>
+                    </>
                   )}
                 </SelectContent>
               </Select>
@@ -453,5 +484,3 @@ export default function OpeningBalancesWizard() {
     </div>
   );
 }
-
-    
