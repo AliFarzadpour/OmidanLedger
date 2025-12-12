@@ -7,44 +7,45 @@ import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
-import { DollarSign, CreditCard, Activity } from 'lucide-react';
-import { startOfMonth, endOfMonth, subMonths, startOfYear, format } from 'date-fns';
+import { DollarSign, CreditCard, Activity, AlertCircle } from 'lucide-react';
+import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 type Transaction = {
-    id: string;
-    date: string;
-    description: string;
-    amount: number;
-    primaryCategory: string;
-    secondaryCategory?: string;
-    subcategory?: string;
-    userId: string;
+  id: string;
+  date: string; // Ensure this matches your DB format (YYYY-MM-DD string)
+  description: string;
+  amount: number;
+  primaryCategory: string;
+  secondaryCategory?: string;
+  subcategory?: string;
+  userId: string;
 };
 
 type FilterOption = 'this-month' | 'last-month' | 'this-year';
 
 const getDateRange = (filter: FilterOption) => {
-    const now = new Date();
-    switch (filter) {
-        case 'this-month':
-            return {
-                startDate: format(startOfMonth(now), 'yyyy-MM-dd'),
-                endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
-            };
-        case 'last-month':
-            const lastMonth = subMonths(now, 1);
-            return {
-                startDate: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
-                endDate: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
-            };
-        case 'this-year':
-            return {
-                startDate: format(startOfYear(now), 'yyyy-MM-dd'),
-                endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
-            };
-    }
+  const now = new Date();
+  switch (filter) {
+    case 'this-month':
+      return {
+        startDate: format(startOfMonth(now), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
+      };
+    case 'last-month':
+      const lastMonth = subMonths(now, 1);
+      return {
+        startDate: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
+      };
+    case 'this-year':
+      return {
+        startDate: format(startOfYear(now), 'yyyy-MM-dd'),
+        endDate: format(endOfYear(now), 'yyyy-MM-dd'),
+      };
+  }
 };
 
 export default function DashboardPage() {
@@ -54,8 +55,16 @@ export default function DashboardPage() {
 
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
+  // ------------------------------------------------------------------
+  // QUERY LOGIC
+  // ------------------------------------------------------------------
   const transactionsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
+    
+    // Debugging: Log what we are asking Firestore for
+    console.log(`[Dashboard] Querying for User: ${user.uid}`);
+    console.log(`[Dashboard] Date Range: ${startDate} to ${endDate}`);
+
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
@@ -65,8 +74,11 @@ export default function DashboardPage() {
     );
   }, [user, firestore, startDate, endDate]);
 
-  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+  const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
 
+  // ------------------------------------------------------------------
+  // STATISTICS CALCULATION
+  // ------------------------------------------------------------------
   const { totalIncome, totalExpenses, netIncome, expenseBreakdown } = useMemo(() => {
     if (!transactions) {
       return { totalIncome: 0, totalExpenses: 0, netIncome: 0, expenseBreakdown: [] };
@@ -77,16 +89,19 @@ export default function DashboardPage() {
     const breakdownMap = new Map<string, number>();
 
     transactions.forEach(tx => {
-      if (tx.amount > 0) {
-        income += tx.amount;
+      const amount = Number(tx.amount); // Force number type safety
+      if (amount > 0) {
+        income += amount;
       } else {
-        expenses += tx.amount;
+        expenses += amount;
         const category = tx.primaryCategory || 'Uncategorized';
-        breakdownMap.set(category, (breakdownMap.get(category) || 0) + Math.abs(tx.amount));
+        breakdownMap.set(category, (breakdownMap.get(category) || 0) + Math.abs(amount));
       }
     });
 
-    const expenseBreakdown = Array.from(breakdownMap.entries()).map(([name, value]) => ({ name, value }));
+    const expenseBreakdown = Array.from(breakdownMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value); // Sort highest expenses first
 
     return { totalIncome: income, totalExpenses: expenses, netIncome: income + expenses, expenseBreakdown };
   }, [transactions]);
@@ -97,6 +112,9 @@ export default function DashboardPage() {
       { label: 'This Year', value: 'this-year' },
   ]
 
+  // ------------------------------------------------------------------
+  // RENDER
+  // ------------------------------------------------------------------
   return (
     <div className="flex flex-col gap-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -117,6 +135,21 @@ export default function DashboardPage() {
             ))}
         </div>
       </div>
+
+      {/* DIAGNOSTIC ALERT: Only shows if data is empty or errored */}
+      {!isLoading && transactions?.length === 0 && (
+        <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800">
+            <AlertCircle className="h-4 w-4 text-yellow-800" />
+            <AlertTitle>No Transactions Found</AlertTitle>
+            <AlertDescription className="mt-2 text-xs font-mono">
+                <p><strong>Diagnosis:</strong> Query returned 0 results.</p>
+                <p>1. Logged In User ID: <span className="bg-yellow-200 px-1 rounded">{user?.uid}</span></p>
+                <p>2. Date Filter: {startDate} to {endDate}</p>
+                <p>3. Check your database: Does the transaction document have a field <strong>userId</strong> matching exactly the ID above?</p>
+                {error && <p className="mt-2 text-red-600 font-bold">Error: {error.message}</p>}
+            </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
