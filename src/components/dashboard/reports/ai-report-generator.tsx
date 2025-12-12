@@ -12,8 +12,9 @@ import { generateFinancialReport } from '@/ai/flows/generate-financial-report';
 import { Skeleton } from '@/components/ui/skeleton';
 import { marked } from 'marked';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable'; // REQUIRED: npm install jspdf-autotable
 
-// Render markdown inside UI (not for PDF)
+// Render markdown inside UI (remains the same)
 function MarkdownReport({ content }: { content: string }) {
   const htmlContent = marked.parse(content);
   return (
@@ -43,197 +44,152 @@ export function AIReportGenerator() {
   }>(userDocRef);
 
   // ===========================================================
-  // 🚀 IMPROVED PDF GENERATOR (Fixed margins, compact tables)
+  // 🚀 PROFESSIONAL NATIVE PDF GENERATOR
   // ===========================================================
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = () => {
     if (!report) return;
+    toast({ title: 'Generating PDF...', description: 'Creating professional report.' });
 
-    toast({ title: 'Generating PDF...', description: 'Please wait a moment.' });
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+    
+    // --- 1. HEADER SECTION ---
+    const companyName = userData?.businessProfile?.businessName || user?.displayName || 'Financial Report';
+    const reportDate = new Date().toLocaleDateString();
+    
+    // Company Name (Top Left)
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(40, 40, 40);
+    doc.text(companyName, 14, 20);
 
-    try {
-      const pdf = new jsPDF({
-        orientation: 'p',
-        unit: 'pt',
-        format: 'a4',
-      });
+    // Report Title/Query (Below Name)
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    const splitTitle = doc.splitTextToSize(`Query: ${query}`, pageWidth - 100);
+    doc.text(splitTitle, 14, 28);
 
-      // A4 dimensions: 595.28 x 841.89 pt
-      const pdfWidth = 595.28;
-      const pdfHeight = 841.89;
-      
-      // MARGINS: Top, Left, Bottom (Large enough for footer), Right
-      const margin = { top: 40, right: 40, bottom: 60, left: 40 };
-      const contentWidth = pdfWidth - margin.left - margin.right;
+    // "AI Generated" Badge (Top Right)
+    doc.setFillColor(230, 240, 255); // Light Blue background
+    doc.roundedRect(pageWidth - 50, 12, 36, 10, 2, 2, 'F');
+    doc.setFontSize(8);
+    doc.setTextColor(0, 80, 180); // Dark Blue text
+    doc.text('AI GENERATED', pageWidth - 46, 18);
+    doc.setTextColor(100);
+    doc.text(reportDate, pageWidth - 46, 24);
 
-      const companyName =
-        userData?.businessProfile?.businessName ||
-        user?.displayName ||
-        'Financial Report';
+    // Separator Line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 35, pageWidth - 14, 35);
 
-      // Clean up query length for display
-      const shortQuery =
-        query.length > 80 ? query.substring(0, 77) + '...' : query || 'Financial Analysis';
+    // --- 2. PARSE MARKDOWN CONTENT ---
+    // We split the AI response into "Text Paragraphs" and "Tables"
+    const lines = report.split('\n');
+    let currentY = 45; // Start position for body content
 
-      const generatedDate = new Date().toLocaleDateString();
-      const generatedTime = new Date().toLocaleTimeString();
-      const fileName = `ai-report-${new Date().toISOString().slice(0, 10)}.pdf`;
+    let tableData: string[][] = [];
+    let isCollectingTable = false;
 
-      // ------------------------------------------------------------
-      // 🎨 CSS STYLING FIXES
-      // ------------------------------------------------------------
-      const styledHtml = `
-        <div style="width: ${contentWidth}px; font-family: 'Helvetica', sans-serif; color: #111;">
-            <style>
-              /* General Text */
-              h1 { font-size: 18px; font-weight: 700; margin: 0 0 4px 0; color: #000; }
-              h2 { font-size: 14px; margin-top: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 4px; color: #333; }
-              h3 { font-size: 12px; margin-top: 12px; font-weight: 600; color: #444; }
-              p { font-size: 10px; line-height: 1.4; margin-bottom: 6px; color: #333; }
-              
-              /* Lists */
-              ul, ol { margin-left: 15px; margin-bottom: 8px; }
-              li { font-size: 10px; margin-bottom: 2px; }
-              
-              /* COMPACT TABLE STYLING */
-              table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin-bottom: 10px; 
-                font-size: 9px; /* Smaller font for data */
-                table-layout: fixed; /* Helps keep columns stable */
-              }
-              
-              th { 
-                background-color: #f3f4f6; 
-                color: #111;
-                text-align: left; 
-                padding: 4px 6px; 
-                border: 1px solid #d1d5db; 
-                font-weight: bold; 
-              }
-              
-              td { 
-                padding: 4px 6px; 
-                border: 1px solid #e5e7eb; 
-                vertical-align: top;
-                word-wrap: break-word; /* Wrap long text */
-              }
+    lines.forEach((line) => {
+      // Check if line is part of a markdown table
+      if (line.trim().startsWith('|')) {
+        isCollectingTable = true;
+        // Clean the markdown row (remove outer pipes and trim)
+        const row = line
+          .split('|')
+          .slice(1, -1) // Remove first and last empty elements from split
+          .map((cell) => cell.trim());
+        tableData.push(row);
+      } else {
+        // If we were collecting a table and hit a text line, DRAW THE TABLE
+        if (isCollectingTable && tableData.length > 0) {
+          const headers = tableData[0]; // First row is header
+          const body = tableData.slice(2); // Skip header and divider row (---|---)
 
-              /* PREVENT DATE WRAPPING */
-              td:first-child {
-                white-space: nowrap;
-                width: 60px; /* Fixed width for date column */
-              }
+          autoTable(doc, {
+            startY: currentY,
+            head: [headers],
+            body: body,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 41, 41], textColor: 255, fontStyle: 'bold' },
+            styles: { fontSize: 9, cellPadding: 3 },
+            margin: { left: 14, right: 14 },
+          });
 
-              /* Header Block - More Compact */
-              .header-container {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                border-bottom: 2px solid #000;
-                padding-bottom: 10px;
-                margin-bottom: 15px;
-              }
-              .header-left { flex: 1; }
-              .header-right { text-align: right; }
-              
-              .meta { font-size: 9px; color: #666; margin-top: 2px; }
-              .badge { 
-                background: #e0f2fe; color: #0369a1; 
-                padding: 3px 6px; border-radius: 4px; 
-                font-size: 8px; font-weight: bold; 
-                text-transform: uppercase;
-                display: inline-block;
-              }
-            </style>
+          // Update Y position to after the table
+          currentY = (doc as any).lastAutoTable.finalY + 10;
+          tableData = [];
+          isCollectingTable = false;
+        }
 
-            <div class="header-container">
-              <div class="header-left">
-                <h1>${companyName}</h1>
-                <div class="meta"><strong>Topic:</strong> ${shortQuery}</div>
-              </div>
-              <div class="header-right">
-                <div class="badge">AI Generated Report</div>
-                <div class="meta"><strong>Date:</strong> ${generatedDate} ${generatedTime}</div>
-              </div>
-            </div>
+        // DRAW PLAIN TEXT (Headings or Paragraphs)
+        if (line.trim() !== '') {
+            // Check if it's a Heading (starts with #)
+            if (line.startsWith('##')) {
+                doc.setFontSize(13);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(0, 0, 0);
+                const text = line.replace(/#/g, '').trim();
+                doc.text(text, 14, currentY);
+                currentY += 8;
+            } 
+            else if (line.startsWith('###')) {
+                doc.setFontSize(11);
+                doc.setFont('helvetica', 'bold');
+                doc.setTextColor(50, 50, 50);
+                const text = line.replace(/#/g, '').trim();
+                doc.text(text, 14, currentY);
+                currentY += 6;
+            }
+            else {
+                // Regular Paragraph
+                doc.setFontSize(10);
+                doc.setFont('helvetica', 'normal');
+                doc.setTextColor(60, 60, 60);
+                const text = line.replace(/\*\*/g, ''); // Remove bold markdown for clean PDF
+                const splitText = doc.splitTextToSize(text, pageWidth - 28);
+                doc.text(splitText, 14, currentY);
+                // Increase Y based on how many lines the text took up
+                currentY += (splitText.length * 5) + 2; 
+            }
+        }
+      }
+    });
 
-            <div class="content">
-              ${marked.parse(report)}
-            </div>
-        </div>
-      `;
-
-      // Hidden Container for Rendering
-      const container = document.createElement('div');
-      container.innerHTML = styledHtml;
-      container.style.position = 'fixed';
-      container.style.top = '0';
-      container.style.left = '0';
-      // Low z-index prevents it from blocking UI, but keeps it "visible" to the renderer
-      container.style.zIndex = '-9999';
-      container.style.background = 'white'; 
-      container.style.width = `${contentWidth}px`; 
-      
-      document.body.appendChild(container);
-
-      // Generate PDF
-      await pdf.html(container, {
-        x: margin.left,
-        y: margin.top,
-        width: contentWidth,
-        windowWidth: contentWidth,
-        // Crucial: This marginBottom ensures auto-paging stops BEFORE hitting the footer area
-        margin: [margin.top, margin.right, margin.bottom, margin.left],
-        autoPaging: 'text', 
-        html2canvas: {
-            scale: 2, // Higher scale = sharper text
-            logging: false,
-            useCORS: true 
-        },
-        callback: (doc) => {
-          // Add Footer to ALL pages
-          const totalPages = doc.getNumberOfPages();
-          const footerFontSize = 9;
-          
-          for (let i = 1; i <= totalPages; i++) {
-            doc.setPage(i);
-            doc.setFontSize(footerFontSize);
-            doc.setTextColor(100); // Gray
-
-            // Divider Line
-            doc.setDrawColor(200); 
-            doc.setLineWidth(0.5);
-            doc.line(margin.left, pdfHeight - 30, pdfWidth - margin.right, pdfHeight - 30);
-
-            // Footer Text
-            const pageText = `Page ${i} of ${totalPages}`;
-            const dateText = `Generated on ${generatedDate}`;
-            
-            // Left aligned date
-            doc.text(dateText, margin.left, pdfHeight - 15);
-            
-            // Right aligned page number
-            const PageTextWidth = doc.getTextWidth(pageText);
-            doc.text(pageText, pdfWidth - margin.right - PageTextWidth, pdfHeight - 15);
-          }
-
-          doc.save(fileName);
-          document.body.removeChild(container);
-        },
-      });
-
-    } catch (error) {
-      console.error('PDF Error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'PDF Failed',
-        description: 'Something went wrong while generating the PDF.',
-      });
+    // Catch-all: If the report ends with a table, draw it
+    if (tableData.length > 0) {
+        const headers = tableData[0];
+        const body = tableData.slice(2);
+        autoTable(doc, {
+            startY: currentY,
+            head: [headers],
+            body: body,
+            theme: 'striped',
+            headStyles: { fillColor: [41, 41, 41] },
+            margin: { left: 14, right: 14 },
+        });
     }
+
+    // --- 3. FOOTER (Page Numbers) ---
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      const footerText = `Page ${i} of ${totalPages} | Generated on ${reportDate}`;
+      const textWidth = doc.getTextWidth(footerText);
+      doc.text(footerText, (pageWidth - textWidth) / 2, pageHeight - 10);
+    }
+
+    // Save
+    doc.save(`Financial_Report_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  // ... (Keep handleDownloadCsv, handleCopy, handleSubmit, etc. exactly as they were)
+  // ===========================================================
+  // CSV EXPORT
+  // ===========================================================
   const handleDownloadCsv = () => {
     if (!report) return;
 
@@ -263,6 +219,7 @@ export function AIReportGenerator() {
     document.body.removeChild(link);
   };
 
+
   const handleCopy = () => {
     if (!report) return;
     navigator.clipboard.writeText(report);
@@ -272,6 +229,9 @@ export function AIReportGenerator() {
     });
   };
 
+  // ===========================================================
+  // SUBMIT AI QUERY
+  // ===========================================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || !user) {
@@ -314,6 +274,7 @@ export function AIReportGenerator() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Query Input */}
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -350,6 +311,7 @@ export function AIReportGenerator() {
         </CardContent>
       </Card>
 
+      {/* Loading Skeleton */}
       {isLoading && (
         <Card>
           <CardHeader>
@@ -363,6 +325,7 @@ export function AIReportGenerator() {
         </Card>
       )}
 
+      {/* Report Output */}
       {report && (
         <Card className="animate-in fade-in-50">
           <CardHeader>
@@ -379,7 +342,8 @@ export function AIReportGenerator() {
                 <Button variant="outline" size="sm" onClick={handleDownloadPdf}>
                   <FileDown className="mr-2 h-4 w-4" /> PDF
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleDownloadCsv}>
+                {/* Fixed: Re-added CSV button logic here if needed, or remove if unused */}
+                 <Button variant="outline" size="sm" onClick={handleDownloadCsv}>
                   <FileDown className="mr-2 h-4 w-4" /> CSV
                 </Button>
               </div>
