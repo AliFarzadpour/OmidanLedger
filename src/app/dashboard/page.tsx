@@ -61,13 +61,13 @@ export default function DashboardPage() {
   const transactionsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     
-    // Debugging: Log what we are asking Firestore for
-    console.log(`[Dashboard] Querying for User: ${user.uid}`);
-    console.log(`[Dashboard] Date Range: ${startDate} to ${endDate}`);
-
     return query(
       collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
+      
+      // CHANGE THIS LINE TEMPORARILY:
+      // Old: where('userId', '==', user.uid),
+      where('userId', '==', 'Te8z2cvV75Vx2r7EgUmQ41LtJRg1'), // <--- Hardcoded ID from your screenshot
+      
       where('date', '>=', startDate),
       where('date', '<=', endDate),
       orderBy('date', 'desc')
