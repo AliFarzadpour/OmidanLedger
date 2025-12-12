@@ -1,14 +1,13 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collectionGroup, query, where, getDocs } from 'firebase/firestore'; // Removed orderBy from import
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore'; 
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
-import { DollarSign, CreditCard, Activity, AlertCircle, RefreshCw } from 'lucide-react';
+import { DollarSign, CreditCard, Activity, AlertCircle, Percent } from 'lucide-react'; // Added Percent Icon
 import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -53,16 +52,14 @@ export default function DashboardPage() {
   const firestore = useFirestore();
   const [filter, setFilter] = useState<FilterOption>('this-month');
   
-  // State for data
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 1. Calculate Date Range
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
   // ------------------------------------------------------------------
-  // 2. DATA FETCHING (The "Diagnostic" Style)
+  // 1. DATA FETCHING (SAFE ZONE - UNCHANGED)
   // ------------------------------------------------------------------
   useEffect(() => {
     async function fetchData() {
@@ -73,10 +70,6 @@ export default function DashboardPage() {
         console.log("🚀 Starting Fetch...");
 
         try {
-            // "NUCLEAR OPTION" QUERY:
-            // 1. No orderBy (Sort in JS)
-            // 2. No date filter (Filter in JS)
-            // 3. Just "Give me my data".
             const q = query(
                 collectionGroup(firestore, 'transactions'),
                 where('userId', '==', user.uid)
@@ -108,13 +101,12 @@ export default function DashboardPage() {
     }
 
     fetchData();
-  }, [user, firestore]); // Only re-run if user/firestore loads
+  }, [user, firestore]); 
 
   // ------------------------------------------------------------------
-  // 3. CLIENT-SIDE FILTERING
+  // 2. CALCULATIONS (Added Profit Margin Here)
   // ------------------------------------------------------------------
-  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown } = useMemo(() => {
-    // Filter by date
+  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown, profitMargin } = useMemo(() => {
     const filtered = allTransactions.filter(tx => {
        return tx.date >= startDate && tx.date <= endDate;
     });
@@ -138,11 +130,18 @@ export default function DashboardPage() {
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
+    // NEW KPI CALCULATION: Profit Margin
+    // Formula: (Net Income / Total Income) * 100
+    // We safeguard against dividing by zero.
+    const net = income + expenses;
+    const margin = income > 0 ? (net / income) * 100 : 0;
+
     return { 
         filteredTransactions: filtered,
         totalIncome: income, 
         totalExpenses: expenses, 
-        netIncome: income + expenses, 
+        netIncome: net,
+        profitMargin: margin, // New Value
         expenseBreakdown 
     };
   }, [allTransactions, startDate, endDate]);
@@ -177,7 +176,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ERROR / EMPTY STATE */}
       {!isLoading && filteredTransactions.length === 0 && (
         <Alert className="bg-blue-50 border-blue-200 text-blue-800">
             <AlertCircle className="h-4 w-4 text-blue-800" />
@@ -202,24 +200,32 @@ export default function DashboardPage() {
          </Alert>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* UPDATED GRID: Changed to allow 4 columns */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Net Income"
           value={netIncome}
-          icon={<Activity className="h-6 w-6 text-primary" />}
           isLoading={isLoading}
+          icon={<Activity className="h-6 w-6 text-primary" />}
+        />
+        <StatCard
+          title="Profit Margin"
+          value={profitMargin}
+          isLoading={isLoading}
+          icon={<Percent className="h-6 w-6 text-blue-500" />}
+          format="percent"
         />
         <StatCard
           title="Total Income"
           value={totalIncome}
-          icon={<DollarSign className="h-6 w-6 text-green-500" />}
           isLoading={isLoading}
+          icon={<DollarSign className="h-6 w-6 text-green-500" />}
         />
         <StatCard
           title="Total Expenses"
           value={totalExpenses}
-          icon={<CreditCard className="h-6 w-6 text-red-500" />}
           isLoading={isLoading}
+          icon={<CreditCard className="h-6 w-6 text-red-500" />}
         />
       </div>
 
