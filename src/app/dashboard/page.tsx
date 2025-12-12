@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
+import { useState, useEffect, useMemo } from 'react';
+import { useUser, useFirestore } from '@/firebase';
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore'; // Removed orderBy from import
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
-import { DollarSign, CreditCard, Activity, AlertCircle } from 'lucide-react';
+import { DollarSign, CreditCard, Activity, AlertCircle, RefreshCw } from 'lucide-react';
 import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -51,45 +51,73 @@ export default function DashboardPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [filter, setFilter] = useState<FilterOption>('this-month');
+  
+  // State for data
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // 1. Calculate the selected Date Range strings (e.g., "2025-11-01")
+  // 1. Calculate Date Range
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
   // ------------------------------------------------------------------
-  // 2. ROBUST QUERY (Fetch All, Filter Later)
+  // 2. DATA FETCHING (The "Diagnostic" Style)
   // ------------------------------------------------------------------
-  // This uses the index we KNOW works: userId + date(desc).
-  // We do NOT filter by date in the database to avoid "Index" errors.
-  const transactionsQuery = useMemoFirebase(() => {
-    if (!user || !firestore) return null;
-    
-    return query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
-      orderBy('date', 'desc')
-    );
-  }, [user, firestore]);
+  useEffect(() => {
+    async function fetchData() {
+        if (!user || !firestore) return;
 
-  const { data: allTransactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
+        setIsLoading(true);
+        setError(null);
+        console.log("🚀 Starting Fetch...");
 
-  // ------------------------------------------------------------------
-  // 3. CLIENT-SIDE FILTERING & STATS
-  // ------------------------------------------------------------------
-  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown } = useMemo(() => {
-    if (!allTransactions) {
-      return { 
-        filteredTransactions: [], 
-        totalIncome: 0, totalExpenses: 0, netIncome: 0, expenseBreakdown: [] 
-      };
+        try {
+            // "NUCLEAR OPTION" QUERY:
+            // 1. No orderBy (Sort in JS)
+            // 2. No date filter (Filter in JS)
+            // 3. Just "Give me my data".
+            const q = query(
+                collectionGroup(firestore, 'transactions'),
+                where('userId', '==', user.uid)
+            );
+
+            const snapshot = await getDocs(q);
+            console.log(`✅ Fetched ${snapshot.size} docs`);
+
+            if (snapshot.empty) {
+                setAllTransactions([]);
+            } else {
+                const data = snapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data()
+                })) as Transaction[];
+                
+                // Sort in memory (Desc Date)
+                data.sort((a, b) => (a.date < b.date ? 1 : -1));
+                
+                setAllTransactions(data);
+            }
+
+        } catch (err: any) {
+            console.error("Fetch Error:", err);
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
     }
 
-    // A. Filter by Date (React handles this instantly)
+    fetchData();
+  }, [user, firestore]); // Only re-run if user/firestore loads
+
+  // ------------------------------------------------------------------
+  // 3. CLIENT-SIDE FILTERING
+  // ------------------------------------------------------------------
+  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown } = useMemo(() => {
+    // Filter by date
     const filtered = allTransactions.filter(tx => {
-       // Ensure we compare strings properly
        return tx.date >= startDate && tx.date <= endDate;
     });
 
-    // B. Calculate Stats based on the FILTERED data
     let income = 0;
     let expenses = 0;
     const breakdownMap = new Map<string, number>();
@@ -116,7 +144,7 @@ export default function DashboardPage() {
         netIncome: income + expenses, 
         expenseBreakdown 
     };
-  }, [allTransactions, startDate, endDate]); // Re-run whenever data OR filter changes
+  }, [allTransactions, startDate, endDate]);
 
   const filterOptions: { label: string, value: FilterOption }[] = [
       { label: 'This Month', value: 'this-month' },
@@ -148,23 +176,28 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Fallback Alert only if genuinely empty (and not loading) */}
-      {!isLoading && (filteredTransactions.length === 0) && (
+      {/* ERROR / EMPTY STATE */}
+      {!isLoading && filteredTransactions.length === 0 && (
         <Alert className="bg-blue-50 border-blue-200 text-blue-800">
             <AlertCircle className="h-4 w-4 text-blue-800" />
             <AlertTitle>No Data in this Period</AlertTitle>
             <AlertDescription className="mt-1 text-xs">
-                We found {allTransactions?.length || 0} total transactions, but none match the date range: 
-                <strong> {startDate} to {endDate}</strong>. Try selecting "This Year".
+                {allTransactions.length > 0 ? (
+                    <span>
+                        We found <strong>{allTransactions.length} total transactions</strong>, but none match the date range 
+                        <strong> {startDate} to {endDate}</strong>. Try "Last Month" or "This Year".
+                    </span>
+                ) : (
+                   <span>No transactions found at all for user <strong>{user?.uid}</strong>.</span>
+                )}
             </AlertDescription>
         </Alert>
       )}
 
-      {/* ERROR DISPLAY */}
       {error && (
          <Alert variant="destructive">
-            <AlertTitle>Error Loading Data</AlertTitle>
-            <AlertDescription>{error.message}</AlertDescription>
+            <AlertTitle>Connection Error</AlertTitle>
+            <AlertDescription>{error}</AlertDescription>
          </Alert>
       )}
 
