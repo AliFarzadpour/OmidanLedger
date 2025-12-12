@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { 
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -43,15 +43,7 @@ function AccountList({
   onRemove: (id: string) => void,
   onChange: (id: string, field: keyof BalanceItem, value: string) => void
 }) {
-  const subtypes = type === 'asset' 
-    ? [
-        { val: 'bank', label: 'Bank Account' },
-        { val: 'cash', label: 'Cash on Hand' },
-        { val: 'receivable', label: 'Unpaid Invoices (Receivable)' },
-        { val: 'inventory', label: 'Inventory Value' },
-        { val: 'asset', label: 'Other Asset' },
-      ]
-    : [
+  const liabilitySubtypes = [
         { val: 'credit_card', label: 'Credit Card Balance' },
         { val: 'loan', label: 'Business Loan' },
         { val: 'payable', label: 'Unpaid Bills (Payable)' },
@@ -72,7 +64,64 @@ function AccountList({
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {subtypes.map(s => <SelectItem key={s.val} value={s.val}>{s.label}</SelectItem>)}
+                  {type === 'asset' ? (
+                     <>
+                        <SelectGroup>
+                            <SelectLabel>💰 Cash & Bank</SelectLabel>
+                            <SelectItem value="checking">Checking</SelectItem>
+                            <SelectItem value="savings">Savings</SelectItem>
+                            <SelectItem value="cash_drawer">Cash Drawer</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>📥 Receivables</SelectLabel>
+                            <SelectItem value="accounts_receivable">Accounts Receivable</SelectItem>
+                            <SelectItem value="insurance_claims_receivable">Insurance Claims Receivable</SelectItem>
+                        </SelectGroup>
+                         <SelectGroup>
+                            <SelectLabel>📦 Inventory</SelectLabel>
+                            <SelectItem value="inventory">Inventory</SelectItem>
+                            <SelectItem value="raw_materials">Raw Materials</SelectItem>
+                            <SelectItem value="work_in_progress">Work in Progress</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>🛠 Fixed Assets</SelectLabel>
+                            <SelectItem value="equipment">Equipment</SelectItem>
+                            <SelectItem value="vehicles">Vehicles</SelectItem>
+                            <SelectItem value="furniture">Furniture</SelectItem>
+                            <SelectItem value="computers">Computers</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>🧾 Prepaids</SelectLabel>
+                            <SelectItem value="prepaid_rent">Prepaid Rent</SelectItem>
+                            <SelectItem value="prepaid_insurance">Prepaid Insurance</SelectItem>
+                            <SelectItem value="prepaid_services">Prepaid Services</SelectItem>
+                        </SelectGroup>
+                         <SelectGroup>
+                            <SelectLabel>📈 Investments</SelectLabel>
+                            <SelectItem value="stocks">Stocks</SelectItem>
+                            <SelectItem value="bonds">Bonds</SelectItem>
+                            <SelectItem value="cds">CDs</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>🏢 Property</SelectLabel>
+                            <SelectItem value="buildings">Buildings</SelectItem>
+                            <SelectItem value="land">Land</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>📚 Intangibles</SelectLabel>
+                            <SelectItem value="software">Software</SelectItem>
+                            <SelectItem value="trademarks">Trademarks</SelectItem>
+                            <SelectItem value="patents">Patents</SelectItem>
+                        </SelectGroup>
+                        <SelectGroup>
+                            <SelectLabel>🔐 Other Assets</SelectLabel>
+                            <SelectItem value="security_deposits">Security Deposits</SelectItem>
+                            <SelectItem value="loans_to_owner">Loans to Owner</SelectItem>
+                        </SelectGroup>
+                     </>
+                  ) : (
+                    liabilitySubtypes.map(s => <SelectItem key={s.val} value={s.val}>{s.label}</SelectItem>)
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -130,7 +179,7 @@ export default function OpeningBalancesWizard() {
       type, 
       name: '', 
       amount: '', 
-      subtype: type === 'asset' ? 'bank' : 'credit_card' 
+      subtype: type === 'asset' ? 'checking' : 'credit_card' 
     }]);
   };
 
@@ -404,3 +453,5 @@ export default function OpeningBalancesWizard() {
     </div>
   );
 }
+
+    
