@@ -58,21 +58,19 @@ export default function DashboardPage() {
   // ------------------------------------------------------------------
   // QUERY LOGIC
   // ------------------------------------------------------------------
+  // REPLACE YOUR CURRENT transactionsQuery WITH THIS:
   const transactionsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    
+
+    console.log("🔍 TESTING SIMPLE QUERY...");
+    console.log("Looking for userId:", user.uid);
+
+    // 1. Simple Query: No dates, no sorting. Just "Is this my data?"
     return query(
       collectionGroup(firestore, 'transactions'),
-      
-      // CHANGE THIS LINE TEMPORARILY:
-      // Old: where('userId', '==', user.uid),
-      where('userId', '==', 'Te8z2cvV75Vx2r7EgUmQ41LtJRg1'), // <--- Hardcoded ID from your screenshot
-      
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
-      orderBy('date', 'desc')
+      where('userId', '==', user.uid) 
     );
-  }, [user, firestore, startDate, endDate]);
+  }, [user, firestore]);
 
   const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
 
@@ -84,11 +82,14 @@ export default function DashboardPage() {
       return { totalIncome: 0, totalExpenses: 0, netIncome: 0, expenseBreakdown: [] };
     }
 
+    // Since the simple query has no date filter, we must filter here manually for the stats.
+    const filteredTransactions = transactions.filter(tx => tx.date >= startDate && tx.date <= endDate);
+
     let income = 0;
     let expenses = 0;
     const breakdownMap = new Map<string, number>();
 
-    transactions.forEach(tx => {
+    filteredTransactions.forEach(tx => {
       const amount = Number(tx.amount); // Force number type safety
       if (amount > 0) {
         income += amount;
@@ -104,7 +105,7 @@ export default function DashboardPage() {
         .sort((a, b) => b.value - a.value); // Sort highest expenses first
 
     return { totalIncome: income, totalExpenses: expenses, netIncome: income + expenses, expenseBreakdown };
-  }, [transactions]);
+  }, [transactions, startDate, endDate]);
 
   const filterOptions: { label: string, value: FilterOption }[] = [
       { label: 'This Month', value: 'this-month' },
@@ -140,12 +141,12 @@ export default function DashboardPage() {
       {!isLoading && transactions?.length === 0 && (
         <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800">
             <AlertCircle className="h-4 w-4 text-yellow-800" />
-            <AlertTitle>No Transactions Found</AlertTitle>
+            <AlertTitle>No Transactions Found (Simplified Query)</AlertTitle>
             <AlertDescription className="mt-2 text-xs font-mono">
-                <p><strong>Diagnosis:</strong> Query returned 0 results.</p>
+                <p><strong>Diagnosis:</strong> The simplest query (no dates/sorting) returned 0 results.</p>
                 <p>1. Logged In User ID: <span className="bg-yellow-200 px-1 rounded">{user?.uid}</span></p>
-                <p>2. Date Filter: {startDate} to {endDate}</p>
-                <p>3. Check your database: Does the transaction document have a field <strong>userId</strong> matching exactly the ID above?</p>
+                <p>2. Please check your Firestore database in the <strong>transactions</strong> collection group. Do any documents have a `userId` field that exactly matches the ID above?</p>
+                <p>3. Common issues: a typo in the `userId` field, or the data belongs to a different user.</p>
                 {error && <p className="mt-2 text-red-600 font-bold">Error: {error.message}</p>}
             </AlertDescription>
         </Alert>
@@ -177,7 +178,7 @@ export default function DashboardPage() {
           <ExpenseChart data={expenseBreakdown} isLoading={isLoading} />
         </div>
         <div className="lg:col-span-3">
-          <RecentTransactions transactions={transactions || []} isLoading={isLoading} />
+          <RecentTransactions transactions={transactions?.filter(tx => tx.date >= startDate && tx.date <= endDate) || []} isLoading={isLoading} />
         </div>
       </div>
     </div>
