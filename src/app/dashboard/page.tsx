@@ -15,6 +15,7 @@ import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, di
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type Transaction = {
   id: string;
@@ -297,5 +298,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-    
