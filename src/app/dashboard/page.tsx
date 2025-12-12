@@ -11,6 +11,7 @@ import { DollarSign, CreditCard, Activity, AlertCircle, Percent } from 'lucide-r
 import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
 
 type Transaction = {
   id: string;
@@ -106,7 +107,7 @@ export default function DashboardPage() {
   // ------------------------------------------------------------------
   // 2. CALCULATIONS (Added Profit Margin Here)
   // ------------------------------------------------------------------
-  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown, profitMargin } = useMemo(() => {
+  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown, profitMargin, cashFlowData } = useMemo(() => {
     const filtered = allTransactions.filter(tx => {
        return tx.date >= startDate && tx.date <= endDate;
     });
@@ -114,21 +115,32 @@ export default function DashboardPage() {
     let income = 0;
     let expenses = 0;
     const breakdownMap = new Map<string, number>();
+    const dailyDataMap = new Map<string, { income: number; expense: number }>();
 
     filtered.forEach(tx => {
       const amount = Number(tx.amount);
+      const date = tx.date;
+      const daily = dailyDataMap.get(date) || { income: 0, expense: 0 };
+      
       if (amount > 0) {
         income += amount;
+        daily.income += amount;
       } else {
         expenses += amount;
+        daily.expense += Math.abs(amount);
         const category = tx.primaryCategory || 'Uncategorized';
         breakdownMap.set(category, (breakdownMap.get(category) || 0) + Math.abs(amount));
       }
+      dailyDataMap.set(date, daily);
     });
 
     const expenseBreakdown = Array.from(breakdownMap.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
+
+    const cashFlowData = Array.from(dailyDataMap.entries())
+        .map(([date, values]) => ({ date, ...values }))
+        .sort((a, b) => a.date.localeCompare(b.date)); 
 
     // NEW KPI CALCULATION: Profit Margin
     // Formula: (Net Income / Total Income) * 100
@@ -142,7 +154,8 @@ export default function DashboardPage() {
         totalExpenses: expenses, 
         netIncome: net,
         profitMargin: margin, // New Value
-        expenseBreakdown 
+        expenseBreakdown,
+        cashFlowData
     };
   }, [allTransactions, startDate, endDate]);
 
@@ -229,14 +242,11 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
-        <div className="lg:col-span-2">
-          <ExpenseChart data={expenseBreakdown} isLoading={isLoading} />
-        </div>
-        <div className="lg:col-span-3">
-          <RecentTransactions transactions={filteredTransactions} isLoading={isLoading} />
-        </div>
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+        <CashFlowChart data={cashFlowData} isLoading={isLoading} />
+        <ExpenseChart data={expenseBreakdown} isLoading={isLoading} />
       </div>
+      <RecentTransactions transactions={filteredTransactions} isLoading={isLoading} />
     </div>
   );
 }
