@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
-import { DollarSign, CreditCard, Landmark, ArrowLeftRight, Activity } from 'lucide-react';
+import { DollarSign, CreditCard, Activity } from 'lucide-react';
 import { startOfMonth, endOfMonth, subMonths, startOfYear, format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
