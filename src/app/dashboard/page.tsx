@@ -1,147 +1,200 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser, useFirestore } from '@/firebase';
-import { collection, collectionGroup, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { useState, useMemo } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
-import { DollarSign, CreditCard, Activity, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { DollarSign, CreditCard, Activity, AlertCircle } from 'lucide-react';
+import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format } from 'date-fns';
+import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+type Transaction = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+  primaryCategory: string;
+  secondaryCategory?: string;
+  subcategory?: string;
+  userId: string;
+};
+
+type FilterOption = 'this-month' | 'last-month' | 'this-year';
+
+const getDateRange = (filter: FilterOption) => {
+  const now = new Date();
+  switch (filter) {
+    case 'this-month':
+      return {
+        startDate: format(startOfMonth(now), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
+      };
+    case 'last-month':
+      const lastMonth = subMonths(now, 1);
+      return {
+        startDate: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
+        endDate: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
+      };
+    case 'this-year':
+      return {
+        startDate: format(startOfYear(now), 'yyyy-MM-dd'),
+        endDate: format(endOfYear(now), 'yyyy-MM-dd'),
+      };
+  }
+};
 
 export default function DashboardPage() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [debugStatus, setDebugStatus] = useState<string>('Initializing...');
-  const [transactions, setTransactions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [filter, setFilter] = useState<FilterOption>('this-month');
 
-  // ---------------------------------------------------------------------------
-  // 🔍 DIAGNOSTIC FETCHER
-  // ---------------------------------------------------------------------------
-  useEffect(() => {
-    async function runDiagnostics() {
-      if (!user || !firestore) return;
-      setIsLoading(true);
-      setDebugStatus('Starting diagnostics...');
+  // 1. Calculate the selected Date Range strings (e.g., "2025-11-01")
+  const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
-      try {
-        // STEP 1: Try the Global Query (The one we want to work)
-        // We removed the date filter to simplify it for this test.
-        const globalQuery = query(
-          collectionGroup(firestore, 'transactions'),
-          where('userId', '==', user.uid),
-          orderBy('date', 'desc')
-        );
-
-        const globalSnap = await getDocs(globalQuery);
-        console.log(`[Global Query] Found ${globalSnap.size} docs.`);
-
-        if (!globalSnap.empty) {
-          setDebugStatus(`✅ SUCCESS: Found ${globalSnap.size} transactions via Global Query.`);
-          const data = globalSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-          setTransactions(data);
-          setIsLoading(false);
-          return;
-        }
-
-        // STEP 2: If Global failed, try "Direct Path" (Drilling down manually)
-        // This verifies if the data exists but the "Collection Group" index/rule is blocking it.
-        setDebugStatus('⚠️ Global query empty. Attempting Direct Path search...');
-        
-        // A. Get Bank Accounts first
-        const banksRef = collection(firestore, 'users', user.uid, 'bankAccounts');
-        const banksSnap = await getDocs(banksRef);
-
-        if (banksSnap.empty) {
-          setDebugStatus('❌ ERROR: No Bank Accounts found. Please add a bank account first.');
-          setIsLoading(false);
-          return;
-        }
-
-        // B. Search inside the first bank account found
-        let foundDocs: any[] = [];
-        for (const bankDoc of banksSnap.docs) {
-          const txRef = collection(firestore, 'users', user.uid, 'bankAccounts', bankDoc.id, 'transactions');
-          // Simple fetch without ordering to test raw access
-          const txSnap = await getDocs(txRef);
-          if (!txSnap.empty) {
-            const docs = txSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-            foundDocs = [...foundDocs, ...docs];
-          }
-        }
-
-        if (foundDocs.length > 0) {
-          setDebugStatus(`⚠️ PARTIAL SUCCESS: Found ${foundDocs.length} docs via Direct Path, but Global Query failed. This means your Index or Security Rule is still stuck.`);
-          setTransactions(foundDocs);
-        } else {
-          setDebugStatus('❌ NO DATA: Found Bank Account, but it has 0 transactions inside.');
-        }
-
-      } catch (err: any) {
-        console.error("Diagnostic Error:", err);
-        setDebugStatus(`❌ CRITICAL ERROR: ${err.message}`);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    runDiagnostics();
+  // ------------------------------------------------------------------
+  // 2. ROBUST QUERY (Fetch All, Filter Later)
+  // ------------------------------------------------------------------
+  // This uses the index we KNOW works: userId + date(desc).
+  // We do NOT filter by date in the database to avoid "Index" errors.
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    
+    return query(
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', user.uid),
+      orderBy('date', 'desc')
+    );
   }, [user, firestore]);
 
-  // ---------------------------------------------------------------------------
-  // CALCULATIONS (Simplified for Debugging)
-  // ---------------------------------------------------------------------------
-  const stats = transactions.reduce((acc, tx) => {
-    const amt = Number(tx.amount) || 0;
-    if (amt > 0) acc.income += amt;
-    else {
-      acc.expenses += amt;
-      const cat = tx.primaryCategory || 'Uncategorized';
-      acc.breakdown[cat] = (acc.breakdown[cat] || 0) + Math.abs(amt);
+  const { data: allTransactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
+
+  // ------------------------------------------------------------------
+  // 3. CLIENT-SIDE FILTERING & STATS
+  // ------------------------------------------------------------------
+  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown } = useMemo(() => {
+    if (!allTransactions) {
+      return { 
+        filteredTransactions: [], 
+        totalIncome: 0, totalExpenses: 0, netIncome: 0, expenseBreakdown: [] 
+      };
     }
-    return acc;
-  }, { income: 0, expenses: 0, breakdown: {} as Record<string, number> });
 
-  const expenseData = Object.entries(stats.breakdown)
-    .map(([name, value]) => ({ name, value: Number(value) }))
-    .sort((a, b) => b.value - a.value);
+    // A. Filter by Date (React handles this instantly)
+    const filtered = allTransactions.filter(tx => {
+       // Ensure we compare strings properly
+       return tx.date >= startDate && tx.date <= endDate;
+    });
 
-  // ---------------------------------------------------------------------------
+    // B. Calculate Stats based on the FILTERED data
+    let income = 0;
+    let expenses = 0;
+    const breakdownMap = new Map<string, number>();
+
+    filtered.forEach(tx => {
+      const amount = Number(tx.amount);
+      if (amount > 0) {
+        income += amount;
+      } else {
+        expenses += amount;
+        const category = tx.primaryCategory || 'Uncategorized';
+        breakdownMap.set(category, (breakdownMap.get(category) || 0) + Math.abs(amount));
+      }
+    });
+
+    const expenseBreakdown = Array.from(breakdownMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value);
+
+    return { 
+        filteredTransactions: filtered,
+        totalIncome: income, 
+        totalExpenses: expenses, 
+        netIncome: income + expenses, 
+        expenseBreakdown 
+    };
+  }, [allTransactions, startDate, endDate]); // Re-run whenever data OR filter changes
+
+  const filterOptions: { label: string, value: FilterOption }[] = [
+      { label: 'This Month', value: 'this-month' },
+      { label: 'Last Month', value: 'last-month' },
+      { label: 'This Year', value: 'this-year' },
+  ]
+
+  // ------------------------------------------------------------------
   // RENDER
-  // ---------------------------------------------------------------------------
+  // ------------------------------------------------------------------
   return (
     <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Financial Dashboard</h1>
-        
-        {/* DIAGNOSTIC PANEL */}
-        <Alert variant={debugStatus.includes('✅') ? 'default' : 'destructive'} className={debugStatus.includes('✅') ? "bg-green-50 border-green-200" : "bg-yellow-50 border-yellow-200"}>
-          {debugStatus.includes('✅') ? <CheckCircle2 className="h-4 w-4 text-green-600"/> : <AlertTriangle className="h-4 w-4 text-yellow-600"/>}
-          <AlertTitle className={debugStatus.includes('✅') ? "text-green-800" : "text-yellow-800"}>
-            Diagnostic Status
-          </AlertTitle>
-          <AlertDescription className="mt-2 font-mono text-xs">
-            {debugStatus}
-            <br/>
-            Logged In User: {user?.uid}
-          </AlertDescription>
-        </Alert>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Welcome Back, {user?.email?.split('@')[0] || 'User'}!</h1>
+          <p className="text-muted-foreground">Here&apos;s a summary of your financial activity.</p>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg bg-muted p-1">
+            {filterOptions.map(opt => (
+                <Button 
+                    key={opt.value}
+                    variant={filter === opt.value ? 'default' : 'ghost'}
+                    onClick={() => setFilter(opt.value)}
+                    className={cn("w-full transition-all", filter === opt.value && "shadow-sm")}
+                >
+                    {opt.label}
+                </Button>
+            ))}
+        </div>
       </div>
 
+      {/* Fallback Alert only if genuinely empty (and not loading) */}
+      {!isLoading && (filteredTransactions.length === 0) && (
+        <Alert className="bg-blue-50 border-blue-200 text-blue-800">
+            <AlertCircle className="h-4 w-4 text-blue-800" />
+            <AlertTitle>No Data in this Period</AlertTitle>
+            <AlertDescription className="mt-1 text-xs">
+                We found {allTransactions?.length || 0} total transactions, but none match the date range: 
+                <strong> {startDate} to {endDate}</strong>. Try selecting "This Year".
+            </AlertDescription>
+        </Alert>
+      )}
+
+      {/* ERROR DISPLAY */}
+      {error && (
+         <Alert variant="destructive">
+            <AlertTitle>Error Loading Data</AlertTitle>
+            <AlertDescription>{error.message}</AlertDescription>
+         </Alert>
+      )}
+
       <div className="grid gap-4 md:grid-cols-3">
-        <StatCard title="Net Income" value={stats.income + stats.expenses} icon={<Activity className="h-6 w-6 text-primary" />} isLoading={isLoading} />
-        <StatCard title="Total Income" value={stats.income} icon={<DollarSign className="h-6 w-6 text-green-500" />} isLoading={isLoading} />
-        <StatCard title="Total Expenses" value={stats.expenses} icon={<CreditCard className="h-6 w-6 text-red-500" />} isLoading={isLoading} />
+        <StatCard
+          title="Net Income"
+          value={netIncome}
+          icon={<Activity className="h-6 w-6 text-primary" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Total Income"
+          value={totalIncome}
+          icon={<DollarSign className="h-6 w-6 text-green-500" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Total Expenses"
+          value={totalExpenses}
+          icon={<CreditCard className="h-6 w-6 text-red-500" />}
+          isLoading={isLoading}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
         <div className="lg:col-span-2">
-          <ExpenseChart data={expenseData} isLoading={isLoading} />
+          <ExpenseChart data={expenseBreakdown} isLoading={isLoading} />
         </div>
-        <div className="lg-col-span-3">
-          <RecentTransactions transactions={transactions} isLoading={isLoading} />
+        <div className="lg:col-span-3">
+          <RecentTransactions transactions={filteredTransactions} isLoading={isLoading} />
         </div>
       </div>
     </div>
