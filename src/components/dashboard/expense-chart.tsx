@@ -1,74 +1,81 @@
 'use client';
 
-import { Pie, PieChart, Cell } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-} from '@/components/ui/chart';
-import { Skeleton } from '@/components/ui/skeleton';
 
-const chartColors = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
+const COLORS = [
+  '#2563eb', // Blue
+  '#16a34a', // Green
+  '#db2777', // Pink
+  '#ea580c', // Orange
+  '#9333ea', // Purple
+  '#0891b2', // Cyan
+  '#ca8a04', // Yellow
+  '#4b5563', // Grey (for Others)
 ];
 
-interface ExpenseChartProps {
-    data: { name: string; value: number }[];
-    isLoading?: boolean;
-}
+type ExpenseChartProps = {
+  data: { name: string; value: number }[];
+  isLoading: boolean;
+};
 
 export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
-  const chartConfig = data.reduce((acc, item, index) => {
-    acc[item.name] = {
-      label: item.name,
-      color: chartColors[index % chartColors.length],
-    };
-    return acc;
-  }, {} as any);
-
-  const chartData = data.map((item, index) => ({
-      ...item,
-      fill: chartColors[index % chartColors.length],
-  }))
+  // Prevent graph from breaking if data is empty
+  const hasData = data && data.length > 0;
 
   return (
-    <Card className="flex h-full flex-col shadow-lg">
+    <Card className="col-span-1">
       <CardHeader>
         <CardTitle>Expense Breakdown</CardTitle>
-        <CardDescription>A summary of your expenses by primary category.</CardDescription>
+        <CardDescription>
+          Where your money went during this period.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 pb-0">
-        {isLoading ? (
-          <div className="flex items-center justify-center h-full aspect-square max-h-[300px] mx-auto">
-            <Skeleton className="h-full w-full rounded-full" />
-          </div>
-        ) : data.length > 0 ? (
-          <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[300px]">
-            <PieChart>
-              <ChartTooltip content={<ChartTooltipContent nameKey="name" hideLabel />} />
-              <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={60}>
-                {chartData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <ChartLegend
-                content={<ChartLegendContent nameKey="name" />}
-                className="-translate-y-2 flex-wrap gap-2 [&>*]:basis-1/4 [&>*]:justify-center"
-              />
-            </PieChart>
-          </ChartContainer>
-        ) : (
-          <div className="flex h-full min-h-[250px] items-center justify-center">
-            <p className="text-sm text-muted-foreground">No expense data for this period.</p>
-          </div>
-        )}
+      <CardContent>
+        <div className="h-[300px] w-full">
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center text-muted-foreground">
+              Loading chart...
+            </div>
+          ) : !hasData ? (
+            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+              <p>No expense data available</p>
+              <p className="text-xs">Try selecting a different date range.</p>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={data}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60} // Makes it a Donut Chart
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {data.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={COLORS[index % COLORS.length]} 
+                      strokeWidth={0}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip 
+                  formatter={(value: number) => [`$${value.toLocaleString()}`, 'Amount']}
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                />
+                <Legend 
+                  layout="vertical" 
+                  verticalAlign="middle" 
+                  align="right"
+                  wrapperStyle={{ fontSize: '12px' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
