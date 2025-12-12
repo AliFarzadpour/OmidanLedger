@@ -13,12 +13,14 @@ import {
   Settings,
   BookCopy,
   BookUser,
+  Briefcase,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 
 const menuItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/dashboard/sales', label: 'Sales Hub', icon: Briefcase },
   { href: '/dashboard/transactions', label: 'Transactions', icon: ArrowLeftRight },
   // The 'Accounts' page can be re-purposed later for bank accounts
   // { href: '/dashboard/accounts', label: 'Accounts', icon: Wallet },
