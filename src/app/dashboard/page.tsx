@@ -6,12 +6,15 @@ import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
+import { CashFlowChart } from '@/components/dashboard/cash-flow-chart'; // NEW IMPORT
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
-import { DollarSign, CreditCard, Activity, AlertCircle, Percent } from 'lucide-react'; // Added Percent Icon
-import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format } from 'date-fns';
+import { 
+  DollarSign, CreditCard, Activity, AlertCircle, Percent, Flame, ShoppingBag 
+} from 'lucide-react';
+import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 
 type Transaction = {
   id: string;
@@ -59,40 +62,26 @@ export default function DashboardPage() {
 
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
-  // ------------------------------------------------------------------
-  // 1. DATA FETCHING (SAFE ZONE - UNCHANGED)
-  // ------------------------------------------------------------------
+  // 1. DATA FETCHING (Unchanged - Safe)
   useEffect(() => {
     async function fetchData() {
         if (!user || !firestore) return;
-
         setIsLoading(true);
         setError(null);
-        console.log("🚀 Starting Fetch...");
 
         try {
             const q = query(
                 collectionGroup(firestore, 'transactions'),
                 where('userId', '==', user.uid)
             );
-
             const snapshot = await getDocs(q);
-            console.log(`✅ Fetched ${snapshot.size} docs`);
-
             if (snapshot.empty) {
                 setAllTransactions([]);
             } else {
-                const data = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })) as Transaction[];
-                
-                // Sort in memory (Desc Date)
+                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
                 data.sort((a, b) => (a.date < b.date ? 1 : -1));
-                
                 setAllTransactions(data);
             }
-
         } catch (err: any) {
             console.error("Fetch Error:", err);
             setError(err.message);
@@ -100,60 +89,75 @@ export default function DashboardPage() {
             setIsLoading(false);
         }
     }
-
     fetchData();
   }, [user, firestore]); 
 
-  // ------------------------------------------------------------------
-  // 2. CALCULATIONS (Added Profit Margin Here)
-  // ------------------------------------------------------------------
-  const { filteredTransactions, totalIncome, totalExpenses, netIncome, expenseBreakdown, profitMargin, cashFlowData } = useMemo(() => {
-    const filtered = allTransactions.filter(tx => {
-       return tx.date >= startDate && tx.date <= endDate;
-    });
+  // 2. CALCULATIONS (Added New KPIs)
+  const stats = useMemo(() => {
+    const filtered = allTransactions.filter(tx => tx.date >= startDate && tx.date <= endDate);
 
     let income = 0;
     let expenses = 0;
     const breakdownMap = new Map<string, number>();
-    const dailyDataMap = new Map<string, { income: number; expense: number }>();
+    const cashFlowMap = new Map<string, { income: number, expense: number }>();
+    const vendorMap = new Map<string, number>();
 
     filtered.forEach(tx => {
       const amount = Number(tx.amount);
-      const date = tx.date;
-      const daily = dailyDataMap.get(date) || { income: 0, expense: 0 };
-      
+      const dateKey = tx.date; // YYYY-MM-DD
+
+      // Initialize daily map
+      if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
+      const dayStats = cashFlowMap.get(dateKey)!;
+
       if (amount > 0) {
         income += amount;
-        daily.income += amount;
+        dayStats.income += amount;
       } else {
         expenses += amount;
-        daily.expense += Math.abs(amount);
+        dayStats.expense += Math.abs(amount);
+        
+        // Category Logic
         const category = tx.primaryCategory || 'Uncategorized';
         breakdownMap.set(category, (breakdownMap.get(category) || 0) + Math.abs(amount));
+
+        // Vendor Logic (Clean the description string slightly for grouping)
+        const vendor = tx.description?.trim() || 'Unknown';
+        vendorMap.set(vendor, (vendorMap.get(vendor) || 0) + Math.abs(amount));
       }
-      dailyDataMap.set(date, daily);
     });
 
+    // KPI 1: Profit Margin
+    const margin = income > 0 ? (income + expenses) / income * 100 : 0;
+
+    // KPI 2: Burn Rate (Avg Daily Spend)
+    const days = Math.max(1, differenceInDays(new Date(endDate), new Date(startDate)) + 1);
+    const burnRate = Math.abs(expenses) / days;
+
+    // KPI 3: Top Vendors
+    const topVendors = Array.from(vendorMap.entries())
+        .map(([name, value]) => ({ name, value }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 5); // Top 5
+
+    // Chart Data Preparation
     const expenseBreakdown = Array.from(breakdownMap.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
-    const cashFlowData = Array.from(dailyDataMap.entries())
-        .map(([date, values]) => ({ date, ...values }))
-        .sort((a, b) => a.date.localeCompare(b.date)); 
-
-    // NEW KPI CALCULATION: Profit Margin
-    // Formula: (Net Income / Total Income) * 100
-    // We safeguard against dividing by zero.
-    const net = income + expenses;
-    const margin = income > 0 ? (net / income) * 100 : 0;
+    // Cash Flow Chart Data (Sorted by date)
+    const cashFlowData = Array.from(cashFlowMap.entries())
+        .map(([date, val]) => ({ date, ...val }))
+        .sort((a, b) => (a.date > b.date ? 1 : -1));
 
     return { 
         filteredTransactions: filtered,
         totalIncome: income, 
         totalExpenses: expenses, 
-        netIncome: net,
-        profitMargin: margin, // New Value
+        netIncome: income + expenses,
+        profitMargin: margin,
+        burnRate,
+        topVendors,
         expenseBreakdown,
         cashFlowData
     };
@@ -169,7 +173,7 @@ export default function DashboardPage() {
   // RENDER
   // ------------------------------------------------------------------
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8 pb-10">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Welcome Back, {user?.email?.split('@')[0] || 'User'}!</h1>
@@ -189,64 +193,109 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {!isLoading && filteredTransactions.length === 0 && (
+      {!isLoading && stats.filteredTransactions.length === 0 && (
         <Alert className="bg-blue-50 border-blue-200 text-blue-800">
             <AlertCircle className="h-4 w-4 text-blue-800" />
-            <AlertTitle>No Data in this Period</AlertTitle>
+            <AlertTitle>No Data for {startDate} to {endDate}</AlertTitle>
             <AlertDescription className="mt-1 text-xs">
-                {allTransactions.length > 0 ? (
-                    <span>
-                        We found <strong>{allTransactions.length} total transactions</strong>, but none match the date range 
-                        <strong> {startDate} to {endDate}</strong>. Try "Last Month" or "This Year".
-                    </span>
-                ) : (
-                   <span>No transactions found at all for user <strong>{user?.uid}</strong>.</span>
-                )}
+                We found {allTransactions.length} total transactions, but none in this period. 
             </AlertDescription>
         </Alert>
       )}
 
-      {error && (
-         <Alert variant="destructive">
-            <AlertTitle>Connection Error</AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
-         </Alert>
-      )}
-
-      {/* UPDATED GRID: Changed to allow 4 columns */}
+      {/* KPI GRID */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatCard
           title="Net Income"
-          value={netIncome}
-          isLoading={isLoading}
+          value={stats.netIncome}
           icon={<Activity className="h-6 w-6 text-primary" />}
+          isLoading={isLoading}
         />
         <StatCard
           title="Profit Margin"
-          value={profitMargin}
-          isLoading={isLoading}
-          icon={<Percent className="h-6 w-6 text-blue-500" />}
+          value={stats.profitMargin}
           format="percent"
+          icon={<Percent className="h-6 w-6 text-blue-500" />}
+          isLoading={isLoading}
         />
         <StatCard
-          title="Total Income"
-          value={totalIncome}
+          title="Daily Burn Rate"
+          value={stats.burnRate} // Will format as currency
+          icon={<Flame className="h-6 w-6 text-orange-500" />}
           isLoading={isLoading}
-          icon={<DollarSign className="h-6 w-6 text-green-500" />}
         />
         <StatCard
           title="Total Expenses"
-          value={totalExpenses}
-          isLoading={isLoading}
+          value={stats.totalExpenses}
           icon={<CreditCard className="h-6 w-6 text-red-500" />}
+          isLoading={isLoading}
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
-        <CashFlowChart data={cashFlowData} isLoading={isLoading} />
-        <ExpenseChart data={expenseBreakdown} isLoading={isLoading} />
+      {/* CHARTS ROW */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+        {/* NEW: Cash Flow Bar Chart */}
+        <div className="lg:col-span-3">
+          <CashFlowChart data={stats.cashFlowData} isLoading={isLoading} />
+        </div>
+        {/* EXISTING: Expense Pie Chart */}
+        <div className="lg:col-span-2">
+          <ExpenseChart data={stats.expenseBreakdown} isLoading={isLoading} />
+        </div>
       </div>
-      <RecentTransactions transactions={filteredTransactions} isLoading={isLoading} />
+
+      {/* BOTTOM ROW: Recent Tx + Top Vendors */}
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <RecentTransactions transactions={stats.filteredTransactions} isLoading={isLoading} />
+        </div>
+        
+        {/* NEW: Top Vendors Card */}
+        <div className="lg:col-span-2">
+            <Card className="h-full">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <ShoppingBag className="h-5 w-5 text-purple-500" />
+                        Top Vendors
+                    </CardTitle>
+                    <CardDescription>Who you paid the most.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-4">
+                        {isLoading ? (
+                            [...Array(5)].map((_, i) => (
+                                <div key={i} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <Skeleton className="h-8 w-8 rounded-full" />
+                                        <Skeleton className="h-5 w-24" />
+                                    </div>
+                                    <Skeleton className="h-5 w-16" />
+                                </div>
+                            ))
+                        ) : stats.topVendors.length > 0 ? (
+                            stats.topVendors.map((v, i) => (
+                                <div key={i} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
+                                            {i + 1}
+                                        </div>
+                                        <span className="text-sm font-medium truncate max-w-[150px]">{v.name}</span>
+                                    </div>
+                                    <span className="text-sm font-mono text-slate-600">
+                                        ${v.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </span>
+                                </div>
+                            ))
+                        ) : (
+                           <p className="text-sm text-muted-foreground">No expenses found.</p>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
+      </div>
     </div>
   );
 }
+
+    
