@@ -12,6 +12,7 @@ import {
   Target,
   Settings,
   BookCopy,
+  BookUser,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -23,6 +24,7 @@ const menuItems = [
   // { href: '/dashboard/accounts', label: 'Accounts', icon: Wallet },
   { href: '/dashboard/reports', label: 'Reports', icon: BookCopy },
   // { href: '/dashboard/budgets', label: 'Budgets', icon: Target },
+  { href: '/dashboard/onboarding/opening-balances', label: 'Opening Balances', icon: BookUser },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
