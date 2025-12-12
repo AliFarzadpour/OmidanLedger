@@ -89,7 +89,20 @@ export function BusinessProfileForm() {
 
   useEffect(() => {
     if (userData?.businessProfile) {
-      form.reset(userData.businessProfile);
+      // Ensure all fields are at least empty strings
+      const profile = userData.businessProfile;
+      form.reset({
+        businessName: profile.businessName || '',
+        businessType: profile.businessType || '',
+        industry: profile.industry || '',
+        taxId: profile.taxId || '',
+        address: profile.address || '',
+        city: profile.city || '',
+        state: profile.state || '',
+        zip: profile.zip || '',
+        country: profile.country || 'USA',
+        logoUrl: profile.logoUrl || '',
+      });
     }
   }, [userData, form]);
 
@@ -233,7 +246,7 @@ export function BusinessProfileForm() {
                   <FormItem>
                     <FormLabel>Business Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., Acme Inc." {...field} value={field.value || ''}/>
+                      <Input placeholder="e.g., Acme Inc." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -245,7 +258,7 @@ export function BusinessProfileForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                             <SelectTrigger>
                             <SelectValue placeholder="Select a business type" />
@@ -273,7 +286,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>Industry</FormLabel>
                         <FormControl>
-                        <Input placeholder="e.g., Software, Retail" {...field} value={field.value || ''} />
+                        <Input placeholder="e.g., Software, Retail" {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -286,7 +299,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>Tax ID / EIN</FormLabel>
                         <FormControl>
-                        <Input placeholder="XX-XXXXXXX" {...field} value={field.value || ''} />
+                        <Input placeholder="XX-XXXXXXX" {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -300,7 +313,7 @@ export function BusinessProfileForm() {
                   <FormItem>
                     <FormLabel>Street Address</FormLabel>
                     <FormControl>
-                      <Input placeholder="123 Main St" {...field} value={field.value || ''} />
+                      <Input placeholder="123 Main St" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -314,7 +327,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>City</FormLabel>
                         <FormControl>
-                        <Input placeholder="San Francisco" {...field} value={field.value || ''} />
+                        <Input placeholder="San Francisco" {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -327,7 +340,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>State / Province</FormLabel>
                         <FormControl>
-                        <Input placeholder="CA" {...field} value={field.value || ''} />
+                        <Input placeholder="CA" {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
@@ -340,7 +353,7 @@ export function BusinessProfileForm() {
                     <FormItem>
                         <FormLabel>ZIP / Postal Code</FormLabel>
                         <FormControl>
-                        <Input placeholder="94103" {...field} value={field.value || ''} />
+                        <Input placeholder="94103" {...field} />
                         </FormControl>
                         <FormMessage />
                     </FormItem>
