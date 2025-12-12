@@ -67,10 +67,10 @@ export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                 />
                 <Legend 
-                  layout="vertical" 
-                  verticalAlign="middle" 
-                  align="right"
-                  wrapperStyle={{ fontSize: '12px' }}
+                  layout="horizontal" 
+                  verticalAlign="bottom" 
+                  align="center"
+                  wrapperStyle={{ fontSize: '12px', paddingTop: '20px' }}
                 />
               </PieChart>
             </ResponsiveContainer>
