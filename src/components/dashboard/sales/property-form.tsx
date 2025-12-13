@@ -1,286 +1,420 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useState } from 'react';
+import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
+import { 
+  Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark 
+} from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
-import { collection, doc, setDoc, addDoc, serverTimestamp, DocumentReference } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, setDoc, collection } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
 
-const numberPreprocess = (val: any) => parseFloat(String(val).replace(/,/g, '')) || 0;
-
+// --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
-  name: z.string().min(1, 'Property name is required.'),
+  name: z.string().min(1, "Nickname is required"),
   address: z.object({
-    street: z.string().min(1, 'Street address is required.'),
-    city: z.string().min(1, 'City is required.'),
-    state: z.string().min(1, 'State is required.'),
-    zip: z.string().min(1, 'ZIP code is required.'),
-    country: z.string().optional(),
+    street: z.string().min(1),
+    city: z.string().min(1),
+    state: z.string().min(2),
+    zip: z.string().min(5),
   }),
   financials: z.object({
-    targetRent: z.preprocess(numberPreprocess, z.number().positive().optional()),
-    securityDeposit: z.preprocess(numberPreprocess, z.number().positive().optional()),
-    mortgagePayment: z.preprocess(numberPreprocess, z.number().positive().optional()),
+    targetRent: z.coerce.number().min(0),
+    securityDeposit: z.coerce.number().min(0),
   }),
-  specs: z.object({
-    units: z.preprocess(numberPreprocess, z.number().int().positive().optional()),
-    type: z.enum(['Residential', 'Commercial', 'Industrial', 'Land', 'Other']).optional(),
+  mortgage: z.object({
+    hasMortgage: z.enum(['yes', 'no']),
+    lenderName: z.string().optional(),
+    monthlyPayment: z.coerce.number().optional(),
+    interestRate: z.coerce.number().optional(),
   }),
+  hoa: z.object({
+    hasHoa: z.enum(['yes', 'no']),
+    fee: z.coerce.number().optional(),
+    frequency: z.enum(['monthly', 'quarterly', 'annually']).optional(),
+    contactPhone: z.string().optional(),
+  }),
+  utilities: z.object({
+    water: z.enum(['tenant', 'landlord']),
+    electric: z.enum(['tenant', 'landlord']),
+    gas: z.enum(['tenant', 'landlord']),
+    trash: z.enum(['tenant', 'landlord']),
+  }),
+  access: z.object({
+    gateCode: z.string().optional(),
+    lockboxCode: z.string().optional(),
+    notes: z.string().optional(),
+  }),
+  preferredVendors: z.array(z.object({
+    role: z.string(),
+    name: z.string(),
+    phone: z.string(),
+  })).optional(),
 });
 
-export type Property = z.infer<typeof propertySchema> & { id?: string, userId?: string };
-
-interface PropertyFormProps {
-  property?: Property | null;
-  onSave: (property: Property) => void;
-  onCancel: () => void;
-}
-
-export function PropertyForm({ property, onSave, onCancel }: PropertyFormProps) {
+// --- MAIN COMPONENT ---
+export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeSection, setActiveSection] = useState("general");
+  const [isSaving, setIsSaving] = useState(false);
 
-  const form = useForm<Property>({
+  const form = useForm({
     resolver: zodResolver(propertySchema),
     defaultValues: {
       name: '',
-      address: { street: '', city: '', state: '', zip: '', country: 'USA' },
-      financials: { targetRent: 0, securityDeposit: 0, mortgagePayment: 0 },
-      specs: { units: 1, type: 'Residential' },
-    },
-  });
-  
-  useEffect(() => {
-    if (property) {
-      form.reset(property);
-    } else {
-      form.reset({
-        name: '',
-        address: { street: '', city: '', state: '', zip: '', country: 'USA' },
-        financials: { targetRent: 0, securityDeposit: 0, mortgagePayment: 0 },
-        specs: { units: 1, type: 'Residential' },
-      });
+      address: { street: '', city: '', state: '', zip: '' },
+      financials: { targetRent: 0, securityDeposit: 0 },
+      mortgage: { hasMortgage: 'no' as 'yes' | 'no', lenderName: '', monthlyPayment: 0, interestRate: 0 },
+      hoa: { hasHoa: 'no' as 'yes' | 'no', fee: 0, frequency: 'monthly' as 'monthly' | 'quarterly' | 'annually', contactPhone: '' },
+      utilities: { water: 'tenant' as 'tenant' | 'landlord', electric: 'tenant' as 'tenant' | 'landlord', gas: 'tenant' as 'tenant' | 'landlord', trash: 'tenant' as 'tenant' | 'landlord' },
+      access: { gateCode: '', lockboxCode: '', notes: '' },
+      preferredVendors: [{ role: 'Handyman', name: '', phone: '' }]
     }
-  }, [property, form]);
+  });
 
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "preferredVendors"
+  });
 
-  const onSubmit = async (values: Property) => {
+  const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
-    setIsSubmitting(true);
-    
-    const isEditing = !!property?.id;
-    
-    const propertyData = {
-      ...values,
-      userId: user.uid,
-    };
-
-    const handleError = (error: any) => {
-      console.error('Error saving property:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Save Failed',
-        description: 'An unexpected error occurred while saving the property.',
+    setIsSaving(true);
+    try {
+      const newRef = doc(collection(firestore, 'properties'));
+      // Flatten the structure slightly if needed, or keep nested
+      await setDoc(newRef, {
+        id: newRef.id,
+        userId: user.uid,
+        status: 'vacant',
+        createdAt: new Date().toISOString(),
+        ...data
       });
-
-      // Emit the contextual error
-      const permissionError = new FirestorePermissionError({
-        path: isEditing ? `properties/${property.id}` : 'properties',
-        operation: isEditing ? 'update' : 'create',
-        requestResourceData: propertyData,
-      });
-      errorEmitter.emit('permission-error', permissionError);
-    };
-
-    const handleSuccess = (docId: string) => {
-       const savedProperty = { ...propertyData, id: docId };
-       toast({
-        title: isEditing ? 'Property Updated' : 'Property Added',
-        description: `${values.name} has been saved successfully.`,
-      });
-      onSave(savedProperty);
-    };
-
-    if (isEditing) {
-        const docRef = doc(firestore, 'properties', property.id!);
-        setDoc(docRef, {...propertyData, updatedAt: serverTimestamp()}, { merge: true })
-            .then(() => handleSuccess(property.id!))
-            .catch(handleError)
-            .finally(() => setIsSubmitting(false));
-    } else {
-        const collRef = collection(firestore, 'properties');
-        addDoc(collRef, {...propertyData, createdAt: serverTimestamp()})
-            .then((docRef) => handleSuccess(docRef.id))
-            .catch(handleError)
-            .finally(() => setIsSubmitting(false));
+      toast({ title: "Property Saved", description: "All details recorded successfully." });
+      if (onSuccess) onSuccess();
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsSaving(false);
     }
   };
 
+  // --- NAVIGATION ITEMS ---
+  const navItems = [
+    { id: 'general', label: 'General Info', icon: Building2 },
+    { id: 'financials', label: 'Rent & Mortgage', icon: DollarSign },
+    { id: 'hoa', label: 'HOA & Fees', icon: Landmark },
+    { id: 'utilities', label: 'Utilities', icon: Zap },
+    { id: 'access', label: 'Access & Keys', icon: Key },
+    { id: 'vendors', label: 'Preferred Vendors', icon: Users },
+  ];
+
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <Tabs defaultValue="general" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="financials">Financials</TabsTrigger>
-            <TabsTrigger value="ops">Operational</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="general" className="space-y-4 pt-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Property Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 123 Main St Duplex" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="address.street"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Street Address</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-3 gap-4">
-                <FormField
-                    control={form.control}
-                    name="address.city"
-                    render={({ field }) => (
-                        <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="address.state"
-                    render={({ field }) => (
-                        <FormItem><FormLabel>State</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )}
-                />
-                <FormField
-                    control={form.control}
-                    name="address.zip"
-                    render={({ field }) => (
-                        <FormItem><FormLabel>ZIP</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                    )}
-                />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="financials" className="space-y-4 pt-4">
-             <FormField
-                control={form.control}
-                name="financials.targetRent"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Target Monthly Rent</FormLabel>
-                        <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="financials.securityDeposit"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Security Deposit</FormLabel>
-                        <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-             <FormField
-                control={form.control}
-                name="financials.mortgagePayment"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Monthly Mortgage (if any)</FormLabel>
-                        <FormControl><Input type="number" step="0.01" {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-          </TabsContent>
-          
-          <TabsContent value="ops" className="space-y-4 pt-4">
-            <FormField
-                control={form.control}
-                name="specs.type"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Property Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                                <SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                <SelectItem value="Residential">Residential</SelectItem>
-                                <SelectItem value="Commercial">Commercial</SelectItem>
-                                <SelectItem value="Industrial">Industrial</SelectItem>
-                                <SelectItem value="Land">Land</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-            <FormField
-                control={form.control}
-                name="specs.units"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormLabel>Number of Units</FormLabel>
-                        <FormControl><Input type="number" {...field} /></FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
-            />
-          </TabsContent>
-        </Tabs>
-        <div className="flex justify-end gap-4 pt-4">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Saving...' : 'Save Property'}
-          </Button>
+    <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[500px]">
+      
+      {/* LEFT SIDEBAR NAVIGATION */}
+      <div className="w-full lg:w-64 flex-shrink-0 space-y-1">
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setActiveSection(item.id)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
+              activeSection === item.id 
+                ? "bg-primary text-primary-foreground shadow-sm" 
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.label}
+          </button>
+        ))}
+        
+        <Separator className="my-4" />
+        
+        <div className="px-4">
+           <Button 
+             className="w-full bg-green-600 hover:bg-green-700" 
+             onClick={form.handleSubmit(onSubmit)}
+             disabled={isSaving}
+           >
+             {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Property</>}
+           </Button>
         </div>
-      </form>
-    </Form>
+      </div>
+
+      {/* RIGHT CONTENT AREA */}
+      <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+        
+        {/* SECTION: GENERAL */}
+        {activeSection === 'general' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>General Information</CardTitle>
+              <CardDescription>Address and nickname for the property.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                <Label>Property Nickname</Label>
+                <Input placeholder="e.g. The Lake House" {...form.register('name')} />
+              </div>
+              <Separator />
+              <div className="grid gap-2">
+                <Label>Street Address</Label>
+                <Input placeholder="123 Main St" {...form.register('address.street')} />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="grid gap-2">
+                  <Label>City</Label>
+                  <Input placeholder="City" {...form.register('address.city')} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>State</Label>
+                  <Input placeholder="TX" {...form.register('address.state')} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Zip Code</Label>
+                  <Input placeholder="00000" {...form.register('address.zip')} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* SECTION: FINANCIALS (Rent + Mortgage) */}
+        {activeSection === 'financials' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Target Revenue</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Monthly Rent Target</Label>
+                  <Input type="number" {...form.register('financials.targetRent')} />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Security Deposit</Label>
+                  <Input type="number" {...form.register('financials.securityDeposit')} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Mortgage Information</CardTitle>
+                <CardDescription>Required for accurate cash flow calculations.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center space-x-4 mb-4">
+                  <Label>Is there a mortgage?</Label>
+                  <RadioGroup 
+                    defaultValue="no" 
+                    onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="yes" id="m-yes" />
+                      <Label htmlFor="m-yes">Yes</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="m-no" />
+                      <Label htmlFor="m-no">No</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label>Lender Name</Label>
+                    <Input placeholder="Bank of America" {...form.register('mortgage.lenderName')} />
+                  </div>
+                  <div className="grid gap-2">
+                     <Label>Interest Rate (%)</Label>
+                     <Input placeholder="4.5" type="number" step="0.1" {...form.register('mortgage.interestRate')} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Monthly Payment (P&I)</Label>
+                    <Input placeholder="0.00" type="number" {...form.register('mortgage.monthlyPayment')} />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* SECTION: HOA */}
+        {activeSection === 'hoa' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Homeowners Association (HOA)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div className="flex items-center space-x-4 mb-4">
+                  <Label>Is there an HOA?</Label>
+                  <RadioGroup 
+                    defaultValue="no" 
+                    onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)}
+                    className="flex gap-4"
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="yes" id="h-yes" />
+                      <Label htmlFor="h-yes">Yes</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="no" id="h-no" />
+                      <Label htmlFor="h-no">No</Label>
+                    </div>
+                  </RadioGroup>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="grid gap-2">
+                      <Label>Fee Amount</Label>
+                      <Input type="number" placeholder="0.00" {...form.register('hoa.fee')} />
+                   </div>
+                   <div className="grid gap-2">
+                      <Label>Frequency</Label>
+                      <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} defaultValue="monthly">
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="annually">Annually</SelectItem>
+                        </SelectContent>
+                      </Select>
+                   </div>
+                   <div className="grid gap-2 col-span-2">
+                      <Label>Contact Phone / Email</Label>
+                      <Input placeholder="(555) 123-4567" {...form.register('hoa.contactPhone')} />
+                   </div>
+                </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* SECTION: UTILITIES */}
+        {activeSection === 'utilities' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Utility Responsibility</CardTitle>
+              <CardDescription>Who pays for what?</CardDescription>
+            </CardHeader>
+            <CardContent>
+               <div className="space-y-4">
+                  {[
+                    { key: 'water', label: 'Water & Sewer' },
+                    { key: 'electric', label: 'Electricity' },
+                    { key: 'gas', label: 'Gas' },
+                    { key: 'trash', label: 'Trash Pickup' },
+                  ].map((util) => (
+                    <div key={util.key} className="flex items-center justify-between p-3 border rounded-lg">
+                       <span className="font-medium">{util.label}</span>
+                       <RadioGroup 
+                         defaultValue="tenant"
+                         onValueChange={(val: any) => form.setValue(`utilities.${util.key}` as any, val)}
+                         className="flex gap-4"
+                       >
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="tenant" id={`${util.key}-t`} />
+                            <Label htmlFor={`${util.key}-t`}>Tenant</Label>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="landlord" id={`${util.key}-l`} />
+                            <Label htmlFor={`${util.key}-l`}>Landlord</Label>
+                          </div>
+                       </RadioGroup>
+                    </div>
+                  ))}
+               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* SECTION: ACCESS */}
+        {activeSection === 'access' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Access Information</CardTitle>
+              <CardDescription>Secure codes and key locations.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                     <Label>Gate Code</Label>
+                     <Input placeholder="#1234" {...form.register('access.gateCode')} />
+                  </div>
+                  <div className="grid gap-2">
+                     <Label>Lockbox / Door Code</Label>
+                     <Input placeholder="4321" {...form.register('access.lockboxCode')} />
+                  </div>
+               </div>
+               <div className="grid gap-2">
+                  <Label>Other Notes (Wifi, Alarm, Spare Key)</Label>
+                  <Input placeholder="Spare key under the mat..." {...form.register('access.notes')} />
+               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* SECTION: VENDORS */}
+        {activeSection === 'vendors' && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                 <div>
+                    <CardTitle>Preferred Vendors</CardTitle>
+                    <CardDescription>Who fixes this house?</CardDescription>
+                 </div>
+                 <Button size="sm" variant="outline" onClick={() => append({ role: '', name: '', phone: '' })}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Vendor
+                 </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               {fields.map((field, index) => (
+                 <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-4 grid gap-1">
+                       <Label className="text-xs">Role</Label>
+                       <Input placeholder="Plumber" {...form.register(`preferredVendors.${index}.role`)} />
+                    </div>
+                    <div className="col-span-4 grid gap-1">
+                       <Label className="text-xs">Name</Label>
+                       <Input placeholder="Joe Smith" {...form.register(`preferredVendors.${index}.name`)} />
+                    </div>
+                    <div className="col-span-3 grid gap-1">
+                       <Label className="text-xs">Phone</Label>
+                       <Input placeholder="555-0000" {...form.register(`preferredVendors.${index}.phone`)} />
+                    </div>
+                    <div className="col-span-1">
+                       <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(index)}>
+                          <Trash2 className="h-4 w-4" />
+                       </Button>
+                    </div>
+                 </div>
+               ))}
+               {fields.length === 0 && (
+                 <p className="text-sm text-muted-foreground text-center py-4">No vendors added yet.</p>
+               )}
+            </CardContent>
+          </Card>
+        )}
+
+      </div>
+    </div>
   );
 }
+    
