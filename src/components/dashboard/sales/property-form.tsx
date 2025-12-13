@@ -197,30 +197,66 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   ];
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px]">
-      {/* SIDEBAR */}
-      <div className="w-full lg:w-64 flex-shrink-0 space-y-1">
+    <div className="flex flex-col lg:flex-row gap-6 w-full lg:h-[calc(100vh-120px)]">
+      
+      {/* --- NAVIGATION (RESPONSIVE) --- */}
+      
+      {/* 1. MOBILE NAV: Dropdown (Saves space) */}
+      <div className="lg:hidden w-full space-y-4">
+         <div className="p-4 bg-muted/50 rounded-lg border">
+            <Label className="mb-2 block">Navigate Form</Label>
+            <Select 
+              value={activeSection} 
+              onValueChange={setActiveSection}
+            >
+              <SelectTrigger className="w-full bg-white">
+                <SelectValue placeholder="Select section" />
+              </SelectTrigger>
+              <SelectContent>
+                {navItems.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    <div className="flex items-center gap-2">
+                      <item.icon className="h-4 w-4" />
+                      {item.label}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+         </div>
+         {/* Mobile Save Button (Always visible on top) */}
+         <Button 
+             className="w-full bg-green-600 hover:bg-green-700 shadow-md" 
+             onClick={form.handleSubmit(onSubmit)}
+             disabled={isSaving}
+           >
+             {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Property</>}
+         </Button>
+      </div>
+
+      {/* 2. DESKTOP NAV: Sidebar (Fixed left) */}
+      <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
         {navItems.map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setActiveSection(item.id)}
             className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors",
+              "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors text-left",
               activeSection === item.id 
                 ? "bg-primary text-primary-foreground shadow-sm" 
                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
             )}
           >
-            <item.icon className="h-4 w-4" />
+            <item.icon className="h-4 w-4 shrink-0" />
             {item.label}
           </button>
         ))}
         <Separator className="my-4" />
-        <div className="px-4">
+        <div className="px-1">
            <Button 
              className="w-full bg-green-600 hover:bg-green-700" 
-             type="submit"
+             onClick={form.handleSubmit(onSubmit)}
              disabled={isSaving}
            >
              {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Property</>}
@@ -228,8 +264,9 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         </div>
       </div>
 
-      {/* CONTENT AREA */}
-      <div className="flex-1 space-y-6 overflow-y-auto pr-1 pb-10">
+      {/* --- CONTENT AREA --- */}
+      {/* On Mobile: h-auto (grows with content). On Desktop: h-full + overflow-auto (scrolls inside) */}
+      <div className="flex-1 w-full h-auto lg:h-full lg:overflow-y-auto pr-1 pb-20 lg:pb-10">
         
         {/* --- 1. GENERAL --- */}
         {activeSection === 'general' && (
@@ -257,7 +294,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             </CardContent>
           </Card>
         )}
-
+        
         {/* --- PHASE 2: SMART ACCOUNTING CONFIGURATION --- */}
         {activeSection === 'accounting' && (
           <div className="space-y-6">
@@ -743,6 +780,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
       </div>
-    </form>
+    </div>
   );
 }
