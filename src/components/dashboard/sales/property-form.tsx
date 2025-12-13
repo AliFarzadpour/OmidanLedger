@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
-  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock 
+  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -37,10 +37,13 @@ const propertySchema = z.object({
   financials: z.object({
     targetRent: z.coerce.number().min(0),
     securityDeposit: z.coerce.number().min(0),
-    purchasePrice: z.coerce.number().optional(),
-    purchaseDate: z.string().optional(),
+    // Purchase info moved to Mortgage object below
   }),
   mortgage: z.object({
+    // Moved here per request
+    purchasePrice: z.coerce.number().optional(),
+    purchaseDate: z.string().optional(),
+    
     hasMortgage: z.enum(['yes', 'no']),
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
@@ -64,7 +67,7 @@ const propertySchema = z.object({
     contactEmail: z.string().email().optional().or(z.literal('')),
   }),
   utilities: z.array(z.object({
-    type: z.string(), // Water, Electric, etc.
+    type: z.string(), 
     responsibility: z.enum(['tenant', 'landlord']),
     providerName: z.string().optional(),
     providerContact: z.string().optional(),
@@ -74,7 +77,6 @@ const propertySchema = z.object({
     lockboxCode: z.string().optional(),
     notes: z.string().optional(),
   }),
-  // Enhanced Tenants (Invoicing Ready)
   tenants: z.array(z.object({
     firstName: z.string(),
     lastName: z.string(),
@@ -82,9 +84,8 @@ const propertySchema = z.object({
     phone: z.string().optional(),
     leaseStart: z.string().optional(),
     leaseEnd: z.string().optional(),
-    // CRITICAL FOR INVOICING:
     rentAmount: z.coerce.number(),
-    rentDueDate: z.coerce.number().min(1).max(31).default(1), // Day of month (e.g., 1st)
+    rentDueDate: z.coerce.number().min(1).max(31).default(1),
     lateFeeAmount: z.coerce.number().optional(),
   })).optional(),
   preferredVendors: z.array(z.object({
@@ -111,6 +112,8 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
       mortgage: { 
+        purchasePrice: 0,
+        purchaseDate: '',
         hasMortgage: 'no' as const, 
         lenderName: '', 
         escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
@@ -245,7 +248,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 2. FINANCIALS (TARGETS) --- */}
+        {/* --- 2. FINANCIALS (TARGETS ONLY) --- */}
         {activeSection === 'financials' && (
           <Card>
             <CardHeader>
@@ -255,17 +258,22 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             <CardContent className="grid grid-cols-2 gap-4">
               <div className="grid gap-2"><Label>Target Monthly Rent</Label><Input type="number" {...form.register('financials.targetRent')} /></div>
               <div className="grid gap-2"><Label>Security Deposit Req.</Label><Input type="number" {...form.register('financials.securityDeposit')} /></div>
-              <div className="grid gap-2"><Label>Purchase Price</Label><Input type="number" {...form.register('financials.purchasePrice')} /></div>
-              <div className="grid gap-2"><Label>Purchase Date</Label><Input type="date" {...form.register('financials.purchaseDate')} /></div>
             </CardContent>
           </Card>
         )}
 
-        {/* --- 3. MORTGAGE --- */}
+        {/* --- 3. MORTGAGE (INCLUDES PURCHASE INFO) --- */}
         {activeSection === 'mortgage' && (
           <Card>
-            <CardHeader><CardTitle>Loan Information</CardTitle></CardHeader>
+            <CardHeader><CardTitle>Loan & Purchase Information</CardTitle></CardHeader>
             <CardContent className="space-y-6">
+              
+              {/* NEW: Purchase Info Moved Here */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 border rounded-lg">
+                  <div className="grid gap-2"><Label>Purchase Price</Label><Input type="number" {...form.register('mortgage.purchasePrice')} /></div>
+                  <div className="grid gap-2"><Label>Purchase Date</Label><Input type="date" {...form.register('mortgage.purchaseDate')} /></div>
+              </div>
+
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <Label>Is there a mortgage?</Label>
                 <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
@@ -273,6 +281,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                   <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
                 </RadioGroup>
               </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Lender Name</Label><Input {...form.register('mortgage.lenderName')} /></div>
                 <div className="grid gap-2"><Label>Account Number</Label><Input {...form.register('mortgage.accountNumber')} /></div>
@@ -396,7 +405,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 7. TENANTS --- */}
+        {/* --- 7. TENANTS (UPDATED 3-ROW LAYOUT) --- */}
         {activeSection === 'tenants' && (
           <Card>
             <CardHeader>
@@ -410,63 +419,58 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                  </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
                {tenantFields.fields.map((field, index) => (
                   <div key={field.id} className="p-4 border rounded-lg bg-slate-50 relative">
                      <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}>
                         <Trash2 className="h-4 w-4" />
                      </Button>
                      
-                     {/* Row 1: Contact Info */}
-                     <div className="grid grid-cols-12 gap-4 mb-4">
-                        <div className="col-span-3">
+                     {/* ROW 1: Identity */}
+                     <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
+                        <div className="grid gap-2">
                            <Label className="text-xs">First Name</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} />
                         </div>
-                        <div className="col-span-3">
+                        <div className="grid gap-2">
                            <Label className="text-xs">Last Name</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} />
                         </div>
-                        <div className="col-span-3">
-                           <Label className="text-xs">Email</Label>
+                     </div>
+
+                     {/* ROW 2: Contact */}
+                     <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid gap-2">
+                           <Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.email`)} />
                         </div>
-                        <div className="col-span-3">
-                           <Label className="text-xs">Phone</Label>
+                        <div className="grid gap-2">
+                           <Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.phone`)} />
                         </div>
                      </div>
 
                      <Separator className="mb-4" />
 
-                     {/* Row 2: Billing & Lease */}
+                     {/* ROW 3: Financials & Lease Dates */}
                      <div className="grid grid-cols-12 gap-4">
-                        <div className="col-span-3">
-                           <Label className="text-xs font-semibold text-blue-700">Monthly Rent ($)</Label>
-                           <div className="relative">
-                              <DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
-                              <Input className="pl-7 bg-white border-blue-200" type="number" {...form.register(`tenants.${index}.rentAmount`)} />
-                           </div>
+                        <div className="col-span-4 lg:col-span-2">
+                           <Label className="text-xs font-semibold text-blue-700">Rent ($)</Label>
+                           <Input type="number" className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentAmount`)} />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-4 lg:col-span-2">
                            <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
-                           <div className="relative">
-                              <CalendarDays className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
-                              <Input className="pl-7 bg-white border-blue-200" type="number" max={31} min={1} {...form.register(`tenants.${index}.rentDueDate`)} />
-                           </div>
+                           <Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-4 lg:col-span-2">
                            <Label className="text-xs text-red-700">Late Fee ($)</Label>
-                           <div className="relative">
-                              <Clock className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
-                              <Input className="pl-7 bg-white border-red-200" type="number" {...form.register(`tenants.${index}.lateFeeAmount`)} />
-                           </div>
+                           <Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-6 lg:col-span-3">
                            <Label className="text-xs">Lease Start</Label>
                            <Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} />
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-6 lg:col-span-3">
                            <Label className="text-xs">Lease End</Label>
                            <Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} />
                         </div>
