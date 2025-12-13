@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatCard } from '@/components/dashboard/stat-card';
@@ -33,25 +34,29 @@ const actionCards = [
         title: "Service Invoice",
         description: "For contractors, freelancers, and service providers. Create a standard invoice.",
         icon: <FileStack className="h-8 w-8 text-primary" />,
-        buttonText: "Create Invoice"
+        buttonText: "Create Invoice",
+        href: '#',
     },
     {
         title: "Product Sale",
         description: "For retail and e-commerce. Sell items from your inventory.",
         icon: <ShoppingCart className="h-8 w-8 text-primary" />,
-        buttonText: "Create Sale"
+        buttonText: "Create Sale",
+        href: '#',
     },
     {
         title: "Rent Collection",
         description: "For landlords and property managers. Charge rent or set up recurring leases.",
         icon: <Building className="h-8 w-8 text-primary" />,
-        buttonText: "Create Charge"
+        buttonText: "Create Charge",
+        href: '/dashboard/sales/rent-collection',
     },
     {
         title: "Time Tracking",
         description: "For attorneys, consultants, and agencies. Bill by the hour for projects.",
         icon: <Clock className="h-8 w-8 text-primary" />,
-        buttonText: "Create Bill"
+        buttonText: "Create Bill",
+        href: '#',
     }
 ];
 
@@ -79,7 +84,8 @@ export default function SalesHubPage() {
       {/* Action Cards Section */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {actionCards.map(card => (
-            <Card key={card.title} className="flex flex-col shadow-lg hover:shadow-xl transition-shadow">
+          <Link key={card.title} href={card.href} passHref>
+            <Card className="flex flex-col shadow-lg hover:shadow-xl transition-shadow h-full cursor-pointer">
                 <CardHeader className="flex-row items-center gap-4 space-y-0">
                    {card.icon}
                    <CardTitle>{card.title}</CardTitle>
@@ -91,6 +97,7 @@ export default function SalesHubPage() {
                     <Button className="w-full">{card.buttonText}</Button>
                 </CardFooter>
             </Card>
+          </Link>
         ))}
       </div>
     </div>
