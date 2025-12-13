@@ -193,191 +193,115 @@
       "type": "object",
       "description": "Represents a rental property owned by a user.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Property."
-        },
-        "userId": {
-          "type": "string",
-          "description": "The ID of the user who owns the property."
-        },
-        "name": {
-          "type": "string",
-          "description": "A nickname for the property (e.g., 'Downtown Condo')."
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "occupied",
-            "vacant",
-            "maintenance"
-          ],
-          "description": "The current status of the property."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Timestamp when the property was created."
-        },
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string", "enum": ["occupied", "vacant", "maintenance"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["single-family", "multi-family", "condo", "commercial"] },
         "address": {
           "type": "object",
           "properties": {
-            "street": {
-              "type": "string"
-            },
-            "city": {
-              "type": "string"
-            },
-            "state": {
-              "type": "string"
-            },
-            "zip": {
-              "type": "string"
-            }
+            "street": { "type": "string" },
+            "city": { "type": "string" },
+            "state": { "type": "string" },
+            "zip": { "type": "string" }
           },
-          "required": [
-            "street",
-            "city",
-            "state",
-            "zip"
-          ]
+          "required": ["street", "city", "state", "zip"]
         },
         "financials": {
           "type": "object",
           "properties": {
-            "targetRent": {
-              "type": "number"
-            },
-            "securityDeposit": {
-              "type": "number"
-            },
-            "purchasePrice": {
-              "type": "number"
-            }
-          },
-          "required": [
-            "targetRent",
-            "securityDeposit"
-          ]
+            "targetRent": { "type": "number" },
+            "securityDeposit": { "type": "number" },
+            "purchasePrice": { "type": "number" },
+            "purchaseDate": { "type": "string", "format": "date" }
+          }
         },
         "mortgage": {
           "type": "object",
           "properties": {
-            "lenderName": {
-              "type": "string"
-            },
-            "monthlyPayment": {
-              "type": "number"
-            },
-            "interestRate": {
-              "type": "number"
-            },
-            "balance": {
-              "type": "number"
-            },
-            "accountNumber": {
-                "type": "string"
-            },
-            "lenderPhone": {
-                "type": "string"
-            },
-            "lenderEmail": {
-                "type": "string",
-                "format": "email"
-            },
+            "hasMortgage": { "type": "string", "enum": ["yes", "no"] },
+            "lenderName": { "type": "string" },
+            "accountNumber": { "type": "string" },
+            "lenderPhone": { "type": "string" },
+            "lenderEmail": { "type": "string", "format": "email" },
+            "monthlyPayment": { "type": "number" },
+            "interestRate": { "type": "number" },
+            "loanBalance": { "type": "number" },
             "escrow": {
-                "type": "object",
-                "properties": {
-                    "includesTax": {"type": "boolean"},
-                    "includesInsurance": {"type": "boolean"},
-                    "includesHoa": {"type": "boolean"}
-                }
+              "type": "object",
+              "properties": {
+                "includesTax": { "type": "boolean" },
+                "includesInsurance": { "type": "boolean" },
+                "includesHoa": { "type": "boolean" }
+              }
             }
           }
         },
         "hoa": {
           "type": "object",
           "properties": {
-            "name": {
-              "type": "string"
-            },
-            "fee": {
-              "type": "number"
-            },
-            "frequency": {
-              "type": "string",
-              "enum": [
-                "monthly",
-                "quarterly",
-                "annually"
-              ]
-            },
-            "contactPhone": {
-              "type": "string"
-            }
+            "hasHoa": { "type": "string", "enum": ["yes", "no"] },
+            "fee": { "type": "number" },
+            "frequency": { "type": "string", "enum": ["monthly", "quarterly", "annually"] },
+            "contactName": { "type": "string" },
+            "contactPhone": { "type": "string" },
+            "contactEmail": { "type": "string", "format": "email" }
           }
         },
         "utilities": {
-          "type": "object",
-          "properties": {
-            "water": {
-              "type": "string",
-              "enum": [
-                "tenant",
-                "landlord"
-              ]
-            },
-            "electric": {
-              "type": "string",
-              "enum": [
-                "tenant",
-                "landlord"
-              ]
-            },
-            "gas": {
-              "type": "string",
-              "enum": [
-                "tenant",
-                "landlord"
-              ]
-            },
-            "trash": {
-              "type": "string",
-              "enum": [
-                "tenant",
-                "landlord"
-              ]
-            },
-            "internet": {
-              "type": "string",
-              "enum": [
-                "tenant",
-                "landlord"
-              ]
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "responsibility": { "type": "string", "enum": ["tenant", "landlord"] },
+              "providerName": { "type": "string" },
+              "providerContact": { "type": "string" }
             }
-          },
-          "required": [
-            "water",
-            "electric",
-            "gas",
-            "trash",
-            "internet"
-          ]
+          }
         },
         "access": {
           "type": "object",
           "properties": {
-            "gateCode": {
-              "type": "string"
-            },
-            "lockboxCode": {
-              "type": "string"
-            },
-            "wifiPass": {
-              "type": "string"
-            },
-            "notes": {
-              "type": "string"
+            "gateCode": { "type": "string" },
+            "lockboxCode": { "type": "string" },
+            "notes": { "type": "string" }
+          }
+        },
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "firstName": { "type": "string" },
+              "lastName": { "type": "string" },
+              "email": { "type": "string", "format": "email" },
+              "phone": { "type": "string" },
+              "leaseStart": { "type": "string", "format": "date" },
+              "leaseEnd": { "type": "string", "format": "date" }
+            }
+          }
+        },
+        "rentRoll": {
+          "type": "object",
+          "properties": {
+            "currentMonthlyRent": { "type": "number" },
+            "securityDepositHeld": { "type": "number" },
+            "nextRentDueDate": { "type": "string", "format": "date" },
+            "leaseStatus": { "type": "string", "enum": ["active", "month-to-month", "expiring", "vacant"] }
+          }
+        },
+        "maintenance": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "date": { "type": "string", "format": "date" },
+              "description": { "type": "string" },
+              "cost": { "type": "number" },
+              "vendor": { "type": "string" }
             }
           }
         },
@@ -386,32 +310,14 @@
           "items": {
             "type": "object",
             "properties": {
-              "role": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "phone": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "role",
-              "name",
-              "phone"
-            ]
+              "role": { "type": "string" },
+              "name": { "type": "string" },
+              "phone": { "type": "string" }
+            }
           }
         }
       },
-      "required": [
-        "id",
-        "userId",
-        "name",
-        "address",
-        "financials",
-        "utilities"
-      ]
+      "required": ["id", "userId", "name", "address"]
     }
   },
   "auth": {

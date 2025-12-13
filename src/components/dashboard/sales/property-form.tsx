@@ -5,7 +5,8 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
-  Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark 
+  Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
+  FileText, Wrench, UserCheck 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -19,16 +20,16 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
-import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Form } from '@/components/ui/form';
 
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
-  propertyType: z.string().optional(),
+  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
   address: z.object({
     street: z.string().min(1),
     city: z.string().min(1),
@@ -44,18 +45,12 @@ const propertySchema = z.object({
   mortgage: z.object({
     hasMortgage: z.enum(['yes', 'no']),
     lenderName: z.string().optional(),
-    accountNumber: z.string().optional(), // NEW
-    
-    // Lender Contact (NEW)
+    accountNumber: z.string().optional(),
     lenderPhone: z.string().optional(),
-    lenderEmail: z.string().email().optional().or(z.literal('')), 
-    
-    // Loan Details
+    lenderEmail: z.string().optional(),
     monthlyPayment: z.coerce.number().optional(),
     interestRate: z.coerce.number().optional(),
     loanBalance: z.coerce.number().optional(),
-
-    // Escrow Details (NEW)
     escrow: z.object({
       includesTax: z.boolean().default(false),
       includesInsurance: z.boolean().default(false),
@@ -66,20 +61,44 @@ const propertySchema = z.object({
     hasHoa: z.enum(['yes', 'no']),
     fee: z.coerce.number().optional(),
     frequency: z.enum(['monthly', 'quarterly', 'annually']).optional(),
+    contactName: z.string().optional(),
     contactPhone: z.string().optional(),
+    contactEmail: z.string().optional(),
   }),
-  utilities: z.object({
-    water: z.enum(['tenant', 'landlord']),
-    electric: z.enum(['tenant', 'landlord']),
-    gas: z.enum(['tenant', 'landlord']),
-    trash: z.enum(['tenant', 'landlord']),
-    internet: z.enum(['tenant', 'landlord']),
-  }),
+  utilities: z.array(z.object({
+    type: z.string(), // Water, Electric, etc.
+    responsibility: z.enum(['tenant', 'landlord']),
+    providerName: z.string().optional(),
+    providerContact: z.string().optional(),
+  })),
   access: z.object({
     gateCode: z.string().optional(),
     lockboxCode: z.string().optional(),
     notes: z.string().optional(),
   }),
+  // NEW: Tenants Array
+  tenants: z.array(z.object({
+    firstName: z.string(),
+    lastName: z.string(),
+    email: z.string().email().optional().or(z.literal('')),
+    phone: z.string().optional(),
+    leaseStart: z.string().optional(),
+    leaseEnd: z.string().optional(),
+  })).optional(),
+  // NEW: Rent Roll (Lease Financials)
+  rentRoll: z.object({
+    currentMonthlyRent: z.coerce.number().optional(),
+    securityDepositHeld: z.coerce.number().optional(),
+    nextRentDueDate: z.string().optional(),
+    leaseStatus: z.enum(['active', 'month-to-month', 'expiring', 'vacant']).default('vacant'),
+  }).optional(),
+  // NEW: Maintenance Log
+  maintenance: z.array(z.object({
+    date: z.string().optional(),
+    description: z.string(),
+    cost: z.coerce.number().optional(),
+    vendor: z.string().optional(),
+  })).optional(),
   preferredVendors: z.array(z.object({
     role: z.string(),
     name: z.string(),
@@ -100,21 +119,36 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     resolver: zodResolver(propertySchema),
     defaultValues: {
       name: '',
-      propertyType: 'single-family',
+      type: 'single-family' as const,
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
-      mortgage: { hasMortgage: 'no' as 'yes' | 'no', lenderName: '', monthlyPayment: 0, interestRate: 0 },
-      hoa: { hasHoa: 'no' as 'yes' | 'no', fee: 0, frequency: 'monthly' as 'monthly' | 'quarterly' | 'annually', contactPhone: '' },
-      utilities: { water: 'tenant' as 'tenant' | 'landlord', electric: 'tenant' as 'tenant' | 'landlord', gas: 'tenant' as 'tenant' | 'landlord', trash: 'tenant' as 'tenant' | 'landlord', internet: 'tenant' as 'tenant' | 'landlord' },
+      mortgage: { 
+        hasMortgage: 'no' as const, 
+        lenderName: '', 
+        escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
+      },
+      hoa: { hasHoa: 'no' as const, fee: 0, frequency: 'monthly' as const, contactName: '', contactPhone: '', contactEmail: '' },
+      // Default Utilities structure
+      utilities: [
+        { type: 'Water', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
+        { type: 'Electric', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
+        { type: 'Gas', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
+        { type: 'Trash', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
+        { type: 'Internet', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
+      ],
       access: { gateCode: '', lockboxCode: '', notes: '' },
+      tenants: [],
+      rentRoll: { leaseStatus: 'vacant' as const, currentMonthlyRent: 0, securityDepositHeld: 0 },
+      maintenance: [],
       preferredVendors: [{ role: 'Handyman', name: '', phone: '' }]
     }
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: "preferredVendors"
-  });
+  // Array Field Handlers
+  const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
+  const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
+  const maintenanceFields = useFieldArray({ control: form.control, name: "maintenance" });
+  const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
 
   const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
@@ -144,22 +178,25 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     });
   };
 
-  // --- NAVIGATION ITEMS ---
+  // Navigation Menu
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
-    { id: 'financials', label: 'Rent & Income', icon: DollarSign },
-    { id: 'mortgage', label: 'Mortgage & Debt', icon: Landmark },
-    { id: 'hoa', label: 'HOA & Fees', icon: Users },
+    { id: 'financials', label: 'Rent Targets', icon: DollarSign },
+    { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
+    { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
     { id: 'access', label: 'Access & Keys', icon: Key },
-    { id: 'vendors', label: 'Preferred Vendors', icon: Users },
+    { id: 'tenants', label: 'Tenants', icon: UserCheck },    // NEW
+    { id: 'rentroll', label: 'Rent Roll', icon: FileText },  // NEW
+    { id: 'maintenance', label: 'Maintenance', icon: Wrench }, // NEW
+    { id: 'vendors', label: 'Vendors', icon: Users },
   ];
 
   return (
     <Form {...form}>
-    <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[500px]">
+    <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px]">
       
-      {/* LEFT SIDEBAR NAVIGATION */}
+      {/* SIDEBAR */}
       <div className="w-full lg:w-64 flex-shrink-0 space-y-1">
         {navItems.map((item) => (
           <button
@@ -177,9 +214,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             {item.label}
           </button>
         ))}
-        
         <Separator className="my-4" />
-        
         <div className="px-4">
            <Button 
              className="w-full bg-green-600 hover:bg-green-700" 
@@ -191,35 +226,29 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         </div>
       </div>
 
-      {/* RIGHT CONTENT AREA */}
-      <div className="flex-1 space-y-6 overflow-y-auto pr-1">
+      {/* CONTENT AREA */}
+      <div className="flex-1 space-y-6 overflow-y-auto pr-1 pb-10">
         
-        {/* SECTION: GENERAL */}
+        {/* --- 1. GENERAL --- */}
         {activeSection === 'general' && (
           <Card>
-            <CardHeader>
-              <CardTitle>General Information</CardTitle>
-              <CardDescription>Address and nickname for the property.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Property Nickname</Label>
-                  <Input placeholder="e.g. The Lake House" {...form.register('name')} />
-                </div>
-                 <div className="grid gap-2">
-                  <Label>Property Type</Label>
-                  <Select onValueChange={(val: any) => form.setValue('propertyType', val)} defaultValue="single-family">
+              <div className="grid gap-2">
+                <Label>Property Nickname</Label>
+                <Input placeholder="e.g. The Lake House" {...form.register('name')} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Property Type</Label>
+                <Select onValueChange={(val: any) => form.setValue('type', val)} defaultValue="single-family">
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="single-family">Single Family</SelectItem>
-                        <SelectItem value="multi-family">Multi-Family</SelectItem>
-                        <SelectItem value="condo">Condo</SelectItem>
-                        <SelectItem value="townhouse">Townhouse</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        <SelectItem value="single-family">Single Family Home</SelectItem>
+                        <SelectItem value="multi-family">Multi-Family / Duplex</SelectItem>
+                        <SelectItem value="condo">Condo / Townhouse</SelectItem>
+                        <SelectItem value="commercial">Commercial</SelectItem>
                     </SelectContent>
-                  </Select>
-                </div>
+                </Select>
               </div>
               <Separator />
               <div className="grid gap-2">
@@ -227,214 +256,89 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                 <Input placeholder="123 Main St" {...form.register('address.street')} />
               </div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="grid gap-2">
-                  <Label>City</Label>
-                  <Input placeholder="City" {...form.register('address.city')} />
-                </div>
-                <div className="grid gap-2">
-                  <Label>State</Label>
-                  <Input placeholder="TX" {...form.register('address.state')} />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Zip Code</Label>
-                  <Input placeholder="00000" {...form.register('address.zip')} />
-                </div>
+                <div className="grid gap-2"><Label>City</Label><Input {...form.register('address.city')} /></div>
+                <div className="grid gap-2"><Label>State</Label><Input {...form.register('address.state')} /></div>
+                <div className="grid gap-2"><Label>Zip</Label><Input {...form.register('address.zip')} /></div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* SECTION: FINANCIALS (Now focused on Income) */}
+        {/* --- 2. FINANCIALS (TARGETS) --- */}
         {activeSection === 'financials' && (
           <Card>
             <CardHeader>
-              <CardTitle>Income Targets</CardTitle>
-              <CardDescription>What is the revenue potential?</CardDescription>
+              <CardTitle>Market Targets</CardTitle>
+              <CardDescription>What you expect to earn from this property.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Target Monthly Rent</Label>
-                  <Input type="number" {...form.register('financials.targetRent')} />
-                </div>
-                <div className="grid gap-2">
-                  <Label>Security Deposit</Label>
-                  <Input type="number" {...form.register('financials.securityDeposit')} />
-                </div>
+            <CardContent className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2"><Label>Target Monthly Rent</Label><Input type="number" {...form.register('financials.targetRent')} /></div>
+              <div className="grid gap-2"><Label>Security Deposit Req.</Label><Input type="number" {...form.register('financials.securityDeposit')} /></div>
+              <div className="grid gap-2"><Label>Purchase Price</Label><Input type="number" {...form.register('financials.purchasePrice')} /></div>
+              <div className="grid gap-2"><Label>Purchase Date</Label><Input type="date" {...form.register('financials.purchaseDate')} /></div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- 3. MORTGAGE (MERGED ESCROW) --- */}
+        {activeSection === 'mortgage' && (
+          <Card>
+            <CardHeader><CardTitle>Loan Information</CardTitle></CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                <Label>Is there a mortgage?</Label>
+                <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
+                  <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
+                </RadioGroup>
               </div>
-              <Separator />
+
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Purchase Price</Label>
-                  <Input type="number" {...form.register('financials.purchasePrice')} />
-                </div>
-                <div className="grid gap-2">
-                   <Label>Purchase Date</Label>
-                   <Input type="date" {...form.register('financials.purchaseDate')} />
+                <div className="grid gap-2"><Label>Lender Name</Label><Input {...form.register('mortgage.lenderName')} /></div>
+                <div className="grid gap-2"><Label>Account Number</Label><Input {...form.register('mortgage.accountNumber')} /></div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="grid gap-2"><Label>Monthly Payment</Label><Input type="number" {...form.register('mortgage.monthlyPayment')} /></div>
+                <div className="grid gap-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" {...form.register('mortgage.interestRate')} /></div>
+                <div className="grid gap-2"><Label>Loan Balance</Label><Input type="number" {...form.register('mortgage.loanBalance')} /></div>
+              </div>
+              
+              <div className="p-4 border rounded-md bg-slate-50">
+                <Label className="mb-2 block font-semibold text-slate-700">Escrow Configuration (Included in Payment)</Label>
+                <div className="flex gap-6">
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesTax')} />
+                    <span className="text-sm">Property Tax</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesInsurance')} />
+                    <span className="text-sm">Insurance</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesHoa')} />
+                    <span className="text-sm">HOA Fees</span>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* SECTION: MORTGAGE (New Dedicated Section) */}
-        {activeSection === 'mortgage' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Loan Information</CardTitle>
-                <CardDescription>Track your debt service and escrow.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Main Toggle */}
-                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-                  <Label className="text-base">Is there a mortgage on this property?</Label>
-                  <RadioGroup 
-                    defaultValue="no" 
-                    onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)}
-                    className="flex gap-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="m-yes" />
-                      <Label htmlFor="m-yes">Yes</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="m-no" />
-                      <Label htmlFor="m-no">No</Label>
-                    </div>
-                  </RadioGroup>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Lender Name</Label>
-                    <Input placeholder="e.g. Wells Fargo" {...form.register('mortgage.lenderName')} />
-                  </div>
-                  <div className="grid gap-2">
-                     <Label>Loan Account Number</Label>
-                     <Input placeholder="####-####" {...form.register('mortgage.accountNumber')} />
-                  </div>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="grid gap-2">
-                     <Label>Total Monthly Payment</Label>
-                     <Input type="number" placeholder="0.00" {...form.register('mortgage.monthlyPayment')} />
-                  </div>
-                  <div className="grid gap-2">
-                     <Label>Interest Rate (%)</Label>
-                     <Input type="number" step="0.01" placeholder="4.5" {...form.register('mortgage.interestRate')} />
-                  </div>
-                  <div className="grid gap-2">
-                     <Label>Current Balance</Label>
-                     <Input type="number" placeholder="0.00" {...form.register('mortgage.loanBalance')} />
-                  </div>
-                </div>
-
-                <Separator />
-                
-                {/* Contact Info */}
-                <div className="grid grid-cols-2 gap-4">
-                   <div className="grid gap-2">
-                     <Label>Lender Phone</Label>
-                     <Input placeholder="(555) 000-0000" {...form.register('mortgage.lenderPhone')} />
-                   </div>
-                   <div className="grid gap-2">
-                     <Label>Lender Email / Portal</Label>
-                     <Input placeholder="support@bank.com" {...form.register('mortgage.lenderEmail')} />
-                   </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Escrow Settings */}
-            <Card>
-              <CardHeader>
-                 <CardTitle>Escrow Details</CardTitle>
-                 <CardDescription>What is included in your monthly payment?</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                 <FormField
-                    control={form.control}
-                    name="mortgage.escrow.includesTax"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between border-b pb-3">
-                        <Label>Includes Property Taxes?</Label>
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                 <FormField
-                    control={form.control}
-                    name="mortgage.escrow.includesInsurance"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between border-b pb-3">
-                        <Label>Includes Home Insurance?</Label>
-                         <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="mortgage.escrow.includesHoa"
-                    render={({ field }) => (
-                      <FormItem className="flex items-center justify-between">
-                         <Label>Includes HOA Fees?</Label>
-                         <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* SECTION: HOA */}
+        {/* --- 4. HOA (CONTACT INFO) --- */}
         {activeSection === 'hoa' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Homeowners Association (HOA)</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>HOA Details</CardTitle></CardHeader>
             <CardContent className="space-y-4">
                <div className="flex items-center space-x-4 mb-4">
                   <Label>Is there an HOA?</Label>
-                  <RadioGroup 
-                    defaultValue="no" 
-                    onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)}
-                    className="flex gap-4"
-                  >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="yes" id="h-yes" />
-                      <Label htmlFor="h-yes">Yes</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="no" id="h-no" />
-                      <Label htmlFor="h-no">No</Label>
-                    </div>
+                  <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4">
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
                   </RadioGroup>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                   <div className="grid gap-2">
-                      <Label>Fee Amount</Label>
-                      <Input type="number" placeholder="0.00" {...form.register('hoa.fee')} />
-                   </div>
-                   <div className="grid gap-2">
-                      <Label>Frequency</Label>
+                   <div className="grid gap-2"><Label>Fee Amount</Label><Input type="number" {...form.register('hoa.fee')} /></div>
+                   <div className="grid gap-2"><Label>Frequency</Label>
                       <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} defaultValue="monthly">
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
@@ -444,123 +348,176 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                         </SelectContent>
                       </Select>
                    </div>
-                   <div className="grid gap-2 col-span-2">
-                      <Label>Contact Phone / Email</Label>
-                      <Input placeholder="(555) 123-4567" {...form.register('hoa.contactPhone')} />
-                   </div>
+                </div>
+                <Separator />
+                <Label className="text-muted-foreground">Association Contact</Label>
+                <div className="grid grid-cols-3 gap-4">
+                   <div className="grid gap-2"><Label>Contact Name</Label><Input placeholder="Mgmt Office" {...form.register('hoa.contactName')} /></div>
+                   <div className="grid gap-2"><Label>Phone</Label><Input {...form.register('hoa.contactPhone')} /></div>
+                   <div className="grid gap-2"><Label>Email</Label><Input {...form.register('hoa.contactEmail')} /></div>
                 </div>
             </CardContent>
           </Card>
         )}
 
-        {/* SECTION: UTILITIES */}
+        {/* --- 5. UTILITIES (DETAILED) --- */}
         {activeSection === 'utilities' && (
           <Card>
             <CardHeader>
-              <CardTitle>Utility Responsibility</CardTitle>
-              <CardDescription>Who pays for what?</CardDescription>
+              <CardTitle>Utility Providers</CardTitle>
+              <CardDescription>Track responsibility and company accounts.</CardDescription>
             </CardHeader>
-            <CardContent>
-               <div className="space-y-4">
-                  {[
-                    { key: 'water', label: 'Water & Sewer' },
-                    { key: 'electric', label: 'Electricity' },
-                    { key: 'gas', label: 'Gas' },
-                    { key: 'trash', label: 'Trash Pickup' },
-                    { key: 'internet', label: 'Internet' },
-                  ].map((util) => (
-                    <div key={util.key} className="flex items-center justify-between p-3 border rounded-lg">
-                       <span className="font-medium">{util.label}</span>
-                       <RadioGroup 
-                         defaultValue="tenant"
-                         onValueChange={(val: any) => form.setValue(`utilities.${util.key}` as any, val)}
-                         className="flex gap-4"
-                       >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="tenant" id={`${util.key}-t`} />
-                            <Label htmlFor={`${util.key}-t`}>Tenant</Label>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem value="landlord" id={`${util.key}-l`} />
-                            <Label htmlFor={`${util.key}-l`}>Landlord</Label>
-                          </div>
-                       </RadioGroup>
-                    </div>
-                  ))}
-               </div>
+            <CardContent className="space-y-6">
+               {utilityFields.fields.map((field, index) => (
+                  <div key={field.id} className="p-4 border rounded-lg bg-card">
+                     <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-bold text-lg">{form.getValues(`utilities.${index}.type`)}</h4>
+                        <RadioGroup 
+                           defaultValue={field.responsibility}
+                           onValueChange={(val: any) => form.setValue(`utilities.${index}.responsibility`, val)}
+                           className="flex gap-4"
+                        >
+                           <div className="flex items-center space-x-2"><RadioGroupItem value="tenant" id={`t-${index}`} /><Label htmlFor={`t-${index}`}>Tenant Pays</Label></div>
+                           <div className="flex items-center space-x-2"><RadioGroupItem value="landlord" id={`l-${index}`} /><Label htmlFor={`l-${index}`}>Landlord Pays</Label></div>
+                        </RadioGroup>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label className="text-xs">Provider Name</Label><Input placeholder="e.g. City Water" {...form.register(`utilities.${index}.providerName`)} /></div>
+                        <div className="grid gap-2"><Label className="text-xs">Phone / Website</Label><Input placeholder="Contact Info" {...form.register(`utilities.${index}.providerContact`)} /></div>
+                     </div>
+                  </div>
+               ))}
             </CardContent>
           </Card>
         )}
 
-        {/* SECTION: ACCESS */}
+        {/* --- 6. ACCESS (UNCHANGED) --- */}
         {activeSection === 'access' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Access Information</CardTitle>
-              <CardDescription>Secure codes and key locations.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Access</CardTitle></CardHeader>
             <CardContent className="space-y-4">
                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                     <Label>Gate Code</Label>
-                     <Input placeholder="#1234" {...form.register('access.gateCode')} />
-                  </div>
-                  <div className="grid gap-2">
-                     <Label>Lockbox / Door Code</Label>
-                     <Input placeholder="4321" {...form.register('access.lockboxCode')} />
-                  </div>
+                  <div className="grid gap-2"><Label>Gate Code</Label><Input {...form.register('access.gateCode')} /></div>
+                  <div className="grid gap-2"><Label>Lockbox</Label><Input {...form.register('access.lockboxCode')} /></div>
                </div>
-               <div className="grid gap-2">
-                  <Label>Other Notes (Wifi, Alarm, Spare Key)</Label>
-                  <Input placeholder="Spare key under the mat..." {...form.register('access.notes')} />
-               </div>
+               <div className="grid gap-2"><Label>Notes</Label><Textarea {...form.register('access.notes')} /></div>
             </CardContent>
           </Card>
         )}
 
-        {/* SECTION: VENDORS */}
+        {/* --- 7. TENANTS (NEW) --- */}
+        {activeSection === 'tenants' && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between">
+                 <CardTitle>Tenant Roster</CardTitle>
+                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '' })}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Tenant
+                 </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               {tenantFields.fields.map((field, index) => (
+                  <div key={field.id} className="p-4 border rounded-lg relative">
+                     <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-red-500" onClick={() => tenantFields.remove(index)}><Trash2 className="h-4 w-4" /></Button>
+                     <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid gap-2"><Label>First Name</Label><Input {...form.register(`tenants.${index}.firstName`)} /></div>
+                        <div className="grid gap-2"><Label>Last Name</Label><Input {...form.register(`tenants.${index}.lastName`)} /></div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid gap-2"><Label>Email</Label><Input {...form.register(`tenants.${index}.email`)} /></div>
+                        <div className="grid gap-2"><Label>Phone</Label><Input {...form.register(`tenants.${index}.phone`)} /></div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Lease Start</Label><Input type="date" {...form.register(`tenants.${index}.leaseStart`)} /></div>
+                        <div className="grid gap-2"><Label>Lease End</Label><Input type="date" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
+                     </div>
+                  </div>
+               ))}
+               {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants listed.</p>}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- 8. RENT ROLL (NEW) --- */}
+        {activeSection === 'rentroll' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Rent Roll Data</CardTitle>
+              <CardDescription>Current active lease financials.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+               <div className="grid gap-2">
+                  <Label>Current Lease Status</Label>
+                  <Select onValueChange={(val: any) => form.setValue('rentRoll.leaseStatus', val)} defaultValue="vacant">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="active">Active Lease</SelectItem>
+                        <SelectItem value="month-to-month">Month-to-Month</SelectItem>
+                        <SelectItem value="expiring">Expiring Soon</SelectItem>
+                        <SelectItem value="vacant">Vacant</SelectItem>
+                    </SelectContent>
+                  </Select>
+               </div>
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2"><Label>Current Monthly Rent</Label><Input type="number" {...form.register('rentRoll.currentMonthlyRent')} /></div>
+                  <div className="grid gap-2"><Label>Security Deposit Held</Label><Input type="number" {...form.register('rentRoll.securityDepositHeld')} /></div>
+               </div>
+               <div className="grid gap-2"><Label>Next Rent Due Date</Label><Input type="date" {...form.register('rentRoll.nextRentDueDate')} /></div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- 9. MAINTENANCE (NEW) --- */}
+        {activeSection === 'maintenance' && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between">
+                 <CardTitle>Maintenance Log</CardTitle>
+                 <Button size="sm" onClick={() => maintenanceFields.append({ description: '', cost: 0, vendor: '', date: '' })}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Record
+                 </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+               {maintenanceFields.fields.map((field, index) => (
+                  <div key={field.id} className="grid grid-cols-12 gap-2 items-end border-b pb-4">
+                     <div className="col-span-2 grid gap-1"><Label className="text-xs">Date</Label><Input type="date" {...form.register(`maintenance.${index}.date`)} /></div>
+                     <div className="col-span-4 grid gap-1"><Label className="text-xs">Description</Label><Input placeholder="Fixed leak" {...form.register(`maintenance.${index}.description`)} /></div>
+                     <div className="col-span-3 grid gap-1"><Label className="text-xs">Vendor</Label><Input placeholder="ABC Plumbing" {...form.register(`maintenance.${index}.vendor`)} /></div>
+                     <div className="col-span-2 grid gap-1"><Label className="text-xs">Cost</Label><Input type="number" {...form.register(`maintenance.${index}.cost`)} /></div>
+                     <div className="col-span-1"><Button size="icon" variant="ghost" className="text-destructive" onClick={() => maintenanceFields.remove(index)}><Trash2 className="h-4 w-4" /></Button></div>
+                  </div>
+               ))}
+               {maintenanceFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No maintenance records added.</p>}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- 10. VENDORS --- */}
         {activeSection === 'vendors' && (
           <Card>
             <CardHeader>
-              <div className="flex items-center justify-between">
-                 <div>
-                    <CardTitle>Preferred Vendors</CardTitle>
-                    <CardDescription>Who fixes this house?</CardDescription>
-                 </div>
-                 <Button size="sm" variant="outline" onClick={() => append({ role: '', name: '', phone: '' })}>
+              <div className="flex justify-between">
+                 <CardTitle>Preferred Vendors</CardTitle>
+                 <Button size="sm" onClick={() => vendorFields.append({ role: '', name: '', phone: '' })}>
                     <Plus className="h-4 w-4 mr-2" /> Add Vendor
                  </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-               {fields.map((field, index) => (
+               {vendorFields.fields.map((field, index) => (
                  <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-4 grid gap-1">
-                       <Label className="text-xs">Role</Label>
-                       <Input placeholder="Plumber" {...form.register(`preferredVendors.${index}.role`)} />
-                    </div>
-                    <div className="col-span-4 grid gap-1">
-                       <Label className="text-xs">Name</Label>
-                       <Input placeholder="Joe Smith" {...form.register(`preferredVendors.${index}.name`)} />
-                    </div>
-                    <div className="col-span-3 grid gap-1">
-                       <Label className="text-xs">Phone</Label>
-                       <Input placeholder="555-0000" {...form.register(`preferredVendors.${index}.phone`)} />
-                    </div>
-                    <div className="col-span-1">
-                       <Button size="icon" variant="ghost" className="text-destructive" onClick={() => remove(index)}>
-                          <Trash2 className="h-4 w-4" />
-                       </Button>
-                    </div>
+                    <div className="col-span-4 grid gap-1"><Label className="text-xs">Role</Label><Input placeholder="Plumber" {...form.register(`preferredVendors.${index}.role`)} /></div>
+                    <div className="col-span-4 grid gap-1"><Label className="text-xs">Name</Label><Input placeholder="Joe Smith" {...form.register(`preferredVendors.${index}.name`)} /></div>
+                    <div className="col-span-3 grid gap-1"><Label className="text-xs">Phone</Label><Input placeholder="555-0000" {...form.register(`preferredVendors.${index}.phone`)} /></div>
+                    <div className="col-span-1"><Button size="icon" variant="ghost" className="text-destructive" onClick={() => vendorFields.remove(index)}><Trash2 className="h-4 w-4" /></Button></div>
                  </div>
                ))}
-               {fields.length === 0 && (
-                 <p className="text-sm text-muted-foreground text-center py-4">No vendors added yet.</p>
-               )}
+               {vendorFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No vendors added.</p>}
             </CardContent>
           </Card>
         )}
-
       </div>
     </div>
     </Form>
