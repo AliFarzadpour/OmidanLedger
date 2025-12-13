@@ -193,12 +193,25 @@
       "type": "object",
       "description": "Represents a rental property owned by a user.",
       "properties": {
-        "id": { "type": "string", "description": "Unique identifier for the Property." },
-        "userId": { "type": "string", "description": "The ID of the user who owns the property." },
-        "name": { "type": "string", "description": "A nickname for the property (e.g., 'Downtown Condo')." },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Property."
+        },
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who owns the property."
+        },
+        "name": {
+          "type": "string",
+          "description": "A nickname for the property (e.g., 'Downtown Condo')."
+        },
         "status": {
           "type": "string",
-          "enum": ["occupied", "vacant", "maintenance"],
+          "enum": [
+            "occupied",
+            "vacant",
+            "maintenance"
+          ],
           "description": "The current status of the property."
         },
         "createdAt": {
@@ -209,58 +222,163 @@
         "address": {
           "type": "object",
           "properties": {
-            "street": { "type": "string" },
-            "city": { "type": "string" },
-            "state": { "type": "string" },
-            "zip": { "type": "string" }
+            "street": {
+              "type": "string"
+            },
+            "city": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string"
+            },
+            "zip": {
+              "type": "string"
+            }
           },
-          "required": ["street", "city", "state", "zip"]
+          "required": [
+            "street",
+            "city",
+            "state",
+            "zip"
+          ]
         },
         "financials": {
           "type": "object",
           "properties": {
-            "targetRent": { "type": "number" },
-            "securityDeposit": { "type": "number" },
-            "purchasePrice": { "type": "number" }
+            "targetRent": {
+              "type": "number"
+            },
+            "securityDeposit": {
+              "type": "number"
+            },
+            "purchasePrice": {
+              "type": "number"
+            }
           },
-          "required": ["targetRent", "securityDeposit"]
+          "required": [
+            "targetRent",
+            "securityDeposit"
+          ]
         },
         "mortgage": {
           "type": "object",
           "properties": {
-            "lenderName": { "type": "string" },
-            "monthlyPayment": { "type": "number" },
-            "interestRate": { "type": "number" },
-            "balance": { "type": "number" }
+            "lenderName": {
+              "type": "string"
+            },
+            "monthlyPayment": {
+              "type": "number"
+            },
+            "interestRate": {
+              "type": "number"
+            },
+            "balance": {
+              "type": "number"
+            },
+            "accountNumber": {
+                "type": "string"
+            },
+            "lenderPhone": {
+                "type": "string"
+            },
+            "lenderEmail": {
+                "type": "string",
+                "format": "email"
+            },
+            "escrow": {
+                "type": "object",
+                "properties": {
+                    "includesTax": {"type": "boolean"},
+                    "includesInsurance": {"type": "boolean"},
+                    "includesHoa": {"type": "boolean"}
+                }
+            }
           }
         },
         "hoa": {
           "type": "object",
           "properties": {
-            "name": { "type": "string" },
-            "fee": { "type": "number" },
-            "frequency": { "type": "string", "enum": ["monthly", "quarterly", "annually"] },
-            "contactPhone": { "type": "string" }
+            "name": {
+              "type": "string"
+            },
+            "fee": {
+              "type": "number"
+            },
+            "frequency": {
+              "type": "string",
+              "enum": [
+                "monthly",
+                "quarterly",
+                "annually"
+              ]
+            },
+            "contactPhone": {
+              "type": "string"
+            }
           }
         },
         "utilities": {
           "type": "object",
           "properties": {
-            "water": { "type": "string", "enum": ["tenant", "landlord"] },
-            "electric": { "type": "string", "enum": ["tenant", "landlord"] },
-            "gas": { "type": "string", "enum": ["tenant", "landlord"] },
-            "trash": { "type": "string", "enum": ["tenant", "landlord"] },
-            "internet": { "type": "string", "enum": ["tenant", "landlord"] }
+            "water": {
+              "type": "string",
+              "enum": [
+                "tenant",
+                "landlord"
+              ]
+            },
+            "electric": {
+              "type": "string",
+              "enum": [
+                "tenant",
+                "landlord"
+              ]
+            },
+            "gas": {
+              "type": "string",
+              "enum": [
+                "tenant",
+                "landlord"
+              ]
+            },
+            "trash": {
+              "type": "string",
+              "enum": [
+                "tenant",
+                "landlord"
+              ]
+            },
+            "internet": {
+              "type": "string",
+              "enum": [
+                "tenant",
+                "landlord"
+              ]
+            }
           },
-          "required": ["water", "electric", "gas", "trash", "internet"]
+          "required": [
+            "water",
+            "electric",
+            "gas",
+            "trash",
+            "internet"
+          ]
         },
         "access": {
           "type": "object",
           "properties": {
-            "gateCode": { "type": "string" },
-            "lockboxCode": { "type": "string" },
-            "wifiPass": { "type": "string" },
-            "notes": { "type": "string" }
+            "gateCode": {
+              "type": "string"
+            },
+            "lockboxCode": {
+              "type": "string"
+            },
+            "wifiPass": {
+              "type": "string"
+            },
+            "notes": {
+              "type": "string"
+            }
           }
         },
         "preferredVendors": {
@@ -268,15 +386,32 @@
           "items": {
             "type": "object",
             "properties": {
-              "role": { "type": "string" },
-              "name": { "type": "string" },
-              "phone": { "type": "string" }
+              "role": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              }
             },
-            "required": ["role", "name", "phone"]
+            "required": [
+              "role",
+              "name",
+              "phone"
+            ]
           }
         }
       },
-      "required": ["id", "userId", "name", "address", "financials", "utilities"]
+      "required": [
+        "id",
+        "userId",
+        "name",
+        "address",
+        "financials",
+        "utilities"
+      ]
     }
   },
   "auth": {
@@ -366,5 +501,3 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user to list transactions where `resource.data.userId` matches their `request.auth.uid`. A rule is also included to grant read access to trusted server processes (like Genkit flows) for AI reporting, which are identified by their unauthenticated `request.auth` status. A new top-level 'properties' collection is added to store property data, secured by rules checking the 'userId' field within each document."
   }
 }
-
-    

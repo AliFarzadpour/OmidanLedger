@@ -21,6 +21,9 @@ import { doc, setDoc, collection } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
+import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
@@ -35,12 +38,29 @@ const propertySchema = z.object({
   financials: z.object({
     targetRent: z.coerce.number().min(0),
     securityDeposit: z.coerce.number().min(0),
+    purchasePrice: z.coerce.number().optional(),
+    purchaseDate: z.string().optional(),
   }),
   mortgage: z.object({
     hasMortgage: z.enum(['yes', 'no']),
     lenderName: z.string().optional(),
+    accountNumber: z.string().optional(), // NEW
+    
+    // Lender Contact (NEW)
+    lenderPhone: z.string().optional(),
+    lenderEmail: z.string().email().optional().or(z.literal('')), 
+    
+    // Loan Details
     monthlyPayment: z.coerce.number().optional(),
     interestRate: z.coerce.number().optional(),
+    loanBalance: z.coerce.number().optional(),
+
+    // Escrow Details (NEW)
+    escrow: z.object({
+      includesTax: z.boolean().default(false),
+      includesInsurance: z.boolean().default(false),
+      includesHoa: z.boolean().default(false),
+    }).optional(),
   }),
   hoa: z.object({
     hasHoa: z.enum(['yes', 'no']),
@@ -66,6 +86,7 @@ const propertySchema = z.object({
     phone: z.string(),
   })).optional(),
 });
+
 
 // --- MAIN COMPONENT ---
 export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
@@ -126,14 +147,16 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   // --- NAVIGATION ITEMS ---
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
-    { id: 'financials', label: 'Rent & Mortgage', icon: DollarSign },
-    { id: 'hoa', label: 'HOA & Fees', icon: Landmark },
+    { id: 'financials', label: 'Rent & Income', icon: DollarSign },
+    { id: 'mortgage', label: 'Mortgage & Debt', icon: Landmark },
+    { id: 'hoa', label: 'HOA & Fees', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
     { id: 'access', label: 'Access & Keys', icon: Key },
     { id: 'vendors', label: 'Preferred Vendors', icon: Users },
   ];
 
   return (
+    <Form {...form}>
     <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[500px]">
       
       {/* LEFT SIDEBAR NAVIGATION */}
@@ -221,33 +244,51 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* SECTION: FINANCIALS (Rent + Mortgage) */}
+        {/* SECTION: FINANCIALS (Now focused on Income) */}
         {activeSection === 'financials' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Target Revenue</CardTitle>
-              </CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Income Targets</CardTitle>
+              <CardDescription>What is the revenue potential?</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label>Monthly Rent Target</Label>
+                  <Label>Target Monthly Rent</Label>
                   <Input type="number" {...form.register('financials.targetRent')} />
                 </div>
                 <div className="grid gap-2">
                   <Label>Security Deposit</Label>
                   <Input type="number" {...form.register('financials.securityDeposit')} />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+              <Separator />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Purchase Price</Label>
+                  <Input type="number" {...form.register('financials.purchasePrice')} />
+                </div>
+                <div className="grid gap-2">
+                   <Label>Purchase Date</Label>
+                   <Input type="date" {...form.register('financials.purchaseDate')} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
+        {/* SECTION: MORTGAGE (New Dedicated Section) */}
+        {activeSection === 'mortgage' && (
+          <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Mortgage Information</CardTitle>
-                <CardDescription>Required for accurate cash flow calculations.</CardDescription>
+                <CardTitle>Loan Information</CardTitle>
+                <CardDescription>Track your debt service and escrow.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-4 mb-4">
-                  <Label>Is there a mortgage?</Label>
+              <CardContent className="space-y-6">
+                {/* Main Toggle */}
+                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                  <Label className="text-base">Is there a mortgage on this property?</Label>
                   <RadioGroup 
                     defaultValue="no" 
                     onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)}
@@ -263,21 +304,101 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                     </div>
                   </RadioGroup>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
                     <Label>Lender Name</Label>
-                    <Input placeholder="Bank of America" {...form.register('mortgage.lenderName')} />
+                    <Input placeholder="e.g. Wells Fargo" {...form.register('mortgage.lenderName')} />
+                  </div>
+                  <div className="grid gap-2">
+                     <Label>Loan Account Number</Label>
+                     <Input placeholder="####-####" {...form.register('mortgage.accountNumber')} />
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="grid gap-2">
+                     <Label>Total Monthly Payment</Label>
+                     <Input type="number" placeholder="0.00" {...form.register('mortgage.monthlyPayment')} />
                   </div>
                   <div className="grid gap-2">
                      <Label>Interest Rate (%)</Label>
-                     <Input placeholder="4.5" type="number" step="0.1" {...form.register('mortgage.interestRate')} />
+                     <Input type="number" step="0.01" placeholder="4.5" {...form.register('mortgage.interestRate')} />
                   </div>
                   <div className="grid gap-2">
-                    <Label>Monthly Payment (P&I)</Label>
-                    <Input placeholder="0.00" type="number" {...form.register('mortgage.monthlyPayment')} />
+                     <Label>Current Balance</Label>
+                     <Input type="number" placeholder="0.00" {...form.register('mortgage.loanBalance')} />
                   </div>
                 </div>
+
+                <Separator />
+                
+                {/* Contact Info */}
+                <div className="grid grid-cols-2 gap-4">
+                   <div className="grid gap-2">
+                     <Label>Lender Phone</Label>
+                     <Input placeholder="(555) 000-0000" {...form.register('mortgage.lenderPhone')} />
+                   </div>
+                   <div className="grid gap-2">
+                     <Label>Lender Email / Portal</Label>
+                     <Input placeholder="support@bank.com" {...form.register('mortgage.lenderEmail')} />
+                   </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Escrow Settings */}
+            <Card>
+              <CardHeader>
+                 <CardTitle>Escrow Details</CardTitle>
+                 <CardDescription>What is included in your monthly payment?</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                 <FormField
+                    control={form.control}
+                    name="mortgage.escrow.includesTax"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between border-b pb-3">
+                        <Label>Includes Property Taxes?</Label>
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                 <FormField
+                    control={form.control}
+                    name="mortgage.escrow.includesInsurance"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between border-b pb-3">
+                        <Label>Includes Home Insurance?</Label>
+                         <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="mortgage.escrow.includesHoa"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between">
+                         <Label>Includes HOA Fees?</Label>
+                         <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
               </CardContent>
             </Card>
           </div>
@@ -442,6 +563,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
       </div>
     </div>
+    </Form>
   );
 }
-    
