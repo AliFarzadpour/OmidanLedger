@@ -175,7 +175,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   ];
 
   return (
-    <Form {...form}>
     <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px]">
       
       {/* SIDEBAR */}
@@ -343,53 +342,44 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
         {/* --- 5. UTILITIES --- */}
         {activeSection === 'utilities' && (
-            <Card>
+          <Card>
             <CardHeader>
-                <CardTitle>Utility Responsibility</CardTitle>
-                <CardDescription>Who pays the bills?</CardDescription>
+              <CardTitle>Utility Responsibility</CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-                <Table>
-                    <TableHeader>
-                    <TableRow>
-                        <TableHead className="w-[100px]">Utility</TableHead>
-                        <TableHead className="w-[150px]">Responsibility</TableHead>
-                        <TableHead>Provider Name</TableHead>
-                        <TableHead>Contact / Acct #</TableHead>
-                    </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                    {utilityFields.fields.map((field, index) => (
-                        <TableRow key={field.id}>
-                        <TableCell className="font-medium">
-                            {form.getValues(`utilities.${index}.type`)}
-                        </TableCell>
-                        <TableCell>
-                            <Select 
+               <Table>
+                 <TableHeader>
+                   <TableRow>
+                     <TableHead className="w-[100px]">Utility</TableHead>
+                     <TableHead className="w-[150px]">Responsibility</TableHead>
+                     <TableHead>Provider Name</TableHead>
+                     <TableHead>Contact / Acct #</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {utilityFields.fields.map((field, index) => (
+                     <TableRow key={field.id}>
+                       <TableCell className="font-medium">{form.getValues(`utilities.${index}.type`)}</TableCell>
+                       <TableCell>
+                          <Select 
                             onValueChange={(val:any) => form.setValue(`utilities.${index}.responsibility`, val)}
                             defaultValue={field.responsibility}
-                            >
-                                <SelectTrigger className="h-8 w-[130px]">
-                                <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
+                          >
+                             <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
+                             <SelectContent>
                                 <SelectItem value="tenant">Tenant Pays</SelectItem>
                                 <SelectItem value="landlord">Landlord Pays</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </TableCell>
-                        <TableCell>
-                            <Input className="h-8" placeholder="Provider" {...form.register(`utilities.${index}.providerName`)} />
-                        </TableCell>
-                        <TableCell>
-                            <Input className="h-8" placeholder="Phone/Acct" {...form.register(`utilities.${index}.providerContact`)} />
-                        </TableCell>
-                        </TableRow>
-                    ))}
-                    </TableBody>
-                </Table>
+                             </SelectContent>
+                          </Select>
+                       </TableCell>
+                       <TableCell><Input className="h-8" placeholder="Provider" {...form.register(`utilities.${index}.providerName`)} /></TableCell>
+                       <TableCell><Input className="h-8" placeholder="Phone/Acct" {...form.register(`utilities.${index}.providerContact`)} /></TableCell>
+                     </TableRow>
+                   ))}
+                 </TableBody>
+               </Table>
             </CardContent>
-            </Card>
+          </Card>
         )}
 
         {/* --- 6. ACCESS --- */}
@@ -427,6 +417,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                         <Trash2 className="h-4 w-4" />
                      </Button>
                      
+                     {/* Row 1: Contact Info */}
                      <div className="grid grid-cols-12 gap-4 mb-4">
                         <div className="col-span-3">
                            <Label className="text-xs">First Name</Label>
@@ -436,11 +427,11 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                            <Label className="text-xs">Last Name</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} />
                         </div>
-                        <div className="col-span-4">
-                           <Label className="text-xs">Email (For Invoicing)</Label>
+                        <div className="col-span-3">
+                           <Label className="text-xs">Email</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.email`)} />
                         </div>
-                        <div className="col-span-2">
+                        <div className="col-span-3">
                            <Label className="text-xs">Phone</Label>
                            <Input className="bg-white" {...form.register(`tenants.${index}.phone`)} />
                         </div>
@@ -448,6 +439,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
                      <Separator className="mb-4" />
 
+                     {/* Row 2: Billing & Lease */}
                      <div className="grid grid-cols-12 gap-4">
                         <div className="col-span-3">
                            <Label className="text-xs font-semibold text-blue-700">Monthly Rent ($)</Label>
@@ -457,7 +449,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                            </div>
                         </div>
                         <div className="col-span-2">
-                           <Label className="text-xs font-semibold text-blue-700">Due Day (1-31)</Label>
+                           <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
                            <div className="relative">
                               <CalendarDays className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
                               <Input className="pl-7 bg-white border-blue-200" type="number" max={31} min={1} {...form.register(`tenants.${index}.rentDueDate`)} />
@@ -481,12 +473,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                      </div>
                   </div>
                ))}
-               {tenantFields.fields.length === 0 && (
-                 <div className="text-center py-10 border-2 border-dashed rounded-lg text-muted-foreground">
-                    <Users className="h-10 w-10 mx-auto mb-2 opacity-20" />
-                    <p>No tenants added yet.</p>
-                 </div>
-               )}
+               {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
             </CardContent>
           </Card>
         )}
