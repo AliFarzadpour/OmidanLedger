@@ -34,6 +34,34 @@ const propertySchema = z.object({
     state: z.string().min(2),
     zip: z.string().min(5),
   }),
+  accounting: z.object({
+    // Core
+    assetAccount: z.string().optional(),      // NEW: Links to Asset
+    incomeAccount: z.string().optional(),
+    lateFeeAccount: z.string().optional(), // NEW
+    expenseAccount: z.string().optional(),
+    managementFeeAccount: z.string().optional(), // NEW
+    
+    // Liabilities
+    liabilityAccount: z.string().optional(),  // NEW: Links to Mortgage Loan
+    securityDepositAccount: z.string().optional(), // NEW: Tenant Deposit Liability
+    
+    // Specific Expenses
+    interestAccount: z.string().optional(),
+    taxAccount: z.string().optional(),
+    insuranceAccount: z.string().optional(),
+    hoaAccount: z.string().optional(),
+    
+    // Utilities (Stored as a Map or flattened)
+    utilities: z.object({
+        water: z.string().optional(),
+        electric: z.string().optional(),
+        gas: z.string().optional(),
+        trash: z.string().optional(),
+        internet: z.string().optional(),
+        deposits: z.string().optional(), // Asset account for utility deposits
+    }).optional(),
+  }).optional(),
   financials: z.object({
     targetRent: z.coerce.number().min(0),
     securityDeposit: z.coerce.number().min(0),
@@ -112,24 +140,24 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     resolver: zodResolver(propertySchema),
     defaultValues: {
       name: '',
-      type: 'single-family' as const,
+      type: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
       mortgage: { 
         purchasePrice: 0,
         purchaseDate: '',
-        hasMortgage: 'no' as const,
+        hasMortgage: 'no', 
         lenderName: '', 
         escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
       },
       taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
-      hoa: { hasHoa: 'no' as const, fee: 0, frequency: 'monthly' as const, contactName: '', contactPhone: '', contactEmail: '' },
+      hoa: { hasHoa: 'no', fee: 0, frequency: 'monthly', contactName: '', contactPhone: '', contactEmail: '' },
       utilities: [
-        { type: 'Water', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
-        { type: 'Electric', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
-        { type: 'Gas', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
-        { type: 'Trash', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
-        { type: 'Internet', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
+        { type: 'Water', responsibility: 'tenant', providerName: '', providerContact: '' },
+        { type: 'Electric', responsibility: 'tenant', providerName: '', providerContact: '' },
+        { type: 'Gas', responsibility: 'tenant', providerName: '', providerContact: '' },
+        { type: 'Trash', responsibility: 'tenant', providerName: '', providerContact: '' },
+        { type: 'Internet', responsibility: 'tenant', providerName: '', providerContact: '' },
       ],
       access: { gateCode: '', lockboxCode: '', notes: '' },
       tenants: [],
@@ -141,104 +169,92 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
 
-  // --- AUTOMATED BATCH CREATION LOGIC ---
+  // --- AUTOMATED BATCH CREATION LOGIC (GRANULAR SUITE) ---
   const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
     setIsSaving(true);
 
     try {
-      // 1. Initiate Batch
       const batch = writeBatch(firestore);
-      
-      // 2. Create References for "The Property Suite"
-      const propertyRef = doc(collection(firestore, 'properties'));
-      const incomeRef = doc(collection(firestore, 'accounts'));
-      const expenseRef = doc(collection(firestore, 'accounts'));
-      const assetRef = doc(collection(firestore, 'accounts'));
-      
-      // 3. Prepare Account Objects (The "Suite")
       const timestamp = new Date().toISOString();
-      const accountsToCreate = [
-        {
-          ref: incomeRef,
-          data: {
-            userId: user.uid,
-            name: `Rent - ${data.name}`,
-            type: 'Income',
-            subtype: 'Rental Income',
-            balance: 0,
-            isSystemAccount: true, // Flag to prevent accidental deletion
-            createdAt: timestamp
-          }
-        },
-        {
-          ref: expenseRef,
-          data: {
-            userId: user.uid,
-            name: `Maint/Ops - ${data.name}`,
-            type: 'Expense',
-            subtype: 'Property Expense',
-            balance: 0,
-            isSystemAccount: true,
-            createdAt: timestamp
-          }
-        },
-        {
-          ref: assetRef,
-          data: {
-            userId: user.uid,
-            name: `Property - ${data.name}`,
-            type: 'Asset',
-            subtype: 'Fixed Asset',
-            balance: data.mortgage?.purchasePrice || 0, // Initial value
-            isSystemAccount: true,
-            createdAt: timestamp
-          }
-        }
-      ];
+      const propertyRef = doc(collection(firestore, 'properties'));
+      
+      // Store all created IDs here
+      const accountingMap: any = { utilities: {} };
 
-      // 4. Handle Mortgage Liability (Conditional)
-      let liabilityAccountId = null;
-      if (data.mortgage.hasMortgage === 'yes') {
-        const liabilityRef = doc(collection(firestore, 'accounts'));
-        accountsToCreate.push({
-          ref: liabilityRef,
-          data: {
-            userId: user.uid,
-            name: `Mortgage - ${data.name}`,
-            type: 'Liability',
-            subtype: 'Long Term Liability',
-            balance: data.mortgage?.loanBalance || 0,
-            isSystemAccount: true,
-            createdAt: timestamp
-          }
+      // Helper to generate the Firestore write
+      const createAccount = (name: string, type: string, subtype: string, balance: number = 0) => {
+        const ref = doc(collection(firestore, 'accounts'));
+        batch.set(ref, {
+          userId: user.uid,
+          name: name,
+          type: type,
+          subtype: subtype,
+          balance: balance,
+          isSystemAccount: true,
+          propertyId: propertyRef.id,
+          createdAt: timestamp
         });
-        liabilityAccountId = liabilityRef.id;
+        return ref.id;
+      };
+
+      // --- 1. ASSETS ---
+      accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', data.mortgage?.purchasePrice || 0);
+      
+      // Utility Deposits (Grouped into one Asset account to avoid clutter, or split if strictly needed)
+      // "Utility Deposits" is cleaner than 5 separate asset accounts for $50 each.
+      accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
+
+      // --- 2. LIABILITIES ---
+      // Tenant Security Deposits (Money you owe back)
+      if (data.financials.securityDeposit > 0) {
+         accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability', 0);
       }
 
-      // 5. Add Accounts to Batch
-      accountsToCreate.forEach(acc => batch.set(acc.ref, acc.data));
+      // Mortgage (Long Term)
+      if (data.mortgage.hasMortgage === 'yes') {
+        accountingMap.liabilityAccount = createAccount(`Mortgage - ${data.name}`, 'Liability', 'Long Term Liability', data.mortgage?.loanBalance || 0);
+      }
 
-      // 6. Add Property to Batch (With Links!)
+      // --- 3. INCOME ---
+      accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
+      accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
+
+      // --- 4. EXPENSES (Core) ---
+      accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
+      accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Legal & Professional');
+      accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
+      accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
+
+      if (data.mortgage.hasMortgage === 'yes') {
+        accountingMap.interestAccount = createAccount(`Mtg Interest - ${data.name}`, 'Expense', 'Interest Expense');
+      }
+
+      if (data.hoa.hasHoa === 'yes') {
+        accountingMap.hoaAccount = createAccount(`HOA Fees - ${data.name}`, 'Expense', 'Dues & Subscriptions');
+      }
+
+      // --- 5. EXPENSES (Utilities - Separated) ---
+      // We create specific ledgers for each type so AI knows exactly where to put "City Water Bill"
+      accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
+
+      // --- COMMIT ---
       batch.set(propertyRef, {
         userId: user.uid,
         ...data,
         createdAt: timestamp,
-        // THE GOLDEN LINK: Connecting Operations to Accounting
-        accounting: {
-          incomeAccountId: incomeRef.id,
-          expenseAccountId: expenseRef.id,
-          assetAccountId: assetRef.id,
-          liabilityAccountId: liabilityAccountId
-        }
+        accounting: accountingMap
       });
 
-      // 7. Commit!
       await batch.commit();
 
       toast({ 
-        title: "Property & Books Created", 
-        description: `Successfully set up ${data.name} and created ${accountsToCreate.length} ledger accounts.` 
+        title: "Property Suite Created", 
+        description: `Generated property record and full Chart of Accounts for ${data.name}.` 
       });
       
       if (onSuccess) onSuccess();
@@ -253,7 +269,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
-    { id: 'accounting', label: 'Automated Accounting', icon: Bot }, // UPDATED LABEL
+    { id: 'accounting', label: 'Automated Accounting', icon: Bot },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
@@ -348,77 +364,54 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- ACCOUNTING (NEW: AUTO-PILOT PREVIEW) --- */}
+        {/* --- ACCOUNTING PREVIEW --- */}
         {activeSection === 'accounting' && (
           <Card className="border-blue-200 bg-blue-50/30">
             <CardHeader>
               <div className="flex items-center gap-2">
                  <Bot className="h-6 w-6 text-blue-600" />
-                 <CardTitle>Automated Bookkeeping</CardTitle>
+                 <CardTitle>Auto-Generated Ledgers</CardTitle>
               </div>
               <CardDescription>
-                We will automatically create separate ledgers for this property to keep your books organized.
+                We will generate <strong>15+ specialized accounts</strong> for {form.watch('name') || 'this property'} to automate your bookkeeping.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-               <div className="grid gap-4">
-                  
-                  {/* Visualizing the "Suite" */}
-                  <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
-                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-green-100 rounded-full"><DollarSign className="h-4 w-4 text-green-700"/></div>
-                        <div>
-                           <p className="font-medium text-sm">Income Ledger</p>
-                           <p className="text-xs text-muted-foreground">For Rent & Fees</p>
-                        </div>
-                     </div>
-                     <div className="text-sm font-mono text-slate-600">Rent - {form.watch('name') || 'Property'}</div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
-                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-red-100 rounded-full"><Wrench className="h-4 w-4 text-red-700"/></div>
-                        <div>
-                           <p className="font-medium text-sm">Expense Ledger</p>
-                           <p className="text-xs text-muted-foreground">For Repairs & Ops</p>
-                        </div>
-                     </div>
-                     <div className="text-sm font-mono text-slate-600">Maint/Ops - {form.watch('name') || 'Property'}</div>
-                  </div>
-
-                  <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
-                     <div className="flex items-center gap-3">
-                        <div className="p-2 bg-blue-100 rounded-full"><Home className="h-4 w-4 text-blue-700"/></div>
-                        <div>
-                           <p className="font-medium text-sm">Asset Ledger</p>
-                           <p className="text-xs text-muted-foreground">Property Value</p>
-                        </div>
-                     </div>
-                     <div className="text-sm font-mono text-slate-600">Property - {form.watch('name') || 'Property'}</div>
-                  </div>
-
-                  {form.watch('mortgage.hasMortgage') === 'yes' && (
-                    <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
-                       <div className="flex items-center gap-3">
-                          <div className="p-2 bg-orange-100 rounded-full"><Landmark className="h-4 w-4 text-orange-700"/></div>
-                          <div>
-                             <p className="font-medium text-sm">Liability Ledger</p>
-                             <p className="text-xs text-muted-foreground">Mortgage Principal</p>
-                          </div>
-                       </div>
-                       <div className="text-sm font-mono text-slate-600">Mortgage - {form.watch('name') || 'Property'}</div>
-                    </div>
-                  )}
-
-               </div>
+            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
                
-               <div className="flex items-start gap-2 p-4 bg-yellow-50 text-yellow-800 rounded-md text-xs">
-                  <BookOpen className="h-4 w-4 mt-0.5 shrink-0" />
-                  <p>
-                     <strong>How AI uses this:</strong> When you download transactions later, our AI will look for 
-                     "{form.watch('name')}" in the description and automatically categorize it into these specific accounts.
-                  </p>
+               {/* ASSETS & LIABILITIES */}
+               <div className="p-2 bg-white border rounded text-xs flex justify-between">
+                  <span className="font-semibold text-blue-700">Assets</span>
+                  <span>Property Value, Utility Deposits</span>
                </div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between">
+                  <span className="font-semibold text-orange-700">Liabilities</span>
+                  <span>Mortgage Loan, Tenant Security Deposits</span>
+               </div>
+
+               {/* INCOME */}
+               <div className="p-2 bg-white border rounded text-xs flex justify-between">
+                  <span className="font-semibold text-green-700">Income</span>
+                  <span>Rent Revenue, Late Fee Revenue</span>
+               </div>
+
+               {/* EXPENSES */}
+               <div className="p-2 bg-white border rounded text-xs">
+                  <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
+                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
+                     <li>Maintenance</li>
+                     <li>Property Tax</li>
+                     <li>Insurance</li>
+                     <li>Mgmt Fees</li>
+                     <li>Water</li>
+                     <li>Electric</li>
+                     <li>Gas</li>
+                     <li>Trash</li>
+                     <li>Internet</li>
+                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
+                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
+                  </ul>
+               </div>
+
             </CardContent>
           </Card>
         )}

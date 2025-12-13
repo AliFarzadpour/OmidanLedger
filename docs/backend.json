@@ -213,10 +213,28 @@
             "type": "object",
             "description": "Links the property to its dedicated suite of GL accounts.",
             "properties": {
-                "assetAccountId": { "type": "string", "description": "FK to the Asset account for this property." },
-                "liabilityAccountId": { "type": "string", "description": "FK to the Mortgage Liability account." },
-                "incomeAccountId": { "type": "string", "description": "FK to the Rental Income account." },
-                "expenseAccountId": { "type": "string", "description": "FK to the primary Expense account." }
+                "assetAccount": { "type": "string", "description": "FK to the Asset account for this property." },
+                "incomeAccount": { "type": "string", "description": "FK to the Rental Income account." },
+                "lateFeeAccount": { "type": "string", "description": "FK to the Late Fee Income account." },
+                "expenseAccount": { "type": "string", "description": "FK to the primary Expense account (Maint/Ops)." },
+                "managementFeeAccount": { "type": "string", "description": "FK to the Management Fee Expense account." },
+                "liabilityAccount": { "type": "string", "description": "FK to the Mortgage Liability account." },
+                "securityDepositAccount": { "type": "string", "description": "FK to the Tenant Deposit Liability account." },
+                "interestAccount": { "type": "string", "description": "FK to the Mortgage Interest Expense account." },
+                "taxAccount": { "type": "string", "description": "FK to the Property Tax Expense account." },
+                "insuranceAccount": { "type": "string", "description": "FK to the Property Insurance Expense account." },
+                "hoaAccount": { "type": "string", "description": "FK to the HOA Fee Expense account." },
+                "utilities": {
+                    "type": "object",
+                    "properties": {
+                        "water": { "type": "string" },
+                        "electric": { "type": "string" },
+                        "gas": { "type": "string" },
+                        "trash": { "type": "string" },
+                        "internet": { "type": "string" },
+                        "deposits": { "type": "string", "description": "Asset account for utility deposits paid." }
+                    }
+                }
             }
         },
         "financials": {
@@ -408,6 +426,4 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user"
-  }
-}
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user
