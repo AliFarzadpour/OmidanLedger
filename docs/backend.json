@@ -213,14 +213,14 @@
           "type": "object",
           "properties": {
             "targetRent": { "type": "number" },
-            "securityDeposit": { "type": "number" },
-            "purchasePrice": { "type": "number" },
-            "purchaseDate": { "type": "string", "format": "date" }
+            "securityDeposit": { "type": "number" }
           }
         },
         "mortgage": {
           "type": "object",
           "properties": {
+            "purchasePrice": { "type": "number" },
+            "purchaseDate": { "type": "string", "format": "date" },
             "hasMortgage": { "type": "string", "enum": ["yes", "no"] },
             "lenderName": { "type": "string" },
             "accountNumber": { "type": "string" },
@@ -237,6 +237,17 @@
                 "includesHoa": { "type": "boolean" }
               }
             }
+          }
+        },
+        "taxAndInsurance": {
+          "type": "object",
+          "properties": {
+            "propertyTaxAmount": { "type": "number" },
+            "taxParcelId": { "type": "string" },
+            "insuranceProvider": { "type": "string" },
+            "policyNumber": { "type": "string" },
+            "annualPremium": { "type": "number" },
+            "renewalDate": { "type": "string", "format": "date" }
           }
         },
         "hoa": {

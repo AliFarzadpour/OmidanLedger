@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
-  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone 
+  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -37,13 +37,10 @@ const propertySchema = z.object({
   financials: z.object({
     targetRent: z.coerce.number().min(0),
     securityDeposit: z.coerce.number().min(0),
-    // Purchase info moved to Mortgage object below
   }),
   mortgage: z.object({
-    // Moved here per request
     purchasePrice: z.coerce.number().optional(),
     purchaseDate: z.string().optional(),
-    
     hasMortgage: z.enum(['yes', 'no']),
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
@@ -57,6 +54,15 @@ const propertySchema = z.object({
       includesInsurance: z.boolean().default(false),
       includesHoa: z.boolean().default(false),
     }).optional(),
+  }),
+  // NEW: Dedicated Tax & Insurance Section
+  taxAndInsurance: z.object({
+    propertyTaxAmount: z.coerce.number().optional(),
+    taxParcelId: z.string().optional(),
+    insuranceProvider: z.string().optional(),
+    policyNumber: z.string().optional(),
+    annualPremium: z.coerce.number().optional(),
+    renewalDate: z.string().optional(),
   }),
   hoa: z.object({
     hasHoa: z.enum(['yes', 'no']),
@@ -95,7 +101,6 @@ const propertySchema = z.object({
   })).optional(),
 });
 
-
 // --- MAIN COMPONENT ---
 export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   const { user } = useUser();
@@ -118,6 +123,8 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         lenderName: '', 
         escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
       },
+      // New Default Values
+      taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
       hoa: { hasHoa: 'no' as const, fee: 0, frequency: 'monthly' as const, contactName: '', contactPhone: '', contactEmail: '' },
       utilities: [
         { type: 'Water', responsibility: 'tenant' as const, providerName: '', providerContact: '' },
@@ -168,6 +175,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     { id: 'general', label: 'General Info', icon: Building2 },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
+    { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck }, // NEW TAB
     { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
     { id: 'access', label: 'Access & Keys', icon: Key },
@@ -178,8 +186,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   ];
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px]">
-      
+    <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col lg:flex-row gap-6 h-full min-h-[600px]">
       {/* SIDEBAR */}
       <div className="w-full lg:w-64 flex-shrink-0 space-y-1">
         {navItems.map((item) => (
@@ -202,7 +209,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         <div className="px-4">
            <Button 
              className="w-full bg-green-600 hover:bg-green-700" 
-             onClick={form.handleSubmit(onSubmit)}
+             type="submit"
              disabled={isSaving}
            >
              {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Property</>}
@@ -218,12 +225,8 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           <Card>
             <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label>Property Nickname</Label>
-                <Input placeholder="e.g. The Lake House" {...form.register('name')} />
-              </div>
-              <div className="grid gap-2">
-                <Label>Property Type</Label>
+              <div className="grid gap-2"><Label>Property Nickname</Label><Input placeholder="e.g. The Lake House" {...form.register('name')} /></div>
+              <div className="grid gap-2"><Label>Property Type</Label>
                 <Select onValueChange={(val: any) => form.setValue('type', val)} defaultValue="single-family">
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -234,11 +237,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                     </SelectContent>
                 </Select>
               </div>
-              <Separator />
-              <div className="grid gap-2">
-                <Label>Street Address</Label>
-                <Input placeholder="123 Main St" {...form.register('address.street')} />
-              </div>
+              <div className="grid gap-2"><Label>Street Address</Label><Input placeholder="123 Main St" {...form.register('address.street')} /></div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2"><Label>City</Label><Input {...form.register('address.city')} /></div>
                 <div className="grid gap-2"><Label>State</Label><Input {...form.register('address.state')} /></div>
@@ -268,7 +267,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             <CardHeader><CardTitle>Loan & Purchase Information</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               
-              {/* NEW: Purchase Info Moved Here */}
+              {/* Purchase Info */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 border rounded-lg">
                   <div className="grid gap-2"><Label>Purchase Price</Label><Input type="number" {...form.register('mortgage.purchasePrice')} /></div>
                   <div className="grid gap-2"><Label>Purchase Date</Label><Input type="date" {...form.register('mortgage.purchaseDate')} /></div>
@@ -291,6 +290,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="grid gap-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" {...form.register('mortgage.interestRate')} /></div>
                 <div className="grid gap-2"><Label>Loan Balance</Label><Input type="number" {...form.register('mortgage.loanBalance')} /></div>
               </div>
+              
               <div className="p-4 border rounded-md bg-slate-50">
                 <Label className="mb-2 block font-semibold text-slate-700">Escrow Configuration</Label>
                 <div className="flex gap-6">
@@ -312,7 +312,40 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 4. HOA --- */}
+        {/* --- 4. TAX & INSURANCE (NEW) --- */}
+        {activeSection === 'tax' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Property Tax</CardTitle>
+                <CardDescription>Jurisdiction and annual costs.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2"><Label>Tax Parcel ID</Label><Input placeholder="Found on tax bill" {...form.register('taxAndInsurance.taxParcelId')} /></div>
+                <div className="grid gap-2"><Label>Annual Tax Amount</Label><Input type="number" {...form.register('taxAndInsurance.propertyTaxAmount')} /></div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Home Insurance</CardTitle>
+                <CardDescription>Policy details and premiums.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div>
+                  <div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2"><Label>Annual Premium ($)</Label><Input type="number" {...form.register('taxAndInsurance.annualPremium')} /></div>
+                  <div className="grid gap-2"><Label>Renewal Date</Label><Input type="date" {...form.register('taxAndInsurance.renewalDate')} /></div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* --- 5. HOA --- */}
         {activeSection === 'hoa' && (
           <Card>
             <CardHeader><CardTitle>HOA Details</CardTitle></CardHeader>
@@ -349,7 +382,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 5. UTILITIES --- */}
+        {/* --- 6. UTILITIES --- */}
         {activeSection === 'utilities' && (
           <Card>
             <CardHeader>
@@ -391,7 +424,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 6. ACCESS --- */}
+        {/* --- 7. ACCESS --- */}
         {activeSection === 'access' && (
           <Card>
             <CardHeader><CardTitle>Access</CardTitle></CardHeader>
@@ -405,7 +438,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 7. TENANTS (UPDATED 3-ROW LAYOUT) --- */}
+        {/* --- 8. TENANTS (UPDATED SPACIOUS LAYOUT) --- */}
         {activeSection === 'tenants' && (
           <Card>
             <CardHeader>
@@ -452,29 +485,34 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
                      <Separator className="mb-4" />
 
-                     {/* ROW 3: Financials & Lease Dates */}
-                     <div className="grid grid-cols-12 gap-4">
-                        <div className="col-span-4 lg:col-span-2">
-                           <Label className="text-xs font-semibold text-blue-700">Rent ($)</Label>
+                     {/* ROW 3: Financials (Full Widths) */}
+                     <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div className="grid gap-2">
+                           <Label className="text-xs font-semibold text-blue-700">Monthly Rent ($)</Label>
                            <Input type="number" className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentAmount`)} />
                         </div>
-                        <div className="col-span-4 lg:col-span-2">
+                        <div className="grid gap-2">
                            <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
                            <Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} />
                         </div>
-                        <div className="col-span-4 lg:col-span-2">
+                        <div className="grid gap-2">
                            <Label className="text-xs text-red-700">Late Fee ($)</Label>
                            <Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} />
                         </div>
-                        <div className="col-span-6 lg:col-span-3">
+                     </div>
+
+                     {/* ROW 4: Lease Dates (Full Widths) */}
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2">
                            <Label className="text-xs">Lease Start</Label>
                            <Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} />
                         </div>
-                        <div className="col-span-6 lg:col-span-3">
+                        <div className="grid gap-2">
                            <Label className="text-xs">Lease End</Label>
                            <Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} />
                         </div>
                      </div>
+
                   </div>
                ))}
                {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
@@ -482,7 +520,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 8. RENT ROLL --- */}
+        {/* --- 9. RENT ROLL --- */}
         {activeSection === 'rentroll' && (
           <Card>
             <CardHeader>
@@ -525,7 +563,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 9. MAINTENANCE --- */}
+        {/* --- 10. MAINTENANCE --- */}
         {activeSection === 'maintenance' && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
@@ -555,7 +593,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 10. VENDORS --- */}
+        {/* --- 11. VENDORS --- */}
         {activeSection === 'vendors' && (
           <Card>
             <CardHeader>
@@ -580,6 +618,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
       </div>
-    </div>
+    </form>
   );
 }
