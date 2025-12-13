@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
-  FileText, Wrench, UserCheck, CalendarDays, Receipt 
+  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ const propertySchema = z.object({
   hoa: z.object({
     hasHoa: z.enum(['yes', 'no']),
     fee: z.coerce.number().optional(),
-    frequency: z.enum(['monthly', 'quarterly', 'annually']).optional(),
+    frequency: z.enum(['monthly', 'quarterly', 'semi-annually', 'annually']).optional(),
     contactName: z.string().optional(),
     contactPhone: z.string().optional(),
     contactEmail: z.string().email().optional().or(z.literal('')),
@@ -85,6 +85,7 @@ const propertySchema = z.object({
     // CRITICAL FOR INVOICING:
     rentAmount: z.coerce.number(),
     rentDueDate: z.coerce.number().min(1).max(31).default(1), // Day of month (e.g., 1st)
+    lateFeeAmount: z.coerce.number().optional(),
   })).optional(),
   preferredVendors: z.array(z.object({
     role: z.string(),
@@ -273,7 +274,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                   <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
                 </RadioGroup>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Lender Name</Label><Input {...form.register('mortgage.lenderName')} /></div>
                 <div className="grid gap-2"><Label>Account Number</Label><Input {...form.register('mortgage.accountNumber')} /></div>
@@ -283,9 +283,8 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="grid gap-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" {...form.register('mortgage.interestRate')} /></div>
                 <div className="grid gap-2"><Label>Loan Balance</Label><Input type="number" {...form.register('mortgage.loanBalance')} /></div>
               </div>
-              
               <div className="p-4 border rounded-md bg-slate-50">
-                <Label className="mb-2 block font-semibold text-slate-700">Escrow Configuration (Included in Payment)</Label>
+                <Label className="mb-2 block font-semibold text-slate-700">Escrow Configuration</Label>
                 <div className="flex gap-6">
                   <div className="flex items-center gap-2">
                     <input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesTax')} />
@@ -325,6 +324,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                         <SelectContent>
                             <SelectItem value="monthly">Monthly</SelectItem>
                             <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="semi-annually">Semi-Annually</SelectItem>
                             <SelectItem value="annually">Annually</SelectItem>
                         </SelectContent>
                       </Select>
@@ -406,7 +406,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 7. TENANTS (INVOICING READY) --- */}
+        {/* --- 7. TENANTS --- */}
         {activeSection === 'tenants' && (
           <Card>
             <CardHeader>
@@ -415,7 +415,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                     <CardTitle>Tenant Roster</CardTitle>
                     <CardDescription>Active tenants for invoicing.</CardDescription>
                  </div>
-                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1 })}>
+                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1, lateFeeAmount: 0 })}>
                     <Plus className="h-4 w-4 mr-2" /> Add Tenant
                  </Button>
               </div>
@@ -456,14 +456,21 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                               <Input className="pl-7 bg-white border-blue-200" type="number" {...form.register(`tenants.${index}.rentAmount`)} />
                            </div>
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
                            <Label className="text-xs font-semibold text-blue-700">Due Day (1-31)</Label>
                            <div className="relative">
                               <CalendarDays className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
                               <Input className="pl-7 bg-white border-blue-200" type="number" max={31} min={1} {...form.register(`tenants.${index}.rentDueDate`)} />
                            </div>
                         </div>
-                        <div className="col-span-3">
+                        <div className="col-span-2">
+                           <Label className="text-xs text-red-700">Late Fee ($)</Label>
+                           <div className="relative">
+                              <Clock className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground" />
+                              <Input className="pl-7 bg-white border-red-200" type="number" {...form.register(`tenants.${index}.lateFeeAmount`)} />
+                           </div>
+                        </div>
+                        <div className="col-span-2">
                            <Label className="text-xs">Lease Start</Label>
                            <Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} />
                         </div>
@@ -484,12 +491,12 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 8. RENT ROLL (DATA SHEET VIEW) --- */}
+        {/* --- 8. RENT ROLL --- */}
         {activeSection === 'rentroll' && (
           <Card>
             <CardHeader>
-              <CardTitle>Rent Roll Data Sheet</CardTitle>
-              <CardDescription>Live summary of lease performance (Auto-calculated).</CardDescription>
+              <CardTitle>Rent Roll</CardTitle>
+              <CardDescription>Live summary of lease performance.</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
                <div className="bg-slate-100 p-4 border-b flex justify-between items-center text-sm">
@@ -505,29 +512,21 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                      <TableHead>Lease Term</TableHead>
                      <TableHead>Status</TableHead>
                      <TableHead className="text-right">Monthly Rent</TableHead>
-                     <TableHead className="text-right">Balance Due</TableHead>
+                     <TableHead className="text-right">Late Fee</TableHead>
                    </TableRow>
                  </TableHeader>
                  <TableBody>
                    {form.watch('tenants')?.map((tenant: any, i: number) => (
                      <TableRow key={i}>
                        <TableCell className="font-medium">{tenant.firstName} {tenant.lastName}</TableCell>
-                       <TableCell className="text-xs text-muted-foreground">
-                          {tenant.leaseStart} - {tenant.leaseEnd}
-                       </TableCell>
-                       <TableCell>
-                          <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">Active</span>
-                       </TableCell>
+                       <TableCell className="text-xs text-muted-foreground">{tenant.leaseStart} - {tenant.leaseEnd}</TableCell>
+                       <TableCell><span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">Active</span></TableCell>
                        <TableCell className="text-right">${tenant.rentAmount}</TableCell>
-                       <TableCell className="text-right text-muted-foreground">$0.00</TableCell> 
+                       <TableCell className="text-right text-red-500">${tenant.lateFeeAmount || 0}</TableCell> 
                      </TableRow>
                    ))}
                    {(!form.watch('tenants') || form.watch('tenants')?.length === 0) && (
-                      <TableRow>
-                        <TableCell colSpan={5} className="text-center h-24 text-muted-foreground">
-                           No active leases found. Add tenants to populate Rent Roll.
-                        </TableCell>
-                      </TableRow>
+                      <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">No active leases found.</TableCell></TableRow>
                    )}
                  </TableBody>
                </Table>
@@ -535,26 +534,18 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* --- 9. MAINTENANCE (DATA SHEET PLACEHOLDER) --- */}
+        {/* --- 9. MAINTENANCE --- */}
         {activeSection === 'maintenance' && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                 <CardTitle>Maintenance Data Sheet</CardTitle>
-                 <CardDescription>Synced from Accounting Transactions.</CardDescription>
-              </div>
-              <Button size="sm" variant="outline">
-                 <Receipt className="h-4 w-4 mr-2" /> Log Expense
-              </Button>
+              <div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div>
+              <Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button>
             </CardHeader>
             <CardContent className="p-0">
                <div className="p-8 text-center border-b bg-slate-50/50">
                   <Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-600 max-w-sm mx-auto">
-                     This sheet will automatically populate with transactions categorized as "Repairs & Maintenance" linked to this property.
-                  </p>
+                  <p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p>
                </div>
-               
                <Table>
                  <TableHeader>
                    <TableRow>
@@ -566,16 +557,14 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                    </TableRow>
                  </TableHeader>
                  <TableBody>
-                    <TableRow>
-                       <TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell>
-                    </TableRow>
+                    <TableRow><TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell></TableRow>
                  </TableBody>
                </Table>
             </CardContent>
           </Card>
         )}
-        
-        {/* --- 10. VENDORS (No Change) --- */}
+
+        {/* --- 10. VENDORS --- */}
         {activeSection === 'vendors' && (
           <Card>
             <CardHeader>
@@ -601,6 +590,5 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         )}
       </div>
     </div>
-    </Form>
   );
 }

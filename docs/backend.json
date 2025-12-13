@@ -244,7 +244,7 @@
           "properties": {
             "hasHoa": { "type": "string", "enum": ["yes", "no"] },
             "fee": { "type": "number" },
-            "frequency": { "type": "string", "enum": ["monthly", "quarterly", "annually"] },
+            "frequency": { "type": "string", "enum": ["monthly", "quarterly", "semi-annually", "annually"] },
             "contactName": { "type": "string" },
             "contactPhone": { "type": "string" },
             "contactEmail": { "type": "string", "format": "email" }
@@ -282,7 +282,8 @@
               "leaseStart": { "type": "string", "format": "date" },
               "leaseEnd": { "type": "string", "format": "date" },
               "rentAmount": { "type": "number" },
-              "rentDueDate": { "type": "number" }
+              "rentDueDate": { "type": "number" },
+              "lateFeeAmount": { "type": "number" }
             },
              "required": ["firstName", "lastName", "email", "rentAmount", "rentDueDate"]
           }
@@ -386,4 +387,4 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user to list transactions where `resource.data.userId` matches their `request.auth.uid`. A rule is also included to grant read access to trusted server processes (like Genkit flows) for AI reporting, which are identified by their unauthenticated `request.auth` status. A new top-level 'properties' collection
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user to list transactions where `resource.data.userId` matches their `request.auth.uid`. A rule is also included to grant read access to trusted server processes (like Genkit flows) for AI reporting, which
