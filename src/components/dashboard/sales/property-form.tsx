@@ -47,7 +47,7 @@ const propertySchema = z.object({
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
     lenderPhone: z.string().optional(),
-    lenderEmail: z.string().optional(),
+    lenderEmail: z.string().email().optional().or(z.literal('')),
     monthlyPayment: z.coerce.number().optional(),
     interestRate: z.coerce.number().optional(),
     loanBalance: z.coerce.number().optional(),
@@ -63,7 +63,7 @@ const propertySchema = z.object({
     frequency: z.enum(['monthly', 'quarterly', 'annually']).optional(),
     contactName: z.string().optional(),
     contactPhone: z.string().optional(),
-    contactEmail: z.string().optional(),
+    contactEmail: z.string().email().optional().or(z.literal('')),
   }),
   utilities: z.array(z.object({
     type: z.string(), // Water, Electric, etc.
