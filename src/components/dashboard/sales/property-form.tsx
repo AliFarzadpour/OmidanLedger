@@ -17,13 +17,11 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, FirestorePermissionError, errorEmitter } from '@/firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
 import { Form } from '@/components/ui/form';
 
 // --- SCHEMA DEFINITION ---
@@ -603,5 +601,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         )}
       </div>
     </div>
+    </Form>
   );
 }
