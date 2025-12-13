@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
-  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck 
+  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, BookOpen 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,12 @@ const propertySchema = z.object({
     state: z.string().min(2),
     zip: z.string().min(5),
   }),
+  // PHASE 2: ACCOUNTING MAPPING
+  accounting: z.object({
+    incomeAccount: z.string().optional(), // e.g. "Rental Income"
+    expenseAccount: z.string().optional(), // e.g. "Property Maintenance"
+    liabilityAccount: z.string().optional(), // e.g. "Security Deposits Held"
+  }).optional(),
   financials: z.object({
     targetRent: z.coerce.number().min(0),
     securityDeposit: z.coerce.number().min(0),
@@ -55,7 +61,6 @@ const propertySchema = z.object({
       includesHoa: z.boolean().default(false),
     }).optional(),
   }),
-  // NEW: Dedicated Tax & Insurance Section
   taxAndInsurance: z.object({
     propertyTaxAmount: z.coerce.number().optional(),
     taxParcelId: z.string().optional(),
@@ -115,6 +120,12 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
       name: '',
       type: 'single-family' as const,
       address: { street: '', city: '', state: '', zip: '' },
+      // PHASE 2 DEFAULTS
+      accounting: { 
+        incomeAccount: 'Rental Income', 
+        expenseAccount: 'Repairs & Maintenance',
+        liabilityAccount: 'Security Deposits' 
+      },
       financials: { targetRent: 0, securityDeposit: 0 },
       mortgage: { 
         purchasePrice: 0,
@@ -123,7 +134,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         lenderName: '', 
         escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
       },
-      // New Default Values
       taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
       hoa: { hasHoa: 'no' as const, fee: 0, frequency: 'monthly' as const, contactName: '', contactPhone: '', contactEmail: '' },
       utilities: [
@@ -173,9 +183,10 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
+    { id: 'accounting', label: 'Accounting Setup', icon: BookOpen }, // NEW TAB
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
-    { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck }, // NEW TAB
+    { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
     { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
     { id: 'access', label: 'Access & Keys', icon: Key },
@@ -242,6 +253,68 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                 <div className="grid gap-2"><Label>City</Label><Input {...form.register('address.city')} /></div>
                 <div className="grid gap-2"><Label>State</Label><Input {...form.register('address.state')} /></div>
                 <div className="grid gap-2"><Label>Zip</Label><Input {...form.register('address.zip')} /></div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* --- PHASE 2: ACCOUNTING SETUP (NEW) --- */}
+        {activeSection === 'accounting' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Accounting Configuration</CardTitle>
+              <CardDescription>
+                Map this property to your Chart of Accounts. This ensures future transactions are automatically categorized.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid gap-2">
+                <Label>Default Income Account</Label>
+                <Select 
+                  onValueChange={(val: any) => form.setValue('accounting.incomeAccount', val)} 
+                  defaultValue="Rental Income"
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Rental Income">Rental Income</SelectItem>
+                    <SelectItem value="Commercial Income">Commercial Income</SelectItem>
+                    <SelectItem value="Short-term Rental">Short-term Rental (Airbnb)</SelectItem>
+                    <SelectItem value="Other Income">Other Income</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Used when generating Rent Invoices.</p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Default Expense Account</Label>
+                <Select 
+                  onValueChange={(val: any) => form.setValue('accounting.expenseAccount', val)} 
+                  defaultValue="Repairs & Maintenance"
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Repairs & Maintenance">Repairs & Maintenance</SelectItem>
+                    <SelectItem value="Supplies">Supplies</SelectItem>
+                    <SelectItem value="Utilities">Utilities</SelectItem>
+                    <SelectItem value="Property Management Fees">Property Management Fees</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Used as the default for logged maintenance tickets.</p>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Security Deposit Liability Account</Label>
+                <Select 
+                  onValueChange={(val: any) => form.setValue('accounting.liabilityAccount', val)} 
+                  defaultValue="Security Deposits"
+                >
+                  <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Security Deposits">Security Deposits Held</SelectItem>
+                    <SelectItem value="Escrow Account">Escrow Account</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Where you hold tenant deposits (Balance Sheet Liability).</p>
               </div>
             </CardContent>
           </Card>
@@ -372,7 +445,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                    </div>
                 </div>
                 <Separator />
-                <Label className="text-muted-foreground">Association Contact</Label>
                 <div className="grid grid-cols-3 gap-4">
                    <div className="grid gap-2"><Label>Contact Name</Label><Input placeholder="Mgmt Office" {...form.register('hoa.contactName')} /></div>
                    <div className="grid gap-2"><Label>Phone</Label><Input {...form.register('hoa.contactPhone')} /></div>
