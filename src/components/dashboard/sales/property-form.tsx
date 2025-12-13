@@ -22,8 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore } from '@/firebase';
-import { collection, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useUser, useFirestore, errorEmitter, FirestorePermissionError } from '@/firebase';
+import { collection, doc, setDoc, addDoc, serverTimestamp, DocumentReference } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
 const numberPreprocess = (val: any) => parseFloat(String(val).replace(/,/g, '')) || 0;
@@ -89,43 +89,52 @@ export function PropertyForm({ property, onSave, onCancel }: PropertyFormProps) 
   const onSubmit = async (values: Property) => {
     if (!user || !firestore) return;
     setIsSubmitting(true);
+    
+    const isEditing = !!property?.id;
+    
+    const propertyData = {
+      ...values,
+      userId: user.uid,
+    };
 
-    try {
-      let docRef;
-      const propertyData = {
-        ...values,
-        userId: user.uid,
-        updatedAt: serverTimestamp(),
-      };
-
-      if (property?.id) {
-        docRef = doc(firestore, 'properties', property.id);
-        await setDoc(docRef, propertyData, { merge: true });
-      } else {
-        docRef = await addDoc(collection(firestore, 'properties'), {
-            ...propertyData,
-            createdAt: serverTimestamp(),
-        });
-      }
-      
-      const savedProperty = { ...propertyData, id: docRef.id };
-
-      toast({
-        title: property?.id ? 'Property Updated' : 'Property Added',
-        description: `${values.name} has been saved successfully.`,
-      });
-      
-      onSave(savedProperty);
-
-    } catch (error: any) {
+    const handleError = (error: any) => {
       console.error('Error saving property:', error);
       toast({
         variant: 'destructive',
         title: 'Save Failed',
-        description: error.message || 'Could not save the property.',
+        description: 'An unexpected error occurred while saving the property.',
       });
-    } finally {
-      setIsSubmitting(false);
+
+      // Emit the contextual error
+      const permissionError = new FirestorePermissionError({
+        path: isEditing ? `properties/${property.id}` : 'properties',
+        operation: isEditing ? 'update' : 'create',
+        requestResourceData: propertyData,
+      });
+      errorEmitter.emit('permission-error', permissionError);
+    };
+
+    const handleSuccess = (docId: string) => {
+       const savedProperty = { ...propertyData, id: docId };
+       toast({
+        title: isEditing ? 'Property Updated' : 'Property Added',
+        description: `${values.name} has been saved successfully.`,
+      });
+      onSave(savedProperty);
+    };
+
+    if (isEditing) {
+        const docRef = doc(firestore, 'properties', property.id!);
+        setDoc(docRef, {...propertyData, updatedAt: serverTimestamp()}, { merge: true })
+            .then(() => handleSuccess(property.id!))
+            .catch(handleError)
+            .finally(() => setIsSubmitting(false));
+    } else {
+        const collRef = collection(firestore, 'properties');
+        addDoc(collRef, {...propertyData, createdAt: serverTimestamp()})
+            .then((docRef) => handleSuccess(docRef.id))
+            .catch(handleError)
+            .finally(() => setIsSubmitting(false));
     }
   };
 
