@@ -6,7 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
-  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, BookOpen 
+  FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
+  BookOpen, Bot, ArrowRight 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -17,8 +18,8 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, FirestorePermissionError, errorEmitter } from '@/firebase';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, writeBatch, collection } from 'firebase/firestore'; // Import writeBatch
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -33,14 +34,6 @@ const propertySchema = z.object({
     state: z.string().min(2),
     zip: z.string().min(5),
   }),
-  // PHASE 2: ACCOUNTING MAPPING
-  accounting: z.object({
-    assetAccount: z.string().optional(),      // NEW: Links to Asset
-    liabilityAccount: z.string().optional(),  // NEW: Links to Mortgage Loan
-    incomeAccount: z.string().optional(),
-    expenseAccount: z.string().optional(),
-    interestAccount: z.string().optional(),   // NEW: For Mortgage Interest
-  }).optional(),
   financials: z.object({
     targetRent: z.coerce.number().min(0),
     securityDeposit: z.coerce.number().min(0),
@@ -52,7 +45,7 @@ const propertySchema = z.object({
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
     lenderPhone: z.string().optional(),
-    lenderEmail: z.string().email().optional().or(z.literal('')),
+    lenderEmail: z.string().optional(),
     monthlyPayment: z.coerce.number().optional(),
     interestRate: z.coerce.number().optional(),
     loanBalance: z.coerce.number().optional(),
@@ -76,7 +69,7 @@ const propertySchema = z.object({
     frequency: z.enum(['monthly', 'quarterly', 'semi-annually', 'annually']).optional(),
     contactName: z.string().optional(),
     contactPhone: z.string().optional(),
-    contactEmail: z.string().email().optional().or(z.literal('')),
+    contactEmail: z.string().optional(),
   }),
   utilities: z.array(z.object({
     type: z.string(), 
@@ -121,16 +114,11 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
       name: '',
       type: 'single-family' as const,
       address: { street: '', city: '', state: '', zip: '' },
-      // PHASE 2 DEFAULTS
-      accounting: { 
-        incomeAccount: 'Rental Income', 
-        expenseAccount: 'Repairs & Maintenance',
-      },
       financials: { targetRent: 0, securityDeposit: 0 },
       mortgage: { 
         purchasePrice: 0,
         purchaseDate: '',
-        hasMortgage: 'no' as const, 
+        hasMortgage: 'no' as const,
         lenderName: '', 
         escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
       },
@@ -153,37 +141,119 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
 
+  // --- AUTOMATED BATCH CREATION LOGIC ---
   const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
     setIsSaving(true);
-    
-    const newRef = doc(collection(firestore, 'properties'));
-    const propertyData = {
-        id: newRef.id,
-        userId: user.uid,
-        status: 'vacant',
-        createdAt: new Date().toISOString(),
-        ...data
-    };
 
-    setDoc(newRef, propertyData).then(() => {
-        toast({ title: "Property Saved", description: "All details recorded successfully." });
-        if (onSuccess) onSuccess();
-    }).catch(error => {
-        const permissionError = new FirestorePermissionError({
-            path: newRef.path,
-            operation: 'create',
-            requestResourceData: propertyData,
+    try {
+      // 1. Initiate Batch
+      const batch = writeBatch(firestore);
+      
+      // 2. Create References for "The Property Suite"
+      const propertyRef = doc(collection(firestore, 'properties'));
+      const incomeRef = doc(collection(firestore, 'accounts'));
+      const expenseRef = doc(collection(firestore, 'accounts'));
+      const assetRef = doc(collection(firestore, 'accounts'));
+      
+      // 3. Prepare Account Objects (The "Suite")
+      const timestamp = new Date().toISOString();
+      const accountsToCreate = [
+        {
+          ref: incomeRef,
+          data: {
+            userId: user.uid,
+            name: `Rent - ${data.name}`,
+            type: 'Income',
+            subtype: 'Rental Income',
+            balance: 0,
+            isSystemAccount: true, // Flag to prevent accidental deletion
+            createdAt: timestamp
+          }
+        },
+        {
+          ref: expenseRef,
+          data: {
+            userId: user.uid,
+            name: `Maint/Ops - ${data.name}`,
+            type: 'Expense',
+            subtype: 'Property Expense',
+            balance: 0,
+            isSystemAccount: true,
+            createdAt: timestamp
+          }
+        },
+        {
+          ref: assetRef,
+          data: {
+            userId: user.uid,
+            name: `Property - ${data.name}`,
+            type: 'Asset',
+            subtype: 'Fixed Asset',
+            balance: data.mortgage?.purchasePrice || 0, // Initial value
+            isSystemAccount: true,
+            createdAt: timestamp
+          }
+        }
+      ];
+
+      // 4. Handle Mortgage Liability (Conditional)
+      let liabilityAccountId = null;
+      if (data.mortgage.hasMortgage === 'yes') {
+        const liabilityRef = doc(collection(firestore, 'accounts'));
+        accountsToCreate.push({
+          ref: liabilityRef,
+          data: {
+            userId: user.uid,
+            name: `Mortgage - ${data.name}`,
+            type: 'Liability',
+            subtype: 'Long Term Liability',
+            balance: data.mortgage?.loanBalance || 0,
+            isSystemAccount: true,
+            createdAt: timestamp
+          }
         });
-        errorEmitter.emit('permission-error', permissionError);
-    }).finally(() => {
-        setIsSaving(false);
-    });
+        liabilityAccountId = liabilityRef.id;
+      }
+
+      // 5. Add Accounts to Batch
+      accountsToCreate.forEach(acc => batch.set(acc.ref, acc.data));
+
+      // 6. Add Property to Batch (With Links!)
+      batch.set(propertyRef, {
+        userId: user.uid,
+        ...data,
+        createdAt: timestamp,
+        // THE GOLDEN LINK: Connecting Operations to Accounting
+        accounting: {
+          incomeAccountId: incomeRef.id,
+          expenseAccountId: expenseRef.id,
+          assetAccountId: assetRef.id,
+          liabilityAccountId: liabilityAccountId
+        }
+      });
+
+      // 7. Commit!
+      await batch.commit();
+
+      toast({ 
+        title: "Property & Books Created", 
+        description: `Successfully set up ${data.name} and created ${accountsToCreate.length} ledger accounts.` 
+      });
+      
+      if (onSuccess) onSuccess();
+
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Error", description: error.message });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
-    { id: 'accounting', label: 'Accounting Setup', icon: BookOpen }, // NEW TAB
+    { id: 'accounting', label: 'Automated Accounting', icon: Bot }, // UPDATED LABEL
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
@@ -198,43 +268,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 w-full lg:h-[calc(100vh-120px)]">
-      
-      {/* --- NAVIGATION (RESPONSIVE) --- */}
-      
-      {/* 1. MOBILE NAV: Dropdown (Saves space) */}
-      <div className="lg:hidden w-full space-y-4">
-         <div className="p-4 bg-muted/50 rounded-lg border">
-            <Label className="mb-2 block">Navigate Form</Label>
-            <Select 
-              value={activeSection} 
-              onValueChange={setActiveSection}
-            >
-              <SelectTrigger className="w-full bg-white">
-                <SelectValue placeholder="Select section" />
-              </SelectTrigger>
-              <SelectContent>
-                {navItems.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    <div className="flex items-center gap-2">
-                      <item.icon className="h-4 w-4" />
-                      {item.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-         </div>
-         {/* Mobile Save Button (Always visible on top) */}
-         <Button 
-             className="w-full bg-green-600 hover:bg-green-700 shadow-md" 
-             onClick={form.handleSubmit(onSubmit)}
-             disabled={isSaving}
-           >
-             {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Property</>}
-         </Button>
-      </div>
-
-      {/* 2. DESKTOP NAV: Sidebar (Fixed left) */}
+      {/* SIDEBAR */}
       <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
         {navItems.map((item) => (
           <button
@@ -259,13 +293,32 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
              onClick={form.handleSubmit(onSubmit)}
              disabled={isSaving}
            >
-             {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> Save Property</>}
+             {isSaving ? "Creating..." : <><Save className="mr-2 h-4 w-4" /> Save & Setup</>}
            </Button>
         </div>
       </div>
 
-      {/* --- CONTENT AREA --- */}
-      {/* On Mobile: h-auto (grows with content). On Desktop: h-full + overflow-auto (scrolls inside) */}
+      {/* MOBILE NAV */}
+      <div className="lg:hidden w-full space-y-4">
+         <div className="p-4 bg-muted/50 rounded-lg border">
+            <Label className="mb-2 block">Navigate Form</Label>
+            <Select value={activeSection} onValueChange={setActiveSection}>
+              <SelectTrigger className="w-full bg-white"><SelectValue placeholder="Select section" /></SelectTrigger>
+              <SelectContent>
+                {navItems.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    <div className="flex items-center gap-2"><item.icon className="h-4 w-4" />{item.label}</div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+         </div>
+         <Button className="w-full bg-green-600 hover:bg-green-700 shadow-md" onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
+             {isSaving ? "Creating..." : <><Save className="mr-2 h-4 w-4" /> Save & Setup</>}
+         </Button>
+      </div>
+
+      {/* CONTENT AREA */}
       <div className="flex-1 w-full h-auto lg:h-full lg:overflow-y-auto pr-1 pb-20 lg:pb-10">
         
         {/* --- 1. GENERAL --- */}
@@ -273,166 +326,107 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           <Card>
             <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2"><Label>Property Nickname</Label><Input placeholder="e.g. The Lake House" {...form.register('name')} /></div>
-              <div className="grid gap-2"><Label>Property Type</Label>
-                <Select onValueChange={(val: any) => form.setValue('type', val)} defaultValue="single-family">
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="single-family">Single Family Home</SelectItem>
-                        <SelectItem value="multi-family">Multi-Family / Duplex</SelectItem>
-                        <SelectItem value="condo">Condo / Townhouse</SelectItem>
-                        <SelectItem value="commercial">Commercial</SelectItem>
-                    </SelectContent>
+              <div className="grid gap-2"><Label>Nickname</Label><Input {...form.register('name')} /></div>
+              <div className="grid gap-2"><Label>Type</Label>
+                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
+                   <SelectTrigger><SelectValue/></SelectTrigger>
+                   <SelectContent>
+                      <SelectItem value="single-family">Single Family</SelectItem>
+                      <SelectItem value="multi-family">Multi-Family</SelectItem>
+                      <SelectItem value="condo">Condo</SelectItem>
+                      <SelectItem value="commercial">Commercial</SelectItem>
+                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2"><Label>Street Address</Label><Input placeholder="123 Main St" {...form.register('address.street')} /></div>
+              <div className="grid gap-2"><Label>Address</Label><Input placeholder="123 Main St" {...form.register('address.street')} /></div>
               <div className="grid grid-cols-3 gap-4">
-                <div className="grid gap-2"><Label>City</Label><Input {...form.register('address.city')} /></div>
-                <div className="grid gap-2"><Label>State</Label><Input {...form.register('address.state')} /></div>
-                <div className="grid gap-2"><Label>Zip</Label><Input {...form.register('address.zip')} /></div>
+                 <Input placeholder="City" {...form.register('address.city')} />
+                 <Input placeholder="State" {...form.register('address.state')} />
+                 <Input placeholder="Zip" {...form.register('address.zip')} />
               </div>
             </CardContent>
           </Card>
         )}
-        
-        {/* --- PHASE 2: SMART ACCOUNTING CONFIGURATION --- */}
+
+        {/* --- ACCOUNTING (NEW: AUTO-PILOT PREVIEW) --- */}
         {activeSection === 'accounting' && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Ledger Mapping</CardTitle>
-                <CardDescription>
-                  Link this property to your Chart of Accounts. 
-                  <span className="block text-amber-600 mt-1 text-xs font-medium">
-                    Note: Saving this form does NOT create financial transactions. It only configures the automation.
-                  </span>
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                
-                {/* ASSET MAPPING */}
-                <div className="grid gap-2">
-                  <Label>Asset Account (Property Value)</Label>
-                  <Select 
-                    onValueChange={(val: any) => form.setValue('accounting.assetAccount', val)} 
-                    // In real app, fetch these from Firestore 'accounts' collection where type == 'Fixed Asset'
-                    defaultValue="123 Main St (Asset)"
-                  >
-                    <SelectTrigger><SelectValue placeholder="Select Asset Account" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="123 Main St (Asset)">123 Main St (Asset)</SelectItem>
-                      <SelectItem value="create_new">+ Create New Asset Account</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* INCOME & EXPENSE MAPPING */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label>Income Account</Label>
-                    <Select 
-                      onValueChange={(val: any) => form.setValue('accounting.incomeAccount', val)} 
-                      defaultValue="Rental Income"
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Rental Income">Rental Income</SelectItem>
-                        <SelectItem value="Commercial Income">Commercial Income</SelectItem>
-                      </SelectContent>
-                    </Select>
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                 <Bot className="h-6 w-6 text-blue-600" />
+                 <CardTitle>Automated Bookkeeping</CardTitle>
+              </div>
+              <CardDescription>
+                We will automatically create separate ledgers for this property to keep your books organized.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+               <div className="grid gap-4">
+                  
+                  {/* Visualizing the "Suite" */}
+                  <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
+                     <div className="flex items-center gap-3">
+                        <div className="p-2 bg-green-100 rounded-full"><DollarSign className="h-4 w-4 text-green-700"/></div>
+                        <div>
+                           <p className="font-medium text-sm">Income Ledger</p>
+                           <p className="text-xs text-muted-foreground">For Rent & Fees</p>
+                        </div>
+                     </div>
+                     <div className="text-sm font-mono text-slate-600">Rent - {form.watch('name') || 'Property'}</div>
                   </div>
 
-                  <div className="grid gap-2">
-                    <Label>Expense Account (Default)</Label>
-                    <Select 
-                      onValueChange={(val: any) => form.setValue('accounting.expenseAccount', val)} 
-                      defaultValue="Repairs & Maintenance"
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Repairs & Maintenance">Repairs & Maintenance</SelectItem>
-                        <SelectItem value="Supplies">Supplies</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
+                     <div className="flex items-center gap-3">
+                        <div className="p-2 bg-red-100 rounded-full"><Wrench className="h-4 w-4 text-red-700"/></div>
+                        <div>
+                           <p className="font-medium text-sm">Expense Ledger</p>
+                           <p className="text-xs text-muted-foreground">For Repairs & Ops</p>
+                        </div>
+                     </div>
+                     <div className="text-sm font-mono text-slate-600">Maint/Ops - {form.watch('name') || 'Property'}</div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
 
-            {/* MORTGAGE AUTOMATION ENGINE */}
-            <Card className="border-blue-100 bg-blue-50/20">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                   <Zap className="h-5 w-5 text-blue-600" />
-                   <CardTitle>Mortgage Automation</CardTitle>
-                </div>
-                <CardDescription>
-                  When AI detects a mortgage payment, how should we split it?
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                 
-                 <div className="grid gap-2">
-                    <Label>Liability Account (Loan Principal)</Label>
-                    <Select 
-                      onValueChange={(val: any) => form.setValue('accounting.liabilityAccount', val)} 
-                      defaultValue="Mortgage - 123 Main"
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select Liability Account" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Mortgage - 123 Main">Mortgage - 123 Main</SelectItem>
-                        <SelectItem value="create_new">+ Create New Liability Account</SelectItem>
-                      </SelectContent>
-                    </Select>
-                 </div>
+                  <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
+                     <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-100 rounded-full"><Home className="h-4 w-4 text-blue-700"/></div>
+                        <div>
+                           <p className="font-medium text-sm">Asset Ledger</p>
+                           <p className="text-xs text-muted-foreground">Property Value</p>
+                        </div>
+                     </div>
+                     <div className="text-sm font-mono text-slate-600">Property - {form.watch('name') || 'Property'}</div>
+                  </div>
 
-                 <div className="grid gap-2">
-                    <Label>Interest Expense Account</Label>
-                    <Select 
-                      onValueChange={(val: any) => form.setValue('accounting.interestAccount', val)} 
-                      defaultValue="Mortgage Interest"
-                    >
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Mortgage Interest">Mortgage Interest Expense</SelectItem>
-                      </SelectContent>
-                    </Select>
-                 </div>
-
-                 {/* The "Split Strategy" */}
-                 <div className="p-4 bg-white rounded-md border space-y-3">
-                    <Label className="text-xs font-semibold uppercase text-muted-foreground">AI Split Strategy</Label>
-                    
-                    <div className="flex items-center justify-between text-sm">
-                       <span>1. Principal & Interest:</span>
-                       <span className="font-mono text-blue-600">Auto-calculated (Amortization)</span>
+                  {form.watch('mortgage.hasMortgage') === 'yes' && (
+                    <div className="flex items-center justify-between p-3 bg-white border rounded-lg shadow-sm">
+                       <div className="flex items-center gap-3">
+                          <div className="p-2 bg-orange-100 rounded-full"><Landmark className="h-4 w-4 text-orange-700"/></div>
+                          <div>
+                             <p className="font-medium text-sm">Liability Ledger</p>
+                             <p className="text-xs text-muted-foreground">Mortgage Principal</p>
+                          </div>
+                       </div>
+                       <div className="text-sm font-mono text-slate-600">Mortgage - {form.watch('name') || 'Property'}</div>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                       <span>2. Escrow (Tax):</span>
-                       <span className="font-mono text-slate-600">
-                          {form.watch('mortgage.escrow.includesTax') ? 'Log as "Tax Expense"' : 'Not included'}
-                       </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm">
-                       <span>3. Escrow (Insurance):</span>
-                       <span className="font-mono text-slate-600">
-                          {form.watch('mortgage.escrow.includesInsurance') ? 'Log as "Insurance Expense"' : 'Not included'}
-                       </span>
-                    </div>
-                 </div>
+                  )}
 
-              </CardContent>
-            </Card>
-          </div>
+               </div>
+               
+               <div className="flex items-start gap-2 p-4 bg-yellow-50 text-yellow-800 rounded-md text-xs">
+                  <BookOpen className="h-4 w-4 mt-0.5 shrink-0" />
+                  <p>
+                     <strong>How AI uses this:</strong> When you download transactions later, our AI will look for 
+                     "{form.watch('name')}" in the description and automatically categorize it into these specific accounts.
+                  </p>
+               </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* --- 2. FINANCIALS --- */}
         {activeSection === 'financials' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Market Targets</CardTitle>
-              <CardDescription>What you expect to earn from this property.</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-2 gap-4">
               <div className="grid gap-2"><Label>Target Monthly Rent</Label><Input type="number" {...form.register('financials.targetRent')} /></div>
               <div className="grid gap-2"><Label>Security Deposit Req.</Label><Input type="number" {...form.register('financials.securityDeposit')} /></div>
