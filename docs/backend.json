@@ -186,6 +186,55 @@
         "secondaryCategory",
         "subcategory"
       ]
+    },
+    "Property": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Property",
+        "type": "object",
+        "description": "Represents a rental property owned by a user.",
+        "properties": {
+            "id": {
+                "type": "string",
+                "description": "Unique identifier for the Property."
+            },
+            "userId": {
+                "type": "string",
+                "description": "The ID of the user who owns the property."
+            },
+            "name": {
+                "type": "string",
+                "description": "A nickname for the property (e.g., 'Downtown Condo')."
+            },
+            "address": {
+                "type": "object",
+                "properties": {
+                    "street": { "type": "string" },
+                    "city": { "type": "string" },
+                    "state": { "type": "string" },
+                    "zip": { "type": "string" },
+                    "country": { "type": "string" }
+                }
+            },
+            "financials": {
+                "type": "object",
+                "properties": {
+                    "targetRent": { "type": "number" },
+                    "securityDeposit": { "type": "number" },
+                    "mortgagePayment": { "type": "number" }
+                }
+            },
+            "specs": {
+                "type": "object",
+                "properties": {
+                    "units": { "type": "number" },
+                    "type": { 
+                        "type": "string",
+                        "enum": ["Residential", "Commercial", "Industrial", "Land", "Other"]
+                    }
+                }
+            }
+        },
+        "required": ["id", "userId", "name"]
     }
   },
   "auth": {
@@ -254,8 +303,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/properties/{propertyId}",
+        "definition": {
+          "entityName": "Property",
+          "schema": {
+            "$ref": "#/backend/entities/Property"
+          },
+          "description": "Stores user-owned properties. Access is restricted to the owning user via a security rule on the 'userId' field.",
+          "params": [
+            {
+              "name": "propertyId",
+              "description": "The unique ID of the property."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user to list transactions where `resource.data.userId` matches their `request.auth.uid`. A rule is also included to grant read access to trusted server processes (like Genkit flows) for AI reporting, which are identified by their unauthenticated `request.auth` status."
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user to list transactions where `resource.data.userId` matches their `request.auth.uid`. A rule is also included to grant read access to trusted server processes (like Genkit flows) for AI reporting, which are identified by their unauthenticated `request.auth` status. A new top-level 'properties' collection is added to store property data, secured by rules checking the 'userId' field within each document."
   }
 }

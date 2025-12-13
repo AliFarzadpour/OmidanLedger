@@ -54,5 +54,12 @@ service cloud.firestore {
     match /{path=**}/transactions/{transactionId} {
       allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isServerProcess();
     }
+
+    match /properties/{propertyId} {
+      // Users can create, read, update, and list properties they own.
+      allow list, read, create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // Users can only delete properties they own.
+      allow delete: if isOwner(resource.data.userId);
+    }
   }
 }
