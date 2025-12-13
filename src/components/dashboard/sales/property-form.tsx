@@ -19,10 +19,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
+  propertyType: z.string().optional(),
   address: z.object({
     street: z.string().min(1),
     city: z.string().min(1),
@@ -50,6 +53,7 @@ const propertySchema = z.object({
     electric: z.enum(['tenant', 'landlord']),
     gas: z.enum(['tenant', 'landlord']),
     trash: z.enum(['tenant', 'landlord']),
+    internet: z.enum(['tenant', 'landlord']),
   }),
   access: z.object({
     gateCode: z.string().optional(),
@@ -75,11 +79,12 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     resolver: zodResolver(propertySchema),
     defaultValues: {
       name: '',
+      propertyType: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
       mortgage: { hasMortgage: 'no' as 'yes' | 'no', lenderName: '', monthlyPayment: 0, interestRate: 0 },
       hoa: { hasHoa: 'no' as 'yes' | 'no', fee: 0, frequency: 'monthly' as 'monthly' | 'quarterly' | 'annually', contactPhone: '' },
-      utilities: { water: 'tenant' as 'tenant' | 'landlord', electric: 'tenant' as 'tenant' | 'landlord', gas: 'tenant' as 'tenant' | 'landlord', trash: 'tenant' as 'tenant' | 'landlord' },
+      utilities: { water: 'tenant' as 'tenant' | 'landlord', electric: 'tenant' as 'tenant' | 'landlord', gas: 'tenant' as 'tenant' | 'landlord', trash: 'tenant' as 'tenant' | 'landlord', internet: 'tenant' as 'tenant' | 'landlord' },
       access: { gateCode: '', lockboxCode: '', notes: '' },
       preferredVendors: [{ role: 'Handyman', name: '', phone: '' }]
     }
@@ -93,23 +98,29 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
   const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
     setIsSaving(true);
-    try {
-      const newRef = doc(collection(firestore, 'properties'));
-      // Flatten the structure slightly if needed, or keep nested
-      await setDoc(newRef, {
+    
+    const newRef = doc(collection(firestore, 'properties'));
+    const propertyData = {
         id: newRef.id,
         userId: user.uid,
         status: 'vacant',
         createdAt: new Date().toISOString(),
         ...data
-      });
-      toast({ title: "Property Saved", description: "All details recorded successfully." });
-      if (onSuccess) onSuccess();
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    } finally {
-      setIsSaving(false);
-    }
+    };
+
+    setDoc(newRef, propertyData).then(() => {
+        toast({ title: "Property Saved", description: "All details recorded successfully." });
+        if (onSuccess) onSuccess();
+    }).catch(error => {
+        const permissionError = new FirestorePermissionError({
+            path: newRef.path,
+            operation: 'create',
+            requestResourceData: propertyData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+    }).finally(() => {
+        setIsSaving(false);
+    });
   };
 
   // --- NAVIGATION ITEMS ---
@@ -168,9 +179,24 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
               <CardDescription>Address and nickname for the property.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label>Property Nickname</Label>
-                <Input placeholder="e.g. The Lake House" {...form.register('name')} />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label>Property Nickname</Label>
+                  <Input placeholder="e.g. The Lake House" {...form.register('name')} />
+                </div>
+                 <div className="grid gap-2">
+                  <Label>Property Type</Label>
+                  <Select onValueChange={(val: any) => form.setValue('propertyType', val)} defaultValue="single-family">
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="single-family">Single Family</SelectItem>
+                        <SelectItem value="multi-family">Multi-Family</SelectItem>
+                        <SelectItem value="condo">Condo</SelectItem>
+                        <SelectItem value="townhouse">Townhouse</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <Separator />
               <div className="grid gap-2">
@@ -320,6 +346,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                     { key: 'electric', label: 'Electricity' },
                     { key: 'gas', label: 'Gas' },
                     { key: 'trash', label: 'Trash Pickup' },
+                    { key: 'internet', label: 'Internet' },
                   ].map((util) => (
                     <div key={util.key} className="flex items-center justify-between p-3 border rounded-lg">
                        <span className="font-medium">{util.label}</span>
