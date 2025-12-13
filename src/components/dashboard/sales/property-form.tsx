@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase 
+  BookOpen, Bot, Briefcase, Globe, MapPin 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection } from 'firebase/firestore'; // Import writeBatch
+import { doc, writeBatch, collection } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -34,41 +34,24 @@ const propertySchema = z.object({
     state: z.string().min(2),
     zip: z.string().min(5),
   }),
-  // ACCOUNTING IDS (Hidden fields populated on save)
-  accounting: z.object({
-    assetAccount: z.string().optional(),
-    incomeAccount: z.string().optional(),
-    lateFeeAccount: z.string().optional(),
-    expenseAccount: z.string().optional(),
-    managementFeeAccount: z.string().optional(),
-    liabilityAccount: z.string().optional(),
-    securityDepositAccount: z.string().optional(),
-    interestAccount: z.string().optional(),
-    taxAccount: z.string().optional(),
-    insuranceAccount: z.string().optional(),
-    hoaAccount: z.string().optional(),
-    utilities: z.object({
-        water: z.string().optional(),
-        electric: z.string().optional(),
-        gas: z.string().optional(),
-        trash: z.string().optional(),
-        internet: z.string().optional(),
-        deposits: z.string().optional(),
-    }).optional(),
-  }).optional(),
-  financials: z.object({
-    targetRent: z.coerce.number().min(0),
-    securityDeposit: z.coerce.number().min(0),
-  }),
-  // MANAGEMENT INFO (Restored)
+  // MANAGEMENT INFO (EXPANDED)
   management: z.object({
     isManaged: z.enum(['self', 'professional']),
     companyName: z.string().optional(),
     managerName: z.string().optional(),
+    website: z.string().optional(),      // NEW
+    address: z.string().optional(),      // NEW
     email: z.string().optional(),
     phone: z.string().optional(),
+    // Fees
     feeType: z.enum(['percent', 'flat']).optional(),
     feeValue: z.coerce.number().optional(),
+    leasingFee: z.coerce.number().optional(), // NEW (Tenant Placement)
+    renewalFee: z.coerce.number().optional(), // NEW (Lease Renewal)
+  }),
+  financials: z.object({
+    targetRent: z.coerce.number().min(0),
+    securityDeposit: z.coerce.number().min(0),
   }),
   mortgage: z.object({
     purchasePrice: z.coerce.number().optional(),
@@ -130,6 +113,28 @@ const propertySchema = z.object({
     name: z.string(),
     phone: z.string(),
   })).optional(),
+  // ACCOUNTING (MOVED TO END)
+  accounting: z.object({
+    assetAccount: z.string().optional(),
+    incomeAccount: z.string().optional(),
+    lateFeeAccount: z.string().optional(),
+    expenseAccount: z.string().optional(),
+    managementFeeAccount: z.string().optional(),
+    liabilityAccount: z.string().optional(),
+    securityDepositAccount: z.string().optional(),
+    interestAccount: z.string().optional(),
+    taxAccount: z.string().optional(),
+    insuranceAccount: z.string().optional(),
+    hoaAccount: z.string().optional(),
+    utilities: z.object({
+        water: z.string().optional(),
+        electric: z.string().optional(),
+        gas: z.string().optional(),
+        trash: z.string().optional(),
+        internet: z.string().optional(),
+        deposits: z.string().optional(),
+    }).optional(),
+  }).optional(),
 });
 
 // --- MAIN COMPONENT ---
@@ -147,7 +152,12 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
       type: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
-      management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', feeType: 'percent', feeValue: 0 },
+      // Expanded Management Defaults
+      management: { 
+        isManaged: 'self', 
+        companyName: '', managerName: '', email: '', phone: '', website: '', address: '',
+        feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 
+      },
       mortgage: { 
         purchasePrice: 0,
         purchaseDate: '',
@@ -261,11 +271,11 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     }
   };
 
+  // REORDERED NAV ITEMS
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
-    { id: 'accounting', label: 'Automated Accounting', icon: Bot },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
-    { id: 'management', label: 'Management Co.', icon: Briefcase }, // RESTORED
+    { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
     { id: 'hoa', label: 'HOA', icon: Users },
@@ -275,6 +285,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     { id: 'rentroll', label: 'Rent Roll', icon: FileText },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'vendors', label: 'Vendors', icon: Users },
+    { id: 'accounting', label: 'Automated Accounting', icon: Bot }, // MOVED TO END
   ];
 
   return (
@@ -356,43 +367,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 2. ACCOUNTING */}
-        {activeSection === 'accounting' && (
-          <Card className="border-blue-200 bg-blue-50/30">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                 <Bot className="h-6 w-6 text-blue-600" />
-                 <CardTitle>Automated Bookkeeping</CardTitle>
-              </div>
-              <CardDescription>
-                We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-               <div className="p-2 bg-white border rounded text-xs flex justify-between">
-                  <span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span>
-               </div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between">
-                  <span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span>
-               </div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between">
-                  <span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span>
-               </div>
-               <div className="p-2 bg-white border rounded text-xs">
-                  <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
-                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
-                     <li>Maintenance</li><li>Property Tax</li><li>Insurance</li>
-                     {form.watch('management.isManaged') === 'professional' && <li>Mgmt Fees</li>}
-                     <li>Water</li><li>Electric</li><li>Gas</li><li>Trash</li><li>Internet</li>
-                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
-                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
-                  </ul>
-               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* 3. FINANCIALS */}
+        {/* 2. FINANCIALS */}
         {activeSection === 'financials' && (
           <Card>
             <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
@@ -403,7 +378,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* NEW: MANAGEMENT CO. TAB */}
+        {/* 3. MANAGEMENT CO. (UPDATED) */}
         {activeSection === 'management' && (
           <Card>
             <CardHeader><CardTitle>Property Management</CardTitle><CardDescription>Who manages the day-to-day operations?</CardDescription></CardHeader>
@@ -427,11 +402,18 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                        <div className="grid gap-2"><Label>Email</Label><Input placeholder="contact@abc.com" {...form.register('management.email')} /></div>
                        <div className="grid gap-2"><Label>Phone</Label><Input placeholder="(555) 555-5555" {...form.register('management.phone')} /></div>
                     </div>
+                    
+                    {/* NEW FIELDS: Website & Address */}
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="grid gap-2"><Label className="flex items-center gap-1"><Globe className="h-3 w-3"/> Website</Label><Input placeholder="www.abc-mgmt.com" {...form.register('management.website')} /></div>
+                       <div className="grid gap-2"><Label className="flex items-center gap-1"><MapPin className="h-3 w-3"/> Mailing Address</Label><Input placeholder="PO Box 123" {...form.register('management.address')} /></div>
+                    </div>
+
                     <div className="p-4 bg-slate-50 border rounded-lg">
                        <Label className="mb-2 block font-semibold text-slate-700">Fee Structure (For Automation)</Label>
-                       <div className="grid grid-cols-12 gap-4">
+                       <div className="grid grid-cols-12 gap-4 mb-3">
                           <div className="col-span-4">
-                             <Label className="text-xs">Fee Type</Label>
+                             <Label className="text-xs">Monthly Fee Type</Label>
                              <Select onValueChange={(val:any) => form.setValue('management.feeType', val)} defaultValue="percent">
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -443,6 +425,18 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                           <div className="col-span-8">
                              <Label className="text-xs">Value ({form.watch('management.feeType') === 'percent' ? '%' : '$'})</Label>
                              <Input type="number" placeholder={form.watch('management.feeType') === 'percent' ? "e.g. 10" : "e.g. 150.00"} {...form.register('management.feeValue')} />
+                          </div>
+                       </div>
+                       
+                       {/* NEW FEES */}
+                       <div className="grid grid-cols-2 gap-4">
+                          <div className="grid gap-2">
+                             <Label className="text-xs text-muted-foreground">Leasing Fee (New Tenant)</Label>
+                             <div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.leasingFee')} /></div>
+                          </div>
+                          <div className="grid gap-2">
+                             <Label className="text-xs text-muted-foreground">Renewal Fee</Label>
+                             <div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.renewalFee')} /></div>
                           </div>
                        </div>
                     </div>
@@ -714,6 +708,43 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             </CardContent>
           </Card>
         )}
+
+        {/* 13. ACCOUNTING (MOVED TO END) */}
+        {activeSection === 'accounting' && (
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                 <Bot className="h-6 w-6 text-blue-600" />
+                 <CardTitle>Automated Bookkeeping</CardTitle>
+              </div>
+              <CardDescription>
+                We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+               <div className="p-2 bg-white border rounded text-xs flex justify-between">
+                  <span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span>
+               </div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between">
+                  <span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span>
+               </div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between">
+                  <span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span>
+               </div>
+               <div className="p-2 bg-white border rounded text-xs">
+                  <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
+                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
+                     <li>Maintenance</li><li>Property Tax</li><li>Insurance</li>
+                     {form.watch('management.isManaged') === 'professional' && <li>Mgmt Fees</li>}
+                     <li>Water</li><li>Electric</li><li>Gas</li><li>Trash</li><li>Internet</li>
+                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
+                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
+                  </ul>
+               </div>
+            </CardContent>
+          </Card>
+        )}
+
       </div>
     </div>
   );
