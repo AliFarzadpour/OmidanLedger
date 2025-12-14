@@ -265,7 +265,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
 
             await batch.commit();
 
-            toast({ title: "Property Suite Created", description: `Generated property record and Chart of Accounts for ${data.name}.` });
+            toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
         }
         
         if (onSuccess) onSuccess();
@@ -288,7 +288,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
     { id: 'utilities', label: 'Utilities', icon: Zap },
     { id: 'access', label: 'Access & Keys', icon: Key },
     { id: 'tenants', label: 'Tenant Roster', icon: UserCheck },
-    { id: 'rentroll', label: 'Rent Roll', icon: FileText },
+    { id: 'rentroll', label: 'Lease Summary', icon: FileText },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'vendors', label: 'Vendors', icon: Users },
     { id: 'accounting', label: 'Automated Accounting', icon: Bot },
@@ -358,6 +358,30 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
                  <Input placeholder="State" {...form.register('address.state')} />
                  <Input placeholder="Zip" {...form.register('address.zip')} />
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeSection === 'accounting' && (
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <div className="flex items-center gap-2"><Bot className="h-6 w-6 text-blue-600" /><CardTitle>Automated Bookkeeping</CardTitle></div>
+              <CardDescription>We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span></div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span></div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span></div>
+               <div className="p-2 bg-white border rounded text-xs">
+                  <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
+                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
+                     <li>Maintenance</li><li>Property Tax</li><li>Insurance</li>
+                     {form.watch('management.isManaged') === 'professional' && <li>Mgmt Fees</li>}
+                     <li>Water</li><li>Electric</li><li>Gas</li><li>Trash</li><li>Internet</li>
+                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
+                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
+                  </ul>
+               </div>
             </CardContent>
           </Card>
         )}
@@ -466,8 +490,26 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
 
         {activeSection === 'tax' && (
           <div className="space-y-6">
-            <Card><CardHeader><CardTitle>Property Tax</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Tax Parcel ID</Label><Input placeholder="Found on tax bill" {...form.register('taxAndInsurance.taxParcelId')} /></div><div className="grid gap-2"><Label>Annual Tax Amount</Label><Input type="number" {...form.register('taxAndInsurance.propertyTaxAmount')} /></div></CardContent></Card>
-            <Card><CardHeader><CardTitle>Home Insurance</CardTitle></CardHeader><CardContent className="space-y-4"><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div><div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div></div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Annual Premium ($)</Label><Input type="number" {...form.register('taxAndInsurance.annualPremium')} /></div><div className="grid gap-2"><Label>Renewal Date</Label><Input type="date" {...form.register('taxAndInsurance.renewalDate')} /></div></div></CardContent></Card>
+            <Card>
+              <CardHeader><CardTitle>Property Tax</CardTitle></CardHeader>
+              <CardContent className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2"><Label>Tax Parcel ID</Label><Input placeholder="Found on tax bill" {...form.register('taxAndInsurance.taxParcelId')} /></div>
+                <div className="grid gap-2"><Label>Annual Tax Amount</Label><Input type="number" {...form.register('taxAndInsurance.propertyTaxAmount')} /></div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader><CardTitle>Home Insurance</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div>
+                  <div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2"><Label>Annual Premium ($)</Label><Input type="number" {...form.register('taxAndInsurance.annualPremium')} /></div>
+                  <div className="grid gap-2"><Label>Renewal Date</Label><Input type="date" {...form.register('taxAndInsurance.renewalDate')} /></div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -475,7 +517,13 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
           <Card>
             <CardHeader><CardTitle>HOA Details</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-               <div className="flex items-center space-x-4 mb-4"><Label>Is there an HOA?</Label><RadioGroup value={form.watch('hoa.hasHoa')} onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4"><div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div><div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div></RadioGroup></div>
+               <div className="flex items-center space-x-4 mb-4">
+                  <Label>Is there an HOA?</Label>
+                  <RadioGroup value={form.watch('hoa.hasHoa')} onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4">
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
+                  </RadioGroup>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                    <div className="grid gap-2"><Label>Fee Amount</Label><Input type="number" {...form.register('hoa.fee')} /></div>
                    <div className="grid gap-2"><Label>Frequency</Label>
@@ -544,9 +592,14 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
 
         {activeSection === 'rentroll' && (
           <Card>
-            <CardHeader><CardTitle>Rent Roll</CardTitle><CardDescription>Live summary of lease performance.</CardDescription></CardHeader>
+            <CardHeader><CardTitle>Lease Summary</CardTitle><CardDescription>Live summary of lease performance.</CardDescription></CardHeader>
             <CardContent className="p-0">
-               <div className="bg-slate-100 p-4 border-b flex justify-between items-center text-sm"><span className="font-medium">Total Monthly Revenue:</span><span className="font-bold text-green-700 text-lg">${form.watch('tenants')?.reduce((acc: number, t: any) => acc + (parseFloat(t.rentAmount)||0), 0).toLocaleString()}</span></div>
+               <div className="bg-slate-100 p-4 border-b flex justify-between items-center text-sm">
+                  <span className="font-medium">Total Monthly Revenue:</span>
+                  <span className="font-bold text-green-700 text-lg">
+                    ${form.watch('tenants')?.reduce((acc: number, t: any) => acc + (parseFloat(t.rentAmount)||0), 0).toLocaleString()}
+                  </span>
+               </div>
                <Table>
                  <TableHeader><TableRow><TableHead>Tenant Name</TableHead><TableHead>Lease Term</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Monthly Rent</TableHead><TableHead className="text-right">Late Fee</TableHead></TableRow></TableHeader>
                  <TableBody>
@@ -570,9 +623,15 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
 
         {activeSection === 'maintenance' && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div><Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div>
+              <Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button>
+            </CardHeader>
             <CardContent className="p-0">
-               <div className="p-8 text-center border-b bg-slate-50/50"><Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" /><p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p></div>
+               <div className="p-8 text-center border-b bg-slate-50/50">
+                  <Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                  <p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p>
+               </div>
                <Table>
                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
                  <TableBody><TableRow><TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell></TableRow></TableBody>
@@ -583,7 +642,9 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
 
         {activeSection === 'vendors' && (
           <Card>
-            <CardHeader><div className="flex justify-between"><CardTitle>Preferred Vendors</CardTitle><Button size="sm" onClick={() => vendorFields.append({ role: '', name: '', phone: '' })}><Plus className="h-4 w-4 mr-2" /> Add Vendor</Button></div></CardHeader>
+            <CardHeader>
+              <div className="flex justify-between"><CardTitle>Preferred Vendors</CardTitle><Button size="sm" onClick={() => vendorFields.append({ role: '', name: '', phone: '' })}><Plus className="h-4 w-4 mr-2" /> Add Vendor</Button></div>
+            </CardHeader>
             <CardContent className="space-y-4">
                {vendorFields.fields.map((field, index) => (
                  <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
@@ -594,30 +655,6 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
                  </div>
                ))}
                {vendorFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No vendors added.</p>}
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'accounting' && (
-          <Card className="border-blue-200 bg-blue-50/30">
-            <CardHeader>
-              <div className="flex items-center gap-2"><Bot className="h-6 w-6 text-blue-600" /><CardTitle>Automated Bookkeeping</CardTitle></div>
-              <CardDescription>We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span></div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span></div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span></div>
-               <div className="p-2 bg-white border rounded text-xs">
-                  <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
-                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
-                     <li>Maintenance</li><li>Property Tax</li><li>Insurance</li>
-                     {form.watch('management.isManaged') === 'professional' && <li>Mgmt Fees</li>}
-                     <li>Water</li><li>Electric</li><li>Gas</li><li>Trash</li><li>Internet</li>
-                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
-                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
-                  </ul>
-               </div>
             </CardContent>
           </Card>
         )}
