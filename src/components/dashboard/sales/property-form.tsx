@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin 
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle 
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
-// Define the type for a single property for clarity
+// --- TYPES ---
 type Property = {
   id: string;
   name: string;
@@ -158,7 +158,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [activeSection, setActiveSection] = useState("general");
+  const [activeSection, setActiveSection] = useState("tenants");
   const [isSaving, setIsSaving] = useState(false);
 
   const isEditMode = !!property;
@@ -171,7 +171,13 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
       management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
-      mortgage: { purchasePrice: 0, purchaseDate: '', hasMortgage: 'no', lenderName: '', escrow: { includesTax: false, includesInsurance: false, includesHoa: false } },
+      mortgage: { 
+        purchasePrice: 0,
+        purchaseDate: '',
+        hasMortgage: 'no', 
+        lenderName: '', 
+        escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
+      },
       taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
       hoa: { hasHoa: 'no', fee: 0, frequency: 'monthly', contactName: '', contactPhone: '', contactEmail: '' },
       utilities: [
@@ -183,7 +189,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
       ],
       access: { gateCode: '', lockboxCode: '', notes: '' },
       tenants: [],
-      preferredVendors: [{ role: 'Handyman', name: '', phone: '' }]
+      preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }]
     }
   });
 
@@ -279,6 +285,10 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
   };
 
   const navItems = [
+    { id: 'tenants', label: 'Tenants', icon: UserCheck },
+    { id: 'rentroll', label: 'Lease Summary', icon: ArrowDownCircle },
+    { id: 'maintenance', label: 'Maintenance', icon: Wrench },
+    { id: 'vendors', label: 'Vendors', icon: Users },
     { id: 'general', label: 'General Info', icon: Building2 },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
@@ -287,10 +297,6 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
     { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
     { id: 'access', label: 'Access & Keys', icon: Key },
-    { id: 'tenants', label: 'Tenant Roster', icon: UserCheck },
-    { id: 'rentroll', label: 'Lease Summary', icon: FileText },
-    { id: 'maintenance', label: 'Maintenance', icon: Wrench },
-    { id: 'vendors', label: 'Vendors', icon: Users },
     { id: 'accounting', label: 'Automated Accounting', icon: Bot },
   ];
 
@@ -300,7 +306,17 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
       {/* SIDEBAR */}
       <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
         {navItems.map((item) => (
-          <button key={item.id} type="button" onClick={() => setActiveSection(item.id)} className={cn("w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors text-left", activeSection === item.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setActiveSection(item.id)}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors text-left",
+              activeSection === item.id 
+                ? "bg-primary text-primary-foreground shadow-sm" 
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
             <item.icon className="h-4 w-4 shrink-0" />
             {item.label}
           </button>
@@ -336,13 +352,131 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
       {/* CONTENT AREA */}
       <div className="flex-1 w-full h-auto lg:h-full lg:overflow-y-auto pr-1 pb-20 lg:pb-10">
         
+        {activeSection === 'tenants' && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                 <div>
+                    <CardTitle>Tenants</CardTitle>
+                    <CardDescription>Current residents and lease details. Add multiple for co-signers.</CardDescription>
+                 </div>
+                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1, lateFeeAmount: 0 })}>
+                    <Plus className="h-4 w-4 mr-2" /> Add Tenant
+                 </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+               {tenantFields.fields.map((field, index) => (
+                  <div key={field.id} className="p-4 border rounded-lg bg-slate-50 relative">
+                     <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}>
+                        <Trash2 className="h-4 w-4" />
+                     </Button>
+                     
+                     <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
+                        <div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div>
+                        <div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div>
+                        <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div>
+                     </div>
+                     
+                     <Separator className="mb-4" />
+
+                     <div className="grid grid-cols-3 gap-4 mb-4">
+                        <div className="grid gap-2">
+                           <Label className="text-xs font-semibold text-blue-700">Rent Portion ($)</Label>
+                           <Input type="number" className="bg-white border-blue-200" placeholder="Their share" {...form.register(`tenants.${index}.rentAmount`)} />
+                        </div>
+                        <div className="grid gap-2">
+                           <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
+                           <Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} />
+                        </div>
+                        <div className="grid gap-2">
+                           <Label className="text-xs text-red-700">Late Fee ($)</Label>
+                           <Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} />
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div>
+                        <div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
+                     </div>
+                  </div>
+               ))}
+               {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
+            </CardContent>
+          </Card>
+        )}
+
+        {activeSection === 'rentroll' && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Lease Summary & Collections</CardTitle>
+              <CardDescription>Report of actual rent collected from transaction history.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+               <div className="p-6 text-center border-b bg-slate-50/50">
+                  <ArrowDownCircle className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                  <p className="text-sm font-medium text-slate-900">No transactions yet.</p>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                     This report will automatically populate with payment history once you log transactions.
+                  </p>
+               </div>
+               
+               <Table>
+                 <TableHeader>
+                   <TableRow>
+                     <TableHead>Date Paid</TableHead>
+                     <TableHead>Tenant / Description</TableHead>
+                     <TableHead>Bank Account</TableHead>
+                     <TableHead className="text-right">Amount Collected</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                    <TableRow>
+                       <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">
+                          Waiting for first payment...
+                       </TableCell>
+                    </TableRow>
+                 </TableBody>
+               </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeSection === 'maintenance' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div>
+              <Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button>
+            </CardHeader>
+            <CardContent className="p-0">
+               <div className="p-8 text-center border-b bg-slate-50/50">
+                  <Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                  <p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p>
+               </div>
+               <Table>
+                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
+                 <TableBody><TableRow><TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell></TableRow></TableBody>
+               </Table>
+            </CardContent>
+          </Card>
+        )}
+
+        {activeSection === 'vendors' && (
+            <p className="text-center text-muted-foreground py-10">
+              The central vendor management page is under development.
+            </p>
+        )}
+
         {activeSection === 'general' && (
           <Card>
             <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2"><Label>Nickname</Label><Input {...form.register('name')} /></div>
               <div className="grid gap-2"><Label>Type</Label>
-                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue={form.getValues('type')}>
+                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
                    <SelectTrigger><SelectValue/></SelectTrigger>
                    <SelectContent>
                       <SelectItem value="single-family">Single Family</SelectItem>
@@ -358,30 +492,6 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
                  <Input placeholder="State" {...form.register('address.state')} />
                  <Input placeholder="Zip" {...form.register('address.zip')} />
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'accounting' && (
-          <Card className="border-blue-200 bg-blue-50/30">
-            <CardHeader>
-              <div className="flex items-center gap-2"><Bot className="h-6 w-6 text-blue-600" /><CardTitle>Automated Bookkeeping</CardTitle></div>
-              <CardDescription>We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span></div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span></div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span></div>
-               <div className="p-2 bg-white border rounded text-xs">
-                  <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
-                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
-                     <li>Maintenance</li><li>Property Tax</li><li>Insurance</li>
-                     {form.watch('management.isManaged') === 'professional' && <li>Mgmt Fees</li>}
-                     <li>Water</li><li>Electric</li><li>Gas</li><li>Trash</li><li>Internet</li>
-                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
-                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
-                  </ul>
-               </div>
             </CardContent>
           </Card>
         )}
@@ -402,7 +512,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
             <CardContent className="space-y-6">
                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                   <Label>Management Style</Label>
-                  <RadioGroup value={form.watch('management.isManaged')} onValueChange={(val: any) => form.setValue('management.isManaged', val)} className="flex gap-4">
+                  <RadioGroup defaultValue="self" onValueChange={(val: any) => form.setValue('management.isManaged', val)} className="flex gap-4">
                     <div className="flex items-center space-x-2"><RadioGroupItem value="self" id="self" /><Label htmlFor="self">Self-Managed</Label></div>
                     <div className="flex items-center space-x-2"><RadioGroupItem value="professional" id="pro" /><Label htmlFor="pro">Professional</Label></div>
                   </RadioGroup>
@@ -424,25 +534,13 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
                        <div className="grid gap-2"><Label className="flex items-center gap-1"><MapPin className="h-3 w-3"/> Mailing Address</Label><Input placeholder="PO Box 123" {...form.register('management.address')} /></div>
                     </div>
                     <div className="p-4 bg-slate-50 border rounded-lg">
-                       <Label className="mb-2 block font-semibold text-slate-700">Fee Structure (For Automation)</Label>
+                       <Label className="mb-2 block font-semibold text-slate-700">Fee Structure</Label>
                        <div className="grid grid-cols-12 gap-4 mb-3">
-                          <div className="col-span-4">
-                             <Label className="text-xs">Monthly Fee Type</Label>
-                             <Select onValueChange={(val:any) => form.setValue('management.feeType', val)} value={form.watch('management.feeType')}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                   <SelectItem value="percent">% of Gross Rent</SelectItem>
-                                   <SelectItem value="flat">Flat Monthly Fee</SelectItem>
-                                </SelectContent>
-                             </Select>
-                          </div>
-                          <div className="col-span-8">
-                             <Label className="text-xs">Value ({form.watch('management.feeType') === 'percent' ? '%' : '$'})</Label>
-                             <Input type="number" placeholder={form.watch('management.feeType') === 'percent' ? "e.g. 10" : "e.g. 150.00"} {...form.register('management.feeValue')} />
-                          </div>
+                          <div className="col-span-4"><Label className="text-xs">Monthly Fee</Label><Select onValueChange={(val:any) => form.setValue('management.feeType', val)} defaultValue="percent"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percent">% of Rent</SelectItem><SelectItem value="flat">Flat Fee</SelectItem></SelectContent></Select></div>
+                          <div className="col-span-8"><Label className="text-xs">Value</Label><Input type="number" placeholder="10" {...form.register('management.feeValue')} /></div>
                        </div>
                        <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Leasing Fee (New Tenant)</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.leasingFee')} /></div></div>
+                          <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Leasing Fee</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.leasingFee')} /></div></div>
                           <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Renewal Fee</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.renewalFee')} /></div></div>
                        </div>
                     </div>
@@ -462,7 +560,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
               </div>
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <Label>Is there a mortgage?</Label>
-                <RadioGroup value={form.watch('mortgage.hasMortgage')} onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
+                <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
                   <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
                   <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
                 </RadioGroup>
@@ -519,7 +617,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
             <CardContent className="space-y-4">
                <div className="flex items-center space-x-4 mb-4">
                   <Label>Is there an HOA?</Label>
-                  <RadioGroup value={form.watch('hoa.hasHoa')} onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4">
+                  <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4">
                     <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
                     <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
                   </RadioGroup>
@@ -527,7 +625,7 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
                 <div className="grid grid-cols-2 gap-4">
                    <div className="grid gap-2"><Label>Fee Amount</Label><Input type="number" {...form.register('hoa.fee')} /></div>
                    <div className="grid gap-2"><Label>Frequency</Label>
-                      <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} value={form.watch('hoa.frequency')}>
+                      <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} defaultValue="monthly">
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="quarterly">Quarterly</SelectItem><SelectItem value="semi-annually">Semi-Annually</SelectItem><SelectItem value="annually">Annually</SelectItem></SelectContent>
                       </Select>
@@ -567,97 +665,40 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
         {activeSection === 'access' && (
           <Card>
             <CardHeader><CardTitle>Access</CardTitle></CardHeader>
-            <CardContent className="space-y-4"><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Gate Code</Label><Input {...form.register('access.gateCode')} /></div><div className="grid gap-2"><Label>Lockbox</Label><Input {...form.register('access.lockboxCode')} /></div></div><div className="grid gap-2"><Label>Notes</Label><Textarea {...form.register('access.notes')} /></div></CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'tenants' && (
-          <Card>
-            <CardHeader><div className="flex justify-between items-center"><div><CardTitle>Tenant Roster</CardTitle><CardDescription>Active tenants for invoicing.</CardDescription></div><Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1 })}><Plus className="h-4 w-4 mr-2" /> Add Tenant</Button></div></CardHeader>
-            <CardContent className="space-y-6">
-               {tenantFields.fields.map((field, index) => (
-                  <div key={field.id} className="p-4 border rounded-lg bg-slate-50 relative">
-                     <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}><Trash2 className="h-4 w-4" /></Button>
-                     <div className="grid grid-cols-2 gap-4 mb-4 pr-8"><div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div><div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div></div>
-                     <div className="grid grid-cols-2 gap-4 mb-4"><div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div><div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div></div>
-                     <Separator className="mb-4" />
-                     <div className="grid grid-cols-3 gap-4 mb-4"><div className="grid gap-2"><Label className="text-xs font-semibold text-blue-700">Monthly Rent ($)</Label><Input type="number" className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentAmount`)} /></div><div className="grid gap-2"><Label className="text-xs font-semibold text-blue-700">Due Day</Label><Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} /></div><div className="grid gap-2"><Label className="text-xs text-red-700">Late Fee ($)</Label><Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} /></div></div>
-                     <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div><div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div></div>
-                  </div>
-               ))}
-               {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'rentroll' && (
-          <Card>
-            <CardHeader><CardTitle>Lease Summary</CardTitle><CardDescription>Live summary of lease performance.</CardDescription></CardHeader>
-            <CardContent className="p-0">
-               <div className="bg-slate-100 p-4 border-b flex justify-between items-center text-sm">
-                  <span className="font-medium">Total Monthly Revenue:</span>
-                  <span className="font-bold text-green-700 text-lg">
-                    ${form.watch('tenants')?.reduce((acc: number, t: any) => acc + (parseFloat(t.rentAmount)||0), 0).toLocaleString()}
-                  </span>
-               </div>
-               <Table>
-                 <TableHeader><TableRow><TableHead>Tenant Name</TableHead><TableHead>Lease Term</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Monthly Rent</TableHead><TableHead className="text-right">Late Fee</TableHead></TableRow></TableHeader>
-                 <TableBody>
-                   {form.watch('tenants')?.map((tenant: any, i: number) => (
-                     <TableRow key={i}>
-                       <TableCell className="font-medium">{tenant.firstName} {tenant.lastName}</TableCell>
-                       <TableCell className="text-xs text-muted-foreground">{tenant.leaseStart} - {tenant.leaseEnd}</TableCell>
-                       <TableCell><span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold">Active</span></TableCell>
-                       <TableCell className="text-right">${tenant.rentAmount}</TableCell>
-                       <TableCell className="text-right text-red-500">${tenant.lateFeeAmount || 0}</TableCell> 
-                     </TableRow>
-                   ))}
-                   {(!form.watch('tenants') || form.watch('tenants')?.length === 0) && (
-                      <TableRow><TableCell colSpan={5} className="text-center h-24 text-muted-foreground">No active leases found.</TableCell></TableRow>
-                   )}
-                 </TableBody>
-               </Table>
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'maintenance' && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div>
-              <Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button>
-            </CardHeader>
-            <CardContent className="p-0">
-               <div className="p-8 text-center border-b bg-slate-50/50">
-                  <Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p>
-               </div>
-               <Table>
-                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
-                 <TableBody><TableRow><TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell></TableRow></TableBody>
-               </Table>
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'vendors' && (
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between"><CardTitle>Preferred Vendors</CardTitle><Button size="sm" onClick={() => vendorFields.append({ role: '', name: '', phone: '' })}><Plus className="h-4 w-4 mr-2" /> Add Vendor</Button></div>
-            </CardHeader>
             <CardContent className="space-y-4">
-               {vendorFields.fields.map((field, index) => (
-                 <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
-                    <div className="col-span-4 grid gap-1"><Label className="text-xs">Role</Label><Input placeholder="Plumber" {...form.register(`preferredVendors.${index}.role`)} /></div>
-                    <div className="col-span-4 grid gap-1"><Label className="text-xs">Name</Label><Input placeholder="Joe Smith" {...form.register(`preferredVendors.${index}.name`)} /></div>
-                    <div className="col-span-3 grid gap-1"><Label className="text-xs">Phone</Label><Input placeholder="555-0000" {...form.register(`preferredVendors.${index}.phone`)} /></div>
-                    <div className="col-span-1"><Button size="icon" variant="ghost" className="text-destructive" onClick={() => vendorFields.remove(index)}><Trash2 className="h-4 w-4" /></Button></div>
-                 </div>
-               ))}
-               {vendorFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No vendors added.</p>}
+               <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2"><Label>Gate Code</Label><Input {...form.register('access.gateCode')} /></div>
+                  <div className="grid gap-2"><Label>Lockbox</Label><Input {...form.register('access.lockboxCode')} /></div>
+               </div>
+               <div className="grid gap-2"><Label>Notes</Label><Textarea {...form.register('access.notes')} /></div>
             </CardContent>
           </Card>
         )}
+
+        {activeSection === 'accounting' && (
+          <Card className="border-blue-200 bg-blue-50/30">
+            <CardHeader>
+              <div className="flex items-center gap-2"><Bot className="h-6 w-6 text-blue-600" /><CardTitle>Automated Bookkeeping</CardTitle></div>
+              <CardDescription>We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span></div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span></div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span></div>
+               <div className="p-2 bg-white border rounded text-xs">
+                  <span className="font-semibold text-red-700 block mb-1">Expenses</span>
+                  <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
+                     <li>Maintenance</li><li>Property Tax</li><li>Insurance</li>
+                     {form.watch('management.isManaged') === 'professional' && <li>Mgmt Fees</li>}
+                     <li>Water</li><li>Electric</li><li>Gas</li><li>Trash</li><li>Internet</li>
+                     {form.watch('mortgage.hasMortgage') === 'yes' && <li>Mortgage Interest</li>}
+                     {form.watch('hoa.hasHoa') === 'yes' && <li>HOA Fees</li>}
+                  </ul>
+               </div>
+            </CardContent>
+          </Card>
+        )}
+
       </div>
     </div>
   );

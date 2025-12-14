@@ -442,4 +442,6 @@
         }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user"
+  }
+}
