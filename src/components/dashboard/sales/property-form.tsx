@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,10 +19,25 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, updateDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+// Define the type for a single property for clarity
+type Property = {
+  id: string;
+  name: string;
+  type: 'single-family' | 'multi-family' | 'condo' | 'commercial';
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+  };
+  [key: string]: any; // Allow other properties
+};
+
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
@@ -34,20 +49,18 @@ const propertySchema = z.object({
     state: z.string().min(2),
     zip: z.string().min(5),
   }),
-  // MANAGEMENT INFO (EXPANDED)
   management: z.object({
     isManaged: z.enum(['self', 'professional']),
     companyName: z.string().optional(),
     managerName: z.string().optional(),
-    website: z.string().optional(),      // NEW
-    address: z.string().optional(),      // NEW
+    website: z.string().optional(),
+    address: z.string().optional(),
     email: z.string().optional(),
     phone: z.string().optional(),
-    // Fees
     feeType: z.enum(['percent', 'flat']).optional(),
     feeValue: z.coerce.number().optional(),
-    leasingFee: z.coerce.number().optional(), // NEW (Tenant Placement)
-    renewalFee: z.coerce.number().optional(), // NEW (Lease Renewal)
+    leasingFee: z.coerce.number().optional(),
+    renewalFee: z.coerce.number().optional(),
   }),
   financials: z.object({
     targetRent: z.coerce.number().min(0),
@@ -98,6 +111,7 @@ const propertySchema = z.object({
     notes: z.string().optional(),
   }),
   tenants: z.array(z.object({
+    id: z.string().optional(), // Keep track of existing tenants
     firstName: z.string(),
     lastName: z.string(),
     email: z.string().email(),
@@ -109,11 +123,11 @@ const propertySchema = z.object({
     lateFeeAmount: z.coerce.number().optional(),
   })).optional(),
   preferredVendors: z.array(z.object({
+    id: z.string().optional(),
     role: z.string(),
     name: z.string(),
     phone: z.string(),
   })).optional(),
-  // ACCOUNTING (MOVED TO END)
   accounting: z.object({
     assetAccount: z.string().optional(),
     incomeAccount: z.string().optional(),
@@ -137,34 +151,27 @@ const propertySchema = z.object({
   }).optional(),
 });
 
+type PropertyFormValues = z.infer<typeof propertySchema>;
+
 // --- MAIN COMPONENT ---
-export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
+export function PropertyForm({ property, onSuccess }: { property?: Property | null; onSuccess?: () => void }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [activeSection, setActiveSection] = useState("general");
   const [isSaving, setIsSaving] = useState(false);
 
-  const form = useForm({
+  const isEditMode = !!property;
+
+  const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
     defaultValues: {
       name: '',
       type: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
       financials: { targetRent: 0, securityDeposit: 0 },
-      // Expanded Management Defaults
-      management: { 
-        isManaged: 'self', 
-        companyName: '', managerName: '', email: '', phone: '', website: '', address: '',
-        feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 
-      },
-      mortgage: { 
-        purchasePrice: 0,
-        purchaseDate: '',
-        hasMortgage: 'no', 
-        lenderName: '', 
-        escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
-      },
+      management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
+      mortgage: { purchasePrice: 0, purchaseDate: '', hasMortgage: 'no', lenderName: '', escrow: { includesTax: false, includesInsurance: false, includesHoa: false } },
       taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
       hoa: { hasHoa: 'no', fee: 0, frequency: 'monthly', contactName: '', contactPhone: '', contactEmail: '' },
       utilities: [
@@ -180,98 +187,97 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     }
   });
 
+  useEffect(() => {
+    if (isEditMode && property) {
+      form.reset(property as PropertyFormValues);
+    }
+  }, [property, isEditMode, form]);
+
+
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
 
-  // --- AUTOMATED BATCH CREATION LOGIC ---
-  const onSubmit = async (data: any) => {
+  const onSubmit = async (data: PropertyFormValues) => {
     if (!user || !firestore) return;
     setIsSaving(true);
-
+    
     try {
-      const batch = writeBatch(firestore);
-      const timestamp = new Date().toISOString();
-      const propertyRef = doc(collection(firestore, 'properties'));
-      
-      const accountingMap: any = { utilities: {} };
+        if (isEditMode && property) {
+            // UPDATE LOGIC
+            const propertyRef = doc(firestore, 'properties', property.id);
+            await updateDoc(propertyRef, data);
+            toast({ title: "Property Updated", description: `${data.name} has been successfully updated.` });
+        } else {
+            // CREATE LOGIC (with account suite)
+            const batch = writeBatch(firestore);
+            const timestamp = new Date().toISOString();
+            const propertyRef = doc(collection(firestore, 'properties'));
+            
+            const accountingMap: any = { utilities: {} };
 
-      const createAccount = (name: string, type: string, subtype: string, balance: number = 0) => {
-        const ref = doc(collection(firestore, 'accounts'));
-        batch.set(ref, {
-          userId: user.uid,
-          name: name,
-          type: type,
-          subtype: subtype,
-          balance: balance,
-          isSystemAccount: true,
-          propertyId: propertyRef.id,
-          createdAt: timestamp
-        });
-        return ref.id;
-      };
+            const createAccount = (name: string, type: string, subtype: string, balance: number = 0) => {
+                const ref = doc(collection(firestore, 'accounts'));
+                batch.set(ref, { userId: user.uid, name, type, subtype, balance, isSystemAccount: true, propertyId: propertyRef.id, createdAt: timestamp });
+                return ref.id;
+            };
 
-      // 1. ASSETS
-      accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', data.mortgage?.purchasePrice || 0);
-      accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
+            accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', data.mortgage?.purchasePrice || 0);
+            accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
 
-      // 2. LIABILITIES
-      if (data.financials.securityDeposit > 0) {
-         accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability', 0);
-      }
-      if (data.mortgage.hasMortgage === 'yes') {
-        accountingMap.liabilityAccount = createAccount(`Mortgage - ${data.name}`, 'Liability', 'Long Term Liability', data.mortgage?.loanBalance || 0);
-      }
+            if (data.financials.securityDeposit > 0) {
+                accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability', 0);
+            }
+            if (data.mortgage.hasMortgage === 'yes') {
+                accountingMap.liabilityAccount = createAccount(`Mortgage - ${data.name}`, 'Liability', 'Long Term Liability', data.mortgage?.loanBalance || 0);
+            }
 
-      // 3. INCOME
-      accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
-      accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
+            accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
+            accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
 
-      // 4. EXPENSES
-      accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
-      accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
-      accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
-      
-      // Management Fees (Only if Professionally Managed)
-      if (data.management.isManaged === 'professional') {
-        accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
-      }
+            accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
+            accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
+            accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
+            
+            if (data.management.isManaged === 'professional') {
+                accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
+            }
 
-      if (data.mortgage.hasMortgage === 'yes') {
-        accountingMap.interestAccount = createAccount(`Mtg Interest - ${data.name}`, 'Expense', 'Interest Expense');
-      }
-      if (data.hoa.hasHoa === 'yes') {
-        accountingMap.hoaAccount = createAccount(`HOA Fees - ${data.name}`, 'Expense', 'Dues & Subscriptions');
-      }
+            if (data.mortgage.hasMortgage === 'yes') {
+                accountingMap.interestAccount = createAccount(`Mtg Interest - ${data.name}`, 'Expense', 'Interest Expense');
+            }
+            if (data.hoa.hasHoa === 'yes') {
+                accountingMap.hoaAccount = createAccount(`HOA Fees - ${data.name}`, 'Expense', 'Dues & Subscriptions');
+            }
 
-      // 5. UTILITIES
-      accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
+            accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
+            accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
+            accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
+            accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
+            accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
 
-      batch.set(propertyRef, {
-        userId: user.uid,
-        ...data,
-        createdAt: timestamp,
-        accounting: accountingMap
-      });
+            batch.set(propertyRef, {
+                userId: user.uid,
+                ...data,
+                createdAt: timestamp,
+                accounting: accountingMap
+            });
 
-      await batch.commit();
+            await batch.commit();
 
-      toast({ title: "Property Suite Created", description: `Generated property record and Chart of Accounts for ${data.name}.` });
-      if (onSuccess) onSuccess();
+            toast({ title: "Property Suite Created", description: `Generated property record and Chart of Accounts for ${data.name}.` });
+        }
+        
+        if (onSuccess) onSuccess();
 
     } catch (error: any) {
-      console.error(error);
-      toast({ variant: "destructive", title: "Error", description: error.message });
+        console.error(error);
+        toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
-      setIsSaving(false);
+        setIsSaving(false);
     }
   };
 
-  // REORDERED NAV ITEMS
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
@@ -285,7 +291,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
     { id: 'rentroll', label: 'Rent Roll', icon: FileText },
     { id: 'maintenance', label: 'Maintenance', icon: Wrench },
     { id: 'vendors', label: 'Vendors', icon: Users },
-    { id: 'accounting', label: 'Automated Accounting', icon: Bot }, // MOVED TO END
+    { id: 'accounting', label: 'Automated Accounting', icon: Bot },
   ];
 
   return (
@@ -294,17 +300,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
       {/* SIDEBAR */}
       <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
         {navItems.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setActiveSection(item.id)}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors text-left",
-              activeSection === item.id 
-                ? "bg-primary text-primary-foreground shadow-sm" 
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
+          <button key={item.id} type="button" onClick={() => setActiveSection(item.id)} className={cn("w-full flex items-center gap-3 px-4 py-3 text-sm font-medium rounded-lg transition-colors text-left", activeSection === item.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
             <item.icon className="h-4 w-4 shrink-0" />
             {item.label}
           </button>
@@ -312,7 +308,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
         <Separator className="my-4" />
         <div className="px-1">
            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
-             {isSaving ? "Creating..." : <><Save className="mr-2 h-4 w-4" /> Save & Setup</>}
+             {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> {isEditMode ? 'Save Changes' : 'Save & Setup'}</>}
            </Button>
         </div>
       </div>
@@ -333,21 +329,20 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             </Select>
          </div>
          <Button className="w-full bg-green-600 hover:bg-green-700 shadow-md" onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
-             {isSaving ? "Creating..." : <><Save className="mr-2 h-4 w-4" /> Save & Setup</>}
+             {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> {isEditMode ? 'Save Changes' : 'Save & Setup'}</>}
          </Button>
       </div>
 
       {/* CONTENT AREA */}
       <div className="flex-1 w-full h-auto lg:h-full lg:overflow-y-auto pr-1 pb-20 lg:pb-10">
         
-        {/* 1. GENERAL */}
         {activeSection === 'general' && (
           <Card>
             <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-2"><Label>Nickname</Label><Input {...form.register('name')} /></div>
               <div className="grid gap-2"><Label>Type</Label>
-                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
+                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue={form.getValues('type')}>
                    <SelectTrigger><SelectValue/></SelectTrigger>
                    <SelectContent>
                       <SelectItem value="single-family">Single Family</SelectItem>
@@ -367,7 +362,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 2. FINANCIALS */}
         {activeSection === 'financials' && (
           <Card>
             <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
@@ -378,14 +372,13 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 3. MANAGEMENT CO. (UPDATED) */}
         {activeSection === 'management' && (
           <Card>
             <CardHeader><CardTitle>Property Management</CardTitle><CardDescription>Who manages the day-to-day operations?</CardDescription></CardHeader>
             <CardContent className="space-y-6">
                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                   <Label>Management Style</Label>
-                  <RadioGroup defaultValue="self" onValueChange={(val: any) => form.setValue('management.isManaged', val)} className="flex gap-4">
+                  <RadioGroup value={form.watch('management.isManaged')} onValueChange={(val: any) => form.setValue('management.isManaged', val)} className="flex gap-4">
                     <div className="flex items-center space-x-2"><RadioGroupItem value="self" id="self" /><Label htmlFor="self">Self-Managed</Label></div>
                     <div className="flex items-center space-x-2"><RadioGroupItem value="professional" id="pro" /><Label htmlFor="pro">Professional</Label></div>
                   </RadioGroup>
@@ -402,19 +395,16 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                        <div className="grid gap-2"><Label>Email</Label><Input placeholder="contact@abc.com" {...form.register('management.email')} /></div>
                        <div className="grid gap-2"><Label>Phone</Label><Input placeholder="(555) 555-5555" {...form.register('management.phone')} /></div>
                     </div>
-                    
-                    {/* NEW FIELDS: Website & Address */}
                     <div className="grid grid-cols-2 gap-4">
                        <div className="grid gap-2"><Label className="flex items-center gap-1"><Globe className="h-3 w-3"/> Website</Label><Input placeholder="www.abc-mgmt.com" {...form.register('management.website')} /></div>
                        <div className="grid gap-2"><Label className="flex items-center gap-1"><MapPin className="h-3 w-3"/> Mailing Address</Label><Input placeholder="PO Box 123" {...form.register('management.address')} /></div>
                     </div>
-
                     <div className="p-4 bg-slate-50 border rounded-lg">
                        <Label className="mb-2 block font-semibold text-slate-700">Fee Structure (For Automation)</Label>
                        <div className="grid grid-cols-12 gap-4 mb-3">
                           <div className="col-span-4">
                              <Label className="text-xs">Monthly Fee Type</Label>
-                             <Select onValueChange={(val:any) => form.setValue('management.feeType', val)} defaultValue="percent">
+                             <Select onValueChange={(val:any) => form.setValue('management.feeType', val)} value={form.watch('management.feeType')}>
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                    <SelectItem value="percent">% of Gross Rent</SelectItem>
@@ -427,17 +417,9 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
                              <Input type="number" placeholder={form.watch('management.feeType') === 'percent' ? "e.g. 10" : "e.g. 150.00"} {...form.register('management.feeValue')} />
                           </div>
                        </div>
-                       
-                       {/* NEW FEES */}
                        <div className="grid grid-cols-2 gap-4">
-                          <div className="grid gap-2">
-                             <Label className="text-xs text-muted-foreground">Leasing Fee (New Tenant)</Label>
-                             <div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.leasingFee')} /></div>
-                          </div>
-                          <div className="grid gap-2">
-                             <Label className="text-xs text-muted-foreground">Renewal Fee</Label>
-                             <div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.renewalFee')} /></div>
-                          </div>
+                          <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Leasing Fee (New Tenant)</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.leasingFee')} /></div></div>
+                          <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Renewal Fee</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.renewalFee')} /></div></div>
                        </div>
                     </div>
                  </div>
@@ -446,7 +428,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 4. MORTGAGE */}
         {activeSection === 'mortgage' && (
           <Card>
             <CardHeader><CardTitle>Loan & Purchase Information</CardTitle></CardHeader>
@@ -457,7 +438,7 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
               </div>
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <Label>Is there a mortgage?</Label>
-                <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
+                <RadioGroup value={form.watch('mortgage.hasMortgage')} onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
                   <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
                   <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
                 </RadioGroup>
@@ -483,55 +464,24 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 5. TAX & INSURANCE */}
         {activeSection === 'tax' && (
           <div className="space-y-6">
-            <Card>
-              <CardHeader><CardTitle>Property Tax</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2"><Label>Tax Parcel ID</Label><Input placeholder="Found on tax bill" {...form.register('taxAndInsurance.taxParcelId')} /></div>
-                <div className="grid gap-2"><Label>Annual Tax Amount</Label><Input type="number" {...form.register('taxAndInsurance.propertyTaxAmount')} /></div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader><CardTitle>Home Insurance</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div>
-                  <div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2"><Label>Annual Premium ($)</Label><Input type="number" {...form.register('taxAndInsurance.annualPremium')} /></div>
-                  <div className="grid gap-2"><Label>Renewal Date</Label><Input type="date" {...form.register('taxAndInsurance.renewalDate')} /></div>
-                </div>
-              </CardContent>
-            </Card>
+            <Card><CardHeader><CardTitle>Property Tax</CardTitle></CardHeader><CardContent className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Tax Parcel ID</Label><Input placeholder="Found on tax bill" {...form.register('taxAndInsurance.taxParcelId')} /></div><div className="grid gap-2"><Label>Annual Tax Amount</Label><Input type="number" {...form.register('taxAndInsurance.propertyTaxAmount')} /></div></CardContent></Card>
+            <Card><CardHeader><CardTitle>Home Insurance</CardTitle></CardHeader><CardContent className="space-y-4"><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div><div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div></div><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Annual Premium ($)</Label><Input type="number" {...form.register('taxAndInsurance.annualPremium')} /></div><div className="grid gap-2"><Label>Renewal Date</Label><Input type="date" {...form.register('taxAndInsurance.renewalDate')} /></div></div></CardContent></Card>
           </div>
         )}
 
-        {/* 6. HOA */}
         {activeSection === 'hoa' && (
           <Card>
             <CardHeader><CardTitle>HOA Details</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-               <div className="flex items-center space-x-4 mb-4">
-                  <Label>Is there an HOA?</Label>
-                  <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4">
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
-                  </RadioGroup>
-                </div>
+               <div className="flex items-center space-x-4 mb-4"><Label>Is there an HOA?</Label><RadioGroup value={form.watch('hoa.hasHoa')} onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4"><div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div><div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div></RadioGroup></div>
                 <div className="grid grid-cols-2 gap-4">
                    <div className="grid gap-2"><Label>Fee Amount</Label><Input type="number" {...form.register('hoa.fee')} /></div>
                    <div className="grid gap-2"><Label>Frequency</Label>
-                      <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} defaultValue="monthly">
+                      <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} value={form.watch('hoa.frequency')}>
                         <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="monthly">Monthly</SelectItem>
-                            <SelectItem value="quarterly">Quarterly</SelectItem>
-                            <SelectItem value="semi-annually">Semi-Annually</SelectItem>
-                            <SelectItem value="annually">Annually</SelectItem>
-                        </SelectContent>
+                        <SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="quarterly">Quarterly</SelectItem><SelectItem value="semi-annually">Semi-Annually</SelectItem><SelectItem value="annually">Annually</SelectItem></SelectContent>
                       </Select>
                    </div>
                 </div>
@@ -545,33 +495,17 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 7. UTILITIES */}
         {activeSection === 'utilities' && (
           <Card>
             <CardHeader><CardTitle>Utility Responsibility</CardTitle></CardHeader>
             <CardContent className="p-0">
                <Table>
-                 <TableHeader>
-                   <TableRow>
-                     <TableHead className="w-[100px]">Utility</TableHead>
-                     <TableHead className="w-[150px]">Responsibility</TableHead>
-                     <TableHead>Provider Name</TableHead>
-                     <TableHead>Contact / Acct #</TableHead>
-                   </TableRow>
-                 </TableHeader>
+                 <TableHeader><TableRow><TableHead className="w-[100px]">Utility</TableHead><TableHead className="w-[150px]">Responsibility</TableHead><TableHead>Provider Name</TableHead><TableHead>Contact / Acct #</TableHead></TableRow></TableHeader>
                  <TableBody>
                    {utilityFields.fields.map((field, index) => (
                      <TableRow key={field.id}>
                        <TableCell className="font-medium">{form.getValues(`utilities.${index}.type`)}</TableCell>
-                       <TableCell>
-                          <Select onValueChange={(val:any) => form.setValue(`utilities.${index}.responsibility`, val)} defaultValue={field.responsibility}>
-                             <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
-                             <SelectContent>
-                                <SelectItem value="tenant">Tenant Pays</SelectItem>
-                                <SelectItem value="landlord">Landlord Pays</SelectItem>
-                             </SelectContent>
-                          </Select>
-                       </TableCell>
+                       <TableCell><Select onValueChange={(val:any) => form.setValue(`utilities.${index}.responsibility`, val)} defaultValue={field.responsibility}><SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="tenant">Tenant Pays</SelectItem><SelectItem value="landlord">Landlord Pays</SelectItem></SelectContent></Select></TableCell>
                        <TableCell><Input className="h-8" placeholder="Provider" {...form.register(`utilities.${index}.providerName`)} /></TableCell>
                        <TableCell><Input className="h-8" placeholder="Phone/Acct" {...form.register(`utilities.${index}.providerContact`)} /></TableCell>
                      </TableRow>
@@ -582,54 +516,25 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 8. ACCESS */}
         {activeSection === 'access' && (
           <Card>
             <CardHeader><CardTitle>Access</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2"><Label>Gate Code</Label><Input {...form.register('access.gateCode')} /></div>
-                  <div className="grid gap-2"><Label>Lockbox</Label><Input {...form.register('access.lockboxCode')} /></div>
-               </div>
-               <div className="grid gap-2"><Label>Notes</Label><Textarea {...form.register('access.notes')} /></div>
-            </CardContent>
+            <CardContent className="space-y-4"><div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label>Gate Code</Label><Input {...form.register('access.gateCode')} /></div><div className="grid gap-2"><Label>Lockbox</Label><Input {...form.register('access.lockboxCode')} /></div></div><div className="grid gap-2"><Label>Notes</Label><Textarea {...form.register('access.notes')} /></div></CardContent>
           </Card>
         )}
 
-        {/* 9. TENANTS */}
         {activeSection === 'tenants' && (
           <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                 <div><CardTitle>Tenant Roster</CardTitle><CardDescription>Active tenants for invoicing.</CardDescription></div>
-                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1 })}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Tenant
-                 </Button>
-              </div>
-            </CardHeader>
+            <CardHeader><div className="flex justify-between items-center"><div><CardTitle>Tenant Roster</CardTitle><CardDescription>Active tenants for invoicing.</CardDescription></div><Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1 })}><Plus className="h-4 w-4 mr-2" /> Add Tenant</Button></div></CardHeader>
             <CardContent className="space-y-6">
                {tenantFields.fields.map((field, index) => (
                   <div key={field.id} className="p-4 border rounded-lg bg-slate-50 relative">
                      <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}><Trash2 className="h-4 w-4" /></Button>
-                     
-                     <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
-                        <div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div>
-                     </div>
-                     <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div>
-                     </div>
+                     <div className="grid grid-cols-2 gap-4 mb-4 pr-8"><div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div><div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div></div>
+                     <div className="grid grid-cols-2 gap-4 mb-4"><div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div><div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div></div>
                      <Separator className="mb-4" />
-                     <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div className="grid gap-2"><Label className="text-xs font-semibold text-blue-700">Monthly Rent ($)</Label><Input type="number" className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentAmount`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs font-semibold text-blue-700">Due Day</Label><Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs text-red-700">Late Fee ($)</Label><Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} /></div>
-                     </div>
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
-                     </div>
+                     <div className="grid grid-cols-3 gap-4 mb-4"><div className="grid gap-2"><Label className="text-xs font-semibold text-blue-700">Monthly Rent ($)</Label><Input type="number" className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentAmount`)} /></div><div className="grid gap-2"><Label className="text-xs font-semibold text-blue-700">Due Day</Label><Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} /></div><div className="grid gap-2"><Label className="text-xs text-red-700">Late Fee ($)</Label><Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} /></div></div>
+                     <div className="grid grid-cols-2 gap-4"><div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div><div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div></div>
                   </div>
                ))}
                {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
@@ -637,17 +542,11 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 10. RENT ROLL */}
         {activeSection === 'rentroll' && (
           <Card>
             <CardHeader><CardTitle>Rent Roll</CardTitle><CardDescription>Live summary of lease performance.</CardDescription></CardHeader>
             <CardContent className="p-0">
-               <div className="bg-slate-100 p-4 border-b flex justify-between items-center text-sm">
-                  <span className="font-medium">Total Monthly Revenue:</span>
-                  <span className="font-bold text-green-700 text-lg">
-                    ${form.watch('tenants')?.reduce((acc: number, t: any) => acc + (parseFloat(t.rentAmount)||0), 0).toLocaleString()}
-                  </span>
-               </div>
+               <div className="bg-slate-100 p-4 border-b flex justify-between items-center text-sm"><span className="font-medium">Total Monthly Revenue:</span><span className="font-bold text-green-700 text-lg">${form.watch('tenants')?.reduce((acc: number, t: any) => acc + (parseFloat(t.rentAmount)||0), 0).toLocaleString()}</span></div>
                <Table>
                  <TableHeader><TableRow><TableHead>Tenant Name</TableHead><TableHead>Lease Term</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Monthly Rent</TableHead><TableHead className="text-right">Late Fee</TableHead></TableRow></TableHeader>
                  <TableBody>
@@ -669,18 +568,11 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 11. MAINTENANCE */}
         {activeSection === 'maintenance' && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div>
-              <Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button>
-            </CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between"><div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div><Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button></CardHeader>
             <CardContent className="p-0">
-               <div className="p-8 text-center border-b bg-slate-50/50">
-                  <Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p>
-               </div>
+               <div className="p-8 text-center border-b bg-slate-50/50"><Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" /><p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p></div>
                <Table>
                  <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
                  <TableBody><TableRow><TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell></TableRow></TableBody>
@@ -689,12 +581,9 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 12. VENDORS */}
         {activeSection === 'vendors' && (
           <Card>
-            <CardHeader>
-              <div className="flex justify-between"><CardTitle>Preferred Vendors</CardTitle><Button size="sm" onClick={() => vendorFields.append({ role: '', name: '', phone: '' })}><Plus className="h-4 w-4 mr-2" /> Add Vendor</Button></div>
-            </CardHeader>
+            <CardHeader><div className="flex justify-between"><CardTitle>Preferred Vendors</CardTitle><Button size="sm" onClick={() => vendorFields.append({ role: '', name: '', phone: '' })}><Plus className="h-4 w-4 mr-2" /> Add Vendor</Button></div></CardHeader>
             <CardContent className="space-y-4">
                {vendorFields.fields.map((field, index) => (
                  <div key={field.id} className="grid grid-cols-12 gap-2 items-end">
@@ -709,28 +598,16 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
           </Card>
         )}
 
-        {/* 13. ACCOUNTING (MOVED TO END) */}
         {activeSection === 'accounting' && (
           <Card className="border-blue-200 bg-blue-50/30">
             <CardHeader>
-              <div className="flex items-center gap-2">
-                 <Bot className="h-6 w-6 text-blue-600" />
-                 <CardTitle>Automated Bookkeeping</CardTitle>
-              </div>
-              <CardDescription>
-                We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.
-              </CardDescription>
+              <div className="flex items-center gap-2"><Bot className="h-6 w-6 text-blue-600" /><CardTitle>Automated Bookkeeping</CardTitle></div>
+              <CardDescription>We will create the following ledgers for <strong>{form.watch('name') || 'this property'}</strong>.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-               <div className="p-2 bg-white border rounded text-xs flex justify-between">
-                  <span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span>
-               </div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between">
-                  <span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span>
-               </div>
-               <div className="p-2 bg-white border rounded text-xs flex justify-between">
-                  <span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span>
-               </div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-blue-700">Assets</span><span>Property Value, Utility Deposits</span></div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-orange-700">Liabilities</span><span>Mortgage, Tenant Deposits</span></div>
+               <div className="p-2 bg-white border rounded text-xs flex justify-between"><span className="font-semibold text-green-700">Income</span><span>Rent Revenue, Late Fees</span></div>
                <div className="p-2 bg-white border rounded text-xs">
                   <span className="font-semibold text-red-700 block mb-1">Expenses (Separated)</span>
                   <ul className="list-disc list-inside text-slate-600 grid grid-cols-2 gap-1">
@@ -744,7 +621,6 @@ export function PropertyForm({ onSuccess }: { onSuccess?: () => void }) {
             </CardContent>
           </Card>
         )}
-
       </div>
     </div>
   );
