@@ -17,15 +17,38 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/logo';
-import { useAuth, useUser, initiateEmailSignUp } from '@/firebase';
+import { useAuth, useUser, initiateEmailSignUp, useFirestore } from '@/firebase'; // Added useFirestore
+import { doc, updateDoc, setDoc } from 'firebase/firestore'; // Added firestore methods
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from '@/components/ui/select';
 
+// --- INDUSTRY LIST FOR AI CONTEXT ---
+const TRADE_OPTIONS = [
+  "Real Estate Investor / Landlord",
+  "Property Manager",
+  "General Contractor",
+  "Subcontractor (Plumber, Electrician, etc.)",
+  "Professional Services (Legal, CPA, Consultant)",
+  "Retail / E-commerce",
+  "Service Business (Cleaning, Landscaping)",
+  "Trucking / Logistics",
+  "Other"
+];
+
+// --- UPDATED SCHEMA ---
 const signupSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
+  trade: z.string().min(1, { message: 'Please select your primary industry.' }), // NEW FIELD
   agreeToTerms: z.boolean().refine(val => val === true, {
     message: 'You must agree to the Privacy Policy.',
   }),
@@ -35,6 +58,7 @@ type SignupFormValues = z.infer<typeof signupSchema>;
 
 export default function SignupPage() {
   const auth = useAuth();
+  const firestore = useFirestore(); // Access DB
   const { user, isUserLoading } = useUser();
   const router = useRouter();
   const [authError, setAuthError] = useState<string | null>(null);
@@ -44,10 +68,12 @@ export default function SignupPage() {
     defaultValues: {
       email: '',
       password: '',
+      trade: '', // Default empty
       agreeToTerms: false,
     },
   });
 
+  // Watch for successful login to redirect
   useEffect(() => {
     if (!isUserLoading && user) {
       router.push('/dashboard');
@@ -56,14 +82,18 @@ export default function SignupPage() {
 
   const onSubmit = async (data: SignupFormValues) => {
     setAuthError(null);
-    initiateEmailSignUp(auth, data.email, data.password, (error) => {
-      let errorMessage = 'An unexpected error occurred. Please try again.';
-      if (error?.code === 'auth/email-already-in-use') {
-        errorMessage = 'This email is already registered. Please sign in or use a different email.';
-      } else if (error?.message) {
-        errorMessage = error.message;
+    
+    // We pass the callback to handle the auth result
+    initiateEmailSignUp(auth, data.email, data.password, data.trade, (error) => {
+      if (error) {
+        let errorMessage = 'An unexpected error occurred. Please try again.';
+        if (error?.code === 'auth/email-already-in-use') {
+          errorMessage = 'This email is already registered. Please sign in or use a different email.';
+        } else if (error?.message) {
+          errorMessage = error.message;
+        }
+        setAuthError(errorMessage);
       }
-      setAuthError(errorMessage);
     });
   };
   
@@ -88,6 +118,7 @@ export default function SignupPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+              
               {authError && (
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
@@ -95,6 +126,8 @@ export default function SignupPage() {
                   <AlertDescription>{authError}</AlertDescription>
                 </Alert>
               )}
+
+              {/* EMAIL */}
               <FormField
                 control={form.control}
                 name="email"
@@ -108,6 +141,8 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
+
+              {/* PASSWORD */}
               <FormField
                 control={form.control}
                 name="password"
@@ -121,7 +156,35 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
-               <FormField
+
+              {/* NEW: TRADE SELECTOR */}
+              <FormField
+                control={form.control}
+                name="trade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Industry / Trade</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your primary business type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {TRADE_OPTIONS.map((trade) => (
+                          <SelectItem key={trade} value={trade}>
+                            {trade}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* TERMS */}
+              <FormField
                 control={form.control}
                 name="agreeToTerms"
                 render={({ field }) => (
@@ -145,6 +208,7 @@ export default function SignupPage() {
                   </FormItem>
                 )}
               />
+
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Creating Account...' : 'Create Account'}
               </Button>

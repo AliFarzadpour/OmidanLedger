@@ -23,6 +23,10 @@
           "type": "string",
           "description": "User's last name."
         },
+        "trade": {
+          "type": "string",
+          "description": "The user's self-identified industry or trade, selected during signup."
+        },
         "createdAt": {
           "type": "string",
           "description": "Date and time when the user account was created.",
