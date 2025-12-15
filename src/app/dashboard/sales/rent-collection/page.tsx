@@ -9,25 +9,17 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Plus, Home, MapPin, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import * as VisuallyHidden from '@radix-ui/react-visually-hidden'; 
+import Link from 'next/link'; // Import Link
 
-// 1. IMPORT THE QUICK FORM
+// Import only the Quick Form
 import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
-
-// 2. IMPORT THE FULL DASHBOARD (The big 12-tab form)
-// We will open this when you click "Manage" on a card
-import { PropertyForm as FullPropertyDashboard } from '@/components/dashboard/sales/property-form';
 
 export default function RentCollectionPage() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [properties, setProperties] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // State to handle which modal is open
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-  const [selectedProperty, setSelectedProperty] = useState<any | null>(null);
-
 
   const fetchProperties = async () => {
     if (!user || !firestore) return;
@@ -48,7 +40,6 @@ export default function RentCollectionPage() {
     fetchProperties();
   }, [user, firestore]);
 
-  // Calculate visual progress bar
   const getCompleteness = (p: any) => {
     let score = 20; 
     if (p.tenants?.length > 0) score += 20;
@@ -66,7 +57,6 @@ export default function RentCollectionPage() {
           <p className="text-muted-foreground">Manage your portfolio and automated ledgers.</p>
         </div>
         
-        {/* BUTTON: Opens the QUICK FORM */}
         <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -77,32 +67,11 @@ export default function RentCollectionPage() {
              <DialogHeader>
                <DialogTitle>Add New Property</DialogTitle>
              </DialogHeader>
-             {/* This renders the small 3-field form */}
              <QuickPropertyForm onSuccess={() => { setIsQuickAddOpen(false); fetchProperties(); }} />
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* MANAGE MODAL (Hidden, opens when you click a card) */}
-      <Dialog open={!!selectedProperty} onOpenChange={(open) => !open && setSelectedProperty(null)}>
-         <DialogContent className="max-w-5xl h-[90vh] overflow-hidden p-0">
-            {/* REQUIRED FOR ACCESSIBILITY: Hidden Title */}
-            <VisuallyHidden.Root>
-              <DialogTitle>Manage Property</DialogTitle>
-            </VisuallyHidden.Root>
-            <div className="h-full overflow-y-auto p-6">
-                {/* This renders the BIG 12-tab form for the selected property */}
-                {selectedProperty && (
-                    <FullPropertyDashboard 
-                        property={selectedProperty}
-                        onSuccess={() => { setSelectedProperty(null); fetchProperties(); }} 
-                    />
-                )}
-            </div>
-         </DialogContent>
-      </Dialog>
-
-      {/* LOADING & EMPTY STATES */}
       {loading && <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}
 
       {!loading && properties.length === 0 && (
@@ -113,7 +82,6 @@ export default function RentCollectionPage() {
         </div>
       )}
 
-      {/* PROPERTY CARDS */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {properties.map((property) => {
           const progress = getCompleteness(property);
@@ -149,14 +117,14 @@ export default function RentCollectionPage() {
               </CardContent>
 
               <CardFooter className="pt-3 border-t bg-slate-50/50">
-                {/* Clicking this opens the BIG form to edit/manage */}
-                <Button 
-                    variant="ghost" 
-                    className="w-full justify-between text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                    onClick={() => setSelectedProperty(property)}
-                >
-                  Manage Property <ArrowRight className="h-4 w-4" />
-                </Button>
+                {/* UPDATED: Now links to the specific dashboard page 
+                   This page acts as the "Setup Wizard" 
+                */}
+                <Link href={`/dashboard/properties/${property.id}`} className="w-full">
+                  <Button variant="ghost" className="w-full justify-between text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                    Manage Property <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </Link>
               </CardFooter>
             </Card>
           );
