@@ -1,6 +1,7 @@
 'use client';
 
 import { BusinessProfileForm } from '@/components/dashboard/settings/business-profile-form';
+import { AccountSettingsForm } from '@/components/dashboard/settings/account-settings-form';
 import { Separator } from '@/components/ui/separator';
 
 export default function SettingsPage() {
@@ -14,6 +15,8 @@ export default function SettingsPage() {
       </div>
       <Separator />
       <BusinessProfileForm />
+      <Separator />
+      <AccountSettingsForm />
     </div>
   );
 }
