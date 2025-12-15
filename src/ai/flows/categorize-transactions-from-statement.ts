@@ -112,28 +112,63 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
   }
 );
 
-// --- THE RESOLVER FUNCTION (ADMIN SDK SYNTAX) ---
+// --- THE UPGRADED RESOLVER FUNCTION ---
 async function resolveAccountId(firestore: any, userId: string, propertyId: string | null, categoryName: string) {
-    if (!propertyId) return null; 
-
-    // Admin SDK Syntax: db.collection().where().get()
     const accountsRef = firestore.collection('accounts');
     
-    // Note: We cannot query if propertyId is null, so we guarded against it above.
-    const snapshot = await accountsRef
-        .where('userId', '==', userId)
-        .where('propertyId', '==', propertyId)
-        .get();
+    // 1. Build Query: Search all accounts for this user
+    // (If propertyId exists, we restrict search. If null, we search everything).
+    let query = accountsRef.where('userId', '==', userId);
+    if (propertyId) {
+        query = query.where('propertyId', '==', propertyId);
+    }
+
+    const snapshot = await query.get();
     
-    // Simple Matcher: Find the account where the name or subtype contains the category
-    let matchId = null;
-    
+    let bestMatchId = null;
+    let bestMatchScore = 0;
+
+    // 2. Keyword Mapping (AI Term -> Likely Ledger Words)
+    const keywordMap: Record<string, string[]> = {
+        "Rental Income": ["Rent", "Lease", "Income"],
+        "Utilities (Electricity, Water, Gas)": ["Utilities", "Electric", "Water", "Gas", "Power"],
+        "Repairs & Maintenance": ["Maint", "Repair", "Fix", "Ops"],
+        "Interest Income": ["Interest"],
+        "Owner’s Draw": ["Draw", "Distribution", "Equity"],
+        "Office Rent": ["Rent", "Lease", "Office"],
+        "Contractor Payments (non-COGS)": ["Contractor", "Labor", "Service"],
+    };
+
+    // Get the list of words to look for (or just use the category name itself)
+    // We clean the categoryName to remove special chars like ">" or "("
+    const cleanCategory = categoryName.split('>').pop()?.trim() || categoryName;
+    const searchTerms = keywordMap[cleanCategory] || keywordMap[categoryName] || [cleanCategory];
+
     snapshot.forEach((doc: any) => {
         const data = doc.data();
-        if (data.subtype === categoryName || data.name.includes(categoryName)) {
-            matchId = doc.id;
+        const accountName = (data.name || "").toLowerCase();
+        const accountSubtype = (data.subtype || "").toLowerCase();
+        
+        // Priority 1: Exact Subtype Match (e.g. "Rental Income" == "Rental Income")
+        if (accountSubtype === cleanCategory.toLowerCase()) {
+            if (bestMatchScore < 100) {
+                bestMatchId = doc.id;
+                bestMatchScore = 100;
+            }
+        }
+
+        // Priority 2: Name contains a Keyword (e.g. "Rent - Talia Cir" contains "Rent")
+        for (const term of searchTerms) {
+            const cleanTerm = term.toLowerCase();
+            if (accountName.includes(cleanTerm)) {
+                // If we found a match, but haven't found a "Priority 1" match yet, take this.
+                if (bestMatchScore < 50) {
+                     bestMatchId = doc.id;
+                     bestMatchScore = 50;
+                }
+            }
         }
     });
 
-    return matchId;
+    return bestMatchId;
 }
