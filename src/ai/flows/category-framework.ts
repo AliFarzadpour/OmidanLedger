@@ -140,4 +140,9 @@ export const MasterCategoryFramework = `
     - Owner’s Contribution
     - Retained Earnings
     - Partner Equity
+
+6. Special Handling Categories
+  6.1 Needs Review
+    - Needs Review - Split Transaction
+    - Needs Review - Unclear Description
 `;

@@ -29,9 +29,9 @@ const extractAndCategorizePrompt = ai.definePrompt({
   output: {schema: StatementOutputSchema},
   prompt: `You are a world-class financial bookkeeping expert specializing in AI-powered transaction extraction and categorization from financial statements.
   
-  **Context:**
-  You are performing bookkeeping for a business in the **{{{userTrade}}}** industry. 
-  Use this context to infer the business purpose of ambiguous transactions (e.g., materials, software, travel).
+**Context:**
+You are performing bookkeeping for a business in the **{{{userTrade}}}** industry. 
+Use this context to infer the business purpose of ambiguous transactions (e.g., materials, software, travel).
 
 **User's Custom Rules (These are the source of truth and MUST be followed):**
 {{{userMappings}}}
@@ -44,13 +44,26 @@ ${MasterCategoryFramework}
 
 **Your Instructions:**
 1.  **Prioritize Custom Rules**: First, check if a transaction description matches any of the user's custom rules. If it does, you MUST use the specified category.
-2.  **Use Master Framework**: If no custom rule applies, thoroughly scan the document and extract every transaction.
-3.  For each transaction, you must extract:
-    - **date**: In YYYY-MM-DD format. If the file is a CSV with a date column, use that.
-    - **description**: The full transaction description.
-    - **amount**: A number. Expenses must be negative, and income/credits must be positive.
-4.  For each extracted transaction, categorize it into the most specific subcategory from the Master Category Framework.
-5.  Return a single JSON object containing a "transactions" array. Each object in the array must conform to the output schema, containing the extracted data and the three-level categorization.
+
+2.  **Special Handling for Complex Transactions (IMPORTANT):**
+    *   **Split Transactions:** If a transaction description contains keywords like "Mortgage", "Loan Pymt", "Insurance Prem", or similar phrases that imply a single payment covers multiple accounting events (e.g., principal, interest, escrow), you MUST categorize it as:
+        - primaryCategory: "Needs Review"
+        - secondaryCategory: "Needs Review"
+        - subcategory: "Needs Review - Split Transaction"
+    *   **Unclear Descriptions:** If a description is too generic to be useful (e.g., "CHECK #1024", "ACH DEBIT", "POS TRANSACTION"), you MUST categorize it as:
+        - primaryCategory: "Needs Review"
+        - secondaryCategory: "Needs Review"
+        - subcategory: "Needs Review - Unclear Description"
+
+3.  **Standard Categorization**: If no special handling rule applies, thoroughly scan the document and extract every transaction. For each transaction:
+    *   **Extract Data**:
+        - **date**: In YYYY-MM-DD format.
+        - **description**: The full, original transaction description.
+        - **amount**: A number. Expenses must be negative, and income/credits must be positive.
+    *   **Normalize Description for Matching**: Before matching, mentally strip common unhelpful words from the description like "INC", "LLC", "CORP", "PAYMENT", "DEBIT", "CREDIT". Focus on the core vendor name (e.g., "UBER   TRIP   HELP.UBER.COM" becomes "UBER TRIP").
+    *   **Categorize**: Match the normalized description to the most specific subcategory from the Master Category Framework.
+    *   **Return**: Provide a single JSON object containing a "transactions" array. Each object in the array must conform to the output schema, containing the extracted data and the three-level categorization.
+
 **CRITICAL:** If the document is unreadable, password-protected, a blurry image, empty, or if you cannot extract any transactions for any reason, your one and only task is to return a single JSON object with an empty "transactions" array, like this: \`{"transactions": []}\`. You are strictly forbidden from creating, inventing, or hallucinating any sample data. Your entire output MUST be only the empty array structure if you cannot read the file.
 `,
 });
