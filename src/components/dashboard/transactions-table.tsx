@@ -66,10 +66,9 @@ interface Transaction {
   secondaryCategory: string;
   subcategory: string;
   amount: number;
-  // AI Fields
   confidence?: number;
   accountId?: string;
-  accountName?: string; // Add this
+  accountName?: string;
   status?: 'posted' | 'review' | 'error' | 'ready';
 }
 
@@ -104,24 +103,9 @@ function StatusIndicator({ transaction }: { transaction: Transaction }) {
     );
   }
 
-  // RED: Missing Account Link (AI guessed a category, but we have no matching Ledger)
+  // If ledger is missing, we render NOTHING (null) instead of a red tag.
   if (!transaction.accountId) {
-     return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-             <div className="flex items-center gap-1 w-fit text-red-600 bg-red-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-red-100 mt-1 cursor-pointer hover:bg-red-100">
-                <AlertCircle className="h-3 w-3" />
-                <span>Missing Ledger</span>
-             </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className="font-semibold text-red-500">Action Required</p>
-            <p>AI suggested "{transaction.subcategory}", but no matching ledger<br/>was found in your Property settings.</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-     );
+     return null;
   }
 
   // YELLOW: Low Confidence
@@ -136,7 +120,7 @@ function StatusIndicator({ transaction }: { transaction: Transaction }) {
           </TooltipTrigger>
           <TooltipContent>
             <p>AI Confidence: <b>{Math.round((transaction.confidence || 0) * 100)}%</b></p>
-            <p>Please verify this category is correct.</p>
+            <p>Please verify this category.</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
