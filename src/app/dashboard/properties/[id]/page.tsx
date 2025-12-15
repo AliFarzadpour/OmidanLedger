@@ -34,7 +34,11 @@ export default function PropertyDashboard() {
       if (propSnap.exists()) {
          setProperty({ id: propSnap.id, ...propSnap.data() });
          
-         const accountsQ = query(collection(firestore, 'accounts'), where('propertyId', '==', id));
+         const accountsQ = query(
+           collection(firestore, 'accounts'), 
+           where('propertyId', '==', id),
+           where('userId', '==', user.uid)
+         );
          const accSnap = await getDocs(accountsQ);
          setAccounts(accSnap.docs.map(d => d.data()));
       }
