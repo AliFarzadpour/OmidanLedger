@@ -92,7 +92,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const [filters, setFilters] = useState({
     term: '',
-    date: undefined as Date | undefined,
+    date: '',
     category: '',
   });
 
@@ -175,8 +175,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                              filters.category === 'all' || 
                              t.primaryCategory === filters.category;
 
-       const matchesDate = !filters.date || 
-                           new Date(t.date).toDateString() === filters.date.toDateString();
+       const matchesDate = !filters.date || t.date === filters.date;
 
        return matchesSearch && matchesCategory && matchesDate;
     });
