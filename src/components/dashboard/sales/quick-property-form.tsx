@@ -7,14 +7,15 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
 import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Home, DollarSign } from 'lucide-react';
 
-// Simple Schema - Just the basics
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
+  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']), // NEW
   address: z.object({
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "City is required"),
@@ -22,6 +23,7 @@ const quickSchema = z.object({
     zip: z.string().min(5, "Zip is required"),
   }),
   targetRent: z.coerce.number().min(0),
+  securityDeposit: z.coerce.number().min(0), // NEW
 });
 
 export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
@@ -34,8 +36,10 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     resolver: zodResolver(quickSchema),
     defaultValues: {
       name: '',
+      type: 'single-family', // Default
       address: { street: '', city: '', state: '', zip: '' },
       targetRent: 0,
+      securityDeposit: 0,
     }
   });
 
@@ -44,14 +48,12 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     setIsSaving(true);
 
     try {
-      // BATCH WRITE: Create Property + 15 Ledgers instantly
       const batch = writeBatch(firestore);
       const timestamp = new Date().toISOString();
       const propertyRef = doc(collection(firestore, 'properties'));
       
       const accountingMap: any = { utilities: {} };
 
-      // Helper to create ledger accounts
       const createAccount = (name: string, type: string, subtype: string) => {
         const ref = doc(collection(firestore, 'accounts'));
         batch.set(ref, {
@@ -67,21 +69,19 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         return ref.id;
       };
 
-      // 1. Create the Ledgers
+      // Create Ledgers
       accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
       accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
       accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
-      // ... (We create the rest silently so they are ready for later)
       accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
       accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
       accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
 
-      // 2. Save Property
+      // Save Property
       batch.set(propertyRef, {
         userId: user.uid,
         ...data,
-        // Set defaults for the complex tabs so they aren't null later
-        financials: { targetRent: data.targetRent, securityDeposit: 0 },
+        financials: { targetRent: data.targetRent, securityDeposit: data.securityDeposit },
         mortgage: { hasMortgage: 'no' }, 
         management: { isManaged: 'self' },
         tenants: [], 
@@ -90,7 +90,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       });
 
       await batch.commit();
-      toast({ title: "Property Added", description: "Basic profile created. Click the card to add more details." });
+      toast({ title: "Property Added", description: "Ledgers created. You can add more details later." });
       onSuccess();
 
     } catch (error: any) {
@@ -106,15 +106,29 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         <Home className="h-5 w-5 text-blue-600 mt-0.5" />
         <div>
           <h3 className="font-medium text-blue-900">Quick Setup</h3>
-          <p className="text-sm text-blue-700">Enter the basics to get started. You can add Mortgage, Tenants, and Tax info later from the dashboard.</p>
+          <p className="text-sm text-blue-700">Enter the basics to get started. You can add Mortgage, Tenants, and Tax info later.</p>
         </div>
       </div>
 
       <div className="grid gap-4">
-        <div className="grid gap-2">
-          <Label>Property Nickname</Label>
-          <Input placeholder="e.g. The Lake House" {...form.register('name')} />
-          {form.formState.errors.name && <p className="text-red-500 text-xs">Required</p>}
+        <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label>Nickname</Label>
+              <Input placeholder="e.g. The Lake House" {...form.register('name')} />
+              {form.formState.errors.name && <p className="text-red-500 text-xs">Required</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label>Type</Label>
+              <Select onValueChange={(val:any) => form.setValue('type', val)} defaultValue="single-family">
+                 <SelectTrigger><SelectValue /></SelectTrigger>
+                 <SelectContent>
+                    <SelectItem value="single-family">Single Family</SelectItem>
+                    <SelectItem value="multi-family">Multi-Family</SelectItem>
+                    <SelectItem value="condo">Condo</SelectItem>
+                    <SelectItem value="commercial">Commercial</SelectItem>
+                 </SelectContent>
+              </Select>
+            </div>
         </div>
 
         <div className="grid gap-2">
@@ -128,12 +142,21 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid gap-2"><Label>Zip</Label><Input {...form.register('address.zip')} /></div>
         </div>
 
-        <div className="grid gap-2">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-2">
             <Label>Target Rent ($)</Label>
             <div className="relative">
                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                <Input className="pl-8" type="number" {...form.register('targetRent')} />
             </div>
+          </div>
+          <div className="grid gap-2">
+            <Label>Deposit ($)</Label>
+            <div className="relative">
+               <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+               <Input className="pl-8" type="number" {...form.register('securityDeposit')} />
+            </div>
+          </div>
         </div>
       </div>
 

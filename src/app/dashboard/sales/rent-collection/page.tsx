@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Plus, Home, MapPin, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden'; 
 
 // 1. IMPORT THE QUICK FORM
 import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
@@ -85,6 +86,10 @@ export default function RentCollectionPage() {
       {/* MANAGE MODAL (Hidden, opens when you click a card) */}
       <Dialog open={!!selectedProperty} onOpenChange={(open) => !open && setSelectedProperty(null)}>
          <DialogContent className="max-w-5xl h-[90vh] overflow-hidden p-0">
+            {/* REQUIRED FOR ACCESSIBILITY: Hidden Title */}
+            <VisuallyHidden.Root>
+              <DialogTitle>Manage Property</DialogTitle>
+            </VisuallyHidden.Root>
             <div className="h-full overflow-y-auto p-6">
                 {/* This renders the BIG 12-tab form for the selected property */}
                 {selectedProperty && (
