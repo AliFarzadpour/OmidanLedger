@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Added Select
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -15,7 +15,7 @@ import { Loader2, Home, DollarSign } from 'lucide-react';
 
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
-  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']), // NEW
+  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
   address: z.object({
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "City is required"),
@@ -23,7 +23,7 @@ const quickSchema = z.object({
     zip: z.string().min(5, "Zip is required"),
   }),
   targetRent: z.coerce.number().min(0),
-  securityDeposit: z.coerce.number().min(0), // NEW
+  securityDeposit: z.coerce.number().min(0),
 });
 
 export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
@@ -36,7 +36,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     resolver: zodResolver(quickSchema),
     defaultValues: {
       name: '',
-      type: 'single-family', // Default
+      type: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
       targetRent: 0,
       securityDeposit: 0,
@@ -69,13 +69,30 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         return ref.id;
       };
 
-      // Create Ledgers
+      // --- 1. ASSETS ---
       accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
-      accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
-      accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
+      accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
+
+      // --- 2. LIABILITIES ---
       accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
+      // Note: Mortgage Liability is created later if they add a mortgage, or we can placeholder it here
+      
+      // --- 3. INCOME ---
+      accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
+      accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
+
+      // --- 4. EXPENSES (Core) ---
+      accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
       accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
       accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
+      accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
+
+      // --- 5. EXPENSES (Utilities Suite) ---
+      accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
+      accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
 
       // Save Property
       batch.set(propertyRef, {
@@ -90,7 +107,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       });
 
       await batch.commit();
-      toast({ title: "Property Added", description: "Ledgers created. You can add more details later." });
+      toast({ title: "Property Added", description: "Full ledger suite created successfully." });
       onSuccess();
 
     } catch (error: any) {
@@ -106,7 +123,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         <Home className="h-5 w-5 text-blue-600 mt-0.5" />
         <div>
           <h3 className="font-medium text-blue-900">Quick Setup</h3>
-          <p className="text-sm text-blue-700">Enter the basics to get started. You can add Mortgage, Tenants, and Tax info later.</p>
+          <p className="text-sm text-blue-700">Enter the basics to get started. We will generate your Chart of Accounts automatically.</p>
         </div>
       </div>
 
