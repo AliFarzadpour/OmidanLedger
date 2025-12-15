@@ -16,7 +16,7 @@ import {
 } from './schemas';
 import { MasterCategoryFramework } from './category-framework';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
-import { doc, getDoc } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 
 
 export async function categorizeTransactionsFromStatement(input: StatementInput): Promise<StatementOutput> {
@@ -77,25 +77,79 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
   async (input) => {
     const { firestore } = initializeServerFirebase();
 
-    // 1. Parallel Fetch: Get Mappings AND User Profile
-    const [userMappings, userProfileSnap] = await Promise.all([
-      getUserCategoryMappings(firestore, input.userId),
-      getDoc(doc(firestore, 'users', input.userId))
-    ]);
+    // 1. Get User Rules & Context
+    const userMappings = await getUserCategoryMappings(firestore, input.userId);
 
-    // 2. Extract the trade (default to 'General Business' if missing)
-    const userTrade = userProfileSnap.exists() 
-      ? userProfileSnap.data().trade 
-      : 'General Business';
-
-    // 3. Pass trade to the prompt
+    // Fetch User Profile to get the trade
+    const userProfileSnap = await getDoc(doc(firestore, 'users', input.userId));
+    const userTrade = userProfileSnap.exists() ? userProfileSnap.data().trade : 'General Business';
+    
     const flowInput = { 
-      ...input, 
-      userMappings, 
-      userTrade // <--- Passing the new context
+        ...input, 
+        userMappings, 
+        userTrade 
     };
 
+    // 2. AI Does the Thinking (Returns Generic Text categories)
     const { output } = await extractAndCategorizePrompt(flowInput);
-    return output!;
+
+    if (!output || !output.transactions) return { transactions: [] };
+
+    // 3. THE BRIDGE: Convert Text -> Account IDs
+    const resolvedTransactions = await Promise.all(output.transactions.map(async (tx) => {
+        
+        let propertyId = null; // In a real app, this would be more sophisticated.
+        
+        const accountId = await resolveAccountId(
+            firestore,
+            input.userId,
+            input.propertyId || null, // Use propertyId from input if available
+            tx.subcategory
+        );
+
+        return {
+            ...tx,
+            accountId: accountId || null,
+            status: accountId ? 'ready' : 'needs_review'
+        };
+    }));
+
+    return { transactions: resolvedTransactions };
   }
 );
+
+
+// --- THE RESOLVER FUNCTION ---
+async function resolveAccountId(firestore: any, userId: string, propertyId: string | null, categoryName: string): Promise<string | null> {
+    // If no property is specified, we can't resolve property-specific accounts.
+    // We could add logic here later to check for general, non-property accounts if needed.
+    if (!propertyId) return null;
+
+    const accountsRef = collection(firestore, 'accounts');
+    
+    // Build a query to find accounts for the given user and property.
+    const q = query(
+        accountsRef,
+        where('userId', '==', userId),
+        where('propertyId', '==', propertyId)
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+        return null;
+    }
+    
+    // Find the best match from the results.
+    // e.g., AI returns category "Repairs & Maintenance". Account name is "Repairs & Maintenance - 123 Main St"
+    const match = snapshot.docs.find(doc => {
+        const data = doc.data();
+        // Check if the account's name or subtype contains the AI's guessed category.
+        // This is a simple but effective matching strategy.
+        const nameMatch = data.name?.toLowerCase().includes(categoryName.toLowerCase());
+        const subtypeMatch = data.subtype?.toLowerCase().includes(categoryName.toLowerCase());
+        return nameMatch || subtypeMatch;
+    });
+
+    return match ? match.id : null;
+}
