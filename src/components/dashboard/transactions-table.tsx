@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
-import { TransactionToolbar } from './transactions/transaction-toolbar'; // Import the new component
+import { TransactionToolbar, type TransactionFilters } from './transactions/transaction-toolbar'; // Import the new component
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -77,6 +77,12 @@ interface TransactionsTableProps {
   dataSource: DataSource;
 }
 
+const initialFilters: TransactionFilters = {
+  searchTerm: '',
+  category: 'all',
+  dateRange: undefined,
+};
+
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -90,10 +96,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     direction: 'descending',
   });
   
-  // NEW: Filter States
-  const [filterTerm, setFilterTerm] = useState('');
-  const [filterDate, setFilterDate] = useState<Date | undefined>();
-  const [filterCategory, setFilterCategory] = useState('');
+  const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -162,28 +165,32 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     }
   };
 
-
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
+
+    let filtered = [...transactions];
+
+    // Filter logic
+    if (filters.searchTerm) {
+      const searchTermLower = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(t =>
+        t.description.toLowerCase().includes(searchTermLower) ||
+        t.amount.toString().includes(searchTermLower)
+      );
+    }
+    if (filters.category && filters.category !== 'all') {
+      filtered = filtered.filter(t => t.primaryCategory === filters.category);
+    }
+    if (filters.dateRange?.from) {
+      const fromDate = new Date(filters.dateRange.from.setHours(0, 0, 0, 0));
+      filtered = filtered.filter(t => new Date(t.date) >= fromDate);
+    }
+    if (filters.dateRange?.to) {
+      const toDate = new Date(filters.dateRange.to.setHours(23, 59, 59, 999));
+      filtered = filtered.filter(t => new Date(t.date) <= toDate);
+    }
     
-    // 1. Filter First
-    let filtered = transactions.filter(t => {
-       const searchTermLower = filterTerm.toLowerCase();
-       const matchesSearch = t.description.toLowerCase().includes(searchTermLower) || 
-                             t.amount.toString().includes(filterTerm);
-       
-       const matchesCategory = filterCategory && filterCategory !== 'all' 
-            ? t.primaryCategory === filterCategory 
-            : true;
-
-       const matchesDate = filterDate 
-            ? new Date(t.date).toDateString() === filterDate.toDateString()
-            : true;
-
-       return matchesSearch && matchesCategory && matchesDate;
-    });
-
-    // 2. Then Sort
+    // Sort logic
     filtered.sort((a, b) => {
       let aValue: string | number, bValue: string | number;
 
@@ -209,7 +216,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? comparison : -comparison;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
+  }, [transactions, sortConfig, filters]);
+
 
   const requestSort = (key: SortKey) => {
     let direction: SortDirection = 'ascending';
@@ -294,14 +302,9 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         <CardContent>
            <TransactionToolbar 
-              onSearch={setFilterTerm}
-              onDateChange={setFilterDate}
-              onCategoryFilter={setFilterCategory}
-              onClear={() => {
-                 setFilterTerm('');
-                 setFilterDate(undefined);
-                 setFilterCategory('');
-              }}
+              filters={filters}
+              onFiltersChange={(changedFilters) => setFilters(prev => ({ ...prev, ...changedFilters }))}
+              onClear={() => setFilters(initialFilters)}
            />
           <Table>
             <TableHeader>
@@ -492,5 +495,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    
