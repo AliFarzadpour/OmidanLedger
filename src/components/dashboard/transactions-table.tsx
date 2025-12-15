@@ -41,7 +41,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
-import { TransactionToolbar, type TransactionFilters } from './transactions/transaction-toolbar'; // Import the new component
+import { TransactionToolbar, type TransactionFilters } from './transactions/transaction-toolbar';
+import { startOfDay, endOfDay } from 'date-fns';
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -182,11 +183,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       filtered = filtered.filter(t => t.primaryCategory === filters.category);
     }
     if (filters.dateRange?.from) {
-      const fromDate = new Date(filters.dateRange.from.setHours(0, 0, 0, 0));
+      const fromDate = startOfDay(filters.dateRange.from);
       filtered = filtered.filter(t => new Date(t.date) >= fromDate);
     }
     if (filters.dateRange?.to) {
-      const toDate = new Date(filters.dateRange.to.setHours(23, 59, 59, 999));
+      const toDate = endOfDay(filters.dateRange.to);
       filtered = filtered.filter(t => new Date(t.date) <= toDate);
     }
     
