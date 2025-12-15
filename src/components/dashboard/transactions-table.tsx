@@ -41,6 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
+import { TransactionToolbar } from './transactions/transaction-toolbar'; // Import the new component
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -88,6 +89,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     key: 'date',
     direction: 'descending',
   });
+  
+  // NEW: Filter States
+  const [filterTerm, setFilterTerm] = useState('');
+  const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [filterCategory, setFilterCategory] = useState('');
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -159,8 +165,26 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
 
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
-    const sortableItems = [...transactions];
-    sortableItems.sort((a, b) => {
+    
+    // 1. Filter First
+    let filtered = transactions.filter(t => {
+       const searchTermLower = filterTerm.toLowerCase();
+       const matchesSearch = t.description.toLowerCase().includes(searchTermLower) || 
+                             t.amount.toString().includes(filterTerm);
+       
+       const matchesCategory = filterCategory && filterCategory !== 'all' 
+            ? t.primaryCategory === filterCategory 
+            : true;
+
+       const matchesDate = filterDate 
+            ? new Date(t.date).toDateString() === filterDate.toDateString()
+            : true;
+
+       return matchesSearch && matchesCategory && matchesDate;
+    });
+
+    // 2. Then Sort
+    filtered.sort((a, b) => {
       let aValue: string | number, bValue: string | number;
 
       if (sortConfig.key === 'category') {
@@ -184,8 +208,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       
       return sortConfig.direction === 'ascending' ? comparison : -comparison;
     });
-    return sortableItems;
-  }, [transactions, sortConfig]);
+    return filtered;
+  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
 
   const requestSort = (key: SortKey) => {
     let direction: SortDirection = 'ascending';
@@ -269,6 +293,16 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           </div>
         </CardHeader>
         <CardContent>
+           <TransactionToolbar 
+              onSearch={setFilterTerm}
+              onDateChange={setFilterDate}
+              onCategoryFilter={setFilterCategory}
+              onClear={() => {
+                 setFilterTerm('');
+                 setFilterDate(undefined);
+                 setFilterCategory('');
+              }}
+           />
           <Table>
             <TableHeader>
               <TableRow>
@@ -458,3 +492,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
