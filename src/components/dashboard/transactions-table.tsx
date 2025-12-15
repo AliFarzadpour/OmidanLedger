@@ -41,7 +41,7 @@ import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { TransactionToolbar } from './transactions/transaction-toolbar'; // Ensure this exists from previous step
+import { TransactionToolbar } from './transactions/transaction-toolbar';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -275,7 +275,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               onSearch={setFilterTerm}
               onDateChange={setFilterDate}
               onCategoryFilter={setFilterCategory}
-              onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
+              onClear={() => {
+                 setFilterTerm('');
+                 setFilterDate(undefined);
+                 setFilterCategory('');
+              }}
           />
 
           <Table>

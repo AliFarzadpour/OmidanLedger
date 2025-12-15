@@ -1,54 +1,93 @@
-
 'use client';
 
+import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { X } from 'lucide-react';
+import { X, Calendar as CalendarIcon } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
-interface Filters {
-  term: string;
-  date: string;
-  category: string;
-}
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 interface TransactionToolbarProps {
-  filters: Filters;
-  onFiltersChange: (filters: Filters) => void;
+  onSearch: (term: string) => void;
+  onDateChange: (date: Date | undefined) => void;
+  onCategoryFilter: (category: string) => void;
+  onClear: () => void;
 }
 
-export function TransactionToolbar({ filters, onFiltersChange }: TransactionToolbarProps) {
+export function TransactionToolbar({ 
+  onSearch, 
+  onDateChange, 
+  onCategoryFilter, 
+  onClear 
+}: TransactionToolbarProps) {
+  const [date, setDate] = React.useState<Date>();
+  const [searchTerm, setSearchTerm] = React.useState('');
+  const [category, setCategory] = React.useState('all');
 
-  const handleInputChange = (field: keyof Filters, value: string) => {
-    onFiltersChange({ ...filters, [field]: value });
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    if (onSearch) onSearch(value);
+  };
+
+  const handleDateSelect = (d: Date | undefined) => {
+    setDate(d);
+    if (onDateChange) onDateChange(d);
+  };
+
+  const handleCategoryChange = (value: string) => {
+    setCategory(value);
+    if (onCategoryFilter) onCategoryFilter(value);
   };
 
   const clearAll = () => {
-    onFiltersChange({ term: '', date: '', category: 'all' });
+    setSearchTerm('');
+    setDate(undefined);
+    setCategory('all');
+    if (onClear) onClear();
   };
 
-  const hasFilters = filters.term || filters.date || (filters.category && filters.category !== 'all');
+  const hasFilters = searchTerm || date || category !== 'all';
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-4">
       
+      {/* Search & Filters */}
       <div className="flex flex-1 items-center space-x-2 w-full">
         <Input
-          placeholder="Search descriptions..."
-          value={filters.term}
-          onChange={(e) => handleInputChange('term', e.target.value)}
-          className="h-9 w-full md:w-[250px]"
+          placeholder="Search descriptions, merchants..."
+          value={searchTerm}
+          onChange={handleSearch}
+          className="h-9 w-full md:w-[300px]"
         />
         
-        <Input
-            type="date"
-            value={filters.date}
-            onChange={(e) => handleInputChange('date', e.target.value)}
-            className="h-9 w-[200px]"
-            placeholder="Filter by date"
-        />
+        {/* Date Filter */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className={cn("h-9 justify-start text-left font-normal", !date && "text-muted-foreground")}
+            >
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {date ? format(date, "MMM dd, yyyy") : "Date"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={handleDateSelect}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
 
-        <Select onValueChange={(value) => handleInputChange('category', value)} value={filters.category}>
+        {/* Category Filter */}
+        <Select onValueChange={handleCategoryChange} value={category}>
              <SelectTrigger className="h-9 w-[150px]">
                  <SelectValue placeholder="Category" />
              </SelectTrigger>
@@ -66,9 +105,6 @@ export function TransactionToolbar({ filters, onFiltersChange }: TransactionTool
             <X className="ml-2 h-4 w-4" />
           </Button>
         )}
-      </div>
-      
-      <div className="flex items-center space-x-2">
       </div>
     </div>
   );
