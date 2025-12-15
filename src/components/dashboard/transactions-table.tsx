@@ -41,8 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
-import { TransactionToolbar, type TransactionFilters } from './transactions/transaction-toolbar';
-import { startOfDay, endOfDay } from 'date-fns';
+import { TransactionToolbar } from './transaction-toolbar';
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -78,12 +77,6 @@ interface TransactionsTableProps {
   dataSource: DataSource;
 }
 
-const initialFilters: TransactionFilters = {
-  searchTerm: '',
-  category: 'all',
-  dateRange: undefined,
-};
-
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -97,7 +90,9 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     direction: 'descending',
   });
   
-  const [filters, setFilters] = useState<TransactionFilters>(initialFilters);
+  const [filterTerm, setFilterTerm] = useState('');
+  const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [filterCategory, setFilterCategory] = useState('');
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -169,27 +164,20 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
 
-    let filtered = [...transactions];
+    let filtered = transactions.filter(t => {
+       const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || 
+                             t.amount.toString().includes(filterTerm);
+       
+       const matchesCategory = filterCategory && filterCategory !== 'all' 
+            ? t.primaryCategory === filterCategory 
+            : true;
 
-    // Filter logic
-    if (filters.searchTerm) {
-      const searchTermLower = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(t =>
-        t.description.toLowerCase().includes(searchTermLower) ||
-        t.amount.toString().includes(searchTermLower)
-      );
-    }
-    if (filters.category && filters.category !== 'all') {
-      filtered = filtered.filter(t => t.primaryCategory === filters.category);
-    }
-    if (filters.dateRange?.from) {
-      const fromDate = startOfDay(filters.dateRange.from);
-      filtered = filtered.filter(t => new Date(t.date) >= fromDate);
-    }
-    if (filters.dateRange?.to) {
-      const toDate = endOfDay(filters.dateRange.to);
-      filtered = filtered.filter(t => new Date(t.date) <= toDate);
-    }
+       const matchesDate = filterDate 
+            ? new Date(t.date).toDateString() === filterDate.toDateString()
+            : true;
+
+       return matchesSearch && matchesCategory && matchesDate;
+    });
     
     // Sort logic
     filtered.sort((a, b) => {
@@ -217,7 +205,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? comparison : -comparison;
     });
     return filtered;
-  }, [transactions, sortConfig, filters]);
+  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
 
 
   const requestSort = (key: SortKey) => {
@@ -303,9 +291,14 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         <CardContent>
            <TransactionToolbar 
-              filters={filters}
-              onFiltersChange={(changedFilters) => setFilters(prev => ({ ...prev, ...changedFilters }))}
-              onClear={() => setFilters(initialFilters)}
+              onSearch={setFilterTerm}
+              onDateChange={setFilterDate}
+              onCategoryFilter={setFilterCategory}
+              onClear={() => {
+                 setFilterTerm('');
+                 setFilterDate(undefined);
+                 setFilterCategory('');
+              }}
            />
           <Table>
             <TableHeader>
