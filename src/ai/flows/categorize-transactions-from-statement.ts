@@ -10,8 +10,7 @@ import {
 } from './schemas';
 import { MasterCategoryFramework } from './category-framework';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
-
-// NOTE: We removed the 'firebase/firestore' imports because we use the Admin SDK syntax now.
+import { DocumentData } from 'firebase-admin/firestore';
 
 export async function categorizeTransactionsFromStatement(input: StatementInput): Promise<StatementOutput> {
   return categorizeTransactionsFromStatementFlow(input);
@@ -59,52 +58,74 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
   async (input) => {
     const { firestore } = initializeServerFirebase();
 
-    // 1. Parallel Fetch: Get Mappings AND User Profile
-    // Note: 'getUserCategoryMappings' handles its own logic, assuming it works.
-    // We fetch the user profile to get the 'trade'
+    // 1. Get User Profile for Trade/Context
     const userProfileSnap = await firestore.collection('users').doc(input.userId).get();
+    const userTrade = userProfileSnap.exists ? userProfileSnap.data()?.trade : 'General Business';
     
-    // Extract the trade (default to 'General Business' if missing)
-    const userTrade = userProfileSnap.exists 
-      ? userProfileSnap.data()?.trade 
-      : 'General Business';
-
+    // 2. Get Custom Category Rules
     const userMappings = await getUserCategoryMappings(firestore, input.userId);
     
+    // 3. [NEW] Build the "Property Dossier"
+    const propertiesSnapshot = await firestore.collection('properties').where('userId', '==', input.userId).get();
+    const propertyDossier: any[] = [];
+    propertiesSnapshot.forEach(doc => {
+      const data = doc.data();
+      propertyDossier.push({
+        id: doc.id,
+        name: data.name,
+        address: data.address,
+        tenants: data.tenants?.map((t: any) => `${t.firstName} ${t.lastName}`) || [],
+        lender: data.mortgage?.lenderName,
+      });
+    });
+
     const flowInput = { 
         ...input, 
         userMappings, 
         userTrade 
     };
     
-    // 2. AI Does the Thinking (Returns Generic Text categories)
+    // 4. AI Does the Thinking (Returns Generic Text categories)
     const { output } = await extractAndCategorizePrompt(flowInput);
-    
     if (!output || !output.transactions) return { transactions: [] };
 
-    // 3. THE BRIDGE: Convert Text -> Account IDs
-    // We iterate through every transaction the AI found and find the real ledger.
+    // 5. THE BRIDGE: Convert Text -> Account IDs using the Dossier
     const resolvedTransactions = await Promise.all(output.transactions.map(async (tx) => {
         
-        // A. Find the Property ID 
-        // In this iteration, we don't have the logic to extract propertyId from the statement yet.
-        // You can pass it in 'input' if you are uploading for a specific property.
-        // For now, we will pass null, which means 'resolveAccountId' will likely return null 
-        // unless you upgrade this logic later.
-        let propertyId = null; 
+        // A. [NEW] Find the Property ID using Deep Context
+        const lowerCaseDesc = tx.description.toLowerCase();
+        let matchedPropertyId: string | null = null;
         
-        // B. Find the Account ID based on the Category Name
+        for (const prop of propertyDossier) {
+          // Match by Tenant Name (for rent payments)
+          if (prop.tenants.some((tenant: string) => lowerCaseDesc.includes(tenant.toLowerCase()))) {
+            matchedPropertyId = prop.id;
+            break; 
+          }
+          // Match by Lender Name (for mortgage payments)
+          if (prop.lender && lowerCaseDesc.includes(prop.lender.toLowerCase())) {
+            matchedPropertyId = prop.id;
+            break;
+          }
+          // Match by Address (fallback for general expenses)
+          if (prop.address?.street && lowerCaseDesc.includes(prop.address.street.toLowerCase())) {
+            matchedPropertyId = prop.id;
+            break;
+          }
+        }
+        
+        // B. Find the Account ID based on the Category Name and (now known) Property
         const accountId = await resolveAccountId(
             firestore, 
             input.userId, 
-            propertyId, 
-            tx.subcategory // e.g., "Repairs & Maintenance"
+            matchedPropertyId, // Use the matched property ID
+            tx.subcategory
         );
 
         return {
             ...tx,
-            accountId: accountId || undefined, // Attach the real DB ID
-            status: accountId ? 'ready' : 'review' // If no ID found, flag for human
+            accountId: accountId || undefined, 
+            status: accountId ? 'ready' : 'review' 
         };
     }));
 
@@ -144,7 +165,7 @@ async function resolveAccountId(firestore: any, userId: string, propertyId: stri
     const cleanCategory = categoryName.split('>').pop()?.trim() || categoryName;
     const searchTerms = keywordMap[cleanCategory] || keywordMap[categoryName] || [cleanCategory];
 
-    snapshot.forEach((doc: any) => {
+    snapshot.forEach((doc: DocumentData) => {
         const data = doc.data();
         const accountName = (data.name || "").toLowerCase();
         const accountSubtype = (data.subtype || "").toLowerCase();
@@ -172,3 +193,5 @@ async function resolveAccountId(firestore: any, userId: string, propertyId: stri
 
     return bestMatchId;
 }
+
+    
