@@ -13,6 +13,7 @@ import Link from 'next/link'; // Import Link
 
 // Import only the Quick Form
 import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
+import { EnterBillDialog } from '@/components/dashboard/sales/enter-bill-dialog';
 
 export default function RentCollectionPage() {
   const { user } = useUser();
@@ -57,19 +58,22 @@ export default function RentCollectionPage() {
           <p className="text-muted-foreground">Manage your portfolio and automated ledgers.</p>
         </div>
         
-        <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="mr-2 h-4 w-4" /> Add New Property
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-             <DialogHeader>
-               <DialogTitle>Add New Property</DialogTitle>
-             </DialogHeader>
-             <QuickPropertyForm onSuccess={() => { setIsQuickAddOpen(false); fetchProperties(); }} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+            <EnterBillDialog />
+            <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
+            <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="mr-2 h-4 w-4" /> Add New Property
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+                <DialogHeader>
+                <DialogTitle>Add New Property</DialogTitle>
+                </DialogHeader>
+                <QuickPropertyForm onSuccess={() => { setIsQuickAddOpen(false); fetchProperties(); }} />
+            </DialogContent>
+            </Dialog>
+        </div>
       </div>
 
       {loading && <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}

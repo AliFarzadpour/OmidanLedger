@@ -375,6 +375,28 @@
         "defaultCategory": { "type": "string", "description": "The default expense category for this vendor, used for automation." }
       },
       "required": ["id", "userId", "name", "role"]
+    },
+    "Bill": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "title": "Bill",
+        "type": "object",
+        "description": "Represents an unpaid (or paid) bill from a vendor.",
+        "properties": {
+            "id": { "type": "string" },
+            "userId": { "type": "string" },
+            "propertyId": { "type": "string" },
+            "vendorId": { "type": "string" },
+            "expenseAccountId": { "type": "string" },
+            "amount": { "type": "number" },
+            "balance": { "type": "number", "description": "The remaining amount due on the bill." },
+            "status": { "type": "string", "enum": ["unpaid", "partially-paid", "paid"] },
+            "invoiceNumber": { "type": "string" },
+            "description": { "type": "string" },
+            "date": { "type": "string", "format": "date-time" },
+            "dueDate": { "type": "string", "format": "date-time" },
+            "createdAt": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "userId", "propertyId", "vendorId", "expenseAccountId", "amount", "status", "date"]
     }
   },
   "auth": {
@@ -472,6 +494,22 @@
             {
               "name": "vendorId",
               "description": "The unique ID of the vendor."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/bills/{billId}",
+        "definition": {
+          "entityName": "Bill",
+          "schema": {
+            "$ref": "#/backend/entities/Bill"
+          },
+          "description": "Stores unpaid vendor bills. Access is restricted to the owning user via a security rule on the 'userId' field.",
+          "params": [
+            {
+              "name": "billId",
+              "description": "The unique ID of the bill."
             }
           ]
         }

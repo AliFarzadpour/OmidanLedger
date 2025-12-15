@@ -67,5 +67,11 @@ service cloud.firestore {
         allow list, create, update, delete: if isSignedIn() && request.resource.data.userId == request.auth.uid;
         allow read: if isOwner(resource.data.userId);
     }
+    
+    match /bills/{billId} {
+        // Users can manage their own bills.
+        allow list, create, update, delete: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow read: if isOwner(resource.data.userId);
+    }
   }
 }
