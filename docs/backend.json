@@ -371,7 +371,8 @@
         "role": { "type": "string", "description": "The service or role the vendor provides (e.g., Plumber, Electrician)." },
         "phone": { "type": "string", "description": "The vendor's phone number." },
         "email": { "type": "string", "description": "The vendor's email address.", "format": "email" },
-        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the vendor was added." }
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the vendor was added." },
+        "defaultCategory": { "type": "string", "description": "The default expense category for this vendor, used for automation." }
       },
       "required": ["id", "userId", "name", "role"]
     }
