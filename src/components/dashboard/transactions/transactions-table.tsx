@@ -2,31 +2,9 @@
 
 import { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
@@ -77,6 +55,40 @@ type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
   dataSource: DataSource;
+}
+
+// --- STATUS INDICATOR (Trust the Link) ---
+function StatusIndicator({ transaction }: { transaction: Transaction }) {
+  if (transaction.status === 'posted') return null;
+
+  // GREEN: Trusted Match
+  // If we have an Account ID, we trust the link.
+  if (transaction.accountId) {
+    return (
+       <div className="flex items-center gap-1 w-fit text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-emerald-100 mt-1 cursor-default">
+          <CheckCircle2 className="h-3 w-3" />
+          <span>Auto-Matched</span>
+       </div>
+    );
+  }
+
+  // SLATE: Unassigned 
+  return (
+       <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+             <div className="flex items-center gap-1 w-fit text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-medium border border-slate-200 mt-1 cursor-pointer hover:bg-slate-200">
+                <AlertTriangle className="h-3 w-3" />
+                <span>Unassigned</span>
+             </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>AI categorized this as <b>{transaction.subcategory}</b>.</p>
+            <p className="text-xs text-muted-foreground">We couldn't link it to a specific property ledger.<br/>Click to assign manually.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+  );
 }
 
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
@@ -159,12 +171,14 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     filtered.sort((a, b) => {
       let aValue: any = a[sortConfig.key as keyof Transaction] || '';
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
+      
       if (sortConfig.key === 'category') {
         aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}`;
         bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}`;
       } else if (sortConfig.key === 'date') {
         return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
+      
       if (typeof aValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
@@ -176,6 +190,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
+  const hasTransactions = transactions && transactions.length > 0;
+  const isPlaidAccount = !!dataSource.plaidAccessToken;
 
   return (
     <>
@@ -186,12 +202,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <CardDescription>Showing all transactions from {dataSource.bankName}.</CardDescription>
           </div>
           <div className="flex gap-2">
-            {dataSource.plaidAccessToken ? (
+            {isPlaidAccount ? (
               <Button onClick={handleSyncTransactions} disabled={isSyncing}><RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} /> Sync</Button>
             ) : (
               <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
             )}
-            <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!transactions || transactions.length === 0 || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>
+            <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>
           </div>
         </CardHeader>
         
@@ -215,7 +231,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <TableBody>
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
-                  <TableRow key={i}><TableCell colSpan={4}><Skeleton className="h-10 w-full" /></TableCell></TableRow>
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-40 rounded-full" /></TableCell>
+                    <TableCell className="text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+                  </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
                 sortedTransactions.map((transaction) => (
@@ -223,12 +244,14 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
-                      {/* THIS COMPONENT NOW WRAPS THE BADGE & STATUS */}
-                      <CategoryEditor 
-                          transaction={transaction} 
-                          onSave={handleCategoryChange} 
-                          displayName={transaction.accountName} 
-                      />
+                      <div className="flex flex-col gap-1">
+                          <CategoryEditor 
+                              transaction={transaction} 
+                              onSave={handleCategoryChange} 
+                              displayName={transaction.accountName} 
+                          />
+                          <StatusIndicator transaction={transaction} />
+                      </div>
                     </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
@@ -260,7 +283,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   );
 }
 
-// --- CATEGORY EDITOR (Wraps everything to make it clickable) ---
+// --- UPDATED CATEGORY EDITOR (Shows Full Context + Pen) ---
 function CategoryEditor({ transaction, onSave, displayName }: { transaction: Transaction, onSave: any, displayName?: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const [primary, setPrimary] = useState(transaction.primaryCategory);
@@ -272,53 +295,31 @@ function CategoryEditor({ transaction, onSave, displayName }: { transaction: Tra
         onSave(transaction, { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub });
         setIsOpen(false);
     };
-
-    // Determine Status Badge inside the component
-    let StatusBadge = null;
-    if (transaction.status !== 'posted') {
-        if ((transaction.confidence || 0) > 0.8 && transaction.accountId) {
-            StatusBadge = (
-                <div className="flex items-center gap-1 w-fit text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-emerald-100 mt-1">
-                    <CheckCircle2 className="h-3 w-3" /> <span>Auto-Matched</span>
-                </div>
-            );
-        } else if (transaction.accountId) {
-            StatusBadge = (
-                <div className="flex items-center gap-1 w-fit text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-amber-100 mt-1">
-                    <HelpCircle className="h-3 w-3" /> <span>Review Needed</span>
-                </div>
-            );
-        } else {
-            StatusBadge = (
-                <div className="flex items-center gap-1 w-fit text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-medium border border-slate-200 mt-1">
-                    <AlertTriangle className="h-3 w-3" /> <span>Unassigned</span>
-                </div>
-            );
-        }
-    }
     
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
-                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity">
-                    {/* 1. Show Account Name OR Generic Badge */}
-                    {displayName ? (
-                         <div className="flex flex-col">
-                            <span className="font-semibold text-sm text-slate-900 flex items-center gap-2">
-                               {displayName}
-                               <Pencil className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100" />
-                            </span>
-                            <span className="text-xs text-muted-foreground">AI: {transaction.subcategory}</span>
-                         </div>
-                    ) : (
-                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
-                            {transaction.primaryCategory}
-                            <Pencil className="ml-2 h-3 w-3 opacity-50" />
-                        </Badge>
+                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
+                    
+                    {/* 1. REAL LEDGER NAME (If linked) */}
+                    {displayName && (
+                         <span className="font-bold text-sm text-slate-900 mb-1">
+                            {displayName}
+                         </span>
                     )}
 
-                    {/* 2. Show Status Badge (Clickable now because it's inside the trigger) */}
-                    {StatusBadge}
+                    {/* 2. FULL CATEGORY DISPLAY (Always Visible) */}
+                    <div className="flex flex-col">
+                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
+                            {transaction.primaryCategory}
+                            {/* Always show Pen on hover */}
+                            <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                        </Badge>
+                        <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                            {transaction.secondaryCategory} &gt; {transaction.subcategory}
+                        </span>
+                    </div>
+
                 </div>
             </PopoverTrigger>
             <PopoverContent className="w-80">
