@@ -3,13 +3,10 @@
 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { X, Calendar as CalendarIcon } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
+import { X } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { DateRange } from 'react-day-picker';
+import { type DateRange } from 'react-day-picker';
+import { format, parse } from 'date-fns';
 
 export interface TransactionFilters {
   searchTerm: string;
@@ -25,50 +22,54 @@ interface TransactionToolbarProps {
 
 export function TransactionToolbar({ filters, onFiltersChange, onClear }: TransactionToolbarProps) {
   const hasFilters = filters.searchTerm || filters.dateRange || (filters.category && filters.category !== 'all');
+  
+  const handleDateChange = (field: 'from' | 'to', value: string) => {
+    const newDate = value ? parse(value, 'yyyy-MM-dd', new Date()) : undefined;
+    
+    // Create a valid date range, ensuring 'from' is not after 'to'
+    let newRange = { ...filters.dateRange };
+    if (field === 'from') {
+        newRange.from = newDate;
+        if (newRange.to && newDate && newDate > newRange.to) {
+            newRange.to = newDate; // Adjust 'to' if 'from' is later
+        }
+    } else { // field === 'to'
+        newRange.to = newDate;
+         if (newRange.from && newDate && newDate < newRange.from) {
+            newRange.from = newDate; // Adjust 'from' if 'to' is earlier
+        }
+    }
+
+    onFiltersChange({ dateRange: newRange });
+  };
+
 
   return (
     <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-4">
       
       <div className="flex flex-1 items-center space-x-2 w-full">
         <Input
-          placeholder="Search descriptions, merchants..."
+          placeholder="Search descriptions..."
           value={filters.searchTerm}
           onChange={(e) => onFiltersChange({ searchTerm: e.target.value })}
-          className="h-9 w-full md:w-[300px]"
+          className="h-9 w-full md:w-[250px]"
         />
         
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn("h-9 w-[240px] justify-start text-left font-normal", !filters.dateRange && "text-muted-foreground")}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {filters.dateRange?.from ? (
-                filters.dateRange.to ? (
-                  <>
-                    {format(filters.dateRange.from, "LLL dd, y")} - {format(filters.dateRange.to, "LLL dd, y")}
-                  </>
-                ) : (
-                  format(filters.dateRange.from, "LLL dd, y")
-                )
-              ) : (
-                "Date"
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              initialFocus
-              mode="range"
-              defaultMonth={filters.dateRange?.from}
-              selected={filters.dateRange}
-              onSelect={(range) => onFiltersChange({ dateRange: range })}
-              numberOfMonths={2}
-            />
-          </PopoverContent>
-        </Popover>
+        <Input
+          type="date"
+          value={filters.dateRange?.from ? format(filters.dateRange.from, 'yyyy-MM-dd') : ''}
+          onChange={(e) => handleDateChange('from', e.target.value)}
+          className="h-9 w-full md:w-[150px] text-muted-foreground"
+          aria-label="Start date"
+        />
+        <Input
+          type="date"
+          value={filters.dateRange?.to ? format(filters.dateRange.to, 'yyyy-MM-dd') : ''}
+          onChange={(e) => handleDateChange('to', e.target.value)}
+          className="h-9 w-full md:w-[150px] text-muted-foreground"
+          aria-label="End date"
+        />
+
 
         <Select onValueChange={(value) => onFiltersChange({ category: value })} value={filters.category}>
              <SelectTrigger className="h-9 w-[150px]">
