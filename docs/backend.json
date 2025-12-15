@@ -219,6 +219,7 @@
                 "expenseAccount": { "type": "string", "description": "FK to the primary Expense account (Maint/Ops)." },
                 "managementFeeAccount": { "type": "string", "description": "FK to the Management Fee Expense account." },
                 "liabilityAccount": { "type": "string", "description": "FK to the Mortgage Liability account." },
+                "accountsPayableAccount": { "type": "string", "description": "FK to the Accounts Payable liability account for unpaid vendor bills." },
                 "securityDepositAccount": { "type": "string", "description": "FK to the Tenant Deposit Liability account." },
                 "interestAccount": { "type": "string", "description": "FK to the Mortgage Interest Expense account." },
                 "taxAccount": { "type": "string", "description": "FK to the Property Tax Expense account." },

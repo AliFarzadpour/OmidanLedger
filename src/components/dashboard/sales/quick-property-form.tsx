@@ -75,8 +75,10 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
 
       // --- 2. LIABILITIES ---
       accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
-      // Note: Mortgage Liability is created later if they add a mortgage, or we can placeholder it here
       
+      // [NEW] Accounts Payable: The bucket for unpaid vendor bills
+      accountingMap.accountsPayableAccount = createAccount(`Accounts Payable - ${data.name}`, 'Liability', 'Accounts Payable');
+
       // --- 3. INCOME ---
       accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
       accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
@@ -107,7 +109,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       });
 
       await batch.commit();
-      toast({ title: "Property Added", description: "Full ledger suite created successfully." });
+      toast({ title: "Property Added", description: "Property and 16 ledger accounts created." });
       onSuccess();
 
     } catch (error: any) {
