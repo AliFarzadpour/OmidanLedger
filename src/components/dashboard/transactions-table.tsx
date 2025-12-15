@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertCircle, HelpCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -42,6 +42,7 @@ import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -60,15 +61,22 @@ interface DataSource {
   plaidAccessToken?: string;
 }
 
+// 1. EXTEND THE INTERFACE
 interface Transaction {
   id: string;
   date: string;
   description: string;
-  primaryCategory: string;
-  secondaryCategory: string;
-  subcategory: string;
   amount: number;
+  
+  // AI & Accounting Fields
+  primaryCategory: string;    // AI's top-level guess
+  secondaryCategory: string;  // AI's mid-level guess
+  subcategory: string;        // AI's specific guess
+  accountId?: string;         // DB ID for the linked ledger account
+  confidence?: number;        // 0.0 to 1.0 from the AI
+  status: 'ready' | 'needs_review' | 'posted' | 'error'; // The state from the AI flow
 }
+
 
 type SortKey = 'date' | 'description' | 'category' | 'amount';
 type SortDirection = 'ascending' | 'descending';
@@ -76,6 +84,74 @@ type SortDirection = 'ascending' | 'descending';
 interface TransactionsTableProps {
   dataSource: DataSource;
 }
+
+// 2. HELPER COMPONENT FOR THE FLAG
+function StatusIndicator({ transaction }: { transaction: Transaction }) {
+  if (transaction.status === 'posted') {
+    return null; // No flag needed if it's already done
+  }
+
+  // GREEN: High confidence + Account ID found
+  if (transaction.status === 'ready' && transaction.confidence && transaction.confidence > 0.8 && transaction.accountId) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+             <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full text-xs font-medium border border-emerald-100">
+                <CheckCircle2 className="h-3 w-3" />
+                <span>Auto-Matched</span>
+             </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>AI is <b>{Math.round(transaction.confidence * 100)}%</b> confident.<br/>Linked to: <i>{transaction.subcategory}</i></p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+
+  // RED: Missing Account Link (The "Bridge" failed)
+  if (transaction.status === 'needs_review' && !transaction.accountId) {
+     return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger>
+             <div className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded-full text-xs font-medium border border-red-100 animate-pulse">
+                <AlertCircle className="h-3 w-3" />
+                <span>Missing Ledger</span>
+             </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p className="text-red-500 font-semibold">Action Required</p>
+            <p>AI suggested "{transaction.subcategory}", but we couldn't find<br/>that account in your settings. Please select one manually.</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+     );
+  }
+
+  // YELLOW: Low Confidence (AI is unsure)
+  if (transaction.status === 'needs_review' && transaction.confidence && transaction.confidence <= 0.8) {
+    return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger>
+               <div className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-full text-xs font-medium border border-amber-100">
+                  <HelpCircle className="h-3 w-3" />
+                  <span>Review Needed</span>
+               </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>AI Confidence: Only <b>{Math.round((transaction.confidence || 0) * 100)}%</b>.<br/>Please verify this category.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+    );
+  }
+
+  return null; // Default to no indicator if no other conditions are met
+}
+
 
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
@@ -346,10 +422,15 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                       <div className="font-medium">{transaction.description}</div>
                     </TableCell>
                     <TableCell>
-                      <CategoryEditor
-                          transaction={transaction}
-                          onSave={handleCategoryChange}
-                      />
+                      <div className="flex flex-col gap-1">
+                        <CategoryEditor
+                            transaction={transaction}
+                            onSave={handleCategoryChange}
+                        />
+                        <div className="mt-1">
+                           <StatusIndicator transaction={transaction} />
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell
                       className={cn(
@@ -484,5 +565,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    
