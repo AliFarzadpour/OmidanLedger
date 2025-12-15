@@ -52,20 +52,22 @@ export function useCollection<T = any>(
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
 
-  // 1. Calculate the path immediately.
   const path = useMemo(() => {
     if (!targetRefOrQuery) return null;
-    return getFirestorePath(targetRefOrQuery);
+    try {
+      return getFirestorePath(targetRefOrQuery);
+    } catch (e) {
+      // In some initial render cases, targetRefOrQuery might not be a valid Firestore object yet
+      return null;
+    }
   }, [targetRefOrQuery]);
 
   useEffect(() => {
-    // 2. THE GUARD CLAUSE (This fixes your error)
-    // If target is missing OR the path is empty (root), we simply wait.
     if (!targetRefOrQuery || !path) {
-      setIsLoading(false); // Not loading, just idle
+      setIsLoading(false);
       setData(null);
       setError(null);
-      return; 
+      return;
     }
 
     setIsLoading(true);
