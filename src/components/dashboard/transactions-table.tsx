@@ -41,7 +41,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
-import { TransactionToolbar } from './transaction-toolbar';
+import { TransactionToolbar } from './transactions/transaction-toolbar';
 
 
 const primaryCategoryColors: Record<string, string> = {
@@ -90,9 +90,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     direction: 'descending',
   });
   
-  const [filterTerm, setFilterTerm] = useState('');
-  const [filterDate, setFilterDate] = useState<Date | undefined>();
-  const [filterCategory, setFilterCategory] = useState('');
+  const [filters, setFilters] = useState({
+    term: '',
+    date: undefined as Date | undefined,
+    category: '',
+  });
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -165,16 +167,16 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!transactions) return [];
 
     let filtered = transactions.filter(t => {
-       const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || 
-                             t.amount.toString().includes(filterTerm);
+       const matchesSearch = filters.term === '' || 
+                             t.description.toLowerCase().includes(filters.term.toLowerCase()) || 
+                             t.amount.toString().includes(filters.term);
        
-       const matchesCategory = filterCategory && filterCategory !== 'all' 
-            ? t.primaryCategory === filterCategory 
-            : true;
+       const matchesCategory = filters.category === '' || 
+                             filters.category === 'all' || 
+                             t.primaryCategory === filters.category;
 
-       const matchesDate = filterDate 
-            ? new Date(t.date).toDateString() === filterDate.toDateString()
-            : true;
+       const matchesDate = !filters.date || 
+                           new Date(t.date).toDateString() === filters.date.toDateString();
 
        return matchesSearch && matchesCategory && matchesDate;
     });
@@ -205,7 +207,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? comparison : -comparison;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
+  }, [transactions, sortConfig, filters]);
 
 
   const requestSort = (key: SortKey) => {
@@ -291,14 +293,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         <CardContent>
            <TransactionToolbar 
-              onSearch={setFilterTerm}
-              onDateChange={setFilterDate}
-              onCategoryFilter={setFilterCategory}
-              onClear={() => {
-                 setFilterTerm('');
-                 setFilterDate(undefined);
-                 setFilterCategory('');
-              }}
+              filters={filters}
+              onFiltersChange={setFilters}
            />
           <Table>
             <TableHeader>
@@ -489,3 +485,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
