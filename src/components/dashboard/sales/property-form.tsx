@@ -154,18 +154,26 @@ const propertySchema = z.object({
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
 // --- MAIN COMPONENT ---
-export function PropertyForm({ property, onSuccess }: { property?: Property | null; onSuccess?: () => void }) {
+export function PropertyForm({ 
+  onSuccess, 
+  initialData,
+  defaultTab = "general"
+}: { 
+  onSuccess?: () => void, 
+  initialData?: any,
+  defaultTab?: string 
+}) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [activeSection, setActiveSection] = useState("tenants");
+  const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
 
-  const isEditMode = !!property;
+  const isEditMode = !!initialData;
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
-    defaultValues: {
+    defaultValues: initialData || {
       name: '',
       type: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
@@ -194,10 +202,10 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
   });
 
   useEffect(() => {
-    if (isEditMode && property) {
-      form.reset(property as PropertyFormValues);
+    if (initialData) {
+      form.reset(initialData);
     }
-  }, [property, isEditMode, form]);
+  }, [initialData, form]);
 
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
@@ -209,13 +217,11 @@ export function PropertyForm({ property, onSuccess }: { property?: Property | nu
     setIsSaving(true);
     
     try {
-        if (isEditMode && property) {
-            // UPDATE LOGIC
-            const propertyRef = doc(firestore, 'properties', property.id);
+        if (isEditMode) {
+            const propertyRef = doc(firestore, 'properties', initialData.id);
             await updateDoc(propertyRef, data);
             toast({ title: "Property Updated", description: `${data.name} has been successfully updated.` });
         } else {
-            // CREATE LOGIC (with account suite)
             const batch = writeBatch(firestore);
             const timestamp = new Date().toISOString();
             const propertyRef = doc(collection(firestore, 'properties'));
