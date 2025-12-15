@@ -151,13 +151,29 @@ async function resolveAccountId(firestore: any, userId: string, propertyId: stri
 
     // 2. Keyword Mapping (AI Term -> Likely Ledger Words)
     const keywordMap: Record<string, string[]> = {
+        // INCOME
         "Rental Income": ["Rent", "Lease", "Income"],
-        "Utilities (Electricity, Water, Gas)": ["Utilities", "Electric", "Water", "Gas", "Power"],
-        "Repairs & Maintenance": ["Maint", "Repair", "Fix", "Ops"],
         "Interest Income": ["Interest"],
-        "Owner’s Draw": ["Draw", "Distribution", "Equity"],
+        
+        // EXPENSES - REPAIRS & OPS
+        "Repairs & Maintenance": ["Maint", "Repair", "Fix", "Ops", "Contractor", "Handyman"],
+        "Cleaning Services": ["Maint", "Ops", "Cleaning", "Janitorial", "Make Ready"], // <--- FIX FOR POOL CLEANING
+        "Landscaping": ["Maint", "Ops", "Landscap", "Lawn", "Yard"], 
+        "Contractor Payments (non-COGS)": ["Contractor", "Labor", "Service", "Maint"],
+        
+        // EXPENSES - UTILITIES
+        "Utilities (Electricity, Water, Gas)": ["Utilities", "Electric", "Water", "Gas", "Power", "Edison", "Atmos", "City"],
+        
+        // EXPENSES - ADMIN
         "Office Rent": ["Rent", "Lease", "Office"],
-        "Contractor Payments (non-COGS)": ["Contractor", "Labor", "Service"],
+        "General & Administrative": ["Gen", "Admin", "Office", "Software", "Supplies"],
+        "Professional Services": ["Legal", "Professional", "CPA", "Accounting"],
+        
+        // LIABILITIES / EQUITY
+        "Owner’s Draw": ["Draw", "Distribution", "Equity"],
+        "Mortgage Interest": ["Mortgage", "Loan", "Interest"], 
+        "Property Taxes": ["Tax", "County", "City"],
+        "Insurance": ["Insurance", "Policy"]
     };
 
     // Get the list of words to look for (or just use the category name itself)
@@ -193,5 +209,3 @@ async function resolveAccountId(firestore: any, userId: string, propertyId: stri
 
     return bestMatchId;
 }
-
-    
