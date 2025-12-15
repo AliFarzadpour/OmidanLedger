@@ -82,7 +82,9 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
   useEffect(() => {
     if (dataSource) {
       form.reset({
-        ...dataSource,
+        accountName: dataSource.accountName || '',
+        bankName: dataSource.bankName || '',
+        accountType: dataSource.accountType || 'checking',
         accountNumber: dataSource.accountNumber || '',
       });
     } else {
