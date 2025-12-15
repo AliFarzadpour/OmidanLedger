@@ -2,29 +2,36 @@
 
 import { useState, useEffect } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore'; 
-import { useParams } from 'next/navigation';
+import { doc, getDoc, collection, query, where, getDocs, writeBatch } from 'firebase/firestore'; 
+import { useParams, useRouter } from 'next/navigation'; // Added useRouter for redirect
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'; // Add DialogTitle
-import * as VisuallyHidden from '@radix-ui/react-visually-hidden'; // Import this
-import { Wallet, ShieldCheck, ArrowLeft, Plus, Users, Home } from 'lucide-react';
+import { Dialog, DialogContent, DialogTitle, DialogHeader, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
+import { Wallet, ShieldCheck, ArrowLeft, Plus, Trash2, AlertTriangle, Loader2 } from 'lucide-react'; // Added Trash2, AlertTriangle, Loader2
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast'; // Added Toast
 
 export default function PropertyDashboard() {
   const { id } = useParams();
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter(); // For redirecting after delete
+  const { toast } = useToast();
+
   const [property, setProperty] = useState<any>(null);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
+  // UI States
   const [editTab, setEditTab] = useState<string | null>(null);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false); // Delete Modal State
+  const [isDeleting, setIsDeleting] = useState(false); // Loading State during delete
 
   const fetchData = async () => {
     if (!user || !firestore || !id) return;
@@ -34,11 +41,7 @@ export default function PropertyDashboard() {
       if (propSnap.exists()) {
          setProperty({ id: propSnap.id, ...propSnap.data() });
          
-         const accountsQ = query(
-           collection(firestore, 'accounts'), 
-           where('propertyId', '==', id),
-           where('userId', '==', user.uid)
-         );
+         const accountsQ = query(collection(firestore, 'accounts'), where('propertyId', '==', id), where('userId', '==', user.uid));
          const accSnap = await getDocs(accountsQ);
          setAccounts(accSnap.docs.map(d => d.data()));
       }
@@ -47,6 +50,41 @@ export default function PropertyDashboard() {
   };
 
   useEffect(() => { fetchData(); }, [user, firestore, id]);
+
+  // --- DELETE & CLEANUP FUNCTION ---
+  const handleDelete = async () => {
+    if (!user || !firestore || !id) return;
+    setIsDeleting(true);
+
+    try {
+      const batch = writeBatch(firestore);
+
+      // 1. Delete the Property Document
+      const propRef = doc(firestore, 'properties', id as string);
+      batch.delete(propRef);
+
+      // 2. Find & Delete ALL Linked Ledger Accounts (Cleanup)
+      const accountsQ = query(collection(firestore, 'accounts'), where('propertyId', '==', id), where('userId', '==', user.uid));
+      const accountSnaps = await getDocs(accountsQ);
+      
+      accountSnaps.forEach((doc) => {
+         batch.delete(doc.ref);
+      });
+
+      // 3. Commit the Batch
+      await batch.commit();
+
+      toast({ title: "Property Deleted", description: `Successfully removed property and ${accountSnaps.size} ledger accounts.` });
+      
+      // 4. Redirect to List Page
+      router.push('/dashboard/sales/rent-collection');
+
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Delete Failed", description: error.message });
+      setIsDeleting(false); // Only stop loading if it failed
+    }
+  };
 
   if (loading) return <div className="p-10 flex justify-center text-muted-foreground">Loading property details...</div>;
   if (!property) return <div className="p-10 text-center text-muted-foreground">Property not found.</div>;
@@ -75,7 +113,14 @@ export default function PropertyDashboard() {
                <p className="text-muted-foreground">{property.address?.street}, {property.address?.city}</p>
             </div>
          </div>
-         <Button onClick={() => setEditTab('general')} variant="outline">Edit Property Settings</Button>
+         
+         <div className="flex gap-2">
+            <Button onClick={() => setEditTab('general')} variant="outline">Edit Settings</Button>
+            {/* DELETE BUTTON */}
+            <Button onClick={() => setIsDeleteOpen(true)} variant="destructive" size="icon">
+               <Trash2 className="h-4 w-4" />
+            </Button>
+         </div>
       </div>
 
       {/* SETUP WIZARD */}
@@ -182,7 +227,10 @@ export default function PropertyDashboard() {
 
          <TabsContent value="financials">
             <Card>
-                <CardHeader><CardTitle>Automated Ledgers</CardTitle></CardHeader>
+                <CardHeader>
+                    <CardTitle>Automated Ledgers</CardTitle>
+                    <p className="text-xs text-muted-foreground">These accounts were automatically created for this property.</p>
+                </CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader><TableRow><TableHead>Account Name</TableHead><TableHead>Type</TableHead></TableRow></TableHeader>
@@ -200,26 +248,42 @@ export default function PropertyDashboard() {
          </TabsContent>
       </Tabs>
 
-      {/* --- EDIT MODAL (FIXED) --- */}
+      {/* --- EDIT MODAL --- */}
       <Dialog open={!!editTab} onOpenChange={(open) => !open && setEditTab(null)}>
          <DialogContent className="max-w-5xl h-[90vh] overflow-hidden p-0">
-            {/* FIXED: Added VisuallyHidden Title for Accessibility */}
-            <VisuallyHidden.Root>
-               <DialogTitle>Edit Property Details</DialogTitle>
-            </VisuallyHidden.Root>
-
+            <VisuallyHidden.Root><DialogTitle>Edit Property</DialogTitle></VisuallyHidden.Root>
             {editTab && (
                <div className="h-full overflow-y-auto p-6">
-                  <PropertyForm 
-                     initialData={property} 
-                     defaultTab={editTab} 
-                     onSuccess={() => { setEditTab(null); fetchData(); }} 
-                  />
+                  <PropertyForm initialData={property} defaultTab={editTab} onSuccess={() => { setEditTab(null); fetchData(); }} />
                </div>
             )}
+         </DialogContent>
+      </Dialog>
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+         <DialogContent>
+            <DialogHeader>
+               <DialogTitle className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" /> Delete Property?
+               </DialogTitle>
+               <DialogDescription className="pt-2">
+                  This action cannot be undone. This will permanently delete <strong>{property.name}</strong> and remove all <strong>{accounts.length} associated ledger accounts</strong>.
+                  <br/><br/>
+                  Any historical transactions linked to this property will remain in your bank feed but will become unlinked.
+               </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+               <Button variant="ghost" onClick={() => setIsDeleteOpen(false)} disabled={isDeleting}>Cancel</Button>
+               <Button variant="destructive" onClick={handleDelete} disabled={isDeleting}>
+                  {isDeleting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Deleting...</> : "Delete Property"}
+               </Button>
+            </DialogFooter>
          </DialogContent>
       </Dialog>
 
     </div>
   );
 }
+
+    
