@@ -12,6 +12,7 @@ import { doc, writeBatch, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Home, DollarSign } from 'lucide-react';
 
+// Simple Schema - Just the basics
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
   address: z.object({
@@ -21,7 +22,6 @@ const quickSchema = z.object({
     zip: z.string().min(5, "Zip is required"),
   }),
   targetRent: z.coerce.number().min(0),
-  securityDeposit: z.coerce.number().min(0),
 });
 
 export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
@@ -36,7 +36,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       name: '',
       address: { street: '', city: '', state: '', zip: '' },
       targetRent: 0,
-      securityDeposit: 0,
     }
   });
 
@@ -45,21 +44,22 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     setIsSaving(true);
 
     try {
+      // BATCH WRITE: Create Property + 15 Ledgers instantly
       const batch = writeBatch(firestore);
       const timestamp = new Date().toISOString();
       const propertyRef = doc(collection(firestore, 'properties'));
       
       const accountingMap: any = { utilities: {} };
 
-      // Helper to create account
-      const createAccount = (name: string, type: string, subtype: string, balance: number = 0) => {
+      // Helper to create ledger accounts
+      const createAccount = (name: string, type: string, subtype: string) => {
         const ref = doc(collection(firestore, 'accounts'));
         batch.set(ref, {
           userId: user.uid,
           name: name,
           type: type,
           subtype: subtype,
-          balance: balance,
+          balance: 0,
           isSystemAccount: true,
           propertyId: propertyRef.id,
           createdAt: timestamp
@@ -67,38 +67,30 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         return ref.id;
       };
 
-      // 1. Create CORE Ledgers (Asset, Income, Expense)
-      accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', 0);
+      // 1. Create the Ledgers
+      accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
       accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
       accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
-      
-      // 2. Create Standard Ledgers (Future-proofing)
-      accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
+      // ... (We create the rest silently so they are ready for later)
       accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
       accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
       accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
-      
-      // Placeholders for Utilities
-      accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
-      
-      // 3. Save Property (With "Partial" Status)
+
+      // 2. Save Property
       batch.set(propertyRef, {
         userId: user.uid,
         ...data,
-        financials: { targetRent: data.targetRent, securityDeposit: data.securityDeposit }, // Map flat fields to structure
-        
-        // Default empty structures for complex tabs
+        // Set defaults for the complex tabs so they aren't null later
+        financials: { targetRent: data.targetRent, securityDeposit: 0 },
         mortgage: { hasMortgage: 'no' }, 
         management: { isManaged: 'self' },
-        tenants: [],
-        
+        tenants: [], 
         createdAt: timestamp,
         accounting: accountingMap
       });
 
       await batch.commit();
-      toast({ title: "Property Added", description: "Ledgers created. You can add more details later." });
+      toast({ title: "Property Added", description: "Basic profile created. Click the card to add more details." });
       onSuccess();
 
     } catch (error: any) {
@@ -109,12 +101,12 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <div className="space-y-6 p-1">
-      <div className="bg-blue-50 p-4 rounded-lg flex gap-3 items-start">
+    <div className="space-y-6 p-4">
+      <div className="bg-blue-50 p-4 rounded-lg flex gap-3 items-start border border-blue-100">
         <Home className="h-5 w-5 text-blue-600 mt-0.5" />
         <div>
           <h3 className="font-medium text-blue-900">Quick Setup</h3>
-          <p className="text-sm text-blue-700">Enter the basics to get started. You can add Mortgage, Tenants, and Tax info later.</p>
+          <p className="text-sm text-blue-700">Enter the basics to get started. You can add Mortgage, Tenants, and Tax info later from the dashboard.</p>
         </div>
       </div>
 
@@ -136,26 +128,17 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid gap-2"><Label>Zip</Label><Input {...form.register('address.zip')} /></div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
+        <div className="grid gap-2">
             <Label>Target Rent ($)</Label>
             <div className="relative">
                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                <Input className="pl-8" type="number" {...form.register('targetRent')} />
             </div>
-          </div>
-          <div className="grid gap-2">
-            <Label>Security Deposit ($)</Label>
-            <div className="relative">
-               <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-               <Input className="pl-8" type="number" {...form.register('securityDeposit')} />
-            </div>
-          </div>
         </div>
       </div>
 
       <div className="flex justify-end pt-4">
-        <Button onClick={form.handleSubmit(onSubmit)} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 w-full md:w-auto">
+        <Button onClick={form.handleSubmit(onSubmit)} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 w-full">
           {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Create Property"}
         </Button>
       </div>
