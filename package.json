@@ -33,6 +33,7 @@
     "@radix-ui/react-tooltip": "^1.1.2",
     "@radix-ui/react-visually-hidden": "latest",
     "class-variance-authority": "^0.7.0",
+    "date-fns": "^3.6.0",
     "lucide-react": "latest",
     "react-plaid-link": "^3.5.2",
     "recharts": "^2.15.1",
