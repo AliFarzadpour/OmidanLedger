@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -10,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'; // Add DialogTitle
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden'; // Import this
 import { Wallet, ShieldCheck, ArrowLeft, Plus, Users, Home } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
@@ -24,7 +24,6 @@ export default function PropertyDashboard() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // State for "Targeted Edit" Modal
   const [editTab, setEditTab] = useState<string | null>(null);
 
   const fetchData = async () => {
@@ -48,19 +47,17 @@ export default function PropertyDashboard() {
   if (loading) return <div className="p-10 flex justify-center text-muted-foreground">Loading property details...</div>;
   if (!property) return <div className="p-10 text-center text-muted-foreground">Property not found.</div>;
 
-  // CALCULATE "TODO" LIST
   const missingItems = [];
   if (!property.tenants?.length) missingItems.push({ id: 'tenants', label: 'Add Tenants', desc: 'Required to track rent income.' });
   if (property.mortgage?.hasMortgage === 'no' || !property.mortgage?.lenderName) missingItems.push({ id: 'mortgage', label: 'Setup Mortgage', desc: 'Enable auto-splits for loan payments.' });
   if (!property.taxAndInsurance?.policyNumber) missingItems.push({ id: 'tax', label: 'Tax & Insurance', desc: 'Track escrow and tax expenses.' });
   
-  // Base 25% for creating it + 25% for each missing item done
   const completeness = Math.round(25 + ((3 - missingItems.length) / 3) * 75);
 
   return (
     <div className="p-8 space-y-8">
       
-      {/* HEADER & NAV */}
+      {/* HEADER */}
       <div className="flex items-center justify-between">
          <div className="flex items-center gap-4">
             <Link href="/dashboard/sales/rent-collection">
@@ -77,7 +74,7 @@ export default function PropertyDashboard() {
          <Button onClick={() => setEditTab('general')} variant="outline">Edit Property Settings</Button>
       </div>
 
-      {/* 1. THE "SETUP WIZARD" WIDGET (Only shows if incomplete) */}
+      {/* SETUP WIZARD */}
       {missingItems.length > 0 && (
         <Card className="bg-indigo-50 border-indigo-100">
            <CardHeader className="pb-3">
@@ -91,7 +88,7 @@ export default function PropertyDashboard() {
               {missingItems.map((item) => (
                  <button 
                     key={item.id}
-                    onClick={() => setEditTab(item.id)} // OPENS SPECIFIC TAB
+                    onClick={() => setEditTab(item.id)} 
                     className="flex items-start gap-3 p-3 bg-white rounded-lg border border-indigo-100 hover:shadow-md transition-all text-left group"
                  >
                     <div className="p-2 bg-indigo-100 text-indigo-600 rounded-full group-hover:bg-indigo-600 group-hover:text-white transition-colors">
@@ -107,7 +104,7 @@ export default function PropertyDashboard() {
         </Card>
       )}
 
-      {/* 2. OPERATIONAL DASHBOARD */}
+      {/* DASHBOARD TABS */}
       <Tabs defaultValue="overview" className="w-full">
          <TabsList>
             <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -115,34 +112,19 @@ export default function PropertyDashboard() {
             <TabsTrigger value="financials">Financials & Ledgers</TabsTrigger>
          </TabsList>
 
-         {/* TAB: OVERVIEW */}
          <TabsContent value="overview" className="space-y-4">
             <div className="grid md:grid-cols-2 gap-4">
-               
-               {/* Mortgage Card */}
                <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                     <div className="flex items-center gap-2">
-                        <Wallet className="h-4 w-4 text-slate-500" />
-                        <CardTitle className="text-base">Mortgage & Loan</CardTitle>
-                     </div>
+                     <div className="flex items-center gap-2"><Wallet className="h-4 w-4 text-slate-500" /><CardTitle className="text-base">Mortgage & Loan</CardTitle></div>
                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditTab('mortgage')}>Edit</Button>
                   </CardHeader>
                   <CardContent>
                      {property.mortgage?.hasMortgage === 'yes' ? (
-                        <div className="space-y-2">
-                           <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Lender</span>
-                              <span className="font-medium">{property.mortgage.lenderName}</span>
-                           </div>
-                           <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Monthly Payment</span>
-                              <span className="font-medium">${property.mortgage.monthlyPayment}</span>
-                           </div>
-                           <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Balance</span>
-                              <span className="font-medium">${property.mortgage.loanBalance}</span>
-                           </div>
+                        <div className="space-y-2 text-sm">
+                           <div className="flex justify-between"><span className="text-muted-foreground">Lender</span><span className="font-medium">{property.mortgage.lenderName}</span></div>
+                           <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><span className="font-medium">${property.mortgage.monthlyPayment}</span></div>
+                           <div className="flex justify-between"><span className="text-muted-foreground">Balance</span><span className="font-medium">${property.mortgage.loanBalance}</span></div>
                         </div>
                      ) : (
                         <div className="text-sm text-muted-foreground italic">No mortgage recorded.</div>
@@ -150,37 +132,25 @@ export default function PropertyDashboard() {
                   </CardContent>
                </Card>
 
-               {/* Tax/Insurance Card */}
                <Card>
                   <CardHeader className="flex flex-row items-center justify-between pb-2">
-                     <div className="flex items-center gap-2">
-                        <ShieldCheck className="h-4 w-4 text-slate-500" />
-                        <CardTitle className="text-base">Tax & Insurance</CardTitle>
-                     </div>
+                     <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-slate-500" /><CardTitle className="text-base">Tax & Insurance</CardTitle></div>
                      <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setEditTab('tax')}>Edit</Button>
                   </CardHeader>
                   <CardContent>
                      {property.taxAndInsurance?.policyNumber ? (
-                        <div className="space-y-2">
-                           <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Insurance Provider</span>
-                              <span className="font-medium">{property.taxAndInsurance.insuranceProvider}</span>
-                           </div>
-                           <div className="flex justify-between text-sm">
-                              <span className="text-muted-foreground">Renewal Date</span>
-                              <span className="font-medium">{property.taxAndInsurance.renewalDate}</span>
-                           </div>
+                        <div className="space-y-2 text-sm">
+                           <div className="flex justify-between"><span className="text-muted-foreground">Insurer</span><span className="font-medium">{property.taxAndInsurance.insuranceProvider}</span></div>
+                           <div className="flex justify-between"><span className="text-muted-foreground">Renewal</span><span className="font-medium">{property.taxAndInsurance.renewalDate}</span></div>
                         </div>
                      ) : (
                         <div className="text-sm text-muted-foreground italic">No insurance details.</div>
                      )}
                   </CardContent>
                </Card>
-
             </div>
          </TabsContent>
 
-         {/* TAB: TENANTS */}
          <TabsContent value="tenants">
             <Card>
                <CardHeader className="flex flex-row justify-between items-center">
@@ -189,9 +159,7 @@ export default function PropertyDashboard() {
                </CardHeader>
                <CardContent>
                   <Table>
-                     <TableHeader>
-                        <TableRow><TableHead>Name</TableHead><TableHead>Term</TableHead><TableHead>Rent</TableHead><TableHead>Status</TableHead></TableRow>
-                     </TableHeader>
+                     <TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Term</TableHead><TableHead>Rent</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
                      <TableBody>
                         {property.tenants?.map((t:any, i:number) => (
                            <TableRow key={i}>
@@ -201,16 +169,13 @@ export default function PropertyDashboard() {
                               <TableCell><Badge className="bg-green-600">Active</Badge></TableCell>
                            </TableRow>
                         ))}
-                        {(!property.tenants || property.tenants.length === 0) && (
-                           <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground h-20">No tenants listed.</TableCell></TableRow>
-                        )}
+                        {(!property.tenants || property.tenants.length === 0) && <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground h-20">No tenants listed.</TableCell></TableRow>}
                      </TableBody>
                   </Table>
                </CardContent>
             </Card>
          </TabsContent>
 
-         {/* TAB: FINANCIALS (LEDGERS) */}
          <TabsContent value="financials">
             <Card>
                 <CardHeader><CardTitle>Automated Ledgers</CardTitle></CardHeader>
@@ -231,12 +196,16 @@ export default function PropertyDashboard() {
          </TabsContent>
       </Tabs>
 
-      {/* --- THE TARGETED EDIT MODAL --- */}
+      {/* --- EDIT MODAL (FIXED) --- */}
       <Dialog open={!!editTab} onOpenChange={(open) => !open && setEditTab(null)}>
          <DialogContent className="max-w-5xl h-[90vh] overflow-hidden p-0">
+            {/* FIXED: Added VisuallyHidden Title for Accessibility */}
+            <VisuallyHidden.Root>
+               <DialogTitle>Edit Property Details</DialogTitle>
+            </VisuallyHidden.Root>
+
             {editTab && (
                <div className="h-full overflow-y-auto p-6">
-                  {/* This re-opens the big form, but jumps straight to the tab you clicked */}
                   <PropertyForm 
                      initialData={property} 
                      defaultTab={editTab} 
