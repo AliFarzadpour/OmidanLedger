@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -10,7 +9,8 @@ import {
 } from './schemas';
 import { MasterCategoryFramework } from './category-framework';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
-import { DocumentData } from 'firebase-admin/firestore';
+
+// NOTE: We use Admin SDK syntax (db.collection) here
 
 export async function categorizeTransactionsFromStatement(input: StatementInput): Promise<StatementOutput> {
   return categorizeTransactionsFromStatementFlow(input);
@@ -20,32 +20,30 @@ const extractAndCategorizePrompt = ai.definePrompt({
   name: 'extractAndCategorizePrompt',
   input: { schema: StatementInputSchema },
   output: { schema: StatementOutputSchema },
-  prompt: `You are a world-class financial bookkeeping expert specializing in AI-powered transaction extraction and categorization from financial statements.
-Your task is to analyze the provided financial statement (PDF or CSV), extract every single transaction, and classify each one with extreme accuracy according to the provided three-level Master Category Framework.
+  prompt: `You are a world-class financial bookkeeping expert specializing in AI-powered transaction extraction and categorization.
+Your task is to analyze the provided financial statement, extract every transaction, and classify each one with extreme accuracy according to the Master Category Framework.
 
 **Context:**
 You are performing bookkeeping for a business in the **{{{userTrade}}}** industry. 
-Use this context to infer the business purpose of ambiguous transactions (e.g., materials, software, travel).
+Use this context to infer the business purpose of ambiguous transactions.
 
-**User's Custom Rules (These are the source of truth and MUST be followed):**
+**User's Custom Rules (Source of Truth):**
 {{{userMappings}}}
 
-**Master Category Framework (Use this if no custom rule applies):**
+**Master Category Framework:**
 ${MasterCategoryFramework}
   
-**Financial Statement File (or CSV data):**
+**Financial Statement File:**
 {{media url=statementDataUri}}
 
-**Your Instructions:**
-1.  **Prioritize Custom Rules**: First, check if a transaction description matches any of the user's custom rules. If it does, you MUST use the specified category.
-2.  **Use Master Framework**: If no custom rule applies, thoroughly scan the document and extract every transaction.
-3.  For each transaction, you must extract:
-    - **date**: In YYYY-MM-DD format. If the file is a CSV with a date column, use that.
-    - **description**: The full transaction description.
-    - **amount**: A number. Expenses must be negative, and income/credits must be positive.
-4.  For each extracted transaction, categorize it into the most specific subcategory from the Master Category Framework.
-5.  Return a single JSON object containing a "transactions" array. Each object in the array must conform to the output schema, containing the extracted data and the three-level categorization.
-**CRITICAL:** If the document is unreadable, password-protected, a blurry image, empty, or if you cannot extract any transactions for any reason, your one and only task is to return a single JSON object with an empty "transactions" array, like this: \`{"transactions": []}\`. You are strictly forbidden from creating, inventing, or hallucinating any sample data. Your entire output MUST be only the empty array structure if you cannot read the file.
+**Instructions:**
+1. **Prioritize Custom Rules**: Check user rules first.
+2. **Extract Data**: 
+    - date (YYYY-MM-DD)
+    - description (Full text)
+    - amount (Negative for expenses, Positive for income)
+3. **Categorize**: Map to the specific Master Framework subcategory.
+4. **Return JSON**: A "transactions" array matching the schema. If the file is unreadable, return {"transactions": []}.
 `,
 });
 
@@ -58,74 +56,74 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
   async (input) => {
     const { firestore } = initializeServerFirebase();
 
-    // 1. Get User Profile for Trade/Context
+    // 1. Fetch User Data
     const userProfileSnap = await firestore.collection('users').doc(input.userId).get();
     const userTrade = userProfileSnap.exists ? userProfileSnap.data()?.trade : 'General Business';
-    
-    // 2. Get Custom Category Rules
     const userMappings = await getUserCategoryMappings(firestore, input.userId);
     
-    // 3. [NEW] Build the "Property Dossier"
-    const propertiesSnapshot = await firestore.collection('properties').where('userId', '==', input.userId).get();
-    const propertyDossier: any[] = [];
-    propertiesSnapshot.forEach(doc => {
-      const data = doc.data();
-      propertyDossier.push({
-        id: doc.id,
-        name: data.name,
-        address: data.address,
-        tenants: data.tenants?.map((t: any) => `${t.firstName} ${t.lastName}`) || [],
-        lender: data.mortgage?.lenderName,
-      });
+    // 2. Fetch Property Context
+    const propsSnap = await firestore.collection('properties').where('userId', '==', input.userId).get();
+    
+    const propertyIndex = propsSnap.docs.map((d:any) => {
+        const data = d.data();
+        const keywords = [];
+        if (data.name) keywords.push(data.name.toLowerCase());
+        if (data.address?.street) {
+            keywords.push(data.address.street.toLowerCase());
+            const parts = data.address.street.split(' ');
+            if (parts.length > 1) keywords.push(parts[1].toLowerCase()); 
+        }
+        if (data.mortgage?.lenderName) keywords.push(data.mortgage.lenderName.toLowerCase());
+        if (data.tenants && Array.isArray(data.tenants)) {
+            data.tenants.forEach((t:any) => {
+                if (t.firstName) keywords.push(t.firstName.toLowerCase());
+                if (t.lastName) keywords.push(t.lastName.toLowerCase());
+                if (t.firstName && t.lastName) keywords.push(`${t.firstName} ${t.lastName}`.toLowerCase());
+            });
+        }
+        return {
+            id: d.id,
+            keywords: keywords.filter((k: string) => k.length > 2)
+        };
     });
 
-    const flowInput = { 
-        ...input, 
-        userMappings, 
-        userTrade 
-    };
+    const flowInput = { ...input, userMappings, userTrade };
     
-    // 4. AI Does the Thinking (Returns Generic Text categories)
+    // 3. AI Categorization
     const { output } = await extractAndCategorizePrompt(flowInput);
+    
     if (!output || !output.transactions) return { transactions: [] };
 
-    // 5. THE BRIDGE: Convert Text -> Account IDs using the Dossier
+    // 4. THE STRICT BRIDGE
     const resolvedTransactions = await Promise.all(output.transactions.map(async (tx) => {
         
-        // A. [NEW] Find the Property ID using Deep Context
-        const lowerCaseDesc = tx.description.toLowerCase();
-        let matchedPropertyId: string | null = null;
+        // A. Identify Property
+        let matchedPropertyId = null;
+        const descLower = tx.description.toLowerCase();
         
-        for (const prop of propertyDossier) {
-          // Match by Tenant Name (for rent payments)
-          if (prop.tenants.some((tenant: string) => lowerCaseDesc.includes(tenant.toLowerCase()))) {
-            matchedPropertyId = prop.id;
-            break; 
-          }
-          // Match by Lender Name (for mortgage payments)
-          if (prop.lender && lowerCaseDesc.includes(prop.lender.toLowerCase())) {
-            matchedPropertyId = prop.id;
-            break;
-          }
-          // Match by Address (fallback for general expenses)
-          if (prop.address?.street && lowerCaseDesc.includes(prop.address.street.toLowerCase())) {
-            matchedPropertyId = prop.id;
-            break;
-          }
+        for (const prop of propertyIndex) {
+            for (const keyword of prop.keywords) {
+                if (descLower.includes(keyword)) {
+                    matchedPropertyId = prop.id;
+                    break; 
+                }
+            }
+            if (matchedPropertyId) break; 
         }
-        
-        // B. Find the Account ID based on the Category Name and (now known) Property
+
+        // B. Find the Account ID (Now passing 'amount' for safety check)
         const resolvedAccount = await resolveAccountId(
             firestore, 
             input.userId, 
-            matchedPropertyId, // Use the matched property ID
-            tx.subcategory
+            matchedPropertyId, 
+            tx.subcategory,
+            tx.amount // <--- NEW: Pass amount to check Income vs Expense
         );
 
         return {
             ...tx,
-            accountId: resolvedAccount?.id || undefined, 
-            accountName: resolvedAccount?.name || undefined, // ADD THIS
+            accountId: resolvedAccount?.id || undefined,
+            accountName: resolvedAccount?.name || undefined,
             status: resolvedAccount ? 'ready' : 'review' 
         };
     }));
@@ -134,84 +132,94 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
   }
 );
 
-// --- THE UPGRADED RESOLVER FUNCTION ---
-async function resolveAccountId(firestore: any, userId: string, propertyId: string | null, categoryName: string): Promise<{ id: string, name: string } | null> {
+// --- STRICT RESOLVER FUNCTION ---
+async function resolveAccountId(firestore: any, userId: string, propertyId: string | null, categoryName: string, amount: number) {
     const accountsRef = firestore.collection('accounts');
     
-    // 1. Build Query: Search all accounts for this user
-    // (If propertyId exists, we restrict search. If null, we search everything).
+    // 1. Base Query
     let query = accountsRef.where('userId', '==', userId);
+    
+    // 2. Strict Property Scope
     if (propertyId) {
         query = query.where('propertyId', '==', propertyId);
     }
+    // IMPORTANT: If propertyId is NULL (we didn't find "Dallas" in your properties),
+    // we fetch ALL accounts, but we will FILTER OUT specific property accounts later.
 
     const snapshot = await query.get();
     
     let bestMatchId = null;
+    let bestMatchName = "";
     let bestMatchScore = 0;
 
-    // 2. Keyword Mapping (AI Term -> Likely Ledger Words)
     const keywordMap: Record<string, string[]> = {
-        // INCOME
         "Rental Income": ["Rent", "Lease", "Income"],
         "Interest Income": ["Interest"],
-        
-        // EXPENSES - REPAIRS & OPS
         "Repairs & Maintenance": ["Maint", "Repair", "Fix", "Ops", "Contractor", "Handyman"],
-        "Cleaning Services": ["Maint", "Ops", "Cleaning", "Janitorial", "Make Ready"], // <--- FIX FOR POOL CLEANING
+        "Cleaning Services": ["Maint", "Ops", "Cleaning", "Janitorial", "Make Ready"],
         "Landscaping": ["Maint", "Ops", "Landscap", "Lawn", "Yard"], 
         "Contractor Payments (non-COGS)": ["Contractor", "Labor", "Service", "Maint"],
-        
-        // EXPENSES - UTILITIES
         "Utilities (Electricity, Water, Gas)": ["Utilities", "Electric", "Water", "Gas", "Power", "Edison", "Atmos", "City"],
-        
-        // EXPENSES - ADMIN
         "Office Rent": ["Rent", "Lease", "Office"],
         "General & Administrative": ["Gen", "Admin", "Office", "Software", "Supplies"],
         "Professional Services": ["Legal", "Professional", "CPA", "Accounting"],
-        
-        // LIABILITIES / EQUITY
         "Owner’s Draw": ["Draw", "Distribution", "Equity"],
         "Mortgage Interest": ["Mortgage", "Loan", "Interest"], 
         "Property Taxes": ["Tax", "County", "City"],
         "Insurance": ["Insurance", "Policy"]
     };
 
-    // Get the list of words to look for (or just use the category name itself)
-    // We clean the categoryName to remove special chars like ">" or "("
     const cleanCategory = categoryName.split('>').pop()?.trim() || categoryName;
     const searchTerms = keywordMap[cleanCategory] || keywordMap[categoryName] || [cleanCategory];
+    
+    // Detect expected account type
+    const isIncome = amount > 0;
 
-    snapshot.forEach((doc: DocumentData) => {
+    snapshot.forEach((doc: any) => {
         const data = doc.data();
+        
+        // --- SAFETY CHECK 1: The "Stranger Danger" Rule ---
+        // If we didn't identify a property from the description (propertyId is null),
+        // we CANNOT assign this to a ledger that belongs to a specific property.
+        // We only allow assignment to "Global" accounts (where propertyId is missing).
+        // (If you want to allow "guessing" the only property, remove this block, but that caused your bug).
+        if (!propertyId && data.propertyId) {
+            return; // Skip this account. It belongs to a house, and we don't know which one.
+        }
+
+        // --- SAFETY CHECK 2: The "Income/Expense" Rule ---
+        // Don't match "Interest Income" ($1.92) to "Mortgage Interest Expense" account.
+        // Simple check: Account Type vs Transaction Sign
+        if (isIncome && data.type === 'Expense') return; // Don't put income in expense ledger
+        if (!isIncome && data.type === 'Income') return; // Don't put expense in income ledger
+
         const accountName = (data.name || "").toLowerCase();
         const accountSubtype = (data.subtype || "").toLowerCase();
         
-        // Priority 1: Exact Subtype Match (e.g. "Rental Income" == "Rental Income")
+        // Priority 1: Exact Subtype
         if (accountSubtype === cleanCategory.toLowerCase()) {
             if (bestMatchScore < 100) {
                 bestMatchId = doc.id;
+                bestMatchName = data.name;
                 bestMatchScore = 100;
             }
         }
 
-        // Priority 2: Name contains a Keyword (e.g. "Rent - Talia Cir" contains "Rent")
+        // Priority 2: Keyword Match
         for (const term of searchTerms) {
-            const cleanTerm = term.toLowerCase();
-            if (accountName.includes(cleanTerm)) {
-                // If we found a match, but haven't found a "Priority 1" match yet, take this.
-                if (bestMatchScore < 50) {
+            if (accountName.includes(term.toLowerCase())) {
+                // If we are scoped to a specific property, matches are trustworthy (90).
+                // If we are global, matches are riskier (50).
+                const score = propertyId ? 90 : 50; 
+                if (bestMatchScore < score) {
                      bestMatchId = doc.id;
-                     bestMatchScore = 50;
+                     bestMatchName = data.name;
+                     bestMatchScore = score;
                 }
             }
         }
     });
 
-    if (bestMatchId) {
-        // Find the doc again to get the name (or store it during the loop)
-        const doc = snapshot.docs.find((d:any) => d.id === bestMatchId);
-        return { id: bestMatchId, name: doc.data().name };
-    }
+    if (bestMatchId) return { id: bestMatchId, name: bestMatchName };
     return null;
 }
