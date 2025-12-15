@@ -69,6 +69,7 @@ interface Transaction {
   // AI Fields
   confidence?: number;
   accountId?: string;
+  accountName?: string; // Add this
   status?: 'posted' | 'review' | 'error' | 'ready';
 }
 
@@ -308,8 +309,23 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
-                          <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
-                          {/* THIS IS WHERE THE RATING APPEARS */}
+                          
+                          {/* IF LINKED: Show the Real Ledger Name */}
+                          {transaction.accountName ? (
+                            <div className="flex flex-col">
+                                <span className="font-semibold text-sm text-slate-900">
+                                  {transaction.accountName}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  AI: {transaction.subcategory}
+                                </span>
+                            </div>
+                          ) : (
+                            /* ELSE: Show the Generic Category Editor */
+                            <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
+                          )}
+
+                          {/* The Status Badge */}
                           <StatusIndicator transaction={transaction} />
                       </div>
                     </TableCell>

@@ -25,8 +25,8 @@ const AIGeneratedTransactionSchema = z.object({
 
 // This is the final shape of the transaction after our code processes it
 export const CategorizedTransactionSchema = AIGeneratedTransactionSchema.extend({
-    // FIX: Make these OPTIONAL so the AI doesn't crash validation
     accountId: z.string().optional().describe('The resolved Firestore ID.'),
+    accountName: z.string().optional().describe('The name of the resolved ledger account.'),
     status: z.enum(['ready', 'needs_review', 'review']).optional().describe('Processing status'),
 });
 export type CategorizedTransaction = z.infer<typeof CategorizedTransactionSchema>;

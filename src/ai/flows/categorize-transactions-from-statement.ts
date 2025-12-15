@@ -115,7 +115,7 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
         }
         
         // B. Find the Account ID based on the Category Name and (now known) Property
-        const accountId = await resolveAccountId(
+        const resolvedAccount = await resolveAccountId(
             firestore, 
             input.userId, 
             matchedPropertyId, // Use the matched property ID
@@ -124,8 +124,9 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
 
         return {
             ...tx,
-            accountId: accountId || undefined, 
-            status: accountId ? 'ready' : 'review' 
+            accountId: resolvedAccount?.id || undefined, 
+            accountName: resolvedAccount?.name || undefined, // ADD THIS
+            status: resolvedAccount ? 'ready' : 'review' 
         };
     }));
 
@@ -134,7 +135,7 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
 );
 
 // --- THE UPGRADED RESOLVER FUNCTION ---
-async function resolveAccountId(firestore: any, userId: string, propertyId: string | null, categoryName: string) {
+async function resolveAccountId(firestore: any, userId: string, propertyId: string | null, categoryName: string): Promise<{ id: string, name: string } | null> {
     const accountsRef = firestore.collection('accounts');
     
     // 1. Build Query: Search all accounts for this user
@@ -207,5 +208,10 @@ async function resolveAccountId(firestore: any, userId: string, propertyId: stri
         }
     });
 
-    return bestMatchId;
+    if (bestMatchId) {
+        // Find the doc again to get the name (or store it during the loop)
+        const doc = snapshot.docs.find((d:any) => d.id === bestMatchId);
+        return { id: bestMatchId, name: doc.data().name };
+    }
+    return null;
 }
