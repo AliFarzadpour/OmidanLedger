@@ -18,6 +18,7 @@ import {
   BookUser,
   Briefcase,
   Book,
+  Users,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
@@ -32,6 +33,12 @@ const primaryMenuItems = [
 const secondaryMenuItems = [
     { href: '/dashboard/onboarding/opening-balances', label: 'Bookkeeping Setup', icon: BookUser },
 ]
+
+const salesMenuItems = [
+    { href: '/dashboard/sales/rent-collection', label: 'Properties', icon: BookUser },
+    { href: '/dashboard/sales/vendors', label: 'Vendors', icon: Users },
+]
+
 
 export function MainNav() {
   const pathname = usePathname();
@@ -53,6 +60,32 @@ export function MainNav() {
         </SidebarMenuItem>
       ))}
     </SidebarMenu>
+
+    <SidebarSeparator />
+
+    <SidebarGroup>
+        <SidebarGroupLabel className="flex items-center">
+            <Briefcase className="mr-2" />
+            <span>Sales & Invoicing</span>
+        </SidebarGroupLabel>
+        <SidebarGroupContent>
+             <SidebarMenu>
+                {salesMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                        as={Link}
+                        href={item.href}
+                        isActive={pathname.startsWith(item.href)}
+                        tooltip={item.label}
+                    >
+                        <item.icon />
+                        <span>{item.label}</span>
+                    </SidebarMenuButton>
+                    </SidebarMenuItem>
+                ))}
+            </SidebarMenu>
+        </SidebarGroupContent>
+    </SidebarGroup>
     
     <SidebarSeparator />
     

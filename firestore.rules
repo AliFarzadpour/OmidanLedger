@@ -61,5 +61,11 @@ service cloud.firestore {
       // Users can only delete properties they own.
       allow delete: if isOwner(resource.data.userId);
     }
+
+    match /vendors/{vendorId} {
+        // Users can manage their own vendors.
+        allow list, create, update, delete: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow read: if isOwner(resource.data.userId);
+    }
   }
 }

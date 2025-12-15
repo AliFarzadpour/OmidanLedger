@@ -356,6 +356,23 @@
         }
       },
       "required": ["id", "userId", "name", "address"]
+    },
+    "Vendor": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Vendor",
+      "type": "object",
+      "description": "Represents a vendor or professional contact for services.",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the Vendor." },
+        "userId": { "type": "string", "description": "The user who owns this vendor record." },
+        "name": { "type": "string", "description": "The name of the vendor contact." },
+        "company": { "type": "string", "description": "The vendor's company name, if applicable." },
+        "role": { "type": "string", "description": "The service or role the vendor provides (e.g., Plumber, Electrician)." },
+        "phone": { "type": "string", "description": "The vendor's phone number." },
+        "email": { "type": "string", "description": "The vendor's email address.", "format": "email" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of when the vendor was added." }
+      },
+      "required": ["id", "userId", "name", "role"]
     }
   },
   "auth": {
@@ -440,8 +457,24 @@
             }
           ]
         }
+      },
+      {
+        "path": "/vendors/{vendorId}",
+        "definition": {
+          "entityName": "Vendor",
+          "schema": {
+            "$ref": "#/backend/entities/Vendor"
+          },
+          "description": "Stores user-specific vendor and contractor contacts. Access is restricted to the owning user via the 'userId' field.",
+          "params": [
+            {
+              "name": "vendorId",
+              "description": "The unique ID of the vendor."
+            }
+          ]
+        }
       }
     ],
-    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. This structure enables simple and secure access rules. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries for reporting features, such as the General Ledger and AI-powered analysis. These queries require a specific security rule allowing a user"
+    "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document."
   }
 }
