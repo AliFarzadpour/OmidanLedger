@@ -39,7 +39,7 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
     invoiceNumber: '',
     description: '',
     date: new Date(),
-    dueDate: new Date(new Date().setDate(new Date().getDate() + 30)), // Default net 30
+    dueDate: new Date(new Date().setDate(new Date().getDate() + 30)), 
   });
 
   // 1. Fetch Properties on Load
@@ -56,24 +56,23 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
   // 2. When Property Changes -> Fetch ITS Ledger Accounts
   useEffect(() => {
     const loadAccounts = async () => {
-      if (!selectedPropertyId || !firestore) return;
+      if (!selectedPropertyId || !firestore || !user) return; // Added user check
       
-      // We only want EXPENSE accounts for the dropdown
       const q = query(
         collection(firestore, 'accounts'), 
         where('propertyId', '==', selectedPropertyId),
-        where('type', '==', 'Expense')
+        where('type', '==', 'Expense'),
+        where('userId', '==', user.uid) // <--- FIXED: ADDED USER ID CHECK
       );
       const snap = await getDocs(q);
       setPropertyAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     loadAccounts();
-  }, [selectedPropertyId, firestore]);
+  }, [selectedPropertyId, firestore, user]); // Added user to dependency array
 
   // 3. Auto-Select Expense Account if Vendor has a Default
   useEffect(() => {
     if (selectedVendor?.defaultCategory && propertyAccounts.length > 0) {
-       // Try to find an account that matches the vendor's default category string
        const match = propertyAccounts.find(acc => 
           acc.name.toLowerCase().includes(selectedVendor.defaultCategory.toLowerCase()) ||
           acc.subtype?.toLowerCase().includes(selectedVendor.defaultCategory.toLowerCase())
@@ -83,7 +82,7 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
   }, [selectedVendor, propertyAccounts]);
 
   const handleSubmit = async () => {
-    if (!user || !firestore) return;
+    if (!user) return;
     if (!selectedPropertyId || !selectedVendor || !formData.amount || !selectedExpenseAccountId) {
       toast({ variant: "destructive", title: "Missing Fields", description: "Please fill out all required fields." });
       return;
@@ -94,7 +93,7 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
       const batch = writeBatch(firestore);
       const amount = parseFloat(formData.amount);
 
-      // A. Create the Bill Record (The Source Document)
+      // A. Create the Bill Record
       const billRef = doc(collection(firestore, 'bills'));
       const property = properties.find(p => p.id === selectedPropertyId);
       
@@ -105,11 +104,9 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
         vendorId: selectedVendor.id,
         vendorName: selectedVendor.name,
         expenseAccountId: selectedExpenseAccountId,
-        
         amount: amount,
-        balance: amount, // Initially unpaid
+        balance: amount,
         status: 'unpaid',
-        
         invoiceNumber: formData.invoiceNumber,
         description: formData.description,
         date: formData.date.toISOString(),
@@ -117,10 +114,9 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
         createdAt: new Date().toISOString()
       });
 
-      // B. DOUBLE ENTRY ACCOUNTING LOGIC
+      // B. DOUBLE ENTRY ACCOUNTING
       
-      // 1. CREDIT: Accounts Payable (Liability Increases)
-      // We need to find the AP account ID for this property. 
+      // 1. CREDIT: Accounts Payable
       const apAccountRef = property?.accounting?.accountsPayableAccount 
          ? doc(firestore, 'accounts', property.accounting.accountsPayableAccount)
          : null;
@@ -129,7 +125,7 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
          batch.update(apAccountRef, { balance: increment(amount) });
       }
 
-      // 2. DEBIT: The Expense Account (Expense Increases)
+      // 2. DEBIT: Expense Account
       const expenseRef = doc(firestore, 'accounts', selectedExpenseAccountId);
       batch.update(expenseRef, { balance: increment(amount) });
 
@@ -137,8 +133,6 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
 
       toast({ title: "Bill Saved", description: `Recorded $${amount} payable to ${selectedVendor.name}` });
       setIsOpen(false);
-      
-      // Reset Form
       setFormData({ ...formData, amount: '', invoiceNumber: '', description: '' });
       setSelectedVendor(null);
 
@@ -167,7 +161,6 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
         </DialogHeader>
         
         <div className="grid gap-6 py-4">
-           
            {/* ROW 1: Context */}
            <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">
@@ -183,7 +176,6 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
               </div>
               <div className="grid gap-2">
                  <Label>Vendor *</Label>
-                 {/* Reusing your Rolodex Component */}
                  <VendorSelector onSelect={setSelectedVendor} />
                  {selectedVendor && <div className="text-xs text-muted-foreground mt-1">Selected: {selectedVendor.name}</div>}
               </div>
@@ -210,7 +202,6 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
                        {propertyAccounts.map(acc => (
                           <SelectItem key={acc.id} value={acc.id}>
                              {acc.name.replace(` - ${properties.find(p=>p.id===selectedPropertyId)?.name}`, '')} 
-                             {/* ^ Cleans up name for display */}
                           </SelectItem>
                        ))}
                     </SelectContent>
@@ -267,7 +258,6 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
   );
 }
 
-// Simple Date Picker Sub-component
 function DatePicker({ date, setDate }: { date: Date, setDate: (d: Date | undefined) => void }) {
    return (
      <Popover>
@@ -283,3 +273,5 @@ function DatePicker({ date, setDate }: { date: Date, setDate: (d: Date | undefin
      </Popover>
    );
 }
+
+    
