@@ -12,11 +12,15 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { MasterCategoryFramework } from './category-framework';
+import { initializeServerFirebase } from '@/ai/utils';
+import { doc, getDoc } from 'firebase/firestore';
 
 const CategorizeTransactionsInputSchema = z.object({
   transactionDescription: z
     .string()
     .describe('The description of the transaction from the bank or credit card statement.'),
+  userId: z.string().describe("The user's Firebase UID."),
+  userTrade: z.string().optional().describe('The industry or trade of the business (e.g., "Plumber", "Landlord").'),
 });
 export type CategorizeTransactionsInput = z.infer<typeof CategorizeTransactionsInputSchema>;
 
@@ -42,6 +46,9 @@ const categorizeTransactionsPrompt = ai.definePrompt({
   prompt: `You are a world-class financial bookkeeping expert specializing in AI-powered transaction categorization.
 Your task is to analyze a single transaction description and classify it with extreme accuracy according to the provided three-level Master Category Framework.
 
+**Context:**
+The business operates in the **{{{userTrade}}}** industry.
+
 **Master Category Framework:**
 ${MasterCategoryFramework}
 
@@ -64,7 +71,20 @@ const categorizeTransactionsFlow = ai.defineFlow(
     outputSchema: CategorizeTransactionsOutputSchema,
   },
   async input => {
-    const {output} = await categorizeTransactionsPrompt(input);
+    const { firestore } = initializeServerFirebase();
+
+    const userProfileSnap = await getDoc(doc(firestore, 'users', input.userId));
+
+    const userTrade = userProfileSnap.exists()
+        ? userProfileSnap.data().trade
+        : 'General Business';
+    
+    const flowInput = {
+        ...input,
+        userTrade,
+    };
+
+    const {output} = await categorizeTransactionsPrompt(flowInput);
     return output!;
   }
 );

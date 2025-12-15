@@ -16,6 +16,7 @@ import {
 } from './schemas';
 import { MasterCategoryFramework } from './category-framework';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
+import { doc, getDoc } from 'firebase/firestore';
 
 
 export async function categorizeTransactionsFromStatement(input: StatementInput): Promise<StatementOutput> {
@@ -27,7 +28,10 @@ const extractAndCategorizePrompt = ai.definePrompt({
   input: {schema: StatementInputSchema},
   output: {schema: StatementOutputSchema},
   prompt: `You are a world-class financial bookkeeping expert specializing in AI-powered transaction extraction and categorization from financial statements.
-Your task is to analyze the provided financial statement (PDF or CSV), extract every single transaction, and classify each one with extreme accuracy according to the provided three-level Master Category Framework.
+  
+  **Context:**
+  You are performing bookkeeping for a business in the **{{{userTrade}}}** industry. 
+  Use this context to infer the business purpose of ambiguous transactions (e.g., materials, software, travel).
 
 **User's Custom Rules (These are the source of truth and MUST be followed):**
 {{{userMappings}}}
@@ -59,8 +63,25 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
   },
   async (input) => {
     const { firestore } = initializeServerFirebase();
-    const userMappings = await getUserCategoryMappings(firestore, input.userId);
-    const flowInput = { ...input, userMappings };
+
+    // 1. Parallel Fetch: Get Mappings AND User Profile
+    const [userMappings, userProfileSnap] = await Promise.all([
+      getUserCategoryMappings(firestore, input.userId),
+      getDoc(doc(firestore, 'users', input.userId))
+    ]);
+
+    // 2. Extract the trade (default to 'General Business' if missing)
+    const userTrade = userProfileSnap.exists() 
+      ? userProfileSnap.data().trade 
+      : 'General Business';
+
+    // 3. Pass trade to the prompt
+    const flowInput = { 
+      ...input, 
+      userMappings, 
+      userTrade // <--- Passing the new context
+    };
+
     const { output } = await extractAndCategorizePrompt(flowInput);
     return output!;
   }

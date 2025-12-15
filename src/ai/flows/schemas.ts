@@ -8,6 +8,7 @@ export const StatementInputSchema = z.object({
     ),
   userId: z.string().describe("The user's Firebase UID."),
   userMappings: z.string().optional().describe("User's custom category mappings as a string."),
+  userTrade: z.string().optional().describe('The industry or trade of the business (e.g., "Plumber", "Landlord").'),
 });
 export type StatementInput = z.infer<typeof StatementInputSchema>;
 
