@@ -97,9 +97,9 @@ const propertySchema = z.object({
   }),
   tenants: z.array(z.object({
     id: z.string().optional(), 
-    firstName: z.string(),
-    lastName: z.string(),
-    email: z.string().email(),
+    firstName: z.string().min(1, "First Name is required"), // Validation
+    lastName: z.string().min(1, "Last Name is required"),   // Validation
+    email: z.string().email("Valid email is required"),     // Validation
     phone: z.string().optional(),
     leaseStart: z.string().optional(),
     leaseEnd: z.string().optional(),
@@ -154,10 +154,8 @@ export function PropertyForm({
   const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
 
-  // FIX 1: Track the Property ID in state.
+  // FIX 1: Track ID state
   const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
-
-  // FIX 2: Determine mode based on the state
   const isEditMode = !!currentPropertyId;
 
   const form = useForm<PropertyFormValues>({
@@ -225,7 +223,7 @@ export function PropertyForm({
                 return ref.id;
             };
 
-            // Assets & Liabilities
+            // Accounting Setup (Ledgers)
             accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', data.mortgage?.purchasePrice || 0);
             accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
 
@@ -236,11 +234,9 @@ export function PropertyForm({
                 accountingMap.liabilityAccount = createAccount(`Mortgage - ${data.name}`, 'Liability', 'Long Term Liability', data.mortgage?.loanBalance || 0);
             }
 
-            // Income
             accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
             accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
 
-            // Expenses
             accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
             accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
             accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
@@ -262,16 +258,17 @@ export function PropertyForm({
             accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
             accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
 
+            // FIX 2: Do NOT overwrite data with empty arrays. Use ...data as the source of truth.
             batch.set(propertyRef, {
                 userId: user.uid,
-                ...data,
+                ...data, // This contains tenants, mortgage, etc. as filled in the form
                 createdAt: timestamp,
                 accounting: accountingMap
             });
 
             await batch.commit();
 
-            // FIX 3: Update state so next save is an Update, not a Create
+            // FIX 3: Update state so subsequent saves are updates
             setCurrentPropertyId(propertyRef.id);
 
             toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
@@ -285,6 +282,16 @@ export function PropertyForm({
     } finally {
         setIsSaving(false);
     }
+  };
+
+  // Validation Error Handler
+  const onError = (errors: any) => {
+    console.log("Form Errors:", errors);
+    toast({ 
+        variant: "destructive", 
+        title: "Validation Error", 
+        description: "Please check the form for missing required fields (e.g. Email)." 
+    });
   };
 
   const navItems = [
@@ -326,7 +333,8 @@ export function PropertyForm({
         ))}
         <Separator className="my-4" />
         <div className="px-1">
-           <Button className="w-full bg-green-600 hover:bg-green-700" onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
+           {/* ADDED onError HANDLER HERE */}
+           <Button className="w-full bg-green-600 hover:bg-green-700" onClick={form.handleSubmit(onSubmit, onError)} disabled={isSaving}>
              {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> {isEditMode ? 'Save Changes' : 'Save & Setup'}</>}
            </Button>
         </div>
@@ -347,7 +355,8 @@ export function PropertyForm({
               </SelectContent>
             </Select>
          </div>
-         <Button className="w-full bg-green-600 hover:bg-green-700 shadow-md" onClick={form.handleSubmit(onSubmit)} disabled={isSaving}>
+         {/* ADDED onError HANDLER HERE TOO */}
+         <Button className="w-full bg-green-600 hover:bg-green-700 shadow-md" onClick={form.handleSubmit(onSubmit, onError)} disabled={isSaving}>
              {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> {isEditMode ? 'Save Changes' : 'Save & Setup'}</>}
          </Button>
       </div>
@@ -376,11 +385,23 @@ export function PropertyForm({
                       </Button>
                       
                       <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
-                         <div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div>
-                         <div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div>
+                         <div className="grid gap-2">
+                            <Label className="text-xs">First Name</Label>
+                            <Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} />
+                            {form.formState.errors.tenants?.[index]?.firstName && <span className="text-red-500 text-[10px]">Required</span>}
+                         </div>
+                         <div className="grid gap-2">
+                            <Label className="text-xs">Last Name</Label>
+                            <Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} />
+                            {form.formState.errors.tenants?.[index]?.lastName && <span className="text-red-500 text-[10px]">Required</span>}
+                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4 mb-4">
-                         <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div>
+                         <div className="grid gap-2">
+                            <Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label>
+                            <Input className="bg-white" {...form.register(`tenants.${index}.email`)} />
+                            {form.formState.errors.tenants?.[index]?.email && <span className="text-red-500 text-[10px]">Valid Email Required</span>}
+                         </div>
                          <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div>
                       </div>
                       
