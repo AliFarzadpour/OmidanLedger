@@ -8,13 +8,6 @@ import { MainNav } from '@/components/dashboard/main-nav';
 import { UserNav } from '@/components/dashboard/user-nav';
 import { Logo } from '@/components/logo';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
   SidebarProvider,
   Sidebar,
   SidebarHeader,
@@ -67,18 +60,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <Logo />
         </SidebarHeader>
         <SidebarContent className="p-2">
-          <div className="p-2">
-            <Select defaultValue="2024">
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select Fiscal Year" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="2024">Fiscal Year 2024</SelectItem>
-                <SelectItem value="2023">Fiscal Year 2023</SelectItem>
-                <SelectItem value="2022">Fiscal Year 2022</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <MainNav />
         </SidebarContent>
         <SidebarFooter className="p-4">
@@ -96,5 +77,3 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </SidebarProvider>
   );
 }
-
-    
