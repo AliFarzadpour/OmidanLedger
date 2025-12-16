@@ -23,6 +23,7 @@ import { doc, writeBatch, collection, setDoc, updateDoc } from 'firebase/firesto
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PropertyFinancials } from './property-financials';
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
@@ -89,7 +90,7 @@ const propertySchema = z.object({
     responsibility: z.enum(['tenant', 'landlord']),
     providerName: z.string().optional(),
     providerContact: z.string().optional(),
-  })).optional(),
+  })).optional(), // Made optional to prevent crashes, but we default it below
   access: z.object({
     gateCode: z.string().optional(),
     lockboxCode: z.string().optional(),
@@ -200,7 +201,9 @@ export function PropertyForm({
   });
 
   useEffect(() => {
-    if (initialData) {
+    // Only reset if we actually switched to a DIFFERENT property
+    // This prevents the infinite loop if initialData is unstable but the ID is the same.
+    if (initialData && initialData.id !== currentPropertyId) {
       const merged = {
           ...DEFAULT_VALUES,
           ...initialData,
@@ -208,11 +211,13 @@ export function PropertyForm({
           access: initialData.access || DEFAULT_VALUES.access,
           tenants: initialData.tenants || [],
           preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
+          mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
+          management: { ...DEFAULT_VALUES.management, ...initialData.management },
       };
       form.reset(merged);
       setCurrentPropertyId(initialData.id);
     }
-  }, [initialData, form]);
+  }, [initialData, form, currentPropertyId]); // Added currentPropertyId to deps
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
