@@ -14,7 +14,8 @@ import {
   CheckCircle2, 
   FileText,
   Loader2,
-  MoreHorizontal
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,26 +26,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// A small isolated component to prevent the Table Loop Error
-function InvoiceRowActions({ invoiceId }: { invoiceId: string }) {
-  return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="h-8 w-8 p-0">
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem asChild>
-          <Link href={`/dashboard/sales/services/${invoiceId}`}>Edit / View</Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-red-600">
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
 
 export default function ServiceInvoicesPage() {
   const { user } = useUser();
@@ -196,7 +177,16 @@ export default function ServiceInvoicesPage() {
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <InvoiceRowActions invoiceId={inv.id} />
+                    <div className="flex justify-end items-center gap-2">
+                      <Button variant="ghost" size="icon" asChild className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                        <Link href={`/dashboard/sales/services/${inv.id}`}>
+                          <Pencil className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
