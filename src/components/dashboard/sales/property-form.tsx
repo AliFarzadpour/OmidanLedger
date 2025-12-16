@@ -23,12 +23,9 @@ import { doc, writeBatch, collection, setDoc, updateDoc } from 'firebase/firesto
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { PropertyFinancials } from './property-financials';
-
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
-  id: z.string().optional(),
   name: z.string().min(1, "Nickname is required"),
   type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
   address: z.object({
@@ -92,7 +89,7 @@ const propertySchema = z.object({
     responsibility: z.enum(['tenant', 'landlord']),
     providerName: z.string().optional(),
     providerContact: z.string().optional(),
-  })).optional(), 
+  })).optional(),
   access: z.object({
     gateCode: z.string().optional(),
     lockboxCode: z.string().optional(),
@@ -168,7 +165,6 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }]
 };
 
-// --- MAIN COMPONENT ---
 export function PropertyForm({ 
   onSuccess, 
   initialData,
@@ -190,7 +186,6 @@ export function PropertyForm({
   const mergedValues = initialData ? {
       ...DEFAULT_VALUES,
       ...initialData,
-      id: initialData.id,
       utilities: initialData.utilities || DEFAULT_VALUES.utilities,
       access: initialData.access || DEFAULT_VALUES.access,
       tenants: initialData.tenants || [],
@@ -281,14 +276,13 @@ export function PropertyForm({
 
             batch.set(propertyRef, {
                 userId: user.uid,
-                ...data,
+                ...data, 
                 createdAt: timestamp,
                 accounting: accountingMap
             });
 
             await batch.commit();
             setCurrentPropertyId(propertyRef.id);
-            form.setValue('id', propertyRef.id);
             toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
         }
         
@@ -304,7 +298,6 @@ export function PropertyForm({
 
   const onError = (errors: any) => {
     console.log("Form Errors:", errors);
-    
     const missingFields = [];
     if (errors.utilities) missingFields.push("Utilities configuration");
     if (errors.address) missingFields.push("Address details");
@@ -314,15 +307,13 @@ export function PropertyForm({
         ? `Missing required info in: ${missingFields.join(", ")}.` 
         : "Please check all tabs for red error messages.";
 
-    toast({ 
-        variant: "destructive", 
-        title: "Validation Failed", 
-        description: desc
-    });
+    toast({ variant: "destructive", title: "Validation Failed", description: desc });
   };
 
   const navItems = [
     { id: 'tenants', label: 'Tenants', icon: UserCheck },
+    { id: 'vendors', label: 'Vendors', icon: Users },
+    { id: 'general', label: 'General Info', icon: Building2 },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
@@ -338,11 +329,6 @@ export function PropertyForm({
       
       {/* SIDEBAR */}
       <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
-        <div className="p-2">
-            <h3 className="font-bold text-lg">{form.getValues('name') || 'New Property'}</h3>
-            <p className="text-xs text-muted-foreground">{form.getValues('address.street')}</p>
-        </div>
-        <Separator className="my-2" />
         {navItems.map((item) => (
           <button
             key={item.id}
@@ -461,7 +447,54 @@ export function PropertyForm({
             </CardContent>
           </Card>
         )}
-        
+
+        {activeSection === 'vendors' && (
+            <p className="text-center text-muted-foreground py-10">The central vendor management page is under development.</p>
+        )}
+
+        {activeSection === 'general' && (
+          <Card>
+            <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-2">
+                  <Label>Nickname</Label>
+                  <Input {...form.register('name')} />
+                  {form.formState.errors.name && <span className="text-red-500 text-xs">Required</span>}
+              </div>
+              <div className="grid gap-2"><Label>Type</Label>
+                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
+                   <SelectTrigger><SelectValue/></SelectTrigger>
+                   <SelectContent>
+                      <SelectItem value="single-family">Single Family</SelectItem>
+                      <SelectItem value="multi-family">Multi-Family</SelectItem>
+                      <SelectItem value="condo">Condo</SelectItem>
+                      <SelectItem value="commercial">Commercial</SelectItem>
+                   </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                  <Label>Address</Label>
+                  <Input placeholder="123 Main St" {...form.register('address.street')} />
+                  {form.formState.errors.address?.street && <span className="text-red-500 text-xs">Required</span>}
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                 <div className="grid gap-2">
+                    <Input placeholder="City" {...form.register('address.city')} />
+                    {form.formState.errors.address?.city && <span className="text-red-500 text-xs">Required</span>}
+                 </div>
+                 <div className="grid gap-2">
+                    <Input placeholder="State" {...form.register('address.state')} />
+                    {form.formState.errors.address?.state && <span className="text-red-500 text-xs">Required</span>}
+                 </div>
+                 <div className="grid gap-2">
+                    <Input placeholder="Zip" {...form.register('address.zip')} />
+                    {form.formState.errors.address?.zip && <span className="text-red-500 text-xs">Required</span>}
+                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {activeSection === 'financials' && (
           <Card>
             <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
