@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
@@ -10,6 +10,7 @@ import { ArrowLeft, Edit } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form'; 
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials'; 
+import { PropertySetupBanner } from '@/components/dashboard/sales/property-setup-banner';
 import { 
   Dialog, 
   DialogContent, 
@@ -28,26 +29,26 @@ import {
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
   const firestore = useFirestore();
   const [property, setProperty] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
+  
+  const defaultTab = searchParams.get('tab') || 'overview';
 
-  // FIX: Replaced useDocument with a direct useEffect listener
-  // This prevents the "stuck loading" bug if the hook doesn't resolve.
   useEffect(() => {
-    if (!firestore || !id) return; // Wait for DB connection
+    if (!firestore || !id) return;
 
     const docRef = doc(firestore, 'properties', id as string);
     
-    // Real-time listener
     const unsubscribe = onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
             setProperty({ id: docSnap.id, ...docSnap.data() });
         } else {
-            setProperty(null); // Document deleted or doesn't exist
+            setProperty(null);
         }
-        setIsLoading(false); // Data loaded (or confirmed missing)
+        setIsLoading(false);
     }, (error) => {
         console.error("Error fetching property:", error);
         setIsLoading(false);
@@ -61,7 +62,6 @@ export default function PropertyDetailsPage() {
 
   return (
     <div className="space-y-6 p-6">
-      {/* HEADER */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/properties">
@@ -73,7 +73,6 @@ export default function PropertyDetailsPage() {
           </div>
         </div>
         
-        {/* EDIT BUTTON (Opens the Form Modal) */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogTrigger asChild>
             <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
@@ -85,15 +84,17 @@ export default function PropertyDetailsPage() {
                    Update tenants, mortgage details, and configuration for {property.name}.
                 </DialogDescription>
              </DialogHeader>
-             
-             {/* The Form is strictly for Editing Data */}
-             <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} />
+             <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} defaultTab={defaultTab}/>
           </DialogContent>
         </Dialog>
       </div>
 
-      {/* MAIN TABS */}
-      <Tabs defaultValue="overview" className="w-full">
+      <PropertySetupBanner 
+         propertyId={id as string}
+         propertyData={property} 
+      />
+
+      <Tabs defaultValue={defaultTab} className="w-full">
         <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tenants">Tenants</TabsTrigger>
@@ -101,7 +102,6 @@ export default function PropertyDetailsPage() {
           <TabsTrigger value="leases">Lease Summary</TabsTrigger>
         </TabsList>
 
-        {/* 1. OVERVIEW TAB */}
         <TabsContent value="overview" className="mt-6">
            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
@@ -118,11 +118,9 @@ export default function PropertyDetailsPage() {
                     </CardTitle>
                  </CardHeader>
               </Card>
-              {/* Add more summary widgets here if needed */}
            </div>
         </TabsContent>
 
-        {/* 2. TENANTS TAB (Read Only View) */}
         <TabsContent value="tenants" className="mt-6">
            <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -155,7 +153,6 @@ export default function PropertyDetailsPage() {
            </Card>
         </TabsContent>
 
-        {/* 3. FINANCIALS (Expenses) TAB */}
         <TabsContent value="financials" className="mt-6">
            <PropertyFinancials 
               propertyId={property.id} 
@@ -164,7 +161,6 @@ export default function PropertyDetailsPage() {
            />
         </TabsContent>
 
-        {/* 4. LEASE SUMMARY (Income) TAB */}
         <TabsContent value="leases" className="mt-6">
            <PropertyFinancials 
               propertyId={property.id} 
@@ -172,7 +168,6 @@ export default function PropertyDetailsPage() {
               view="income" 
            />
         </TabsContent>
-
       </Tabs>
     </div>
   );
