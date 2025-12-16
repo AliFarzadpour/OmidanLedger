@@ -23,9 +23,11 @@ import { doc, writeBatch, collection, setDoc, updateDoc } from 'firebase/firesto
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { PropertyFinancials } from './property-financials';
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(1, "Nickname is required"),
   type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
   address: z.object({
@@ -191,6 +193,7 @@ export function PropertyForm({
   const mergedValues = initialData ? {
       ...DEFAULT_VALUES,
       ...initialData,
+      id: initialData.id, // Ensure ID is part of the form values
       utilities: initialData.utilities || DEFAULT_VALUES.utilities,
       access: initialData.access || DEFAULT_VALUES.access,
       tenants: initialData.tenants || [],
@@ -283,13 +286,14 @@ export function PropertyForm({
 
             batch.set(propertyRef, {
                 userId: user.uid,
-                ...data, 
+                ...data,
                 createdAt: timestamp,
                 accounting: accountingMap
             });
 
             await batch.commit();
             setCurrentPropertyId(propertyRef.id);
+            form.setValue('id', propertyRef.id); // Also update form state
             toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
         }
         
@@ -465,46 +469,24 @@ export function PropertyForm({
           </Card>
         )}
 
-        {/* ... KEEP ALL OTHER SECTIONS HERE (rentroll, maintenance, general, financials, management, mortgage, tax, hoa, utilities, access, accounting) ... */}
         {activeSection === 'rentroll' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Lease Summary & Collections</CardTitle>
-              <CardDescription>Report of actual rent collected from transaction history.</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-               <div className="p-6 text-center border-b bg-slate-50/50">
-                  <ArrowDownCircle className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm font-medium text-slate-900">No transactions yet.</p>
-                  <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-                     This report will automatically populate with payment history once you log transactions.
-                  </p>
-               </div>
-               <Table>
-                 <TableHeader><TableRow><TableHead>Date Paid</TableHead><TableHead>Tenant / Description</TableHead><TableHead>Bank Account</TableHead><TableHead className="text-right">Amount Collected</TableHead></TableRow></TableHeader>
-                 <TableBody><TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">Waiting for first payment...</TableCell></TableRow></TableBody>
-               </Table>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+              <PropertyFinancials 
+                propertyId={currentPropertyId || ""}
+                propertyName={form.getValues('name')} 
+                view="income" 
+              />
+          </div>
         )}
 
         {activeSection === 'maintenance' && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle>Maintenance Data Sheet</CardTitle><CardDescription>Synced from Transactions.</CardDescription></div>
-              <Button size="sm" variant="outline"><Receipt className="h-4 w-4 mr-2" /> Log Expense</Button>
-            </CardHeader>
-            <CardContent className="p-0">
-               <div className="p-8 text-center border-b bg-slate-50/50">
-                  <Wrench className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-600 max-w-sm mx-auto">This sheet will automatically populate with maintenance transactions.</p>
-               </div>
-               <Table>
-                 <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead>Vendor</TableHead><TableHead className="text-right">Cost</TableHead><TableHead className="text-right">Status</TableHead></TableRow></TableHeader>
-                 <TableBody><TableRow><TableCell className="text-muted-foreground italic" colSpan={5}>No maintenance records found.</TableCell></TableRow></TableBody>
-               </Table>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+              <PropertyFinancials 
+                propertyId={currentPropertyId || ""}
+                propertyName={form.getValues('name')} 
+                view="expenses" 
+              />
+          </div>
         )}
 
         {activeSection === 'vendors' && (
