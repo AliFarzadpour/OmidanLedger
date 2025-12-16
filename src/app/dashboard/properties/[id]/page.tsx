@@ -1,34 +1,36 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
-import { useDoc, useFirestore } from '@/firebase'; 
+import { useParams } from 'next/navigation';
+import { useDoc } from '@/firebase'; 
 import { doc } from 'firebase/firestore';
+import { useFirestore } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, Wallet, ShieldCheck, Users as UsersIcon, Building } from 'lucide-react';
+import { ArrowLeft, Edit } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form'; 
-import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
+import { PropertyFinancials } from '@/components/dashboard/sales/property-financials'; 
 import { useState } from 'react';
 import { 
   Dialog, 
   DialogContent, 
-  DialogTrigger,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription
+  DialogTrigger, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription 
 } from '@/components/ui/dialog';
-import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Landmark, DollarSign } from 'lucide-react';
-
+// FIX: Added Card imports here
+import { 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  CardDescription 
+} from '@/components/ui/card';
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
   const firestore = useFirestore();
-  const router = useRouter();
   const [isEditOpen, setIsEditOpen] = useState(false);
 
   // Fetch Property Data
@@ -41,28 +43,24 @@ export default function PropertyDetailsPage() {
     refetch(); // Refetch the data to show updates
   };
 
-  if (isLoading) return <div className="p-8 text-center text-muted-foreground">Loading property details...</div>;
-  if (!property) return <div className="p-8 text-center text-muted-foreground">Property not found or you do not have permission to view it.</div>;
+  if (isLoading) return <div className="p-8">Loading property...</div>;
+  if (!property) return <div className="p-8">Property not found.</div>;
 
   return (
-    <div className="space-y-6 p-4 md:p-8">
+    <div className="space-y-6 p-6">
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/properties">
-            <Button variant="ghost" size="icon" aria-label="Back to properties">
-                <ArrowLeft className="h-4 w-4" />
-            </Button>
+            <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-                {property.name}
-                <Badge variant="outline" className="text-sm font-normal">{property.type}</Badge>
-            </h1>
+            <h1 className="text-2xl font-bold">{property.name}</h1>
             <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
           </div>
         </div>
         
+        {/* EDIT BUTTON (Opens the Form Modal) */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogTrigger asChild>
             <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
@@ -83,85 +81,67 @@ export default function PropertyDetailsPage() {
 
       {/* MAIN TABS */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 lg:w-auto lg:inline-flex">
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tenants">Tenants</TabsTrigger>
-          <TabsTrigger value="income">Income</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="income">Income</TabsTrigger>
         </TabsList>
 
+        {/* 1. OVERVIEW TAB */}
         <TabsContent value="overview" className="mt-6">
            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium">Target Rent</CardTitle>
-                    <DollarSign className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">${(property.financials?.targetRent || 0).toLocaleString()}</div>
-                  </CardContent>
-              </Card>
-               <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium">Status</CardTitle>
-                    <Building className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold capitalize">{property.status || 'Active'}</div>
-                  </CardContent>
+                 <CardHeader className="pb-2">
+                    <CardDescription>Target Rent</CardDescription>
+                    <CardTitle className="text-2xl font-bold">${(property.financials?.targetRent || 0).toLocaleString()}</CardTitle>
+                 </CardHeader>
               </Card>
               <Card>
-                  <CardHeader className="flex flex-row items-center justify-between pb-2">
-                    <CardTitle className="text-sm font-medium">Mortgage</CardTitle>
-                    <Landmark className="h-4 w-4 text-muted-foreground" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{property.mortgage?.hasMortgage === 'yes' ? 'Active' : 'None'}</div>
-                    <p className="text-xs text-muted-foreground">{property.mortgage?.lenderName || 'No lender specified'}</p>
-                  </CardContent>
+                 <CardHeader className="pb-2">
+                    <CardDescription>Status</CardDescription>
+                    <CardTitle className="text-2xl font-bold capitalize">
+                        {property.tenants && property.tenants.length > 0 ? 'Occupied' : 'Vacant'}
+                    </CardTitle>
+                 </CardHeader>
               </Card>
            </div>
         </TabsContent>
 
+        {/* 2. TENANTS TAB (Read Only View) */}
         <TabsContent value="tenants" className="mt-6">
            <Card>
-               <CardHeader>
-                  <CardTitle>Current Residents</CardTitle>
-                  <CardDescription>All tenants associated with this property.</CardDescription>
-               </CardHeader>
-               <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Term</TableHead>
-                                <TableHead>Rent Portion</TableHead>
-                                <TableHead>Contact</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {property.tenants && property.tenants.length > 0 ? (
-                                property.tenants.map((t: any, i: number) => (
-                                    <TableRow key={i}>
-                                        <TableCell className="font-medium">{t.firstName} {t.lastName}</TableCell>
-                                        <TableCell className="text-xs">{t.leaseStart} to {t.leaseEnd}</TableCell>
-                                        <TableCell>${t.rentAmount?.toLocaleString()}</TableCell>
-                                        <TableCell className="text-xs">{t.email}<br/>{t.phone}</TableCell>
-                                    </TableRow>
-                                ))
-                            ) : (
-                                <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
-                                        No tenants recorded. Click "Edit Settings" to add one.
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-               </CardContent>
+              <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Current Residents</CardTitle>
+                    <CardDescription>Lease details for this property.</CardDescription>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>Manage Tenants</Button>
+              </CardHeader>
+              <CardContent>
+                  {property.tenants && property.tenants.length > 0 ? (
+                     <div className="space-y-4">
+                        {property.tenants.map((t: any, i: number) => (
+                            <div key={i} className="flex justify-between items-center border-b pb-2 last:border-0 last:pb-0">
+                               <div>
+                                  <p className="font-medium">{t.firstName} {t.lastName}</p>
+                                  <p className="text-sm text-muted-foreground">{t.email}</p>
+                               </div>
+                               <div className="text-right">
+                                  <p className="font-medium">${t.rentAmount.toLocaleString()}/mo</p>
+                                  <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
+                               </div>
+                            </div>
+                        ))}
+                     </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">No tenants recorded. Click "Edit Settings" to add one.</p>
+                  )}
+              </CardContent>
            </Card>
         </TabsContent>
 
+        {/* 3. EXPENSES (was Financials) TAB */}
         <TabsContent value="expenses" className="mt-6">
            <PropertyFinancials 
               propertyId={property.id} 
@@ -170,6 +150,7 @@ export default function PropertyDetailsPage() {
            />
         </TabsContent>
 
+        {/* 4. INCOME (was Leases) TAB */}
         <TabsContent value="income" className="mt-6">
            <PropertyFinancials 
               propertyId={property.id} 
