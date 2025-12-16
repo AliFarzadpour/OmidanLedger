@@ -25,6 +25,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PropertyFinancials } from './property-financials';
 
+
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
   id: z.string().optional(),
@@ -91,7 +92,7 @@ const propertySchema = z.object({
     responsibility: z.enum(['tenant', 'landlord']),
     providerName: z.string().optional(),
     providerContact: z.string().optional(),
-  })).optional(), // Made optional to prevent crashes, but we default it below
+  })).optional(), 
   access: z.object({
     gateCode: z.string().optional(),
     lockboxCode: z.string().optional(),
@@ -183,22 +184,18 @@ export function PropertyForm({
   const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
 
-  // FIX 1: Track ID
   const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
   const isEditMode = !!currentPropertyId;
 
-  // FIX 2: SMART MERGE
-  // If initialData exists, we use it, BUT we fill in missing arrays (like utilities) 
-  // with our defaults so validation doesn't fail on "missing required field".
   const mergedValues = initialData ? {
       ...DEFAULT_VALUES,
       ...initialData,
-      id: initialData.id, // Ensure ID is part of the form values
+      id: initialData.id,
       utilities: initialData.utilities || DEFAULT_VALUES.utilities,
       access: initialData.access || DEFAULT_VALUES.access,
       tenants: initialData.tenants || [],
       preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
-      mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage }, // Deep merge for safety
+      mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
       management: { ...DEFAULT_VALUES.management, ...initialData.management },
   } : DEFAULT_VALUES;
 
@@ -232,12 +229,10 @@ export function PropertyForm({
     
     try {
         if (isEditMode && currentPropertyId) {
-            // --- UPDATE MODE ---
             const propertyRef = doc(firestore, 'properties', currentPropertyId);
             await updateDoc(propertyRef, data);
             toast({ title: "Property Updated", description: "Changes saved successfully." });
         } else {
-            // --- CREATE MODE ---
             const batch = writeBatch(firestore);
             const timestamp = new Date().toISOString();
             const propertyRef = doc(collection(firestore, 'properties'));
@@ -293,7 +288,7 @@ export function PropertyForm({
 
             await batch.commit();
             setCurrentPropertyId(propertyRef.id);
-            form.setValue('id', propertyRef.id); // Also update form state
+            form.setValue('id', propertyRef.id);
             toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
         }
         
@@ -307,11 +302,9 @@ export function PropertyForm({
     }
   };
 
-  // FIX 3: Detailed Error Reporting
   const onError = (errors: any) => {
     console.log("Form Errors:", errors);
     
-    // Check for specific commonly missing fields
     const missingFields = [];
     if (errors.utilities) missingFields.push("Utilities configuration");
     if (errors.address) missingFields.push("Address details");
@@ -330,10 +323,6 @@ export function PropertyForm({
 
   const navItems = [
     { id: 'tenants', label: 'Tenants', icon: UserCheck },
-    { id: 'rentroll', label: 'Lease Summary', icon: ArrowDownCircle },
-    { id: 'maintenance', label: 'Maintenance', icon: Wrench },
-    { id: 'vendors', label: 'Vendors', icon: Users },
-    { id: 'general', label: 'General Info', icon: Building2 },
     { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
@@ -349,6 +338,11 @@ export function PropertyForm({
       
       {/* SIDEBAR */}
       <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
+        <div className="p-2">
+            <h3 className="font-bold text-lg">{form.getValues('name') || 'New Property'}</h3>
+            <p className="text-xs text-muted-foreground">{form.getValues('address.street')}</p>
+        </div>
+        <Separator className="my-2" />
         {navItems.map((item) => (
           <button
             key={item.id}
@@ -363,7 +357,6 @@ export function PropertyForm({
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {item.label}
-            {/* Show warning icon if this section has an error */}
             {form.formState.errors[item.id as keyof PropertyFormValues] && (
                 <AlertTriangle className="h-3 w-3 ml-auto text-red-500" />
             )}
@@ -468,69 +461,7 @@ export function PropertyForm({
             </CardContent>
           </Card>
         )}
-
-        {activeSection === 'rentroll' && (
-          <div className="space-y-6">
-              <PropertyFinancials 
-                propertyId={currentPropertyId || ""}
-                propertyName={form.getValues('name')} 
-                view="income" 
-              />
-          </div>
-        )}
-
-        {activeSection === 'maintenance' && (
-          <div className="space-y-6">
-              <PropertyFinancials 
-                propertyId={currentPropertyId || ""}
-                propertyName={form.getValues('name')} 
-                view="expenses" 
-              />
-          </div>
-        )}
-
-        {activeSection === 'vendors' && (
-            <p className="text-center text-muted-foreground py-10">The central vendor management page is under development.</p>
-        )}
         
-        {activeSection === 'general' && (
-          <Card>
-            <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                  <Label>Nickname</Label>
-                  <Input {...form.register('name')} />
-                  {form.formState.errors.name && <span className="text-red-500 text-xs">Required</span>}
-              </div>
-              <div className="grid gap-2"><Label>Type</Label>
-                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
-                   <SelectTrigger><SelectValue/></SelectTrigger>
-                   <SelectContent><SelectItem value="single-family">Single Family</SelectItem><SelectItem value="multi-family">Multi-Family</SelectItem><SelectItem value="condo">Condo</SelectItem><SelectItem value="commercial">Commercial</SelectItem></SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                  <Label>Address</Label>
-                  <Input placeholder="123 Main St" {...form.register('address.street')} />
-                  {form.formState.errors.address?.street && <span className="text-red-500 text-xs">Required</span>}
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                 <div className="grid gap-2">
-                    <Input placeholder="City" {...form.register('address.city')} />
-                    {form.formState.errors.address?.city && <span className="text-red-500 text-xs">Required</span>}
-                 </div>
-                 <div className="grid gap-2">
-                    <Input placeholder="State" {...form.register('address.state')} />
-                    {form.formState.errors.address?.state && <span className="text-red-500 text-xs">Required</span>}
-                 </div>
-                 <div className="grid gap-2">
-                    <Input placeholder="Zip" {...form.register('address.zip')} />
-                    {form.formState.errors.address?.zip && <span className="text-red-500 text-xs">Required</span>}
-                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {activeSection === 'financials' && (
           <Card>
             <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
