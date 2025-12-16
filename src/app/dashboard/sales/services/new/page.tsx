@@ -3,7 +3,16 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase'; // Assuming you have these hooks
-import { collection, doc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore'; // Firebase tools
+import { 
+  collection, 
+  doc, 
+  writeBatch, 
+  serverTimestamp, 
+  Timestamp,
+  getDoc,
+  setDoc,
+  increment
+} from 'firebase/firestore'; // Firebase tools
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,10 +29,12 @@ import {
 export default function NewServiceInvoicePage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const { user } = useUser();
+  const firestore = useFirestore();
 
   // 1. Invoice State
   const [invoiceData, setInvoiceData] = useState({
-    invoiceNumber: 'INV-2024-001', // We will auto-generate this later
+    invoiceNumber: 'INV-000', // We will auto-generate this
     issueDate: new Date().toISOString().split('T')[0],
     dueDate: '',
     clientName: '',
@@ -38,14 +49,39 @@ export default function NewServiceInvoicePage() {
 
   const [taxRate, setTaxRate] = useState(0); // e.g. 8.25 for 8.25%
 
+  // Auto-Numbering Logic: Fetch the next available number on mount
+  useEffect(() => {
+    const fetchNextNumber = async () => {
+      if (!firestore) return;
+      
+      const counterRef = doc(firestore, 'settings', 'invoiceCounter');
+      const counterSnap = await getDoc(counterRef);
+
+      let nextNum = 1;
+      
+      if (counterSnap.exists()) {
+        nextNum = counterSnap.data().current + 1;
+      } else {
+        // First time running: Create the counter doc
+        await setDoc(counterRef, { current: 0 });
+      }
+
+      // Format it: INV-001, INV-002, etc.
+      const formattedNumber = `INV-${nextNum.toString().padStart(3, '0')}`;
+      
+      setInvoiceData(prev => ({ ...prev, invoiceNumber: formattedNumber }));
+    };
+
+    fetchNextNumber();
+  }, [firestore]);
+
+
   // 3. Calculated Totals
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount;
 
   // --- Handlers ---
-  const { user } = useUser();
-  const firestore = useFirestore();
 
   const handleAddItem = () => {
     setItems([
@@ -70,16 +106,27 @@ export default function NewServiceInvoicePage() {
     setLoading(true);
 
     try {
-      // 1. Prepare the Data
-      const invoiceId = doc(collection(firestore, 'invoices')).id; // Generate ID
-      const batch = writeBatch(firestore); // Start a batch transaction
+      const invoiceId = doc(collection(firestore, 'invoices')).id;
+      const batch = writeBatch(firestore);
+
+      // --- NEW: Reference the Counter ---
+      const counterRef = doc(firestore, 'settings', 'invoiceCounter');
+      
+      // Update the counter in the same batch (atomic operation)
+      // This ensures if the invoice fails to save, the number isn't skipped.
+      if (status === 'open') {
+        batch.update(counterRef, {
+          current: increment(1)
+        });
+      }
+      // ----------------------------------
 
       const invoiceRef = doc(firestore, 'invoices', invoiceId);
       
       const invoicePayload = {
         id: invoiceId,
         userId: user.uid,
-        invoiceNumber: invoiceData.invoiceNumber, // We will automate this next
+        invoiceNumber: invoiceData.invoiceNumber,
         status: status,
         type: 'service', // Explicitly marking this as a Service Invoice
         
@@ -143,7 +190,7 @@ export default function NewServiceInvoicePage() {
       alert(status === 'draft' ? "Draft Saved!" : "Invoice Approved & Posted to Ledger!");
       router.push('/dashboard/sales/services');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving invoice:", error);
       alert("Failed to save invoice. Check console for details.");
     } finally {
