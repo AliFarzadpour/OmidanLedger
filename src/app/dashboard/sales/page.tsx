@@ -2,104 +2,148 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatCard } from '@/components/dashboard/stat-card';
 import { 
-    FileText, Send, CalendarCheck, FileStack, ShoppingCart, Building, Clock 
+  FileText, 
+  Home, 
+  CreditCard, 
+  Users, 
+  ArrowUpRight,
+  Wallet
 } from 'lucide-react';
-
-const kpiData = [
-    {
-        title: "Ready to Collect",
-        value: 1250.00,
-        icon: <FileText className="h-6 w-6 text-yellow-500" />,
-        description: "Total value of Draft & Unsent invoices"
-    },
-    {
-        title: "Outstanding",
-        value: 8750.00,
-        icon: <Send className="h-6 w-6 text-orange-500" />,
-        description: "Invoices sent but not yet paid"
-    },
-    {
-        title: "Collected this Month",
-        value: 21500.00,
-        icon: <CalendarCheck className="h-6 w-6 text-green-500" />,
-        description: "Total payments received this month"
-    }
-];
-
-const actionCards = [
-    {
-        title: "Service Invoice",
-        description: "For contractors, freelancers, and service providers. Create a standard invoice.",
-        icon: <FileStack className="h-8 w-8 text-primary" />,
-        buttonText: "Create Invoice",
-        href: '/dashboard/sales/services',
-    },
-    {
-        title: "Product Sale",
-        description: "For retail and e-commerce. Sell items from your inventory.",
-        icon: <ShoppingCart className="h-8 w-8 text-primary" />,
-        buttonText: "Create Sale",
-        href: '#',
-    },
-    {
-        title: "Rent Collection",
-        description: "For landlords and property managers. Charge rent or set up recurring leases.",
-        icon: <Building className="h-8 w-8 text-primary" />,
-        buttonText: "Create Charge",
-        href: '/dashboard/sales/rent-collection',
-    },
-    {
-        title: "Time Tracking",
-        description: "For attorneys, consultants, and agencies. Bill by the hour for projects.",
-        icon: <Clock className="h-8 w-8 text-primary" />,
-        buttonText: "Create Bill",
-        href: '#',
-    }
-];
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function SalesHubPage() {
   return (
-    <div className="flex flex-col gap-8 pb-10">
+    <div className="space-y-8 p-8">
+      
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Sales & Collections</h1>
-        <p className="text-muted-foreground">Create invoices, track payments, and manage your sales workflow.</p>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Revenue Center</h1>
+        <p className="text-muted-foreground mt-1">Track rents, security deposits, and tenant charges.</p>
       </div>
 
-      {/* KPI Section */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {kpiData.map(kpi => (
-            <StatCard
-                key={kpi.title}
-                title={kpi.title}
-                value={kpi.value}
-                icon={kpi.icon}
-                description={kpi.description}
-            />
-        ))}
+      {/* KPI Section (Placeholder - can be connected to real data later) */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="shadow-sm border-l-4 border-l-green-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-600">Collected Rent (Nov)</CardTitle>
+            <Wallet className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">$12,450.00</div>
+            <p className="text-xs text-muted-foreground mt-1">92% of expected rent</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-sm border-l-4 border-l-amber-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-600">Overdue / Late</CardTitle>
+            <ClockIcon className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">$1,250.00</div>
+            <p className="text-xs text-muted-foreground mt-1">2 tenants pending</p>
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-sm border-l-4 border-l-blue-500">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-slate-600">Occupancy Rate</CardTitle>
+            <Home className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">94%</div>
+            <p className="text-xs text-muted-foreground mt-1">1 unit vacant</p>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Action Cards Section */}
+      {/* Action Cards Grid - The "Plan A" Focus */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        {actionCards.map(card => (
-          <Link key={card.title} href={card.href} passHref>
-            <Card className="flex flex-col shadow-lg hover:shadow-xl transition-shadow h-full cursor-pointer">
-                <CardHeader className="flex-row items-center gap-4 space-y-0">
-                   {card.icon}
-                   <CardTitle>{card.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="flex-1">
-                    <CardDescription>{card.description}</CardDescription>
-                </CardContent>
-                <CardFooter>
-                    <Button className="w-full">{card.buttonText}</Button>
-                </CardFooter>
-            </Card>
-          </Link>
-        ))}
+        
+        {/* Card 1: Rent Collection (Future Feature) */}
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-slate-200">
+          <CardHeader>
+            <div className="bg-green-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+              <Wallet className="h-6 w-6 text-green-700" />
+            </div>
+            <CardTitle>Collect Rent</CardTitle>
+            <CardDescription>Log monthly rent payments from tenants.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full bg-green-600 hover:bg-green-700">Record Payment</Button>
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Tenant Invoice (What we just built) */}
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-slate-200">
+          <CardHeader>
+            <div className="bg-blue-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+              <FileText className="h-6 w-6 text-blue-700" />
+            </div>
+            <CardTitle>Invoice Tenant</CardTitle>
+            <CardDescription>Charge for repairs, utilities, or late fees.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
+              <Link href="/dashboard/sales/services">Create Charge</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: Security Deposits */}
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-slate-200">
+          <CardHeader>
+            <div className="bg-purple-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+              <CreditCard className="h-6 w-6 text-purple-700" />
+            </div>
+            <CardTitle>Security Deposits</CardTitle>
+            <CardDescription>Manage escrow and move-in funds.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-full">Manage Deposits</Button>
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Tenant List */}
+        <Card className="hover:shadow-md transition-shadow cursor-pointer border-slate-200">
+          <CardHeader>
+            <div className="bg-slate-100 w-12 h-12 rounded-lg flex items-center justify-center mb-4">
+              <Users className="h-6 w-6 text-slate-700" />
+            </div>
+            <CardTitle>Tenants</CardTitle>
+            <CardDescription>View contact info and lease details.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" className="w-full" asChild>
+                {/* Assuming you have a tenants page or properties page */}
+                <Link href="/dashboard/properties">View Tenants</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   );
+}
+
+// Simple icon component for the KPI card
+function ClockIcon(props: any) {
+  return (
+    <svg
+      {...props}
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <polyline points="12 6 12 12 16 14" />
+    </svg>
+  )
 }
