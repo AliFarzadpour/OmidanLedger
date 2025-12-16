@@ -41,11 +41,16 @@ export default function ServiceInvoicesPage() {
 
   const { data: snapshot, isLoading } = useCollection(invoicesQuery);
 
-  // 2. Process Data (Map snapshot to array)
-  const invoices = snapshot?.map(doc => ({
-    id: doc.id,
-    ...doc.data()
-  })) || [];
+  // 2. Process Data (Safe Map)
+  const invoices = snapshot?.map((doc: any) => {
+    // Check if .data() exists (Standard Firestore) or if it's already data (Custom Hooks)
+    const data = typeof doc.data === 'function' ? doc.data() : doc;
+    
+    return {
+      id: doc.id,
+      ...data
+    };
+  }) || [];
 
   // 3. Client-Side Filter (Search)
   const filteredInvoices = invoices.filter((inv: any) => 
