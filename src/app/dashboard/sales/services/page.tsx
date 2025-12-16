@@ -60,31 +60,20 @@ export default function ServiceInvoicesPage() {
       ) 
     : null;
 
-  const { data: snapshot, isLoading } = useCollection(invoicesQuery);
-
-  // 2. Process Data (Safe Map)
-  const invoices = snapshot?.map((doc: any) => {
-    // Check if .data() exists (Standard Firestore) or if it's already data (Custom Hooks)
-    const data = typeof doc.data === 'function' ? doc.data() : doc;
-    
-    return {
-      id: doc.id,
-      ...data
-    };
-  }) || [];
+  const { data: invoices, isLoading } = useCollection(invoicesQuery);
 
   // 3. Client-Side Filter (Search)
-  const filteredInvoices = invoices.filter((inv: any) => 
+  const filteredInvoices = (invoices || []).filter((inv: any) => 
     inv.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     inv.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // 4. Calculate KPIs Dynamically
-  const totalOutstanding = invoices
+  const totalOutstanding = (invoices || [])
     .filter((inv: any) => inv.status === 'open' || inv.status === 'overdue')
     .reduce((sum: number, inv: any) => sum + (inv.balanceDue || 0), 0);
 
-  const draftCount = invoices.filter((inv: any) => inv.status === 'draft').length;
+  const draftCount = (invoices || []).filter((inv: any) => inv.status === 'draft').length;
 
   // Placeholder for "Collected this month" (requires payment logic later)
   const collectedThisMonth = 0; 
