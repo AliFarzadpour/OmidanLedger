@@ -28,7 +28,7 @@ import {
 // A small isolated component to prevent the Table Loop Error
 function InvoiceRowActions({ invoiceId }: { invoiceId: string }) {
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="h-8 w-8 p-0">
           <MoreHorizontal className="h-4 w-4" />
