@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useUser, useFirestore, useCollection } from '@/firebase'; // Use your hooks
 import { collection, query, where, orderBy } from 'firebase/firestore';
@@ -32,14 +32,15 @@ export default function ServiceInvoicesPage() {
   const firestore = useFirestore();
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 1. Fetch Real Data from Firestore
-  const invoicesQuery = user && firestore 
-    ? query(
-        collection(firestore, 'invoices'), 
-        where('userId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      ) 
-    : null;
+  const invoicesQuery = useMemo(() => {
+    if (!user || !firestore) return null;
+    
+    return query(
+      collection(firestore, 'invoices'), 
+      where('userId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
+  }, [user, firestore]);
 
   const { data: invoices, isLoading } = useCollection(invoicesQuery);
 
