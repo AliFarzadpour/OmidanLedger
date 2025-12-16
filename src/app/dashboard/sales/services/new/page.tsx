@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useUser, useFirestore } from '@/firebase'; // Assuming you have these hooks
+import { collection, doc, writeBatch, serverTimestamp, Timestamp } from 'firebase/firestore'; // Firebase tools
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -42,6 +44,8 @@ export default function NewServiceInvoicePage() {
   const total = subtotal + taxAmount;
 
   // --- Handlers ---
+  const { user } = useUser();
+  const firestore = useFirestore();
 
   const handleAddItem = () => {
     setItems([
@@ -62,16 +66,91 @@ export default function NewServiceInvoicePage() {
   };
 
   const handleSave = async (status: 'draft' | 'open') => {
+    if (!user || !firestore) return;
     setLoading(true);
-    console.log("Saving Invoice...", { ...invoiceData, items, status, totals: { subtotal, total } });
-    
-    // Simulate API Call
-    setTimeout(() => {
-      setLoading(false);
-      alert(status === 'draft' ? "Draft Saved!" : "Invoice Sent!");
+
+    try {
+      // 1. Prepare the Data
+      const invoiceId = doc(collection(firestore, 'invoices')).id; // Generate ID
+      const batch = writeBatch(firestore); // Start a batch transaction
+
+      const invoiceRef = doc(firestore, 'invoices', invoiceId);
+      
+      const invoicePayload = {
+        id: invoiceId,
+        userId: user.uid,
+        invoiceNumber: invoiceData.invoiceNumber, // We will automate this next
+        status: status,
+        type: 'service', // Explicitly marking this as a Service Invoice
+        
+        // Client Info
+        clientName: invoiceData.clientName,
+        clientEmail: invoiceData.clientEmail,
+        // clientId: selectedClientId, // TODO: We will link this to real clients later
+        
+        // Dates
+        issueDate: Timestamp.fromDate(new Date(invoiceData.issueDate)),
+        dueDate: invoiceData.dueDate ? Timestamp.fromDate(new Date(invoiceData.dueDate)) : null,
+        
+        // The Money
+        items: items, // The array of service rows
+        subtotal: subtotal,
+        taxRate: taxRate,
+        taxAmount: taxAmount,
+        totalAmount: total,
+        balanceDue: total, // Initially, they owe the full amount
+        
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      // 2. Add Invoice to Batch
+      batch.set(invoiceRef, invoicePayload);
+
+      // 3. IF APPROVED: Generate the Accounting Entries (The "Double Entry")
+      if (status === 'open') {
+        const ledgerRef = doc(collection(firestore, 'ledgerEntries'));
+        
+        batch.set(ledgerRef, {
+          transactionId: invoiceId, // Link back to invoice
+          date: serverTimestamp(),
+          description: `Invoice #${invoiceData.invoiceNumber} for ${invoiceData.clientName}`,
+          type: 'invoice',
+          userId: user.uid,
+          
+          // The Journal Entry
+          debit: {
+            accountId: 'accounts-receivable', // Asset: They owe you
+            amount: total
+          },
+          credit: {
+            accountId: 'service-revenue', // Income: You earned it
+            amount: subtotal
+          },
+          // Handle Tax Liability if needed (Credit Sales Tax Payable)
+          ...(taxAmount > 0 && {
+             taxCredit: {
+               accountId: 'sales-tax-payable',
+               amount: taxAmount
+             }
+          })
+        });
+      }
+
+      // 4. Commit to Database
+      await batch.commit();
+
+      alert(status === 'draft' ? "Draft Saved!" : "Invoice Approved & Posted to Ledger!");
       router.push('/dashboard/sales/services');
-    }, 1000);
+
+    } catch (error) {
+      console.error("Error saving invoice:", error);
+      alert("Failed to save invoice. Check console for details.");
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-8">
