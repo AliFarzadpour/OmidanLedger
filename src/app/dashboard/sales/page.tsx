@@ -80,7 +80,9 @@ export default function SalesHubPage() {
             <CardDescription>Log monthly rent payments from tenants.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full bg-green-600 hover:bg-green-700">Record Payment</Button>
+            <Button className="w-full bg-green-600 hover:bg-green-700" asChild>
+              <Link href="/dashboard/properties">Record Payment</Link>
+            </Button>
           </CardContent>
         </Card>
 
