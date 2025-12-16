@@ -35,7 +35,7 @@ const actionCards = [
         description: "For contractors, freelancers, and service providers. Create a standard invoice.",
         icon: <FileStack className="h-8 w-8 text-primary" />,
         buttonText: "Create Invoice",
-        href: '#',
+        href: '/dashboard/sales/services',
     },
     {
         title: "Product Sale",
