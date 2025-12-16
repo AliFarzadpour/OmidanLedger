@@ -10,11 +10,19 @@ import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form'; 
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
 import { useState } from 'react';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogTrigger,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from '@/components/ui/dialog';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Landmark, DollarSign } from 'lucide-react';
 
 
 export default function PropertyDetailsPage() {
@@ -41,7 +49,7 @@ export default function PropertyDetailsPage() {
       {/* HEADER */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/sales/rent-collection">
+          <Link href="/dashboard/properties">
             <Button variant="ghost" size="icon" aria-label="Back to properties">
                 <ArrowLeft className="h-4 w-4" />
             </Button>
@@ -60,8 +68,13 @@ export default function PropertyDetailsPage() {
             <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
           </DialogTrigger>
           <DialogContent className="max-w-5xl h-[90vh] p-0">
-             <VisuallyHidden.Root><DialogTitle>Edit Property</DialogTitle></VisuallyHidden.Root>
-             <div className="overflow-y-auto p-6">
+             <DialogHeader className="p-6 pb-0">
+                <DialogTitle>Edit Property Settings</DialogTitle>
+                <DialogDescription>
+                   Update tenants, mortgage details, and configuration for {property.name}.
+                </DialogDescription>
+             </DialogHeader>
+             <div className="overflow-y-auto px-6 pb-6">
                 <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={handleEditSuccess} />
              </div>
           </DialogContent>
@@ -85,7 +98,7 @@ export default function PropertyDetailsPage() {
                     <DollarSign className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
-                    <div className="text-2xl font-bold">${property.financials?.targetRent.toLocaleString() || '0'}</div>
+                    <div className="text-2xl font-bold">${(property.financials?.targetRent || 0).toLocaleString()}</div>
                   </CardContent>
               </Card>
                <Card>
