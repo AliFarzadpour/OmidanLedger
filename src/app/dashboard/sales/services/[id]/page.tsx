@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, use } from 'react'; // 👈 1. Import 'use'
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, getDoc, updateDoc, writeBatch, serverTimestamp, collection } from 'firebase/firestore';
@@ -19,14 +19,17 @@ import {
   Lock
 } from 'lucide-react';
 
-export default function EditServiceInvoicePage({ params }: { params: { id: string } }) {
+// 👈 2. Update types: params is now a Promise
+export default function EditServiceInvoicePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params); // 👈 3. Unwrap the params here using React.use()
+  
   const router = useRouter();
   const { user } = useUser();
   const firestore = useFirestore();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Invoice State
+  // ... (Keep your state definitions exactly the same) ...
   const [status, setStatus] = useState<string>('draft');
   const [invoiceData, setInvoiceData] = useState({
     invoiceNumber: '',
@@ -40,21 +43,20 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
   const [items, setItems] = useState<any[]>([]);
   const [taxRate, setTaxRate] = useState(0);
 
-  // Calculations
   const subtotal = items.reduce((sum, item) => sum + (item.quantity * item.rate), 0);
   const taxAmount = subtotal * (taxRate / 100);
   const total = subtotal + taxAmount;
   
-  // Check if locked (Open or Paid invoices shouldn't be easily edited)
   const isLocked = status === 'open' || status === 'paid';
 
-  // 1. Fetch Invoice Data on Load
+  // Fetch Invoice Data
   useEffect(() => {
     const fetchInvoice = async () => {
       if (!firestore || !user) return;
 
       try {
-        const docRef = doc(firestore, 'invoices', params.id);
+        // 👇 Update this line: Use 'id' instead of 'params.id'
+        const docRef = doc(firestore, 'invoices', id);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -83,33 +85,32 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
     };
 
     fetchInvoice();
-  }, [firestore, user, params.id, router]);
+  }, [firestore, user, id, router]); // 👈 Update dependency: 'id' instead of 'params.id'
 
-  // --- Handlers ---
-
+  // ... (Keep existing handlers handleAddItem, handleRemoveItem, handleItemChange) ...
   const handleAddItem = () => {
     setItems([...items, { id: Date.now(), description: '', quantity: 1, rate: 0 }]);
   };
 
-  const handleRemoveItem = (id: number) => {
+  const handleRemoveItem = (itemId: number) => {
     if (items.length === 1) return;
-    setItems(items.filter(item => item.id !== id));
+    setItems(items.filter(item => item.id !== itemId));
   };
 
-  const handleItemChange = (id: number, field: string, value: any) => {
-    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+  const handleItemChange = (itemId: number, field: string, value: any) => {
+    setItems(items.map(item => item.id === itemId ? { ...item, [field]: value } : item));
   };
 
-  // 2. Save / Update Logic
+  // Save / Update Logic
   const handleSave = async (newStatus: 'draft' | 'open') => {
     if (!firestore || !user) return;
     setSaving(true);
 
     try {
       const batch = writeBatch(firestore);
-      const invoiceRef = doc(firestore, 'invoices', params.id);
+      // 👇 Update this line: Use 'id' instead of 'params.id'
+      const invoiceRef = doc(firestore, 'invoices', id);
 
-      // A. Update the Invoice Document
       batch.update(invoiceRef, {
         status: newStatus,
         clientName: invoiceData.clientName,
@@ -121,15 +122,14 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
         taxRate: taxRate,
         taxAmount: taxAmount,
         totalAmount: total,
-        balanceDue: total, // Reset balance (simplified for now)
+        balanceDue: total,
         updatedAt: serverTimestamp(),
       });
 
-      // B. If Approving ('open'), Create the Ledger Entry
       if (newStatus === 'open' && status === 'draft') {
         const ledgerRef = doc(collection(firestore, 'ledgerEntries'));
         batch.set(ledgerRef, {
-          transactionId: params.id,
+          transactionId: id, // 👈 Update this line: Use 'id'
           date: serverTimestamp(),
           description: `Invoice #${invoiceData.invoiceNumber} for ${invoiceData.clientName}`,
           type: 'invoice',
@@ -147,7 +147,7 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
       alert(newStatus === 'open' ? "Invoice Approved & Posted!" : "Invoice Updated!");
       router.push('/dashboard/sales/services');
 
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating:", error);
       alert("Failed to update invoice.");
     } finally {
@@ -158,9 +158,10 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="h-8 w-8 animate-spin text-blue-600"/></div>;
 
   return (
+    // ... (Your JSX remains exactly the same) ...
     <div className="max-w-5xl mx-auto p-6 space-y-8">
-      
-      {/* Header */}
+      {/* Copy your JSX from the previous file, it doesn't need changes */}
+      {/* Just make sure you paste the full return (...) block here */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
@@ -178,7 +179,6 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
           </div>
         </div>
         
-        {/* Action Buttons */}
         {!isLocked ? (
           <div className="flex gap-3">
             <Button variant="outline" onClick={() => handleSave('draft')} disabled={saving}>
@@ -196,8 +196,6 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Left Column */}
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardContent className="p-6 grid gap-6">
@@ -221,6 +219,10 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
               </div>
               
               <div className="grid grid-cols-3 gap-4 border-t pt-4">
+                 <div className="space-y-2">
+                    <label className="text-sm font-medium">Invoice #</label>
+                    <Input value={invoiceData.invoiceNumber} disabled className="bg-slate-50" />
+                </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Issue Date</label>
                   <Input 
@@ -243,7 +245,6 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
             </CardContent>
           </Card>
 
-          {/* Line Items */}
           <Card>
             <CardContent className="p-6">
               <div className="grid grid-cols-12 gap-4 mb-2 text-sm font-medium text-muted-foreground px-1">
@@ -301,7 +302,6 @@ export default function EditServiceInvoicePage({ params }: { params: { id: strin
           </Card>
         </div>
 
-        {/* Right Column: Totals */}
         <div className="space-y-6">
           <Card className="bg-slate-50/50">
             <CardContent className="p-6 space-y-4">
