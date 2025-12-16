@@ -35,9 +35,8 @@ type Property = {
     state: string;
     zip: string;
   };
-  [key: string]: any; // Allow other properties
+  [key: string]: any; 
 };
-
 
 // --- SCHEMA DEFINITION ---
 const propertySchema = z.object({
@@ -111,7 +110,7 @@ const propertySchema = z.object({
     notes: z.string().optional(),
   }),
   tenants: z.array(z.object({
-    id: z.string().optional(), // Keep track of existing tenants
+    id: z.string().optional(), 
     firstName: z.string(),
     lastName: z.string(),
     email: z.string().email(),
@@ -169,7 +168,9 @@ export function PropertyForm({
   const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
 
-  const isEditMode = !!initialData;
+  const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
+
+  const isEditMode = !!currentPropertyId;
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
@@ -204,9 +205,9 @@ export function PropertyForm({
   useEffect(() => {
     if (initialData) {
       form.reset(initialData);
+      setCurrentPropertyId(initialData.id);
     }
   }, [initialData, form]);
-
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
@@ -217,10 +218,10 @@ export function PropertyForm({
     setIsSaving(true);
     
     try {
-        if (isEditMode) {
-            const propertyRef = doc(firestore, 'properties', initialData.id);
+        if (isEditMode && currentPropertyId) {
+            const propertyRef = doc(firestore, 'properties', currentPropertyId);
             await updateDoc(propertyRef, data);
-            toast({ title: "Property Updated", description: `${data.name} has been successfully updated.` });
+            toast({ title: "Property Updated", description: "Changes saved successfully." });
         } else {
             const batch = writeBatch(firestore);
             const timestamp = new Date().toISOString();
@@ -276,6 +277,8 @@ export function PropertyForm({
             });
 
             await batch.commit();
+
+            setCurrentPropertyId(propertyRef.id);
 
             toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
         }
@@ -366,7 +369,7 @@ export function PropertyForm({
                     <CardTitle>Tenants</CardTitle>
                     <CardDescription>Current residents and lease details. Add multiple for co-signers.</CardDescription>
                  </div>
-                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1, lateFeeAmount: 0 })}>
+                 <Button size="sm" onClick={() => tenantFields.append({ id: '', firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1, lateFeeAmount: 0 })}>
                     <Plus className="h-4 w-4 mr-2" /> Add Tenant
                  </Button>
               </div>
@@ -374,47 +377,47 @@ export function PropertyForm({
             <CardContent className="space-y-6">
                {tenantFields.fields.map((field, index) => (
                   <div key={field.id} className="p-4 border rounded-lg bg-slate-50 relative">
-                     <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}>
-                        <Trash2 className="h-4 w-4" />
-                     </Button>
-                     
-                     <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
-                        <div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div>
-                     </div>
-                     <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div>
-                     </div>
-                     
-                     <Separator className="mb-4" />
+                      <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}>
+                         <Trash2 className="h-4 w-4" />
+                      </Button>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
+                         <div className="grid gap-2"><Label className="text-xs">First Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} /></div>
+                         <div className="grid gap-2"><Label className="text-xs">Last Name</Label><Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} /></div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                         <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label><Input className="bg-white" {...form.register(`tenants.${index}.email`)} /></div>
+                         <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div>
+                      </div>
+                      
+                      <Separator className="mb-4" />
 
-                     <div className="grid grid-cols-3 gap-4 mb-4">
-                        <div className="grid gap-2">
-                           <Label className="text-xs font-semibold text-blue-700">Rent Portion ($)</Label>
-                           <Input type="number" className="bg-white border-blue-200" placeholder="Their share" {...form.register(`tenants.${index}.rentAmount`)} />
-                        </div>
-                        <div className="grid gap-2">
-                           <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
-                           <Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} />
-                        </div>
-                        <div className="grid gap-2">
-                           <Label className="text-xs text-red-700">Late Fee ($)</Label>
-                           <Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} />
-                        </div>
-                     </div>
+                      <div className="grid grid-cols-3 gap-4 mb-4">
+                         <div className="grid gap-2">
+                            <Label className="text-xs font-semibold text-blue-700">Rent Portion ($)</Label>
+                            <Input type="number" className="bg-white border-blue-200" placeholder="Their share" {...form.register(`tenants.${index}.rentAmount`)} />
+                         </div>
+                         <div className="grid gap-2">
+                            <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
+                            <Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} />
+                         </div>
+                         <div className="grid gap-2">
+                            <Label className="text-xs text-red-700">Late Fee ($)</Label>
+                            <Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} />
+                         </div>
+                      </div>
 
-                     <div className="grid grid-cols-2 gap-4">
-                        <div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div>
-                        <div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
-                     </div>
+                      <div className="grid grid-cols-2 gap-4">
+                         <div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div>
+                         <div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
+                      </div>
                   </div>
                ))}
                {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
             </CardContent>
           </Card>
         )}
-
+        
         {activeSection === 'rentroll' && (
           <Card>
             <CardHeader>
@@ -469,13 +472,7 @@ export function PropertyForm({
             </CardContent>
           </Card>
         )}
-
-        {activeSection === 'vendors' && (
-            <p className="text-center text-muted-foreground py-10">
-              The central vendor management page is under development.
-            </p>
-        )}
-
+        
         {activeSection === 'general' && (
           <Card>
             <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
@@ -501,7 +498,7 @@ export function PropertyForm({
             </CardContent>
           </Card>
         )}
-
+        
         {activeSection === 'financials' && (
           <Card>
             <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
@@ -681,7 +678,7 @@ export function PropertyForm({
             </CardContent>
           </Card>
         )}
-
+        
         {activeSection === 'accounting' && (
           <Card className="border-blue-200 bg-blue-50/30">
             <CardHeader>
@@ -705,8 +702,10 @@ export function PropertyForm({
             </CardContent>
           </Card>
         )}
-
       </div>
     </div>
   );
 }
+I am omitting the other sections for brevity as they are unchanged, but ensure you keep them in your file!
+
+[object Object]
