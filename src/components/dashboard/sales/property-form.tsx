@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle 
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,10 @@ const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
   type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
   address: z.object({
-    street: z.string().min(1),
-    city: z.string().min(1),
-    state: z.string().min(2),
-    zip: z.string().min(5),
+    street: z.string().min(1, "Street is required"),
+    city: z.string().min(1, "City is required"),
+    state: z.string().min(2, "State is required"),
+    zip: z.string().min(5, "Zip is required"),
   }),
   management: z.object({
     isManaged: z.enum(['self', 'professional']),
@@ -89,17 +89,17 @@ const propertySchema = z.object({
     responsibility: z.enum(['tenant', 'landlord']),
     providerName: z.string().optional(),
     providerContact: z.string().optional(),
-  })),
+  })).optional(), // Made optional to prevent crashes, but we default it below
   access: z.object({
     gateCode: z.string().optional(),
     lockboxCode: z.string().optional(),
     notes: z.string().optional(),
-  }),
+  }).optional(),
   tenants: z.array(z.object({
     id: z.string().optional(), 
-    firstName: z.string().min(1, "First Name is required"), // Validation
-    lastName: z.string().min(1, "Last Name is required"),   // Validation
-    email: z.string().email("Valid email is required"),     // Validation
+    firstName: z.string().min(1, "First Name is required"),
+    lastName: z.string().min(1, "Last Name is required"),
+    email: z.string().email("Valid email is required"),
     phone: z.string().optional(),
     leaseStart: z.string().optional(),
     leaseEnd: z.string().optional(),
@@ -138,6 +138,33 @@ const propertySchema = z.object({
 
 type PropertyFormValues = z.infer<typeof propertySchema>;
 
+const DEFAULT_VALUES: Partial<PropertyFormValues> = {
+  name: '',
+  type: 'single-family',
+  address: { street: '', city: '', state: '', zip: '' },
+  financials: { targetRent: 0, securityDeposit: 0 },
+  management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
+  mortgage: { 
+    purchasePrice: 0,
+    purchaseDate: '',
+    hasMortgage: 'no', 
+    lenderName: '', 
+    escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
+  },
+  taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
+  hoa: { hasHoa: 'no', fee: 0, frequency: 'monthly', contactName: '', contactPhone: '', contactEmail: '' },
+  utilities: [
+    { type: 'Water', responsibility: 'tenant', providerName: '', providerContact: '' },
+    { type: 'Electric', responsibility: 'tenant', providerName: '', providerContact: '' },
+    { type: 'Gas', responsibility: 'tenant', providerName: '', providerContact: '' },
+    { type: 'Trash', responsibility: 'tenant', providerName: '', providerContact: '' },
+    { type: 'Internet', responsibility: 'tenant', providerName: '', providerContact: '' },
+  ],
+  access: { gateCode: '', lockboxCode: '', notes: '' },
+  tenants: [],
+  preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }]
+};
+
 // --- MAIN COMPONENT ---
 export function PropertyForm({ 
   onSuccess, 
@@ -154,43 +181,40 @@ export function PropertyForm({
   const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
 
-  // FIX 1: Track ID state
+  // FIX 1: Track ID
   const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
   const isEditMode = !!currentPropertyId;
 
+  // FIX 2: SMART MERGE
+  // If initialData exists, we use it, BUT we fill in missing arrays (like utilities) 
+  // with our defaults so validation doesn't fail on "missing required field".
+  const mergedValues = initialData ? {
+      ...DEFAULT_VALUES,
+      ...initialData,
+      utilities: initialData.utilities || DEFAULT_VALUES.utilities,
+      access: initialData.access || DEFAULT_VALUES.access,
+      tenants: initialData.tenants || [],
+      preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
+      mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage }, // Deep merge for safety
+      management: { ...DEFAULT_VALUES.management, ...initialData.management },
+  } : DEFAULT_VALUES;
+
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
-    defaultValues: initialData || {
-      name: '',
-      type: 'single-family',
-      address: { street: '', city: '', state: '', zip: '' },
-      financials: { targetRent: 0, securityDeposit: 0 },
-      management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
-      mortgage: { 
-        purchasePrice: 0,
-        purchaseDate: '',
-        hasMortgage: 'no', 
-        lenderName: '', 
-        escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
-      },
-      taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
-      hoa: { hasHoa: 'no', fee: 0, frequency: 'monthly', contactName: '', contactPhone: '', contactEmail: '' },
-      utilities: [
-        { type: 'Water', responsibility: 'tenant', providerName: '', providerContact: '' },
-        { type: 'Electric', responsibility: 'tenant', providerName: '', providerContact: '' },
-        { type: 'Gas', responsibility: 'tenant', providerName: '', providerContact: '' },
-        { type: 'Trash', responsibility: 'tenant', providerName: '', providerContact: '' },
-        { type: 'Internet', responsibility: 'tenant', providerName: '', providerContact: '' },
-      ],
-      access: { gateCode: '', lockboxCode: '', notes: '' },
-      tenants: [],
-      preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }]
-    }
+    defaultValues: mergedValues
   });
 
   useEffect(() => {
     if (initialData) {
-      form.reset(initialData);
+      const merged = {
+          ...DEFAULT_VALUES,
+          ...initialData,
+          utilities: initialData.utilities || DEFAULT_VALUES.utilities,
+          access: initialData.access || DEFAULT_VALUES.access,
+          tenants: initialData.tenants || [],
+          preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
+      };
+      form.reset(merged);
       setCurrentPropertyId(initialData.id);
     }
   }, [initialData, form]);
@@ -223,7 +247,6 @@ export function PropertyForm({
                 return ref.id;
             };
 
-            // Accounting Setup (Ledgers)
             accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', data.mortgage?.purchasePrice || 0);
             accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
 
@@ -258,19 +281,15 @@ export function PropertyForm({
             accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
             accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
 
-            // FIX 2: Do NOT overwrite data with empty arrays. Use ...data as the source of truth.
             batch.set(propertyRef, {
                 userId: user.uid,
-                ...data, // This contains tenants, mortgage, etc. as filled in the form
+                ...data, 
                 createdAt: timestamp,
                 accounting: accountingMap
             });
 
             await batch.commit();
-
-            // FIX 3: Update state so subsequent saves are updates
             setCurrentPropertyId(propertyRef.id);
-
             toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
         }
         
@@ -284,13 +303,24 @@ export function PropertyForm({
     }
   };
 
-  // Validation Error Handler
+  // FIX 3: Detailed Error Reporting
   const onError = (errors: any) => {
     console.log("Form Errors:", errors);
+    
+    // Check for specific commonly missing fields
+    const missingFields = [];
+    if (errors.utilities) missingFields.push("Utilities configuration");
+    if (errors.address) missingFields.push("Address details");
+    if (errors.tenants) missingFields.push("Tenant details (Email/Name)");
+
+    const desc = missingFields.length > 0 
+        ? `Missing required info in: ${missingFields.join(", ")}.` 
+        : "Please check all tabs for red error messages.";
+
     toast({ 
         variant: "destructive", 
-        title: "Validation Error", 
-        description: "Please check the form for missing required fields (e.g. Email)." 
+        title: "Validation Failed", 
+        description: desc
     });
   };
 
@@ -329,11 +359,14 @@ export function PropertyForm({
           >
             <item.icon className="h-4 w-4 shrink-0" />
             {item.label}
+            {/* Show warning icon if this section has an error */}
+            {form.formState.errors[item.id as keyof PropertyFormValues] && (
+                <AlertTriangle className="h-3 w-3 ml-auto text-red-500" />
+            )}
           </button>
         ))}
         <Separator className="my-4" />
         <div className="px-1">
-           {/* ADDED onError HANDLER HERE */}
            <Button className="w-full bg-green-600 hover:bg-green-700" onClick={form.handleSubmit(onSubmit, onError)} disabled={isSaving}>
              {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> {isEditMode ? 'Save Changes' : 'Save & Setup'}</>}
            </Button>
@@ -355,7 +388,6 @@ export function PropertyForm({
               </SelectContent>
             </Select>
          </div>
-         {/* ADDED onError HANDLER HERE TOO */}
          <Button className="w-full bg-green-600 hover:bg-green-700 shadow-md" onClick={form.handleSubmit(onSubmit, onError)} disabled={isSaving}>
              {isSaving ? "Saving..." : <><Save className="mr-2 h-4 w-4" /> {isEditMode ? 'Save Changes' : 'Save & Setup'}</>}
          </Button>
@@ -433,6 +465,7 @@ export function PropertyForm({
           </Card>
         )}
 
+        {/* ... KEEP ALL OTHER SECTIONS HERE (rentroll, maintenance, general, financials, management, mortgage, tax, hoa, utilities, access, accounting) ... */}
         {activeSection === 'rentroll' && (
           <Card>
             <CardHeader>
@@ -447,23 +480,9 @@ export function PropertyForm({
                      This report will automatically populate with payment history once you log transactions.
                   </p>
                </div>
-               
                <Table>
-                 <TableHeader>
-                   <TableRow>
-                     <TableHead>Date Paid</TableHead>
-                     <TableHead>Tenant / Description</TableHead>
-                     <TableHead>Bank Account</TableHead>
-                     <TableHead className="text-right">Amount Collected</TableHead>
-                   </TableRow>
-                 </TableHeader>
-                 <TableBody>
-                    <TableRow>
-                       <TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">
-                          Waiting for first payment...
-                       </TableCell>
-                    </TableRow>
-                 </TableBody>
+                 <TableHeader><TableRow><TableHead>Date Paid</TableHead><TableHead>Tenant / Description</TableHead><TableHead>Bank Account</TableHead><TableHead className="text-right">Amount Collected</TableHead></TableRow></TableHeader>
+                 <TableBody><TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground italic">Waiting for first payment...</TableCell></TableRow></TableBody>
                </Table>
             </CardContent>
           </Card>
@@ -489,32 +508,42 @@ export function PropertyForm({
         )}
 
         {activeSection === 'vendors' && (
-            <p className="text-center text-muted-foreground py-10">
-              The central vendor management page is under development.
-            </p>
+            <p className="text-center text-muted-foreground py-10">The central vendor management page is under development.</p>
         )}
-
+        
         {activeSection === 'general' && (
           <Card>
             <CardHeader><CardTitle>General Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2"><Label>Nickname</Label><Input {...form.register('name')} /></div>
+              <div className="grid gap-2">
+                  <Label>Nickname</Label>
+                  <Input {...form.register('name')} />
+                  {form.formState.errors.name && <span className="text-red-500 text-xs">Required</span>}
+              </div>
               <div className="grid gap-2"><Label>Type</Label>
                 <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
                    <SelectTrigger><SelectValue/></SelectTrigger>
-                   <SelectContent>
-                      <SelectItem value="single-family">Single Family</SelectItem>
-                      <SelectItem value="multi-family">Multi-Family</SelectItem>
-                      <SelectItem value="condo">Condo</SelectItem>
-                      <SelectItem value="commercial">Commercial</SelectItem>
-                   </SelectContent>
+                   <SelectContent><SelectItem value="single-family">Single Family</SelectItem><SelectItem value="multi-family">Multi-Family</SelectItem><SelectItem value="condo">Condo</SelectItem><SelectItem value="commercial">Commercial</SelectItem></SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2"><Label>Address</Label><Input placeholder="123 Main St" {...form.register('address.street')} /></div>
+              <div className="grid gap-2">
+                  <Label>Address</Label>
+                  <Input placeholder="123 Main St" {...form.register('address.street')} />
+                  {form.formState.errors.address?.street && <span className="text-red-500 text-xs">Required</span>}
+              </div>
               <div className="grid grid-cols-3 gap-4">
-                 <Input placeholder="City" {...form.register('address.city')} />
-                 <Input placeholder="State" {...form.register('address.state')} />
-                 <Input placeholder="Zip" {...form.register('address.zip')} />
+                 <div className="grid gap-2">
+                    <Input placeholder="City" {...form.register('address.city')} />
+                    {form.formState.errors.address?.city && <span className="text-red-500 text-xs">Required</span>}
+                 </div>
+                 <div className="grid gap-2">
+                    <Input placeholder="State" {...form.register('address.state')} />
+                    {form.formState.errors.address?.state && <span className="text-red-500 text-xs">Required</span>}
+                 </div>
+                 <div className="grid gap-2">
+                    <Input placeholder="Zip" {...form.register('address.zip')} />
+                    {form.formState.errors.address?.zip && <span className="text-red-500 text-xs">Required</span>}
+                 </div>
               </div>
             </CardContent>
           </Card>
@@ -541,7 +570,6 @@ export function PropertyForm({
                     <div className="flex items-center space-x-2"><RadioGroupItem value="professional" id="pro" /><Label htmlFor="pro">Professional</Label></div>
                   </RadioGroup>
                </div>
-
                {form.watch('management.isManaged') === 'professional' && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
                     <Separator />
