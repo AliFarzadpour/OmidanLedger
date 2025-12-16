@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser, useFirestore, useCollection } from '@/firebase';
+import { useState } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore'; 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,9 +17,13 @@ import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-f
 export default function PropertiesListPage() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const { data: properties, isLoading, refetch } = useCollection(
-    user ? query(collection(firestore, 'properties'), where('userId', '==', user.uid)) : null
-  );
+  
+  const propertiesQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  }, [user, firestore]);
+  
+  const { data: properties, isLoading, refetch } = useCollection(propertiesQuery);
   
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
