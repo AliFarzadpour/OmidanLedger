@@ -1,110 +1,103 @@
 'use client';
 
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase'; // Use your existing hooks
-import { collection, query, where } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { Plus, Home, FileText } from 'lucide-react';
+import { Plus, Home, FileText, Users } from 'lucide-react';
 import Link from 'next/link';
 
-export function PropertySetupBanner({ propertyId, propertyData }: { propertyId: string, propertyData: any }) {
-  const firestore = useFirestore();
+interface PropertySetupBannerProps {
+  propertyId: string;
+  propertyData: any;
+}
+
+export function PropertySetupBanner({ propertyId, propertyData }: PropertySetupBannerProps) {
   const { user } = useUser();
+  const firestore = useFirestore();
 
-  // 1. SAFE QUERIES: Wrapped in useMemoFirebase to PREVENT INFINITE LOOPS
-  const tenantsQuery = useMemoFirebase(() => {
-    if (!firestore || !propertyId || !user) return null;
-    return query(collection(firestore, 'properties'), where('userId', '==', user.uid), where('id', '==', propertyId));
-  }, [firestore, propertyId, user]);
+  // Logic to determine what's missing
+  const hasTenants = propertyData?.tenants && propertyData.tenants.length > 0;
+  const hasMortgage = propertyData?.mortgage?.hasMortgage === 'yes' && propertyData?.mortgage?.lenderName;
+  const hasTax = propertyData?.taxAndInsurance?.taxParcelId || (propertyData?.taxAndInsurance?.annualPremium || 0) > 0;
 
-  const mortgageQuery = useMemoFirebase(() => {
-    if (!firestore || !propertyId || !user) return null;
-    // Assuming mortgage is a field on the property document itself
-    return query(collection(firestore, 'properties'), where('userId', '==', user.uid), where('id', '==', propertyId));
-  }, [firestore, propertyId, user]);
-
-  const taxQuery = useMemoFirebase(() => {
-    if (!firestore || !propertyId || !user) return null;
-    // Assuming tax is a field on the property document itself
-    return query(collection(firestore, 'properties'), where('userId', '==', user.uid), where('id', '==', propertyId));
-  }, [firestore, propertyId, user]);
-
-  // 2. Fetch data safely
-  const { data: properties, isLoading: loadingProperties } = useCollection(tenantsQuery);
-  
-  if (loadingProperties) return null;
-
-  const currentProperty = properties?.[0];
-
-  // 3. Calculate Progress
-  const hasTenants = currentProperty?.tenants && currentProperty.tenants.length > 0;
-  const hasMortgage = currentProperty?.mortgage?.hasMortgage === 'yes' && currentProperty?.mortgage?.lenderName;
-  const hasTax = currentProperty?.taxAndInsurance?.taxParcelId || currentProperty?.taxAndInsurance?.annualPremium > 0;
-  
-  let progress = 0;
-  if (propertyData?.address?.street) progress += 34; // Base progress for having the property
+  // Calculate percentage
+  let progress = 34; // Base score for having the property created
   if (hasTenants) progress += 22;
   if (hasMortgage) progress += 22;
   if (hasTax) progress += 22;
 
-
-  // If complete, hide the banner
+  // If mostly complete (99%+), hide the banner
   if (progress >= 99) return null;
 
   return (
-    <div className="bg-blue-50 border border-blue-100 rounded-xl p-6 mb-8">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold text-blue-900">
+    <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 mb-8 shadow-sm">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-4">
+        <h3 className="text-lg font-semibold text-blue-950">
           Finish Setting Up {propertyData?.name || 'Property'}
         </h3>
-        <span className="text-sm font-bold text-blue-700">{Math.round(progress)}% Complete</span>
+        <span className="text-sm font-bold text-blue-600 bg-blue-100 px-3 py-1 rounded-full w-fit">
+          {Math.round(progress)}% Complete
+        </span>
       </div>
 
       {/* Progress Bar */}
-      <div className="w-full bg-blue-200 rounded-full h-2.5 mb-6">
+      <div className="w-full bg-blue-200/50 rounded-full h-2 mb-6 overflow-hidden">
         <div 
-          className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
+          className="bg-blue-600 h-full rounded-full transition-all duration-700 ease-out" 
           style={{ width: `${progress}%` }}
-        ></div>
+        />
       </div>
 
-      {/* Action Cards */}
+      {/* Action Buttons Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        {/* 1. Add Tenants Button */}
         {!hasTenants && (
-           <Button variant="outline" className="h-auto p-4 justify-start bg-white hover:bg-blue-50 border-blue-200" asChild>
+           <Button asChild variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
              <Link href={`/dashboard/properties/${propertyId}?tab=tenants`}>
-               <div className="bg-blue-100 p-2 rounded-full mr-3 text-blue-600">
-                 <Plus className="h-5 w-5" />
+               <div className="bg-blue-100 p-2.5 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                 <Users className="h-5 w-5" />
                </div>
-               <div className="text-left">
-                 <div className="font-semibold text-blue-900">Add Tenants</div>
-                 <div className="text-xs text-blue-600/70 font-normal">Track leases and rent payments</div>
-               </div>
-             </Link>
-           </Button>
-        )}
-        {!hasMortgage && (
-           <Button variant="outline" className="h-auto p-4 justify-start bg-white hover:bg-blue-50 border-blue-200" asChild>
-             <Link href={`/dashboard/properties/${propertyId}?tab=mortgage`}>
-               <div className="bg-blue-100 p-2 rounded-full mr-3 text-blue-600">
-                 <Home className="h-5 w-5" />
-               </div>
-               <div className="text-left">
-                 <div className="font-semibold text-blue-900">Setup Mortgage</div>
-                 <div className="text-xs text-blue-600/70 font-normal">Track loan balances & interest</div>
+               <div className="flex flex-col items-start min-w-0">
+                 <span className="font-semibold text-blue-950 text-base">Add Tenants</span>
+                 <span className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 text-left">
+                   Track leases and rent payments
+                 </span>
                </div>
              </Link>
            </Button>
         )}
 
+        {/* 2. Setup Mortgage Button */}
+        {!hasMortgage && (
+           <Button asChild variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
+             <Link href={`/dashboard/properties/${propertyId}?tab=mortgage`}>
+               <div className="bg-blue-100 p-2.5 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                 <Home className="h-5 w-5" />
+               </div>
+               <div className="flex flex-col items-start min-w-0">
+                 <span className="font-semibold text-blue-950 text-base">Setup Mortgage</span>
+                 <span className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 text-left">
+                   Track loan balances & interest
+                 </span>
+               </div>
+             </Link>
+           </Button>
+        )}
+
+        {/* 3. Tax & Insurance Button */}
         {!hasTax && (
-           <Button variant="outline" className="h-auto p-4 justify-start bg-white hover:bg-blue-50 border-blue-200" asChild>
+           <Button asChild variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
              <Link href={`/dashboard/properties/${propertyId}?tab=tax`}>
-               <div className="bg-blue-100 p-2 rounded-full mr-3 text-blue-600">
+               <div className="bg-blue-100 p-2.5 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                  <FileText className="h-5 w-5" />
                </div>
-               <div className="text-left">
-                 <div className="font-semibold text-blue-900">Tax & Insurance</div>
-                 <div className="text-xs text-blue-600/70 font-normal">Record tax payments & policies</div>
+               <div className="flex flex-col items-start min-w-0">
+                 <span className="font-semibold text-blue-950 text-base">Tax & Insurance</span>
+                 <span className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 text-left">
+                   Record tax payments & policies
+                 </span>
                </div>
              </Link>
            </Button>
