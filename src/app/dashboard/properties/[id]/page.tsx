@@ -36,6 +36,7 @@ export default function PropertyDetailsPage() {
   const [isEditOpen, setIsEditOpen] = useState(false);
   
   const defaultTab = searchParams.get('tab') || 'overview';
+  const [formTab, setFormTab] = useState('general');
 
   useEffect(() => {
     if (!firestore || !id) return;
@@ -57,6 +58,11 @@ export default function PropertyDetailsPage() {
     return () => unsubscribe();
   }, [firestore, id]);
 
+  const handleOpenDialog = (tab: string) => {
+    setFormTab(tab);
+    setIsEditOpen(true);
+  }
+
   if (isLoading) return <div className="p-8 text-muted-foreground">Loading property details...</div>;
   if (!property) return <div className="p-8">Property not found.</div>;
 
@@ -75,7 +81,7 @@ export default function PropertyDetailsPage() {
         
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogTrigger asChild>
-            <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
+            <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
              <DialogHeader>
@@ -84,7 +90,7 @@ export default function PropertyDetailsPage() {
                    Update tenants, mortgage details, and configuration for {property.name}.
                 </DialogDescription>
              </DialogHeader>
-             <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} defaultTab={defaultTab}/>
+             <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} defaultTab={formTab}/>
           </DialogContent>
         </Dialog>
       </div>
@@ -128,7 +134,7 @@ export default function PropertyDetailsPage() {
                     <CardTitle>Current Residents</CardTitle>
                     <CardDescription>Lease details for this property.</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => setIsEditOpen(true)}>Manage Tenants</Button>
+                  <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
               </CardHeader>
               <CardContent>
                   {property.tenants && property.tenants.length > 0 ? (
