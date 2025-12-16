@@ -1,8 +1,8 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useDoc } from '@/firebase'; 
-import { doc } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,6 @@ import { ArrowLeft, Edit } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form'; 
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials'; 
-import { useState } from 'react';
 import { 
   Dialog, 
   DialogContent, 
@@ -19,7 +18,6 @@ import {
   DialogTitle, 
   DialogDescription 
 } from '@/components/ui/dialog';
-// FIX: Added Card imports here
 import { 
   Card, 
   CardContent, 
@@ -31,19 +29,34 @@ import {
 export default function PropertyDetailsPage() {
   const { id } = useParams();
   const firestore = useFirestore();
+  const [property, setProperty] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
 
-  // Fetch Property Data
-  const { data: property, isLoading, refetch } = useDoc(
-    doc(firestore, 'properties', id as string)
-  );
+  // FIX: Replaced useDocument with a direct useEffect listener
+  // This prevents the "stuck loading" bug if the hook doesn't resolve.
+  useEffect(() => {
+    if (!firestore || !id) return; // Wait for DB connection
 
-  const handleEditSuccess = () => {
-    setIsEditOpen(false);
-    refetch(); // Refetch the data to show updates
-  };
+    const docRef = doc(firestore, 'properties', id as string);
+    
+    // Real-time listener
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            setProperty({ id: docSnap.id, ...docSnap.data() });
+        } else {
+            setProperty(null); // Document deleted or doesn't exist
+        }
+        setIsLoading(false); // Data loaded (or confirmed missing)
+    }, (error) => {
+        console.error("Error fetching property:", error);
+        setIsLoading(false);
+    });
 
-  if (isLoading) return <div className="p-8">Loading property...</div>;
+    return () => unsubscribe();
+  }, [firestore, id]);
+
+  if (isLoading) return <div className="p-8 text-muted-foreground">Loading property details...</div>;
   if (!property) return <div className="p-8">Property not found.</div>;
 
   return (
@@ -65,27 +78,27 @@ export default function PropertyDetailsPage() {
           <DialogTrigger asChild>
             <Button variant="outline"><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
           </DialogTrigger>
-          <DialogContent className="max-w-5xl h-[90vh] p-0">
-             <DialogHeader className="p-6 pb-0">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+             <DialogHeader>
                 <DialogTitle>Edit Property Settings</DialogTitle>
                 <DialogDescription>
                    Update tenants, mortgage details, and configuration for {property.name}.
                 </DialogDescription>
              </DialogHeader>
-             <div className="overflow-y-auto px-6 pb-6">
-                <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={handleEditSuccess} />
-             </div>
+             
+             {/* The Form is strictly for Editing Data */}
+             <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} />
           </DialogContent>
         </Dialog>
       </div>
 
       {/* MAIN TABS */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+        <TabsList className="grid w-full grid-cols-4 lg:w-[600px]">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tenants">Tenants</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="income">Income</TabsTrigger>
+          <TabsTrigger value="financials">Expenses</TabsTrigger>
+          <TabsTrigger value="leases">Lease Summary</TabsTrigger>
         </TabsList>
 
         {/* 1. OVERVIEW TAB */}
@@ -94,7 +107,7 @@ export default function PropertyDetailsPage() {
               <Card>
                  <CardHeader className="pb-2">
                     <CardDescription>Target Rent</CardDescription>
-                    <CardTitle className="text-2xl font-bold">${(property.financials?.targetRent || 0).toLocaleString()}</CardTitle>
+                    <CardTitle className="text-2xl font-bold">${property.financials?.targetRent || 0}</CardTitle>
                  </CardHeader>
               </Card>
               <Card>
@@ -105,6 +118,7 @@ export default function PropertyDetailsPage() {
                     </CardTitle>
                  </CardHeader>
               </Card>
+              {/* Add more summary widgets here if needed */}
            </div>
         </TabsContent>
 
@@ -128,7 +142,7 @@ export default function PropertyDetailsPage() {
                                   <p className="text-sm text-muted-foreground">{t.email}</p>
                                </div>
                                <div className="text-right">
-                                  <p className="font-medium">${t.rentAmount.toLocaleString()}/mo</p>
+                                  <p className="font-medium">${t.rentAmount}/mo</p>
                                   <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
                                </div>
                             </div>
@@ -141,8 +155,8 @@ export default function PropertyDetailsPage() {
            </Card>
         </TabsContent>
 
-        {/* 3. EXPENSES (was Financials) TAB */}
-        <TabsContent value="expenses" className="mt-6">
+        {/* 3. FINANCIALS (Expenses) TAB */}
+        <TabsContent value="financials" className="mt-6">
            <PropertyFinancials 
               propertyId={property.id} 
               propertyName={property.name} 
@@ -150,8 +164,8 @@ export default function PropertyDetailsPage() {
            />
         </TabsContent>
 
-        {/* 4. INCOME (was Leases) TAB */}
-        <TabsContent value="income" className="mt-6">
+        {/* 4. LEASE SUMMARY (Income) TAB */}
+        <TabsContent value="leases" className="mt-6">
            <PropertyFinancials 
               propertyId={property.id} 
               propertyName={property.name} 
