@@ -1,17 +1,17 @@
 'use client';
 
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { Plus, Home, FileText, Users } from 'lucide-react';
+import { Home, FileText, Users } from 'lucide-react';
 import Link from 'next/link';
 
 interface PropertySetupBannerProps {
   propertyId: string;
   propertyData: any;
+  onOpenSettings: (tab: string) => void; // New prop for handling clicks
 }
 
-export function PropertySetupBanner({ propertyId, propertyData }: PropertySetupBannerProps) {
+export function PropertySetupBanner({ propertyId, propertyData, onOpenSettings }: PropertySetupBannerProps) {
   const { user } = useUser();
   const firestore = useFirestore();
 
@@ -54,8 +54,7 @@ export function PropertySetupBanner({ propertyId, propertyData }: PropertySetupB
         
         {/* 1. Add Tenants Button */}
         {!hasTenants && (
-           <Button asChild variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
-             <Link href={`/dashboard/properties/${propertyId}?tab=tenants`}>
+           <Button onClick={() => onOpenSettings('tenants')} variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
                <div className="bg-blue-100 p-2.5 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                  <Users className="h-5 w-5" />
                </div>
@@ -65,41 +64,36 @@ export function PropertySetupBanner({ propertyId, propertyData }: PropertySetupB
                    Track leases and rent payments
                  </span>
                </div>
-             </Link>
            </Button>
         )}
 
         {/* 2. Setup Mortgage Button */}
         {!hasMortgage && (
-           <Button asChild variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
-             <Link href={`/dashboard/properties/${propertyId}?tab=mortgage`}>
+           <Button onClick={() => onOpenSettings('mortgage')} variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
                <div className="bg-blue-100 p-2.5 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                  <Home className="h-5 w-5" />
                </div>
                <div className="flex flex-col items-start min-w-0">
                  <span className="font-semibold text-blue-950 text-base">Setup Mortgage</span>
                  <span className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 text-left">
-                   Track loan balances & interest
+                   Track loan balances &amp; interest
                  </span>
                </div>
-             </Link>
            </Button>
         )}
 
         {/* 3. Tax & Insurance Button */}
         {!hasTax && (
-           <Button asChild variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
-             <Link href={`/dashboard/properties/${propertyId}?tab=tax`}>
+           <Button onClick={() => onOpenSettings('tax')} variant="outline" className="h-auto py-4 px-4 justify-start bg-white hover:bg-blue-50 hover:border-blue-300 border-blue-200 shadow-sm relative group whitespace-normal">
                <div className="bg-blue-100 p-2.5 rounded-full mr-3 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                  <FileText className="h-5 w-5" />
                </div>
                <div className="flex flex-col items-start min-w-0">
-                 <span className="font-semibold text-blue-950 text-base">Tax & Insurance</span>
+                 <span className="font-semibold text-blue-950 text-base">Tax &amp; Insurance</span>
                  <span className="text-xs text-slate-500 font-normal mt-0.5 line-clamp-2 text-left">
-                   Record tax payments & policies
+                   Record tax payments &amp; policies
                  </span>
                </div>
-             </Link>
            </Button>
         )}
       </div>

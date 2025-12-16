@@ -98,6 +98,7 @@ export default function PropertyDetailsPage() {
       <PropertySetupBanner 
          propertyId={id as string}
          propertyData={property} 
+         onOpenSettings={handleOpenDialog}
       />
 
       <Tabs defaultValue={defaultTab} className="w-full">
