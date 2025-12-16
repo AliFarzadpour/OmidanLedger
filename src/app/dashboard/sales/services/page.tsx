@@ -25,6 +25,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+// A small isolated component to prevent the Table Loop Error
+function InvoiceRowActions({ invoiceId }: { invoiceId: string }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="h-8 w-8 p-0">
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem asChild>
+          <Link href={`/dashboard/sales/services/${invoiceId}`}>Edit / View</Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="text-red-600">
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function ServiceInvoicesPage() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -175,31 +196,18 @@ export default function ServiceInvoicesPage() {
                   <td className="px-6 py-4 text-center">
                     <Badge variant={
                       inv.status === 'open' ? 'default' : 
-                      inv.status === 'paid' ? 'secondary' : // Green usually implies success/paid
+                      inv.status === 'paid' ? 'secondary' : 
                       inv.status === 'overdue' ? 'destructive' : 'outline'
                     } className={
                         inv.status === 'open' ? 'bg-blue-100 text-blue-700 hover:bg-blue-100' :
                         inv.status === 'paid' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
                         inv.status === 'draft' ? 'bg-slate-100 text-slate-700 hover:bg-slate-100' : ''
                     }>
-                      {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
+                      {inv.status ? inv.status.charAt(0).toUpperCase() + inv.status.slice(1) : 'Unknown'}
                     </Badge>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem asChild>
-                           {/* We will build the Edit page next */}
-                           <Link href={`/dashboard/sales/services/${inv.id}`}>Edit / View</Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <InvoiceRowActions invoiceId={inv.id} />
                   </td>
                 </tr>
               ))}
