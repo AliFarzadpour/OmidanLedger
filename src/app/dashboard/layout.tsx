@@ -3,20 +3,16 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/firebase';
-import { Header } from '@/components/header';
-import { MainNav } from '@/components/dashboard/main-nav';
 import { UserNav } from '@/components/dashboard/user-nav';
-import { Logo } from '@/components/logo';
+import { AppSidebar } from "@/components/app-sidebar"
 import {
   SidebarProvider,
-  Sidebar,
-  SidebarHeader,
-  SidebarContent,
-  SidebarFooter,
   SidebarInset,
   SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from "@/components/ui/separator"
+
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
@@ -55,25 +51,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   
   return (
     <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader className="p-4">
-          <Logo />
-        </SidebarHeader>
-        <SidebarContent className="p-2">
-          <MainNav />
-        </SidebarContent>
-        <SidebarFooter className="p-4">
-          <UserNav isMobile={false}/>
-        </SidebarFooter>
-      </Sidebar>
-      <SidebarInset className="flex flex-col">
-        <Header>
-          <SidebarTrigger className="md:hidden" />
-          <div className="flex-1" />
-          <UserNav isMobile={true}/>
-        </Header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+      {/* The New Sidebar */}
+      <AppSidebar />
+      
+      {/* The Main Content Area */}
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4 bg-white">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex-1">
+             {/* You can add Breadcrumbs here later if you want */}
+          </div>
+           <UserNav isMobile={true}/>
+        </header>
+        
+        {/* The Page Content */}
+        <main className="flex-1 overflow-auto p-4 md:p-8">
+           {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
-  );
+  )
 }
