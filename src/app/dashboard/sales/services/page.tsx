@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useCollection } from '@/firebase'; // Use your hooks
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -15,7 +16,8 @@ import {
   FileText,
   Loader2,
   Pencil,
-  Trash2
+  Trash2,
+  ArrowLeft
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -30,6 +32,7 @@ import {
 export default function ServiceInvoicesPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
 
   const invoicesQuery = useMemo(() => {
@@ -59,15 +62,28 @@ export default function ServiceInvoicesPage() {
 
   // Placeholder for "Collected this month" (requires payment logic later)
   const collectedThisMonth = 0; 
+  
+  const handleDelete = async (invoiceId: string) => {
+      if (!firestore) return;
+      if (window.confirm('Are you sure you want to delete this invoice?')) {
+          const docRef = doc(firestore, 'invoices', invoiceId);
+          await deleteDoc(docRef);
+      }
+  }
 
   return (
     <div className="space-y-8 p-8">
       
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Service Invoices</h1>
-          <p className="text-muted-foreground mt-1">Manage consulting, hourly work, and project billing.</p>
+        <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/sales')}>
+                <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900">Service Invoices</h1>
+                <p className="text-muted-foreground mt-1">Manage consulting, hourly work, and project billing.</p>
+            </div>
         </div>
         <div className="flex gap-3">
           <Button className="bg-blue-600 hover:bg-blue-700 gap-2" asChild>
@@ -184,7 +200,7 @@ export default function ServiceInvoicesPage() {
                           <Pencil className="h-4 w-4" />
                         </Link>
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50">
+                      <Button variant="ghost" size="icon" onClick={() => handleDelete(inv.id)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
