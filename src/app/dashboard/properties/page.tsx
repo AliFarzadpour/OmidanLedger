@@ -7,16 +7,18 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Home, MapPin, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden'; 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
 
 export default function PropertiesListPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
   
   const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -38,10 +40,15 @@ export default function PropertiesListPage() {
 
   return (
     <div className="space-y-8 p-4 md:p-8">
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My Properties</h1>
-          <p className="text-muted-foreground">Manage your portfolio and automated ledgers.</p>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex items-center gap-2">
+           <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/sales')}>
+              <ArrowLeft className="h-5 w-5" />
+           </Button>
+           <div>
+              <h1 className="text-3xl font-bold tracking-tight">My Properties</h1>
+              <p className="text-muted-foreground">Manage your portfolio and automated ledgers.</p>
+           </div>
         </div>
         
         <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
