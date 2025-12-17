@@ -1,8 +1,8 @@
+
 'use client';
 
 import * as React from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation"; // Import useRouter
 import {
   Building2,    // Properties
   Users,        // Tenants/Vendors
@@ -11,13 +11,11 @@ import {
   PieChart,     // Reports
   Settings,
   Landmark,     // Main Logo
-  ArrowLeftRight // Switcher icon (visual only for now)
 } from "lucide-react";
 
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -37,7 +35,6 @@ const data = {
     },
     {
       title: "Tenants",
-      // We can point this to the property list for now, or a specific tenant list later
       url: "/dashboard/properties?view=tenants", 
       icon: Users,
     },
@@ -73,6 +70,7 @@ const data = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  const router = useRouter(); // Initialize the router
   const pathname = usePathname();
 
   return (
@@ -97,11 +95,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 const isActive = pathname.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive} className="h-10">
-                      <Link href={item.url} className={isActive ? "font-medium text-blue-700" : "text-slate-600"}>
-                        <item.icon className="mr-2 h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
+                    <SidebarMenuButton 
+                      isActive={isActive} 
+                      onClick={() => router.push(item.url)} // Direct navigation
+                      className={`h-10 cursor-pointer ${isActive ? "font-medium text-blue-700" : "text-slate-600"}`}
+                    >
+                      <item.icon className="mr-2 h-4 w-4" />
+                      <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -121,11 +121,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 const isActive = pathname.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild isActive={isActive} className="h-10">
-                      <Link href={item.url} className={isActive ? "font-medium text-blue-700" : "text-slate-600"}>
-                        <item.icon className="mr-2 h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
+                    <SidebarMenuButton 
+                      isActive={isActive} 
+                      onClick={() => router.push(item.url)} // Direct navigation
+                      className={`h-10 cursor-pointer ${isActive ? "font-medium text-blue-700" : "text-slate-600"}`}
+                    >
+                      <item.icon className="mr-2 h-4 w-4" />
+                      <span>{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -140,11 +142,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               {data.system.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild className="h-10">
-                    <Link href={item.url}>
-                      <item.icon className="mr-2 h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
+                  <SidebarMenuButton 
+                    onClick={() => router.push(item.url)} 
+                    className="h-10 cursor-pointer text-slate-600"
+                  >
+                    <item.icon className="mr-2 h-4 w-4" />
+                    <span>{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
