@@ -53,10 +53,11 @@ export default function TransactionsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
+    <div className="space-y-8 p-8 max-w-7xl mx-auto">
+      
+      <div className="flex justify-between items-start">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Transactions</h1>
           <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
         </div>
         <Button onClick={handleAdd}>
