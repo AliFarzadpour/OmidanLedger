@@ -6,11 +6,11 @@ import {
   Building2,
   Users,
   CreditCard,
-  FileText,
   PieChart,
   Settings,
   Landmark,
-  LayoutDashboard, // Import LayoutDashboard icon
+  LayoutDashboard,
+  Wallet, // Changed from FileText
 } from "lucide-react";
 
 import {
@@ -50,9 +50,9 @@ const data = {
       icon: CreditCard,
     },
     {
-      title: "Invoices & Billing",
+      title: "Revenue Center", // Renamed from 'Invoices & Billing'
       url: "/dashboard/sales",
-      icon: FileText,
+      icon: Wallet, // Changed icon
     },
     {
       title: "Reports",
