@@ -44,11 +44,13 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
   const rawPrimary = (plaidPrimary || '').toUpperCase();
   const desc = description.toUpperCase();
 
+  // 1. Check for obvious Income
   if (rawPrimary === 'INCOME' || rawDetailed.includes('DIVIDENDS') || rawDetailed.includes('INTEREST')) {
     if (rawDetailed.includes('INTEREST')) return { primary: 'Income', secondary: 'Non-Operating Income', sub: 'Interest Income' };
     return { primary: 'Income', secondary: 'Operating Income', sub: 'Sales / Service' };
   }
 
+  // 2. Specific Logic based on Description (Overrides Plaid)
   if (desc.includes('UBER') || desc.includes('LYFT')) {
     return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Taxis & Rideshare' };
   }
@@ -59,6 +61,7 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
     return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Utilities' };
   }
 
+  // 3. Map Plaid Categories to Business Buckets
   if (rawPrimary === 'RENT_AND_UTILITIES') {
      return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities' };
   }
@@ -82,7 +85,8 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer' };
   }
 
-  const cleanSub = rawDetailed.split('_').pop() || 'General'; 
+  // 4. Default / Fallback
+  const cleanSub = rawDetailed.split('_').pop() || 'General';
   const formattedSub = cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1).toLowerCase();
   
   return { 
@@ -109,6 +113,9 @@ const createLinkTokenFlow = ai.defineFlow(
         products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
+        transactions: {
+          days_requested: 730 // <-- REQUEST MORE HISTORY
+        }
       });
       return response.data.link_token;
     } catch (error: any) {
@@ -138,31 +145,20 @@ const CreateBankAccountInputSchema = z.object({ userId: z.string(), accessToken:
 export async function createBankAccountFromPlaid(input: z.infer<typeof CreateBankAccountInputSchema>): Promise<void> {
   await createBankAccountFromPlaidFlow(input);
 }
-// 👇 FIXED: This flow now iterates over all accounts.
 const createBankAccountFromPlaidFlow = ai.defineFlow(
-  {
-    name: 'createBankAccountFromPlaidFlow',
-    inputSchema: CreateBankAccountInputSchema,
-    outputSchema: z.void(),
-  },
+  { name: 'createBankAccountFromPlaidFlow', inputSchema: CreateBankAccountInputSchema, outputSchema: z.void() },
   async ({ userId, accessToken, metadata }) => {
-    const db = getAdminDB(); 
+    const db = getAdminDB();
     const plaidClient = getPlaidClient();
-    const batch = db.batch(); // Use a batch for atomic writes
+    const batch = db.batch();
 
     try {
-      // 1. Fetch all accounts associated with the Item
-      const accountsResponse = await plaidClient.accountsGet({
-        access_token: accessToken,
-      });
-
+      const accountsResponse = await plaidClient.accountsGet({ access_token: accessToken });
       if (!accountsResponse.data.accounts || accountsResponse.data.accounts.length === 0) {
         throw new Error('No accounts found for this Plaid item.');
       }
-      
       const institutionName = metadata?.institution?.name || 'Unknown Bank';
 
-      // 2. Loop through every account returned by Plaid
       accountsResponse.data.accounts.forEach(accountData => {
         const newAccount = {
           userId,
@@ -173,15 +169,12 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
           accountType: accountData.subtype || 'other',
           bankName: institutionName,
           accountNumber: accountData.mask || 'N/A',
-          plaidSyncCursor: null, // Start with a null cursor for the first sync
+          plaidSyncCursor: null,
         };
-        
-        // Add a "set" operation to the batch for each account
         const accountDocRef = db.collection('users').doc(userId).collection('bankAccounts').doc(accountData.account_id);
         batch.set(accountDocRef, newAccount, { merge: true });
       });
 
-      // 3. Commit the batch to save all accounts at once
       await batch.commit();
 
     } catch (error: any) {
@@ -190,7 +183,6 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
     }
   }
 );
-
 
 const SyncTransactionsInputSchema = z.object({ userId: z.string(), bankAccountId: z.string() });
 export async function syncAndCategorizePlaidTransactions(input: z.infer<typeof SyncTransactionsInputSchema>): Promise<{ count: number }> {
@@ -247,10 +239,11 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
 
         const batch = db.batch();
-        const transactionsRef = accountRef.collection('transactions');
 
         relevantTransactions.forEach((tx) => {
-            const docRef = transactionsRef.doc(tx.transaction_id);
+            // Correctly reference the sub-collection for the specific account
+            const transactionAccountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(tx.account_id);
+            const docRef = transactionAccountRef.collection('transactions').doc(tx.transaction_id);
             
             const smartCategory = mapPlaidToBusinessCategory(
                 tx.personal_finance_category?.primary,
@@ -263,13 +256,11 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 description: tx.name,
                 amount: tx.amount * -1,
                 merchantName: tx.merchant_name || tx.name,
-                
                 primaryCategory: smartCategory.primary,
                 secondaryCategory: smartCategory.secondary,
                 subcategory: smartCategory.sub,
-                
                 plaidTransactionId: tx.transaction_id,
-                bankAccountId: bankAccountId,
+                bankAccountId: tx.account_id, // Use the account_id from the transaction
                 userId: userId,
                 status: 'pending_review',
                 confidence: 0.8,
@@ -278,6 +269,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         });
 
         await batch.commit();
+        // We update the cursor on the account that initiated the sync.
+        // All accounts under the same item share the same cursor progress.
         await accountRef.update({ plaidSyncCursor: cursor });
         return { count: relevantTransactions.length };
 
