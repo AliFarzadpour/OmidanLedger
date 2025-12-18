@@ -132,15 +132,24 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
         const { firestore } = initializeServerFirebase();
         const plaidClient = getPlaidClient();
 
+        console.log("🔍 Debug: Metadata received:", JSON.stringify(metadata, null, 2));
+
         try {
-            // Get account details from Plaid
+            // 1. Get account details from Plaid
             const accountsResponse = await plaidClient.accountsGet({
                 access_token: accessToken,
             });
             
-            // Correctly get the account ID from the metadata object
-            const selectedAccountId = metadata.account.id;
+            // 2. Safely extract metadata (Prevents "Cannot read property of undefined" crashes)
+            // If metadata.account is missing, default to the first account in the response
+            const selectedAccountId = metadata?.account?.id || accountsResponse.data.accounts[0]?.account_id;
+            const institutionName = metadata?.institution?.name || 'Unknown Bank';
 
+            if (!selectedAccountId) {
+                throw new Error('No account ID found in Metadata or Plaid Response.');
+            }
+
+            // 3. Find the specific account details
             const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === selectedAccountId);
 
             if (!accountData) {
@@ -154,21 +163,25 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
                 plaidAccountId: accountData.account_id,
                 accountName: accountData.name,
                 accountType: accountData.subtype || 'other',
-                bankName: metadata.institution.name,
-                accountNumber: accountData.mask,
-                plaidSyncCursor: null, // Initialize sync cursor
+                bankName: institutionName, 
+                accountNumber: accountData.mask || 'N/A', // Handle null masks safely
+                plaidSyncCursor: null, 
             };
             
-            const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, accountData.account_id);
+            console.log("💾 Saving to Firestore:", newAccount);
 
+            // 4. Save to Firestore
+            const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, accountData.account_id);
             await setDoc(bankAccountRef, newAccount, { merge: true });
 
         } catch (error: any) {
-            console.error('Error creating bank account from Plaid:', error.response?.data || error.message);
-            throw new Error('Could not create bank account from Plaid data.');
+            // Log the REAL error to the server console
+            console.error('🔴 DETAILED ERROR:', error.response?.data || error.message || error);
+            
+            // Re-throw a message that might actually help the UI
+            throw new Error(`Failed to save account: ${error.message}`);
         }
-    }
-);
+    });
 
 const SyncTransactionsInputSchema = z.object({
   userId: z.string(),
