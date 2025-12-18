@@ -33,7 +33,7 @@ import { useUser, useFirestore } from '@/firebase';
 import { collection, doc, addDoc, setDoc } from 'firebase/firestore';
 import { PlaidLink } from './plaid-link';
 import { Separator } from '@/components/ui/separator';
-import { createBankAccountFromPlaid, exchangePublicToken } from '@/ai/flows/plaid-flows';
+import { createBankAccountFromPlaid, exchangePublicToken } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
 import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
 
