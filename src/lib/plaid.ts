@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -116,65 +115,66 @@ export async function createBankAccountFromPlaid(input: z.infer<typeof CreateBan
   await createBankAccountFromPlaidFlow(input);
 }
 
-// 👇 FIXED FUNCTION: Uses Admin SDK Syntax
 const createBankAccountFromPlaidFlow = ai.defineFlow(
-  {
-    name: 'createBankAccountFromPlaidFlow',
-    inputSchema: CreateBankAccountInputSchema,
-    outputSchema: z.void(),
-  },
-  async ({ userId, accessToken, metadata }) => {
-    const db = getAdminDB(); // Use Admin DB
-    const plaidClient = getPlaidClient();
+    {
+        name: 'createBankAccountFromPlaidFlow',
+        inputSchema: CreateBankAccountInputSchema,
+        outputSchema: z.void(),
+    },
+    async ({ userId, accessToken, metadata }) => {
+        const { firestore } = initializeServerFirebase();
+        const plaidClient = getPlaidClient();
 
-    console.log("Creating Bank Account. Metadata:", JSON.stringify(metadata));
+        console.log("🔍 Debug: Metadata received:", JSON.stringify(metadata, null, 2));
 
-    try {
-      // 1. Fetch real account data from Plaid to be safe
-      const accountsResponse = await plaidClient.accountsGet({
-        access_token: accessToken,
-      });
+        try {
+            // 1. Get account details from Plaid
+            const accountsResponse = await plaidClient.accountsGet({
+                access_token: accessToken,
+            });
+            
+            // 2. Safely extract metadata (Prevents "Cannot read property of undefined" crashes)
+            // If metadata.account is missing, default to the first account in the response
+            const selectedAccountId = metadata?.account?.id || accountsResponse.data.accounts[0]?.account_id;
+            const institutionName = metadata?.institution?.name || 'Unknown Bank';
 
-      // 2. Determine which account to save
-      // Prefer the ID from metadata, fallback to the first one found
-      const selectedAccountId = metadata?.account?.id || accountsResponse.data.accounts[0]?.account_id;
-      const institutionName = metadata?.institution?.name || 'Unknown Bank';
+            if (!selectedAccountId) {
+                throw new Error('No account ID found in Metadata or Plaid Response.');
+            }
 
-      if (!selectedAccountId) throw new Error('No Account ID found.');
+            // 3. Find the specific account details
+            const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === selectedAccountId);
 
-      const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === selectedAccountId);
-      if (!accountData) throw new Error('Account data not found in Plaid response.');
+            if (!accountData) {
+                throw new Error(`Account with ID ${selectedAccountId} not found in Plaid response.`);
+            }
 
-      // 3. Prepare Data
-      const newAccount = {
-        userId,
-        plaidAccessToken: accessToken,
-        plaidItemId: accountsResponse.data.item.item_id,
-        plaidAccountId: accountData.account_id,
-        accountName: accountData.name,
-        accountType: accountData.subtype || 'other',
-        bankName: institutionName,
-        accountNumber: accountData.mask || 'N/A',
-        plaidSyncCursor: null,
-      };
+            const newAccount = {
+                userId,
+                plaidAccessToken: accessToken,
+                plaidItemId: accountsResponse.data.item.item_id,
+                plaidAccountId: accountData.account_id,
+                accountName: accountData.name,
+                accountType: accountData.subtype || 'other',
+                bankName: institutionName, 
+                accountNumber: accountData.mask || 'N/A', // Handle null masks safely
+                plaidSyncCursor: null, 
+            };
+            
+            console.log("💾 Saving to Firestore:", newAccount);
 
-      // 4. Save using ADMIN syntax (db.doc().set())
-      // Note: No "doc(db, ...)" wrapper needed here
-      await db
-        .collection('users')
-        .doc(userId)
-        .collection('bankAccounts')
-        .doc(accountData.account_id)
-        .set(newAccount, { merge: true });
-        
-      console.log("✅ Bank Account Saved Successfully");
+            // 4. Save to Firestore
+            const bankAccountRef = doc(firestore, `users/${userId}/bankAccounts`, accountData.account_id);
+            await setDoc(bankAccountRef, newAccount, { merge: true });
 
-    } catch (error: any) {
-      console.error('Create Bank Account Error:', error.response?.data || error);
-      throw new Error(`Failed to save bank account: ${error.message}`);
-    }
-  }
-);
+        } catch (error: any) {
+            // Log the REAL error to the server console
+            console.error('🔴 DETAILED ERROR:', error.response?.data || error.message || error);
+            
+            // Re-throw a message that might actually help the UI
+            throw new Error(`Failed to save account: ${error.message}`);
+        }
+    });
 
 const SyncTransactionsInputSchema = z.object({
   userId: z.string(),
@@ -185,7 +185,7 @@ export async function syncAndCategorizePlaidTransactions(input: z.infer<typeof S
   return syncAndCategorizePlaidTransactionsFlow(input);
 }
 
-// 👇 FIXED FUNCTION: Uses Admin SDK Syntax
+// 👇 REPLACE THE SYNC FLOW AT THE BOTTOM WITH THIS 👇
 const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
   {
     name: 'syncAndCategorizePlaidTransactionsFlow',
@@ -196,64 +196,105 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     const db = getAdminDB();
     const plaidClient = getPlaidClient();
 
-    // 1. Get Access Token
-    const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
-    const accountSnap = await accountRef.get(); // Admin SDK uses .get(), not getDoc()
+    console.log(`🔄 Syncing Plaid for User: ${userId}, Account: ${bankAccountId}`);
 
-    if (!accountSnap.exists) {
-      throw new Error("Bank account not found in DB.");
+    try {
+        // 1. Get Access Token from Firestore
+        const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
+        const accountSnap = await accountRef.get();
+
+        if (!accountSnap.exists) {
+            throw new Error(`Bank account ${bankAccountId} not found in DB.`);
+        }
+
+        const data = accountSnap.data();
+        const accessToken = data?.plaidAccessToken;
+        
+        // ⚠️ FIX: Plaid expects 'undefined' for empty cursors, NOT 'null'
+        let cursor = data?.plaidSyncCursor ?? undefined; 
+
+        if (!accessToken) throw new Error("No access token found for this account.");
+
+        // 2. Fetch Transactions (Pagination Loop)
+        let allTransactions: PlaidTransaction[] = [];
+        let hasMore = true;
+
+        // Safety: Limit loop to prevent infinite runs during dev
+        let loopCount = 0;
+        const MAX_LOOPS = 5; 
+
+        while (hasMore && loopCount < MAX_LOOPS) {
+            loopCount++;
+            const response = await plaidClient.transactionsSync({
+                access_token: accessToken,
+                cursor: cursor,
+                count: 100, // Max per page
+                options: { 
+                    include_personal_finance_category: true, // Help AI with categories
+                }
+            });
+
+            const newData = response.data;
+            allTransactions = allTransactions.concat(newData.added);
+            
+            // Update cursor and loop status
+            hasMore = newData.has_more;
+            cursor = newData.next_cursor;
+        }
+
+        console.log(`📥 Fetched ${allTransactions.length} new transactions.`);
+
+        if (allTransactions.length === 0) {
+            // Even if no transactions, update cursor so we don't check old history again
+            await accountRef.update({ plaidSyncCursor: cursor });
+            return { count: 0 };
+        }
+
+        // 3. Save Transactions (Batch Write)
+        const batch = db.batch();
+        const transactionsRef = accountRef.collection('transactions');
+
+        allTransactions.forEach((tx) => {
+            const docRef = transactionsRef.doc(tx.transaction_id);
+            
+            batch.set(docRef, {
+                date: tx.date,
+                description: tx.name,
+                amount: tx.amount, // Positive = Expense, Negative = Income (Usually)
+                merchantName: tx.merchant_name || tx.name,
+                
+                // Use Plaid's category if available as a fallback
+                primaryCategory: tx.personal_finance_category?.primary || 'Uncategorized',
+                secondaryCategory: tx.personal_finance_category?.detailed || '',
+                subcategory: '', // AI will fill this later if we run categorization
+                
+                plaidTransactionId: tx.transaction_id,
+                bankAccountId: bankAccountId,
+                userId: userId,
+                status: 'pending_review',
+                confidence: 0.5, // Low confidence until AI reviews it
+                createdAt: FieldValue.serverTimestamp()
+            }, { merge: true });
+        });
+
+        await batch.commit();
+        
+        // Update cursor AFTER successful save
+        await accountRef.update({ plaidSyncCursor: cursor });
+
+        console.log("✅ Sync Complete.");
+        return { count: allTransactions.length };
+
+    } catch (error: any) {
+        // Detailed Error Logging
+        const plaidError = error.response?.data;
+        console.error("🔴 Plaid Sync Failed:", plaidError || error.message);
+        
+        if (plaidError?.error_code === 'ITEM_LOGIN_REQUIRED') {
+            throw new Error("Bank connection expired. Please reconnect your account.");
+        }
+        
+        throw new Error(`Sync failed: ${plaidError?.error_message || error.message}`);
     }
-
-    const data = accountSnap.data();
-    const accessToken = data?.plaidAccessToken;
-    let cursor = data?.plaidSyncCursor || null;
-
-    if (!accessToken) throw new Error("No access token found.");
-
-    // 2. Fetch Transactions (Pagination)
-    let allTransactions: PlaidTransaction[] = [];
-    let hasMore = true;
-
-    while (hasMore) {
-      const response = await plaidClient.transactionsSync({
-        access_token: accessToken,
-        cursor: cursor,
-        count: 100,
-        options: { account_ids: [bankAccountId] }
-      });
-
-      allTransactions = allTransactions.concat(response.data.added);
-      hasMore = response.data.has_more;
-      cursor = response.data.next_cursor;
-    }
-
-    if (allTransactions.length === 0) {
-      await accountRef.update({ plaidSyncCursor: cursor });
-      return { count: 0 };
-    }
-
-    // 3. Save Transactions (Batch)
-    const batch = db.batch();
-    const transactionsRef = accountRef.collection('transactions');
-
-    allTransactions.forEach((tx) => {
-      const docRef = transactionsRef.doc(tx.transaction_id);
-      batch.set(docRef, {
-        date: tx.date,
-        description: tx.name,
-        amount: tx.amount,
-        merchantName: tx.merchant_name || tx.name,
-        category: tx.category ? tx.category[0] : 'Uncategorized',
-        plaidTransactionId: tx.transaction_id,
-        bankAccountId: bankAccountId,
-        userId: userId,
-        status: 'pending_review' // Default status
-      }, { merge: true });
-    });
-
-    await batch.commit();
-    await accountRef.update({ plaidSyncCursor: cursor });
-
-    return { count: allTransactions.length };
   }
 );
