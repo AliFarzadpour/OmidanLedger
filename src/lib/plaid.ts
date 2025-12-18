@@ -219,13 +219,18 @@ function categorizeWithContext(
   // TIER 3: SMART FALLBACKS (Plaid Data)
   // =========================================================
 
+  // 12. INTERNAL BANK TRANSFERS (Checking <-> Savings)
+  if (desc.includes('ONLINE BANKING TRANSFER') || desc.includes('TRANSFER FROM SAV') || desc.includes('TRANSFER TO CHK') || desc.includes('TRANSFER TO SAV')) {
+      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 0.95 };
+  }
+
   // Credit Card Payments (Paying the bill)
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('CREDIT CARD PAYMENT')) {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.95 };
   }
   
   // Plaid says "LOAN_PAYMENTS"
-  if (plaidCategory?.primary === 'LOAN_PAYMENTS') {
+  if (rawPrimary === 'LOAN_PAYMENTS') {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment', confidence: 0.8 };
   }
 
@@ -462,6 +467,8 @@ const CreateLinkTokenInputSchema = z.object({
   
 
 
+
+    
 
     
 
