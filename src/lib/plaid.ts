@@ -100,7 +100,7 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
 
 const CreateLinkTokenInputSchema = z.object({
   userId: z.string(),
-  daysRequested: z.number().optional(), // <--- ADDED
+  daysRequested: z.number().optional(),
 });
 export async function createLinkToken(input: z.infer<typeof CreateLinkTokenInputSchema>): Promise<string> {
   return createLinkTokenFlow(input);
@@ -110,7 +110,6 @@ const createLinkTokenFlow = ai.defineFlow(
   async ({ userId, daysRequested }) => {
     const plaidClient = getPlaidClient();
     
-    // Use user's value OR fallback to a default (e.g., 90 days)
     const finalDays = daysRequested || 90;
 
     try {
@@ -121,7 +120,7 @@ const createLinkTokenFlow = ai.defineFlow(
         country_codes: ['US'],
         language: 'en',
         transactions: {
-          days_requested: finalDays // <--- Pass the dynamic value here
+          days_requested: finalDays
         }
       });
       return response.data.link_token;
@@ -177,6 +176,8 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
           bankName: institutionName,
           accountNumber: accountData.mask || 'N/A',
           plaidSyncCursor: null,
+          historicalDataPending: true, // <--- DEFAULT TO TRUE
+          lastSyncedAt: FieldValue.serverTimestamp()
         };
         const accountDocRef = db.collection('users').doc(userId).collection('bankAccounts').doc(accountData.account_id);
         batch.set(accountDocRef, newAccount, { merge: true });
@@ -235,61 +236,56 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = newData.next_cursor;
         }
 
-        // 1. Define your strict start date
         const STRICT_START_DATE = '2025-01-01'; 
 
-        // 2. Filter the raw Plaid data
         const relevantTransactions = allTransactions.filter(tx => {
-            // Check 1: Is the date 2025 or later?
             const isNewEnough = tx.date >= STRICT_START_DATE;
-
-            // Check 2: Does this transaction belong to the account we are currently looping?
-            // (This prevents the "duplicate transactions" issue we solved earlier)
             const isCurrentAccount = tx.account_id === bankAccountId;
-
             return isNewEnough && isCurrentAccount;
         });
 
-        if (relevantTransactions.length === 0) {
-            await accountRef.update({ plaidSyncCursor: cursor });
-            return { count: 0 };
+        if (relevantTransactions.length > 0) {
+            const batch = db.batch();
+            const transactionsRef = accountRef.collection('transactions');
+
+            relevantTransactions.forEach((tx) => {
+                const docRef = transactionsRef.doc(tx.transaction_id);
+                
+                const smartCategory = mapPlaidToBusinessCategory(
+                    tx.personal_finance_category?.primary,
+                    tx.personal_finance_category?.detailed,
+                    tx.name
+                );
+
+                batch.set(docRef, {
+                    date: tx.date,
+                    description: tx.name,
+                    amount: tx.amount * -1,
+                    merchantName: tx.merchant_name || tx.name,
+                    
+                    primaryCategory: smartCategory.primary,
+                    secondaryCategory: smartCategory.secondary,
+                    subcategory: smartCategory.sub,
+                    
+                    plaidTransactionId: tx.transaction_id,
+                    bankAccountId: bankAccountId,
+                    userId: userId,
+                    status: 'pending_review',
+                    confidence: 0.8, 
+                    createdAt: FieldValue.serverTimestamp()
+                }, { merge: true });
+            });
+
+            await batch.commit();
         }
-
-        const batch = db.batch();
-        const transactionsRef = accountRef.collection('transactions');
-
-        relevantTransactions.forEach((tx) => {
-            const docRef = transactionsRef.doc(tx.transaction_id);
-            
-            const smartCategory = mapPlaidToBusinessCategory(
-                tx.personal_finance_category?.primary,
-                tx.personal_finance_category?.detailed,
-                tx.name
-            );
-
-            batch.set(docRef, {
-                date: tx.date,
-                description: tx.name,
-                // Invert amount (Expenses become negative)
-                amount: tx.amount * -1,
-                merchantName: tx.merchant_name || tx.name,
-                
-                // Use Smart Categories
-                primaryCategory: smartCategory.primary,
-                secondaryCategory: smartCategory.secondary,
-                subcategory: smartCategory.sub,
-                
-                plaidTransactionId: tx.transaction_id,
-                bankAccountId: bankAccountId,
-                userId: userId,
-                status: 'pending_review',
-                confidence: 0.8, // Higher confidence since we mapped it logicially
-                createdAt: FieldValue.serverTimestamp()
-            }, { merge: true });
+        
+        // If this sync ran successfully, update the timestamp and clear the pending flag.
+        await accountRef.update({ 
+            plaidSyncCursor: cursor,
+            historicalDataPending: false, // <--- FLIP TO FALSE
+            lastSyncedAt: FieldValue.serverTimestamp()
         });
 
-        await batch.commit();
-        await accountRef.update({ plaidSyncCursor: cursor });
         return { count: relevantTransactions.length };
 
     } catch (error: any) {
@@ -298,5 +294,3 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
   }
 );
-
-    
