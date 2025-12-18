@@ -67,6 +67,18 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [currentStep, setCurrentStep] = useState(1);
+  
+  const getDefaultDate = () => {
+    const date = new Date();
+    date.setMonth(0); // January
+    date.setDate(1);  // 1st
+    return date.toISOString().split('T')[0]; // Format: "YYYY-MM-DD"
+  };
+
+  const [startDate, setStartDate] = useState(getDefaultDate());
+  const [daysToRequest, setDaysToRequest] = useState(90);
+
   const isEditMode = !!dataSource;
 
   const form = useForm<DataSourceFormValues>({
@@ -96,6 +108,27 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
       });
     }
   }, [dataSource, form]);
+
+  useEffect(() => {
+    if (!isOpen) {
+        setCurrentStep(1);
+        setStartDate(getDefaultDate());
+    }
+  }, [isOpen]);
+
+  const handleContinueToPlaid = () => {
+    const start = new Date(startDate);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - start.getTime());
+    let calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+    if (calculatedDays < 30) calculatedDays = 30;
+    if (calculatedDays > 730) calculatedDays = 730;
+
+    setDaysToRequest(calculatedDays);
+    setCurrentStep(2); // Move to Plaid step
+  };
+
 
   const onSubmit = async (values: DataSourceFormValues) => {
     if (!user || !firestore) return;
@@ -185,9 +218,27 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
           </p>
         ) : (
           <>
-            <PlaidLink 
-              onSuccess={handlePlaidSuccess}
-            />
+            {currentStep === 1 && (
+                <div className="space-y-4 pt-4">
+                     <div className="space-y-2">
+                        <Label>Sync Start Date</Label>
+                        <Input 
+                            type="date" 
+                            value={startDate} 
+                            onChange={(e) => setStartDate(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">Select how far back you want to download transactions (max 2 years).</p>
+                    </div>
+                    <Button onClick={handleContinueToPlaid} className="w-full">Continue to Bank Login</Button>
+                </div>
+            )}
+
+            {currentStep === 2 && (
+                <PlaidLink 
+                    onSuccess={handlePlaidSuccess}
+                    daysRequested={daysToRequest}
+                />
+            )}
             
             <div className="flex items-center gap-4">
                 <Separator className="flex-1" />

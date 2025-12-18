@@ -10,9 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 
 interface PlaidLinkProps {
   onSuccess: PlaidLinkOnSuccess;
+  daysRequested: number;
 }
 
-export function PlaidLink({ onSuccess }: PlaidLinkProps) {
+export function PlaidLink({ onSuccess, daysRequested }: PlaidLinkProps) {
   const { user } = useUser();
   const { toast } = useToast();
   const [linkToken, setLinkToken] = useState<string | null>(null);
@@ -22,13 +23,13 @@ export function PlaidLink({ onSuccess }: PlaidLinkProps) {
     async function generateToken() {
       if (user) {
         try {
-          const token = await createLinkToken({ userId: user.uid });
+          // Pass the dynamic number of days
+          const token = await createLinkToken({ userId: user.uid, daysRequested });
           setLinkToken(token);
           setError(null);
         } catch (e: any) {
           console.error('Error creating link token:', e.message);
           setError(e.message || 'Could not create Plaid link token.');
-          // Display the error in a toast for better visibility
           toast({
             variant: 'destructive',
             title: 'Plaid Setup Incomplete',
@@ -37,8 +38,11 @@ export function PlaidLink({ onSuccess }: PlaidLinkProps) {
         }
       }
     }
-    generateToken();
-  }, [user, toast]);
+    // Only generate token when daysRequested is a valid number
+    if (daysRequested > 0) {
+        generateToken();
+    }
+  }, [user, toast, daysRequested]);
 
   const { open, ready } = usePlaidLink({
     token: linkToken,
@@ -58,6 +62,14 @@ export function PlaidLink({ onSuccess }: PlaidLinkProps) {
       open();
     }
   };
+
+  // Automatically open Plaid once the link token is ready
+  useEffect(() => {
+    if (ready && linkToken) {
+        open();
+    }
+  }, [ready, linkToken, open]);
+
 
   return (
     <Button onClick={handleClick} disabled={!ready} className="w-full">

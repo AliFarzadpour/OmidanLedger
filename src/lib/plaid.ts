@@ -98,27 +98,20 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
 
 // --- FLOWS ---
 
-const CreateLinkTokenInputSchema = z.object({ userId: z.string() });
+const CreateLinkTokenInputSchema = z.object({
+  userId: z.string(),
+  daysRequested: z.number().optional(), // <--- ADDED
+});
 export async function createLinkToken(input: z.infer<typeof CreateLinkTokenInputSchema>): Promise<string> {
   return createLinkTokenFlow(input);
 }
 const createLinkTokenFlow = ai.defineFlow(
   { name: 'createLinkTokenFlow', inputSchema: CreateLinkTokenInputSchema, outputSchema: z.string() },
-  async ({ userId }) => {
+  async ({ userId, daysRequested }) => {
     const plaidClient = getPlaidClient();
-
-    // 1. Calculate "Jan 1 of Previous Year" dynamically
-    const today = new Date();
-    const prevYear = today.getFullYear() - 1;
-    const targetDate = new Date(prevYear, 0, 1); // Month is 0-indexed (0 = Jan)
     
-    // 2. Calculate difference in days
-    const diffTime = Math.abs(today.getTime() - targetDate.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-
-    // 3. Safety Check: Plaid max is 730. 
-    // "Jan 1 of previous year" will always be < 730, but it's good practice to cap it just in case.
-    const daysRequested = Math.min(diffDays + 5, 730); // Adding 5 days buffer is often safe
+    // Use user's value OR fallback to a default (e.g., 90 days)
+    const finalDays = daysRequested || 90;
 
     try {
       const response = await plaidClient.linkTokenCreate({
@@ -128,7 +121,7 @@ const createLinkTokenFlow = ai.defineFlow(
         country_codes: ['US'],
         language: 'en',
         transactions: {
-          days_requested: daysRequested // <--- Use the calculated value here
+          days_requested: finalDays // <--- Pass the dynamic value here
         }
       });
       return response.data.link_token;
@@ -249,7 +242,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         
         const relevantTransactions = allTransactions.filter(tx => {
             const isNewEnough = tx.date >= startDate;
-            const isCurrentAccount = tx.account_id === bankAccountId;
+            const isCurrentAccount = tx.account_id === bankAccountId; 
             return isNewEnough && isCurrentAccount;
         });
 
