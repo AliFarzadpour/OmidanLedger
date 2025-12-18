@@ -43,7 +43,7 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
   const rawPrimary = (plaidPrimary || '').toUpperCase();
   const desc = description.toUpperCase();
 
-  // 1. Check for obvious Income
+  // 1. Check for obvious Income (Negative Expense logic handles the sign, this handles categorization)
   if (rawPrimary === 'INCOME' || rawDetailed.includes('DIVIDENDS') || rawDetailed.includes('INTEREST')) {
     if (rawDetailed.includes('INTEREST')) return { primary: 'Income', secondary: 'Non-Operating Income', sub: 'Interest Income' };
     return { primary: 'Income', secondary: 'Operating Income', sub: 'Sales / Service' };
@@ -84,12 +84,12 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer' };
   }
 
-  // 4. Default / Fallback
-  const cleanSub = rawDetailed.split('_').pop() || 'General';
+  // 4. Default / Fallback (Clean up the text at least)
+  const cleanSub = rawDetailed.split('_').pop() || 'General'; // Get last part "FAST_FOOD" -> "FOOD"
   const formattedSub = cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1).toLowerCase();
   
   return { 
-      primary: 'Operating Expenses',
+      primary: 'Operating Expenses', // Default bucket for businesses
       secondary: 'Uncategorized', 
       sub: formattedSub 
   };
@@ -213,6 +213,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         let hasMore = true;
         let loopCount = 0;
 
+        // Fetch Transactions
         while (hasMore && loopCount < 50) {
             loopCount++;
             const response = await plaidClient.transactionsSync({
@@ -226,11 +227,16 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = newData.next_cursor;
         }
 
+        // Filter for relevant date range and CORRECT account
         const today = new Date();
         const targetYear = today.getFullYear() - 1; 
         const startDate = `${targetYear}-01-01`; 
         
-        const relevantTransactions = allTransactions.filter(tx => tx.date >= startDate);
+        const relevantTransactions = allTransactions.filter(tx => {
+            const isNewEnough = tx.date >= startDate;
+            const isCurrentAccount = tx.account_id === bankAccountId;
+            return isNewEnough && isCurrentAccount;
+        });
 
         if (relevantTransactions.length === 0) {
             await accountRef.update({ plaidSyncCursor: cursor });
@@ -238,11 +244,10 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
 
         const batch = db.batch();
+        const transactionsRef = accountRef.collection('transactions');
 
         relevantTransactions.forEach((tx) => {
-            // Correctly reference the sub-collection for the specific account
-            const transactionAccountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(tx.account_id);
-            const docRef = transactionAccountRef.collection('transactions').doc(tx.transaction_id);
+            const docRef = transactionsRef.doc(tx.transaction_id);
             
             const smartCategory = mapPlaidToBusinessCategory(
                 tx.personal_finance_category?.primary,
@@ -255,11 +260,13 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 description: tx.name,
                 amount: tx.amount * -1,
                 merchantName: tx.merchant_name || tx.name,
+                
                 primaryCategory: smartCategory.primary,
                 secondaryCategory: smartCategory.secondary,
                 subcategory: smartCategory.sub,
+                
                 plaidTransactionId: tx.transaction_id,
-                bankAccountId: tx.account_id, // Use the account_id from the transaction
+                bankAccountId: bankAccountId,
                 userId: userId,
                 status: 'pending_review',
                 confidence: 0.8,
@@ -268,8 +275,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         });
 
         await batch.commit();
-        // We update the cursor on the account that initiated the sync.
-        // All accounts under the same item share the same cursor progress.
         await accountRef.update({ plaidSyncCursor: cursor });
         return { count: relevantTransactions.length };
 
