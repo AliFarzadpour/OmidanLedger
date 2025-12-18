@@ -8,7 +8,7 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Banknote, CreditCard, Wallet, Pencil } from 'lucide-react';
+import { Banknote, CreditCard, Wallet, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,7 @@ interface DataSourceListProps {
   isLoading: boolean;
   onEdit: (dataSource: DataSource) => void;
   onSelect: (dataSource: DataSource) => void;
+  onDelete: (dataSource: DataSource) => void;
   selectedDataSourceId?: string | null;
 }
 
@@ -39,7 +40,7 @@ const typeIcons = {
   other: <Wallet className="h-6 w-6 text-gray-500" />,
 };
 
-export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, selectedDataSourceId }: DataSourceListProps) {
+export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, onDelete, selectedDataSourceId }: DataSourceListProps) {
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -100,19 +101,24 @@ export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, selec
               {/* Footer can be used for other actions in the future */}
             </CardFooter>
           </Card>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onEdit(source);
-            }}
-          >
-            <Pencil className="h-4 w-4" />
-            <span className="sr-only">Edit</span>
-          </Button>
+           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={(e) => { e.stopPropagation(); onEdit(source); }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                onClick={(e) => { e.stopPropagation(); onDelete(source); }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+          </div>
         </div>
       ))}
     </div>
