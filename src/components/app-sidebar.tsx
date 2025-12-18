@@ -55,7 +55,7 @@ const data = {
     },
     {
       title: "Invoices & Billing",
-      url: "/dashboard/sales",
+      url: "/dashboard/sales/services",
       icon: FileText,
     },
     {
