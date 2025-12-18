@@ -31,11 +31,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, doc, addDoc, setDoc } from 'firebase/firestore';
-import { PlaidLink } from './plaid-link';
 import { Separator } from '@/components/ui/separator';
-import { createBankAccountFromPlaid, exchangePublicToken } from '@/lib/plaid';
+import { createBankAccountFromPlaid, exchangePublicToken, createLinkToken } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
-import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
+import { PlaidLinkOnSuccess, PlaidLinkOnSuccessMetadata, usePlaidLink } from 'react-plaid-link';
 import { Label } from '@/components/ui/label';
 
 const dataSourceSchema = z.object({
@@ -67,8 +66,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const [currentStep, setCurrentStep] = useState(1);
+  const [linkToken, setLinkToken] = useState<string | null>(null);
   
   const getDefaultDate = () => {
     const date = new Date();
@@ -78,7 +76,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
   };
 
   const [startDate, setStartDate] = useState(getDefaultDate());
-  const [daysToRequest, setDaysToRequest] = useState(90);
 
   const isEditMode = !!dataSource;
 
@@ -91,6 +88,77 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
       accountNumber: '',
     },
   });
+
+  const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
+    if (!user) return;
+
+    setIsSubmitting(true);
+    
+    toast({
+      title: 'Connecting Account...',
+      description: 'Exchanging token and setting up your account. Please wait.',
+    });
+
+    try {
+      const { accessToken } = await exchangePublicToken({ publicToken: public_token });
+      await createBankAccountFromPlaid({
+        userId: user.uid,
+        accessToken: accessToken,
+        metadata: metadata,
+      });
+
+      toast({
+        title: 'Account Connected!',
+        description: `${metadata.institution.name} has been successfully linked.`,
+      });
+
+    } catch (error) {
+      console.error('Plaid connection error:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Plaid Connection Failed',
+        description: 'There was an error connecting your bank account. Please try again.',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const { open: openPlaid, ready: isPlaidReady } = usePlaidLink({
+    token: linkToken,
+    onSuccess: handlePlaidSuccess,
+  });
+
+  useEffect(() => {
+    if (isPlaidReady && linkToken) {
+      openPlaid();
+    }
+  }, [isPlaidReady, linkToken, openPlaid]);
+
+  const handleContinueToPlaid = async () => {
+    if (!user) return;
+    
+    const start = new Date(startDate);
+    const today = new Date();
+    const diffTime = Math.abs(today.getTime() - start.getTime());
+    let calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+    if (calculatedDays < 30) calculatedDays = 30;
+    if (calculatedDays > 730) calculatedDays = 730;
+
+    onOpenChange(false); // Close the dialog first
+
+    try {
+        const token = await createLinkToken({ userId: user.uid, daysRequested: calculatedDays });
+        setLinkToken(token);
+    } catch (e: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Plaid Setup Incomplete',
+            description: e.message || 'Could not create Plaid link token. Please check your .env file.',
+        });
+    }
+  };
 
   useEffect(() => {
     if (dataSource) {
@@ -112,24 +180,9 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
 
   useEffect(() => {
     if (!isOpen) {
-        setCurrentStep(1);
         setStartDate(getDefaultDate());
     }
   }, [isOpen]);
-
-  const handleContinueToPlaid = () => {
-    const start = new Date(startDate);
-    const today = new Date();
-    const diffTime = Math.abs(today.getTime() - start.getTime());
-    let calculatedDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  
-    if (calculatedDays < 30) calculatedDays = 30;
-    if (calculatedDays > 730) calculatedDays = 730;
-
-    setDaysToRequest(calculatedDays);
-    setCurrentStep(2); // Move to Plaid step
-  };
-
 
   const onSubmit = async (values: DataSourceFormValues) => {
     if (!user || !firestore) return;
@@ -165,43 +218,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
         setIsSubmitting(false);
     }
   };
-  
-  const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
-    if (!user) return;
-
-    setIsSubmitting(true);
-    onOpenChange(false); // Close the dialog on success
-
-    toast({
-      title: 'Connecting Account...',
-      description: 'Exchanging token and setting up your account. Please wait.',
-    });
-
-    try {
-      const { accessToken } = await exchangePublicToken({ publicToken: public_token });
-      await createBankAccountFromPlaid({
-        userId: user.uid,
-        accessToken: accessToken,
-        metadata: metadata,
-      });
-
-      toast({
-        title: 'Account Connected!',
-        description: `${metadata.institution.name} has been successfully linked.`,
-      });
-
-    } catch (error) {
-      console.error('Plaid connection error:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Plaid Connection Failed',
-        description: 'There was an error connecting your bank account. Please try again.',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -219,27 +235,18 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
           </p>
         ) : (
           <>
-            {currentStep === 1 && (
-                <div className="space-y-4 pt-4">
-                     <div className="space-y-2">
-                        <Label>Sync Start Date</Label>
-                        <Input 
-                            type="date" 
-                            value={startDate} 
-                            onChange={(e) => setStartDate(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground">Select how far back you want to download transactions (max 2 years).</p>
-                    </div>
-                    <Button onClick={handleContinueToPlaid} className="w-full">Continue to Bank Login</Button>
+            <div className="space-y-4 pt-4">
+                 <div className="space-y-2">
+                    <Label>Sync Start Date</Label>
+                    <Input 
+                        type="date" 
+                        value={startDate} 
+                        onChange={(e) => setStartDate(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">Select how far back you want to download transactions (max 2 years).</p>
                 </div>
-            )}
-
-            {currentStep === 2 && (
-                <PlaidLink 
-                    onSuccess={handlePlaidSuccess}
-                    daysRequested={daysToRequest}
-                />
-            )}
+                <Button onClick={handleContinueToPlaid} className="w-full">Continue to Bank Login</Button>
+            </div>
             
             <div className="flex items-center gap-4">
                 <Separator className="flex-1" />
