@@ -38,6 +38,7 @@ function getPlaidClient() {
 }
 
 // --- SMART MAPPING: Plaid -> Accountant ---
+// This turns ugly Plaid tags into professional Chart of Accounts buckets
 function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetailed: string | undefined, description: string): { primary: string, secondary: string, sub: string } {
   const rawDetailed = (plaidDetailed || '').toUpperCase();
   const rawPrimary = (plaidPrimary || '').toUpperCase();
@@ -105,6 +106,20 @@ const createLinkTokenFlow = ai.defineFlow(
   { name: 'createLinkTokenFlow', inputSchema: CreateLinkTokenInputSchema, outputSchema: z.string() },
   async ({ userId }) => {
     const plaidClient = getPlaidClient();
+
+    // 1. Calculate "Jan 1 of Previous Year" dynamically
+    const today = new Date();
+    const prevYear = today.getFullYear() - 1;
+    const targetDate = new Date(prevYear, 0, 1); // Month is 0-indexed (0 = Jan)
+    
+    // 2. Calculate difference in days
+    const diffTime = Math.abs(today.getTime() - targetDate.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+    // 3. Safety Check: Plaid max is 730. 
+    // "Jan 1 of previous year" will always be < 730, but it's good practice to cap it just in case.
+    const daysRequested = Math.min(diffDays + 5, 730); // Adding 5 days buffer is often safe
+
     try {
       const response = await plaidClient.linkTokenCreate({
         user: { client_user_id: userId },
@@ -113,7 +128,7 @@ const createLinkTokenFlow = ai.defineFlow(
         country_codes: ['US'],
         language: 'en',
         transactions: {
-          days_requested: 730
+          days_requested: daysRequested // <--- Use the calculated value here
         }
       });
       return response.data.link_token;
@@ -147,7 +162,7 @@ export async function createBankAccountFromPlaid(input: z.infer<typeof CreateBan
 const createBankAccountFromPlaidFlow = ai.defineFlow(
   { name: 'createBankAccountFromPlaidFlow', inputSchema: CreateBankAccountInputSchema, outputSchema: z.void() },
   async ({ userId, accessToken, metadata }) => {
-    const db = getAdminDB();
+    const db = getAdminDB(); 
     const plaidClient = getPlaidClient();
     const batch = db.batch();
 
@@ -258,9 +273,11 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             batch.set(docRef, {
                 date: tx.date,
                 description: tx.name,
+                // Invert amount (Expenses become negative)
                 amount: tx.amount * -1,
                 merchantName: tx.merchant_name || tx.name,
                 
+                // Use Smart Categories
                 primaryCategory: smartCategory.primary,
                 secondaryCategory: smartCategory.secondary,
                 subcategory: smartCategory.sub,
@@ -269,7 +286,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 bankAccountId: bankAccountId,
                 userId: userId,
                 status: 'pending_review',
-                confidence: 0.8,
+                confidence: 0.8, // Higher confidence since we mapped it logicially
                 createdAt: FieldValue.serverTimestamp()
             }, { merge: true });
         });
