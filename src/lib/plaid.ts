@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -11,7 +12,7 @@ import {
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
 
-// 1. Initialize Admin SDK (Bypasses Security Rules)
+// --- INITIALIZATION ---
 function getAdminDB() {
   if (!getApps().length) {
     initializeApp();
@@ -19,7 +20,6 @@ function getAdminDB() {
   return getFirestore();
 }
 
-// 2. Configure Plaid Client
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
@@ -38,22 +38,24 @@ function getPlaidClient() {
   return new PlaidApi(plaidConfig);
 }
 
+// --- HELPER: Clean Text (NEW) ---
+// Converts "LOAN_PAYMENTS" -> "Loan Payments"
+function formatCategory(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
 // --- FLOWS ---
 
-const CreateLinkTokenInputSchema = z.object({
-  userId: z.string(),
-});
-
+const CreateLinkTokenInputSchema = z.object({ userId: z.string() });
 export async function createLinkToken(input: z.infer<typeof CreateLinkTokenInputSchema>): Promise<string> {
   return createLinkTokenFlow(input);
 }
-
 const createLinkTokenFlow = ai.defineFlow(
-  {
-    name: 'createLinkTokenFlow',
-    inputSchema: CreateLinkTokenInputSchema,
-    outputSchema: z.string(),
-  },
+  { name: 'createLinkTokenFlow', inputSchema: CreateLinkTokenInputSchema, outputSchema: z.string() },
   async ({ userId }) => {
     const plaidClient = getPlaidClient();
     try {
@@ -66,78 +68,42 @@ const createLinkTokenFlow = ai.defineFlow(
       });
       return response.data.link_token;
     } catch (error: any) {
-      console.error("Plaid Link Token Error:", error.response?.data || error);
       throw new Error('Failed to create link token');
     }
   }
 );
 
-const ExchangePublicTokenInputSchema = z.object({
-  publicToken: z.string(),
-});
-
+const ExchangePublicTokenInputSchema = z.object({ publicToken: z.string() });
 export async function exchangePublicToken(input: z.infer<typeof ExchangePublicTokenInputSchema>): Promise<{ accessToken: string; itemId: string; }> {
   return exchangePublicTokenFlow(input);
 }
-
 const exchangePublicTokenFlow = ai.defineFlow(
-  {
-    name: 'exchangePublicTokenFlow',
-    inputSchema: ExchangePublicTokenInputSchema,
-    outputSchema: z.object({ accessToken: z.string(), itemId: z.string() }),
-  },
+  { name: 'exchangePublicTokenFlow', inputSchema: ExchangePublicTokenInputSchema, outputSchema: z.object({ accessToken: z.string(), itemId: z.string() }) },
   async ({ publicToken }) => {
     const plaidClient = getPlaidClient();
     try {
-      const response = await plaidClient.itemPublicTokenExchange({
-        public_token: publicToken,
-      });
-      return {
-        accessToken: response.data.access_token,
-        itemId: response.data.item_id,
-      };
+      const response = await plaidClient.itemPublicTokenExchange({ public_token: publicToken });
+      return { accessToken: response.data.access_token, itemId: response.data.item_id };
     } catch (error: any) {
-      console.error('Exchange Token Error:', error.response?.data || error);
       throw new Error('Failed to exchange public token');
     }
   }
 );
 
-const CreateBankAccountInputSchema = z.object({
-  userId: z.string(),
-  accessToken: z.string(),
-  metadata: z.any(),
-});
-
+const CreateBankAccountInputSchema = z.object({ userId: z.string(), accessToken: z.string(), metadata: z.any() });
 export async function createBankAccountFromPlaid(input: z.infer<typeof CreateBankAccountInputSchema>): Promise<void> {
   await createBankAccountFromPlaidFlow(input);
 }
-
-// 3. Create Bank Account (Using Admin DB)
 const createBankAccountFromPlaidFlow = ai.defineFlow(
-  {
-    name: 'createBankAccountFromPlaidFlow',
-    inputSchema: CreateBankAccountInputSchema,
-    outputSchema: z.void(),
-  },
+  { name: 'createBankAccountFromPlaidFlow', inputSchema: CreateBankAccountInputSchema, outputSchema: z.void() },
   async ({ userId, accessToken, metadata }) => {
     const db = getAdminDB(); 
     const plaidClient = getPlaidClient();
-
-    console.log("Creating Bank Account...");
-
     try {
-      // Fetch real account data from Plaid
-      const accountsResponse = await plaidClient.accountsGet({
-        access_token: accessToken,
-      });
-
-      // Determine which account to save
+      const accountsResponse = await plaidClient.accountsGet({ access_token: accessToken });
       const selectedAccountId = metadata?.account?.id || accountsResponse.data.accounts[0]?.account_id;
       const institutionName = metadata?.institution?.name || 'Unknown Bank';
-
       if (!selectedAccountId) throw new Error('No Account ID found.');
-
       const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === selectedAccountId);
       if (!accountData) throw new Error('Account data not found.');
 
@@ -150,36 +116,22 @@ const createBankAccountFromPlaidFlow = ai.defineFlow(
         accountType: accountData.subtype || 'other',
         bankName: institutionName,
         accountNumber: accountData.mask || 'N/A',
-        plaidSyncCursor: null, // Reset cursor for new account
+        plaidSyncCursor: null,
       };
 
-      // Save to Firestore (Admin SDK)
-      await db
-        .collection('users')
-        .doc(userId)
-        .collection('bankAccounts')
-        .doc(accountData.account_id)
-        .set(newAccount, { merge: true });
-        
-      console.log("✅ Bank Account Saved");
-
+      await db.collection('users').doc(userId).collection('bankAccounts').doc(accountData.account_id).set(newAccount, { merge: true });
     } catch (error: any) {
-      console.error('Create Bank Account Error:', error.response?.data || error);
       throw new Error(`Failed to save bank account: ${error.message}`);
     }
   }
 );
 
-const SyncTransactionsInputSchema = z.object({
-  userId: z.string(),
-  bankAccountId: z.string(),
-});
-
+const SyncTransactionsInputSchema = z.object({ userId: z.string(), bankAccountId: z.string() });
 export async function syncAndCategorizePlaidTransactions(input: z.infer<typeof SyncTransactionsInputSchema>): Promise<{ count: number }> {
   return syncAndCategorizePlaidTransactionsFlow(input);
 }
 
-// 4. Sync Transactions (Fixes 400 Error)
+// 👇 UPDATED SYNC FLOW WITH CATEGORY CLEANING
 const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
   {
     name: 'syncAndCategorizePlaidTransactionsFlow',
@@ -190,18 +142,13 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     const db = getAdminDB();
     const plaidClient = getPlaidClient();
 
-    console.log(`🔄 Syncing Account: ${bankAccountId}`);
-
     try {
         const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
         const accountSnap = await accountRef.get();
-
-        if (!accountSnap.exists) throw new Error("Account not found in DB");
+        if (!accountSnap.exists) throw new Error("Account not found");
 
         const data = accountSnap.data();
         const accessToken = data?.plaidAccessToken;
-        
-        // FIX: Ensure cursor is 'undefined' (not null) if missing
         let cursor = data?.plaidSyncCursor ?? undefined;
 
         if (!accessToken) throw new Error("No access token.");
@@ -210,54 +157,60 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         let hasMore = true;
         let loopCount = 0;
 
-        // Pagination Loop (Max 5 pages to be safe)
-        while (hasMore && loopCount < 5) {
+        // Fetch up to 5000 transactions (Current + Previous Year)
+        while (hasMore && loopCount < 50) {
             loopCount++;
             const response = await plaidClient.transactionsSync({
                 access_token: accessToken,
                 cursor: cursor,
                 count: 100,
             });
-
             const newData = response.data;
             allTransactions = allTransactions.concat(newData.added);
             hasMore = newData.has_more;
             cursor = newData.next_cursor;
         }
 
-        console.log(`📥 Fetched ${allTransactions.length} raw transactions.`);
-
-        // 👇 UPDATED: Dynamic "Start of Previous Year" Logic
+        // Filter: Start from Jan 1st of Previous Year (e.g., Jan 1, 2024 if today is 2025)
         const today = new Date();
-        // If we are in 2026, we want to start from Jan 1, 2025
         const targetYear = today.getFullYear() - 1; 
-        const startDate = `${targetYear}-01-01`; // e.g. "2025-01-01"
-
-        const relevantTransactions = allTransactions.filter(tx => 
-            tx.date >= startDate 
-        );
-
-        console.log(`🧹 Keeping transactions from ${startDate} onwards.`);
+        const startDate = `${targetYear}-01-01`; 
+        
+        const relevantTransactions = allTransactions.filter(tx => tx.date >= startDate);
 
         if (relevantTransactions.length === 0) {
             await accountRef.update({ plaidSyncCursor: cursor });
             return { count: 0 };
         }
 
-        // Batch Save
         const batch = db.batch();
         const transactionsRef = accountRef.collection('transactions');
 
         relevantTransactions.forEach((tx) => {
             const docRef = transactionsRef.doc(tx.transaction_id);
+            
+            // --- 🧹 CLEANING LOGIC START ---
+            let primary = formatCategory(tx.personal_finance_category?.primary); // "Food And Drink"
+            let secondary = formatCategory(tx.personal_finance_category?.detailed); // "Food And Drink Fast Food"
+            
+            // Remove redundancy: "Food And Drink Fast Food" -> "Fast Food"
+            if (secondary.startsWith(primary)) {
+                secondary = secondary.replace(primary, '').trim();
+            }
+            if (!secondary) secondary = 'General'; // Fallback if empty
+            // --- CLEANING LOGIC END ---
+
             batch.set(docRef, {
                 date: tx.date,
                 description: tx.name,
                 amount: tx.amount,
                 merchantName: tx.merchant_name || tx.name,
-                primaryCategory: tx.personal_finance_category?.primary || 'Uncategorized',
-                secondaryCategory: tx.personal_finance_category?.detailed || '',
-                subcategory: '',
+                
+                // Use the Cleaned Categories
+                primaryCategory: primary || 'Uncategorized',
+                secondaryCategory: secondary,
+                subcategory: secondary, // Fill subcategory so it's not empty in UI
+                
                 plaidTransactionId: tx.transaction_id,
                 bankAccountId: bankAccountId,
                 userId: userId,
@@ -269,8 +222,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
         await batch.commit();
         await accountRef.update({ plaidSyncCursor: cursor });
-
-        console.log(`✅ Synced ${relevantTransactions.length} transactions.`);
         return { count: relevantTransactions.length };
 
     } catch (error: any) {
@@ -279,3 +230,5 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
   }
 );
+
+    
