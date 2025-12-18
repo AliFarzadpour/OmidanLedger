@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -203,7 +202,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             batch.set(docRef, {
                 date: tx.date,
                 description: tx.name,
-                amount: tx.amount,
+                amount: tx.amount * -1,
                 merchantName: tx.merchant_name || tx.name,
                 
                 // Use the Cleaned Categories
@@ -230,5 +229,3 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
   }
 );
-
-    
