@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -11,7 +12,7 @@ import {
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
 
-// 1. Initialize Admin SDK (Bypasses Security Rules)
+// --- INITIALIZATION ---
 function getAdminDB() {
   if (!getApps().length) {
     initializeApp();
@@ -19,7 +20,6 @@ function getAdminDB() {
   return getFirestore();
 }
 
-// 2. Configure Plaid Client
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
@@ -39,19 +39,16 @@ function getPlaidClient() {
 }
 
 // --- SMART MAPPING: Plaid -> Accountant ---
-// This turns ugly Plaid tags into professional Chart of Accounts buckets
 function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetailed: string | undefined, description: string): { primary: string, secondary: string, sub: string } {
   const rawDetailed = (plaidDetailed || '').toUpperCase();
   const rawPrimary = (plaidPrimary || '').toUpperCase();
   const desc = description.toUpperCase();
 
-  // 1. Check for obvious Income (Negative Expense logic handles the sign, this handles categorization)
   if (rawPrimary === 'INCOME' || rawDetailed.includes('DIVIDENDS') || rawDetailed.includes('INTEREST')) {
     if (rawDetailed.includes('INTEREST')) return { primary: 'Income', secondary: 'Non-Operating Income', sub: 'Interest Income' };
     return { primary: 'Income', secondary: 'Operating Income', sub: 'Sales / Service' };
   }
 
-  // 2. Specific Logic based on Description (Overrides Plaid)
   if (desc.includes('UBER') || desc.includes('LYFT')) {
     return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Taxis & Rideshare' };
   }
@@ -62,7 +59,6 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
     return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Utilities' };
   }
 
-  // 3. Map Plaid Categories to Business Buckets
   if (rawPrimary === 'RENT_AND_UTILITIES') {
      return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities' };
   }
@@ -86,12 +82,11 @@ function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetai
      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer' };
   }
 
-  // 4. Default / Fallback (Clean up the text at least)
-  const cleanSub = rawDetailed.split('_').pop() || 'General'; // Get last part "FAST_FOOD" -> "FOOD"
+  const cleanSub = rawDetailed.split('_').pop() || 'General'; 
   const formattedSub = cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1).toLowerCase();
   
   return { 
-      primary: 'Operating Expenses', // Default bucket for businesses
+      primary: 'Operating Expenses',
       secondary: 'Uncategorized', 
       sub: formattedSub 
   };
@@ -143,37 +138,59 @@ const CreateBankAccountInputSchema = z.object({ userId: z.string(), accessToken:
 export async function createBankAccountFromPlaid(input: z.infer<typeof CreateBankAccountInputSchema>): Promise<void> {
   await createBankAccountFromPlaidFlow(input);
 }
+// 👇 FIXED: This flow now iterates over all accounts.
 const createBankAccountFromPlaidFlow = ai.defineFlow(
-  { name: 'createBankAccountFromPlaidFlow', inputSchema: CreateBankAccountInputSchema, outputSchema: z.void() },
+  {
+    name: 'createBankAccountFromPlaidFlow',
+    inputSchema: CreateBankAccountInputSchema,
+    outputSchema: z.void(),
+  },
   async ({ userId, accessToken, metadata }) => {
     const db = getAdminDB(); 
     const plaidClient = getPlaidClient();
+    const batch = db.batch(); // Use a batch for atomic writes
+
     try {
-      const accountsResponse = await plaidClient.accountsGet({ access_token: accessToken });
-      const selectedAccountId = metadata?.account?.id || accountsResponse.data.accounts[0]?.account_id;
+      // 1. Fetch all accounts associated with the Item
+      const accountsResponse = await plaidClient.accountsGet({
+        access_token: accessToken,
+      });
+
+      if (!accountsResponse.data.accounts || accountsResponse.data.accounts.length === 0) {
+        throw new Error('No accounts found for this Plaid item.');
+      }
+      
       const institutionName = metadata?.institution?.name || 'Unknown Bank';
-      if (!selectedAccountId) throw new Error('No Account ID found.');
-      const accountData = accountsResponse.data.accounts.find(acc => acc.account_id === selectedAccountId);
-      if (!accountData) throw new Error('Account data not found.');
 
-      const newAccount = {
-        userId,
-        plaidAccessToken: accessToken,
-        plaidItemId: accountsResponse.data.item.item_id,
-        plaidAccountId: accountData.account_id,
-        accountName: accountData.name,
-        accountType: accountData.subtype || 'other',
-        bankName: institutionName,
-        accountNumber: accountData.mask || 'N/A',
-        plaidSyncCursor: null,
-      };
+      // 2. Loop through every account returned by Plaid
+      accountsResponse.data.accounts.forEach(accountData => {
+        const newAccount = {
+          userId,
+          plaidAccessToken: accessToken,
+          plaidItemId: accountsResponse.data.item.item_id,
+          plaidAccountId: accountData.account_id,
+          accountName: accountData.name,
+          accountType: accountData.subtype || 'other',
+          bankName: institutionName,
+          accountNumber: accountData.mask || 'N/A',
+          plaidSyncCursor: null, // Start with a null cursor for the first sync
+        };
+        
+        // Add a "set" operation to the batch for each account
+        const accountDocRef = db.collection('users').doc(userId).collection('bankAccounts').doc(accountData.account_id);
+        batch.set(accountDocRef, newAccount, { merge: true });
+      });
 
-      await db.collection('users').doc(userId).collection('bankAccounts').doc(accountData.account_id).set(newAccount, { merge: true });
+      // 3. Commit the batch to save all accounts at once
+      await batch.commit();
+
     } catch (error: any) {
-      throw new Error(`Failed to save bank account: ${error.message}`);
+      console.error('Create Bank Account Flow Error:', error.response?.data || error);
+      throw new Error(`Failed to save bank accounts: ${error.message}`);
     }
   }
 );
+
 
 const SyncTransactionsInputSchema = z.object({ userId: z.string(), bankAccountId: z.string() });
 export async function syncAndCategorizePlaidTransactions(input: z.infer<typeof SyncTransactionsInputSchema>): Promise<{ count: number }> {
@@ -205,7 +222,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         let hasMore = true;
         let loopCount = 0;
 
-        // Fetch Transactions
         while (hasMore && loopCount < 50) {
             loopCount++;
             const response = await plaidClient.transactionsSync({
@@ -219,10 +235,10 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = newData.next_cursor;
         }
 
-        // Filter for relevant date range
         const today = new Date();
         const targetYear = today.getFullYear() - 1; 
         const startDate = `${targetYear}-01-01`; 
+        
         const relevantTransactions = allTransactions.filter(tx => tx.date >= startDate);
 
         if (relevantTransactions.length === 0) {
@@ -236,7 +252,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         relevantTransactions.forEach((tx) => {
             const docRef = transactionsRef.doc(tx.transaction_id);
             
-            // 👇 USE THE NEW SMART MAPPER
             const smartCategory = mapPlaidToBusinessCategory(
                 tx.personal_finance_category?.primary,
                 tx.personal_finance_category?.detailed,
@@ -246,11 +261,9 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             batch.set(docRef, {
                 date: tx.date,
                 description: tx.name,
-                // Invert amount (Expenses become negative)
                 amount: tx.amount * -1,
                 merchantName: tx.merchant_name || tx.name,
                 
-                // Use Smart Categories
                 primaryCategory: smartCategory.primary,
                 secondaryCategory: smartCategory.secondary,
                 subcategory: smartCategory.sub,
@@ -259,7 +272,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 bankAccountId: bankAccountId,
                 userId: userId,
                 status: 'pending_review',
-                confidence: 0.8, // Higher confidence since we mapped it logicially
+                confidence: 0.8,
                 createdAt: FieldValue.serverTimestamp()
             }, { merge: true });
         });
@@ -274,3 +287,5 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
   }
 );
+
+    
