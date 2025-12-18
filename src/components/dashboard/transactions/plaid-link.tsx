@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { usePlaidLink } from 'react-plaid-link';
 import { Button } from '@/components/ui/button';
-import { createLinkToken } from '@/ai/flows/plaid-flows';
+import { createLinkToken } from '@/lib/plaid';
 import { useUser } from '@/firebase';
 import { PlaidLinkOnSuccess } from 'react-plaid-link';
 import { useToast } from '@/hooks/use-toast';
