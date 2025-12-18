@@ -225,7 +225,21 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = newData.next_cursor;
         }
 
-        if (allTransactions.length === 0) {
+        console.log(`📥 Fetched ${allTransactions.length} raw transactions.`);
+
+        // 👇 UPDATED: Dynamic "Start of Previous Year" Logic
+        const today = new Date();
+        // If we are in 2026, we want to start from Jan 1, 2025
+        const targetYear = today.getFullYear() - 1; 
+        const startDate = `${targetYear}-01-01`; // e.g. "2025-01-01"
+
+        const relevantTransactions = allTransactions.filter(tx => 
+            tx.date >= startDate 
+        );
+
+        console.log(`🧹 Keeping transactions from ${startDate} onwards.`);
+
+        if (relevantTransactions.length === 0) {
             await accountRef.update({ plaidSyncCursor: cursor });
             return { count: 0 };
         }
@@ -234,7 +248,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         const batch = db.batch();
         const transactionsRef = accountRef.collection('transactions');
 
-        allTransactions.forEach((tx) => {
+        relevantTransactions.forEach((tx) => {
             const docRef = transactionsRef.doc(tx.transaction_id);
             batch.set(docRef, {
                 date: tx.date,
@@ -256,8 +270,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         await batch.commit();
         await accountRef.update({ plaidSyncCursor: cursor });
 
-        console.log(`✅ Synced ${allTransactions.length} transactions.`);
-        return { count: allTransactions.length };
+        console.log(`✅ Synced ${relevantTransactions.length} transactions.`);
+        return { count: relevantTransactions.length };
 
     } catch (error: any) {
         console.error("Sync Error:", error.response?.data || error);
