@@ -4,11 +4,12 @@ import { useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Upload } from 'lucide-react';
+import { PlusCircle, Upload, ArrowLeft } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
 import { Card, CardContent } from '@/components/ui/card';
+import { useRouter } from 'next/navigation';
 
 // Define the shape of a data source for type safety
 interface DataSource {
@@ -22,6 +23,7 @@ interface DataSource {
 export default function TransactionsPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingDataSource, setEditingDataSource] = useState<DataSource | null>(null);
   const [selectedDataSource, setSelectedDataSource] = useState<DataSource | null>(null);
@@ -56,9 +58,14 @@ export default function TransactionsPage() {
     <div className="space-y-8 p-8 max-w-7xl mx-auto">
       
       <div className="flex justify-between items-start">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Transactions</h1>
-          <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
+        <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')}>
+                <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="space-y-1">
+                <h1 className="text-3xl font-bold tracking-tight text-slate-900">Transactions</h1>
+                <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
+            </div>
         </div>
         <Button onClick={handleAdd}>
           <PlusCircle className="mr-2 h-4 w-4" />
