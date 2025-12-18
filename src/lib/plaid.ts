@@ -111,145 +111,6 @@ async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: string)
   return context;
 }
 
-function categorizeWithContext(
-  description: string, 
-  amount: number, 
-  plaidCategory: any,
-  context: UserContext
-): { primary: string, secondary: string, sub: string, confidence: number } {
-  
-  const desc = description.toUpperCase();
-  const isIncome = amount > 0;
-  const { industry, defaultIncomeCategory } = context.business;
-  const rawPrimary = (plaidCategory?.primary || '').toUpperCase();
-
-  // =========================================================
-  // TIER 1: EXACT DATABASE MATCHES (User's Specific Data)
-  // =========================================================
-  
-  // 1. Known Tenants (Income)
-  if (isIncome) {
-    const matchedTenant = context.tenantNames.find(name => desc.includes(name));
-    if (matchedTenant) {
-      return { 
-        primary: 'Income', 
-        secondary: 'Operating Income', 
-        sub: defaultIncomeCategory, // e.g. "Rental Income"
-        confidence: 0.95 
-      };
-    }
-  }
-
-  // 2. Known Vendors (Expense)
-  if (!isIncome) {
-    const matchedVendor = Object.keys(context.vendorMap).find(name => desc.includes(name));
-    if (matchedVendor) {
-      const mapping = context.vendorMap[matchedVendor];
-      return {
-        primary: 'Operating Expenses', 
-        secondary: mapping.category,
-        sub: mapping.subcategory,
-        confidence: 0.95
-      };
-    }
-  }
-
-  // 3. Property Address Match (Expense)
-  const matchedAddress = context.propertyAddresses.find(addr => desc.includes(addr));
-  if (matchedAddress && !isIncome) {
-     return {
-        primary: 'Operating Expenses',
-        secondary: 'Repairs & Maintenance',
-        sub: 'General Maintenance',
-        confidence: 0.7
-     };
-  }
-
-  // =========================================================
-  // TIER 2: SPECIFIC VENDOR RULES (The Fix for your Logs)
-  // =========================================================
-
-  if (!isIncome) {
-
-    // 4. TELEPHONE & INTERNET (Visible, Verizon, etc.)
-    if (desc.includes('VISIBLE') || desc.includes('VERIZON') || desc.includes('T-MOBILE') || desc.includes('AT&T') || desc.includes('SPECTRUM') || desc.includes('COMCAST') || desc.includes('XFINITY')) {
-       return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Telephone & Internet', confidence: 0.9 };
-    }
-
-    // 5. TOLLS & PARKING (NTTA, TxTag, etc.) - Catches "NTTA" before "AUTO" catches it as fuel
-    if (desc.includes('NTTA') || desc.includes('TOLL') || desc.includes('EZ PASS') || desc.includes('SUNPASS') || desc.includes('TXT AG') || desc.includes('PARKING') || desc.includes('METER')) {
-       return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Tolls & Parking', confidence: 0.95 };
-    }
-
-    // 6. SOFTWARE & SECURITY (Norton, VPN, eSign)
-    if (desc.includes('NORTON') || desc.includes('VPN') || desc.includes('ESIGN') || desc.includes('DOCUSIGN') || desc.includes('ADOBE') || desc.includes('INTUIT') || desc.includes('GOOGLE') || desc.includes('MICROSOFT') || desc.includes('GODADDY')) {
-       return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
-    }
-
-    // 7. ONLINE MARKETPLACES (Amazon)
-    if (desc.includes('AMAZON')) {
-       // If it's a "Marketplace" or "Retail", it's usually supplies.
-       // Unless it's "Amazon Web Services" (AWS), which is software.
-       if (desc.includes('AWS') || desc.includes('WEB SERVICES')) {
-          return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
-       }
-       return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Office Supplies', confidence: 0.8 };
-    }
-
-    // 8. GROCERIES & WHOLESALE (Costco, Kroger, Walmart)
-    if (desc.includes('COSTCO') || desc.includes('KROGER') || desc.includes('WALMART') || desc.includes('SAM\'S CLUB') || desc.includes('WHOLE FOODS') || desc.includes('HEB') || desc.includes('TARGET')) {
-       if (industry === 'Restaurant' || industry === 'Retail') {
-          return { primary: 'Cost of Goods Sold', secondary: 'Supplies', sub: 'Inventory/Supplies', confidence: 0.8 };
-       }
-       return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Office Supplies', confidence: 0.7 };
-    }
-
-    // 9. GAS & AUTO (Catches Fuel)
-    if (desc.includes('SHELL') || desc.includes('EXXON') || desc.includes('CHEVRON') || desc.includes('QT') || desc.includes('QUIKTRIP') || desc.includes('AUTOCHARGE') || desc.includes('FUEL')) {
-       return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.85 };
-    }
-    
-    // 10. MEALS (In-N-Out, Starbucks, Cafe)
-    if (desc.includes('STARBUCKS') || desc.includes('CAFE') || desc.includes('BURGER') || desc.includes('PIZZA') || desc.includes('DINER') || desc.includes('GRILL') || desc.includes('IN-N-OUT') || desc.includes('MOOYAH') || desc.includes('CHICK-FIL-A')) {
-       return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
-    }
-
-    // 11. PERSONAL / OWNER DRAW (Gyms)
-    if (desc.includes('FITNESS') || desc.includes('GYM') || desc.includes('24 HOUR') || desc.includes('SALON') || desc.includes('SPA')) {
-       return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.85 };
-    }
-  }
-
-  // =========================================================
-  // TIER 3: SMART FALLBACKS (Plaid Data)
-  // =========================================================
-  
-  // 12. INTERNAL BANK TRANSFERS (Checking <-> Savings)
-  if (desc.includes('ONLINE BANKING TRANSFER') || desc.includes('TRANSFER FROM SAV') || desc.includes('TRANSFER TO CHK') || desc.includes('TRANSFER TO SAV')) {
-      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 0.95 };
-  }
-
-  // Credit Card Payments (Paying the bill)
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('CREDIT CARD PAYMENT')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.95 };
-  }
-  
-  // Plaid says "LOAN_PAYMENTS"
-  if (rawPrimary === 'LOAN_PAYMENTS') {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment', confidence: 0.8 };
-  }
-
-  // =========================================================
-  // TIER 4: DEFAULT
-  // =========================================================
-  return { 
-      primary: 'Operating Expenses', 
-      secondary: 'Uncategorized', 
-      sub: 'General Expense', 
-      confidence: 0.1 
-  };
-}
-
 // NEW HELPER: Process a Batch with AI
 async function categorizeBatchWithAI(
   transactions: PlaidTransaction[], 
@@ -304,9 +165,10 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
         if (!accessToken) throw new Error("No access token.");
 
-        // 1. Fetch Context & Plaid Data
+        // 1. Fetch User Context
         const userContext = await fetchUserContext(db, userId);
-        
+
+        // 2. Fetch from Plaid
         let allTransactions: PlaidTransaction[] = [];
         let hasMore = true;
         let loopCount = 0;
@@ -318,70 +180,84 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 cursor: cursor,
                 count: 500,
             });
-            const newData = response.data;
-            allTransactions = allTransactions.concat(newData.added);
-            hasMore = newData.has_more;
-            cursor = newData.next_cursor;
+            allTransactions = allTransactions.concat(response.data.added);
+            hasMore = response.data.has_more;
+            cursor = response.data.next_cursor;
         }
 
-        const STRICT_START_DATE = '2025-01-01';
+        // 3. Filter for 2025
+        const STRICT_START_DATE = '2025-01-01'; 
         const relevantTransactions = allTransactions.filter(tx => {
-            const isNewEnough = tx.date >= STRICT_START_DATE;
-            const isCurrentAccount = tx.account_id === bankAccountId;
-            return isNewEnough && isCurrentAccount;
+            return tx.date >= STRICT_START_DATE && tx.account_id === bankAccountId;
         });
 
         if (relevantTransactions.length === 0) {
-            await accountRef.update({ 
-                plaidSyncCursor: cursor,
-                historicalDataPending: false,
-                lastSyncedAt: FieldValue.serverTimestamp()
-            });
+            await accountRef.update({ plaidSyncCursor: cursor, lastSyncedAt: FieldValue.serverTimestamp() });
             return { count: 0 };
         }
 
-        // 2. BATCH PROCESSING LOOP
+        // 4. BATCH PROCESSING WITH SAFETY FALLBACK
         const BATCH_SIZE = 20; 
         const batchPromises = [];
 
         for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
             const chunk = relevantTransactions.slice(i, i + BATCH_SIZE);
             
-            const p = categorizeBatchWithAI(chunk, userContext).then(aiResults => {
-                const batch = db.batch();
-                
-                aiResults.forEach(aiResult => {
-                    const originalTx = chunk.find(t => t.transaction_id === aiResult.transactionId);
-                    if (!originalTx) return;
+            const p = categorizeBatchWithAI(chunk, userContext)
+                .catch(err => {
+                    console.error("AI Batch Failed, falling back to defaults", err);
+                    return []; // Return empty if AI crashes so we still save data
+                })
+                .then(aiResults => {
+                    const batch = db.batch();
+                    
+                    // CRITICAL FIX: Loop over the REAL DATA (chunk), not the AI results
+                    chunk.forEach(originalTx => {
+                        const docRef = db.collection('users').doc(userId)
+                            .collection('bankAccounts').doc(bankAccountId)
+                            .collection('transactions').doc(originalTx.transaction_id);
 
-                    const docRef = db.collection('users').doc(userId)
-                        .collection('bankAccounts').doc(bankAccountId)
-                        .collection('transactions').doc(originalTx.transaction_id);
+                        // Try to find the matching AI result
+                        const aiResult = aiResults.find(r => r.transactionId === originalTx.transaction_id);
 
-                    batch.set(docRef, {
-                        date: originalTx.date,
-                        description: originalTx.name,
-                        merchantName: aiResult.merchantName,
-                        amount: originalTx.amount * -1,
-                        primaryCategory: aiResult.primaryCategory,
-                        secondaryCategory: aiResult.secondaryCategory,
-                        subcategory: aiResult.subcategory,
-                        confidence: aiResult.confidence,
-                        aiExplanation: aiResult.explanation,
-                        status: aiResult.confidence > 0.85 ? 'posted' : 'review',
-                        plaidTransactionId: originalTx.transaction_id,
-                        bankAccountId: originalTx.account_id,
-                        userId: userId,
-                        createdAt: FieldValue.serverTimestamp()
-                    }, { merge: true });
+                        // Default values if AI missed it
+                        const categoryData = aiResult ? {
+                            merchantName: aiResult.merchantName,
+                            primaryCategory: aiResult.primaryCategory,
+                            secondaryCategory: aiResult.secondaryCategory,
+                            subcategory: aiResult.subcategory,
+                            confidence: aiResult.confidence,
+                            aiExplanation: aiResult.explanation,
+                            status: aiResult.confidence > 0.85 ? 'posted' : 'review'
+                        } : {
+                            merchantName: originalTx.merchant_name || originalTx.name,
+                            primaryCategory: 'Operating Expenses',
+                            secondaryCategory: 'Uncategorized',
+                            subcategory: 'General Expense',
+                            confidence: 0,
+                            aiExplanation: 'AI processing skipped or failed',
+                            status: 'review'
+                        };
+
+                        batch.set(docRef, {
+                            date: originalTx.date,
+                            description: originalTx.name,
+                            amount: originalTx.amount * -1, // Invert amount
+                            plaidTransactionId: originalTx.transaction_id,
+                            bankAccountId: originalTx.account_id,
+                            userId: userId,
+                            createdAt: FieldValue.serverTimestamp(),
+                            ...categoryData // Spread the category data (AI or Default)
+                        }, { merge: true });
+                    });
+                    
+                    return batch.commit();
                 });
-                return batch.commit();
-            });
             batchPromises.push(p);
         }
 
         await Promise.all(batchPromises);
-
+        
         await accountRef.update({ 
             plaidSyncCursor: cursor,
             historicalDataPending: false,
@@ -391,7 +267,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         return { count: relevantTransactions.length };
 
     } catch (error: any) {
-        console.error("Sync Error:", error.response?.data || error);
+        console.error("Sync Error:", error);
         throw new Error(`Sync failed: ${error.message}`);
     }
   }
@@ -503,4 +379,5 @@ const CreateLinkTokenInputSchema = z.object({
     
 
     
+
 
