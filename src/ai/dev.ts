@@ -8,3 +8,4 @@ import '@/ai/flows/learn-category-mapping.ts';
 import '@/ai/flows/generalize-transaction-description.ts';
 import '@/lib/plaid.ts';
 import '@/ai/flows/generate-financial-report.ts';
+import '@/ai/flows/identify-contacts.ts';
