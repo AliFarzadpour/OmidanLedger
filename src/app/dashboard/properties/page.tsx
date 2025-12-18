@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
+import { ImportPropertiesDialog } from '@/components/dashboard/properties/import-dialog';
 
 export default function PropertiesListPage() {
   const { user } = useUser();
@@ -51,19 +52,22 @@ export default function PropertiesListPage() {
            </div>
         </div>
         
-        <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="mr-2 h-4 w-4" /> Add New Property
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-             <DialogHeader>
-               <DialogTitle>Add New Property</DialogTitle>
-             </DialogHeader>
-             <QuickPropertyForm onSuccess={() => { setIsQuickAddOpen(false); refetch(); }} />
-          </DialogContent>
-        </Dialog>
+        <div className="flex items-center gap-2">
+          <ImportPropertiesDialog />
+          <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="mr-2 h-4 w-4" /> Add New Property
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[500px]">
+               <DialogHeader>
+                 <DialogTitle>Add New Property</DialogTitle>
+               </DialogHeader>
+               <QuickPropertyForm onSuccess={() => { setIsQuickAddOpen(false); refetch(); }} />
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {isLoading && <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}
