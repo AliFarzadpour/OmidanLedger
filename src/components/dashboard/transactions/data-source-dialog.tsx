@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { createBankAccountFromPlaid, exchangePublicToken } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
 import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
+import { Label } from '@/components/ui/label';
 
 const dataSourceSchema = z.object({
   accountName: z.string().min(1, 'Account name is required.'),
@@ -203,7 +204,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange} modal={false}>
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{isEditMode ? 'Edit Data Source' : 'Add New Data Source'}</DialogTitle>
