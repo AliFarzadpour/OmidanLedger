@@ -10,6 +10,7 @@ import {
   PieChart,
   Settings,
   Landmark,
+  LayoutDashboard, // Import LayoutDashboard icon
 } from "lucide-react";
 
 import {
@@ -25,17 +26,43 @@ import {
 } from "@/components/ui/sidebar";
 
 const data = {
+  // Zone 1: The "Physical" World (Real Estate)
   realEstate: [
     { title: "Properties", url: "/dashboard/properties", icon: Building2 },
     { title: "Tenants", url: "/dashboard/properties?view=tenants", icon: Users },
   ],
+  
+  // Zone 2: The "Money" World (Bookkeeping)
   accounting: [
-    { title: "Transactions", url: "/dashboard/transactions", icon: CreditCard },
-    { title: "Invoices & Billing", url: "/dashboard/sales", icon: FileText },
-    { title: "Reports", url: "/dashboard/reports", icon: PieChart },
+    {
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      title: "Transactions",
+      url: "/dashboard/transactions",
+      icon: CreditCard,
+    },
+    {
+      title: "Invoices & Billing",
+      url: "/dashboard/sales",
+      icon: FileText,
+    },
+    {
+      title: "Reports",
+      url: "/dashboard/reports",
+      icon: PieChart,
+    },
   ],
+
+  // Zone 3: System
   system: [
-    { title: "Settings", url: "/dashboard/settings", icon: Settings },
+    {
+      title: "Settings",
+      url: "/dashboard/settings",
+      icon: Settings,
+    },
   ]
 };
 
@@ -45,7 +72,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar variant="inset" className="border-r bg-white" {...props}>
-      {/* 1. Header Spacing: Added 'mb-4' to push content down */}
       <SidebarHeader className="h-16 flex items-center px-6 border-b bg-white mb-2">
         <div className="flex items-center gap-2 font-bold text-xl text-slate-900">
           <Landmark className="h-6 w-6 text-blue-600" />
@@ -53,9 +79,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="bg-slate-50/50 px-2"> {/* Added horizontal padding px-2 */}
+      <SidebarContent className="bg-slate-50/50 px-2">
         
-        {/* REAL ESTATE GROUP */}
+        {/* GROUP 1: REAL ESTATE */}
         <SidebarGroup>
           <SidebarGroupLabel className="tracking-widest text-slate-500 font-bold text-xs mt-2 mb-3 px-2">
             REAL ESTATE
@@ -81,16 +107,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* ACCOUNTING GROUP */}
+        {/* GROUP 2: ACCOUNTING */}
         <SidebarGroup>
-          {/* 2. Group Spacing: Increased to 'mt-8' for clear separation */}
           <SidebarGroupLabel className="tracking-widest text-slate-500 font-bold text-xs mt-8 mb-3 px-2">
             ACCOUNTING
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {data.accounting.map((item) => {
-                const isActive = pathname.startsWith(item.url);
+                const isActive = pathname === item.url || (item.url !== '/dashboard' && pathname.startsWith(item.url));
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
