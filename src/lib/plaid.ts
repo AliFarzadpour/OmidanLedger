@@ -235,14 +235,18 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = newData.next_cursor;
         }
 
-        // Filter for relevant date range and CORRECT account
-        const today = new Date();
-        const targetYear = today.getFullYear() - 1; 
-        const startDate = `${targetYear}-01-01`; 
-        
+        // 1. Define your strict start date
+        const STRICT_START_DATE = '2025-01-01'; 
+
+        // 2. Filter the raw Plaid data
         const relevantTransactions = allTransactions.filter(tx => {
-            const isNewEnough = tx.date >= startDate;
-            const isCurrentAccount = tx.account_id === bankAccountId; 
+            // Check 1: Is the date 2025 or later?
+            const isNewEnough = tx.date >= STRICT_START_DATE;
+
+            // Check 2: Does this transaction belong to the account we are currently looping?
+            // (This prevents the "duplicate transactions" issue we solved earlier)
+            const isCurrentAccount = tx.account_id === bankAccountId;
+
             return isNewEnough && isCurrentAccount;
         });
 
@@ -294,3 +298,5 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
   }
 );
+
+    
