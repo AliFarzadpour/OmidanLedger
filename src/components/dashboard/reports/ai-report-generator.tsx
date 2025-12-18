@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { BrainCircuit, Sparkles, FileDown, ClipboardCopy } from 'lucide-react';
+import { BrainCircuit, Sparkles, FileDown, ClipboardCopy, Loader2 } from 'lucide-react';
 import { generateFinancialReport } from '@/ai/flows/generate-financial-report';
 import { Skeleton } from '@/components/ui/skeleton';
 import { marked } from 'marked';
@@ -368,13 +368,16 @@ export function AIReportGenerator() {
 
       {isLoading && (
         <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-1/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </CardHeader>
-          <CardContent>
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
+          <CardContent className="flex flex-col items-center justify-center h-64 gap-4 text-center">
+             <div className="bg-primary/10 p-4 rounded-full">
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+             </div>
+             <div className="space-y-1">
+                <h3 className="font-semibold text-lg">Report in Progress...</h3>
+                <p className="text-muted-foreground text-sm max-w-sm">
+                    Our AI is analyzing your transactions and writing your report. This may take a minute.
+                </p>
+             </div>
           </CardContent>
         </Card>
       )}
