@@ -170,7 +170,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
     if (!user) return;
 
     setIsSubmitting(true);
-    onOpenChange(false);
+    onOpenChange(false); // Close the dialog on success
 
     toast({
       title: 'Connecting Account...',

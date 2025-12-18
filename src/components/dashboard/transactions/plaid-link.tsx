@@ -23,7 +23,6 @@ export function PlaidLink({ onSuccess, daysRequested }: PlaidLinkProps) {
     async function generateToken() {
       if (user) {
         try {
-          // Pass the dynamic number of days
           const token = await createLinkToken({ userId: user.uid, daysRequested });
           setLinkToken(token);
           setError(null);
@@ -38,7 +37,6 @@ export function PlaidLink({ onSuccess, daysRequested }: PlaidLinkProps) {
         }
       }
     }
-    // Only generate token when daysRequested is a valid number
     if (daysRequested > 0) {
         generateToken();
     }
@@ -62,14 +60,6 @@ export function PlaidLink({ onSuccess, daysRequested }: PlaidLinkProps) {
       open();
     }
   };
-
-  // Automatically open Plaid once the link token is ready
-  useEffect(() => {
-    if (ready && linkToken) {
-        open();
-    }
-  }, [ready, linkToken, open]);
-
 
   return (
     <Button onClick={handleClick} disabled={!ready} className="w-full">
