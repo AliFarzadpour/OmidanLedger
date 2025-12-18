@@ -1,185 +1,161 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
+  DialogTrigger,
   DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore } from '@/firebase';
-import { categorizeTransactionsFromStatement } from '@/ai/flows/categorize-transactions-from-statement';
-import { collection, writeBatch, doc } from 'firebase/firestore';
-import { Progress } from '@/components/ui/progress';
+} from "@/components/ui/dialog";
+import { Upload, FileText, Check, AlertCircle, Loader2 } from 'lucide-react';
 
-const uploadSchema = z.object({
-  file: z.instanceof(FileList).refine((files) => files?.length === 1, 'A CSV or PDF file is required.'),
-});
-
-type UploadFormValues = z.infer<typeof uploadSchema>;
-
-interface DataSource {
-  id: string;
-  accountName: string;
+// We define a simple interface for our preview data so we don't rely on complex types
+interface TransactionPreview {
+  date: string;
+  description: string;
+  amount: string;
 }
 
-interface UploadTransactionsDialogProps {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  dataSource: DataSource;
-}
+export function UploadTransactionsDialog() {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fileName, setFileName] = useState('');
+  const [error, setError] = useState('');
+  const [previewData, setPreviewData] = useState<TransactionPreview[]>([]);
 
-const fileToDataUri = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-};
+  // Handle file selection safely
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
+    const file = files[0];
+    setFileName(file.name);
+    setError('');
+    setLoading(true);
 
-export function UploadTransactionsDialog({ isOpen, onOpenChange, dataSource }: UploadTransactionsDialogProps) {
-  const { user } = useUser();
-  const firestore = useFirestore();
-  const { toast } = useToast();
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-
-  const form = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadSchema),
-  });
-
-  const onSubmit = async (values: UploadFormValues) => {
-    if (!user || !firestore) return;
-    
-    const file = values.file[0];
-    if (!file) return;
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    try {
-        const dataUri = await fileToDataUri(file);
+    // Basic CSV parsing for preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const lines = text.split('\n').slice(0, 5); // Preview first 5 lines
         
-        toast({
-            title: 'Processing Statement',
-            description: 'The AI is analyzing your document. This may take a moment...',
-        });
-        
-        const result = await categorizeTransactionsFromStatement({
-          statementDataUri: dataUri,
-          userId: user.uid,
-        });
-
-        if (!result || !result.transactions || result.transactions.length === 0) {
-            throw new Error("The AI failed to extract data from the document. This can happen if the file is password-protected, corrupted, or in an unsupported format. Please check the file and try again. If the problem persists on a valid document, the AI service may be temporarily unavailable.");
-        }
-        
-        const batch = writeBatch(firestore);
-        const transactionsCol = collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
-        const totalTransactions = result.transactions.length;
-
-        result.transactions.forEach((transaction, index) => {
-            const newTransactionDoc = doc(transactionsCol); // Auto-generate ID
-            const newTransaction = {
-                ...transaction,
-                bankAccountId: dataSource.id,
-                userId: user.uid,
+        const preview: TransactionPreview[] = lines
+          .filter(line => line.trim().length > 0)
+          .map(line => {
+            const cols = line.split(',');
+            return {
+              date: cols[0] || 'Unknown',
+              description: cols[1] || 'Unknown',
+              amount: cols[2] || '0.00'
             };
-            batch.set(newTransactionDoc, newTransaction);
-            setUploadProgress(((index + 1) / totalTransactions) * 100);
-        });
+          });
         
-        await batch.commit();
-        
-        toast({
-          title: 'Upload Complete',
-          description: `${totalTransactions} transactions have been successfully imported and categorized.`,
-        });
+        setPreviewData(preview);
+      } catch (err) {
+        console.error("Error reading file:", err);
+        setError("Failed to read file.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    reader.readAsText(file);
+  };
 
-    } catch (error: any) {
-        console.error("Error processing statement:", error);
-        toast({
-          variant: 'destructive',
-          title: 'Processing Failed',
-          description: error.message || 'An unexpected error occurred while processing the statement.',
-        });
-    } finally {
-        setIsUploading(false);
-        onOpenChange(false);
-        form.reset();
-    }
+  const handleUpload = async () => {
+    setLoading(true);
+    // TODO: Connect to your backend import logic here
+    setTimeout(() => {
+        setLoading(false);
+        setOpen(false);
+        setFileName('');
+        setPreviewData([]);
+        alert("Upload feature coming soon!");
+    }, 1000);
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!isUploading) {
-        onOpenChange(open);
-        form.reset();
-      }
-    }}>
-      <DialogContent>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <Upload className="h-4 w-4" />
+          Upload CSV
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Upload Transaction Statement</DialogTitle>
+          <DialogTitle>Upload Transactions</DialogTitle>
           <DialogDescription>
-            Select a CSV or PDF file to upload for the account: <strong>{dataSource.accountName}</strong>.
+            Upload a CSV file from your bank. Expected format: Date, Description, Amount.
           </DialogDescription>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="file"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Statement File</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="file" 
-                      accept=".csv,.pdf"
-                      disabled={isUploading}
-                      {...form.register('file')}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            {isUploading && (
-              <div className="space-y-2">
-                <p className="text-sm text-muted-foreground">Categorizing and importing transactions...</p>
-                <Progress value={uploadProgress} />
-              </div>
-            )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isUploading}>
-                {isUploading ? 'Processing...' : 'Upload & Categorize'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+        {!fileName ? (
+          <div className="flex flex-col items-center justify-center border-2 border-dashed rounded-lg p-8 mt-4 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer relative">
+            {/* Input must handle onChange, not onClick */}
+            <input 
+              type="file" 
+              accept=".csv" 
+              onChange={handleFileChange}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+            <FileText className="h-8 w-8 text-slate-400 mb-2" />
+            <p className="text-sm font-medium text-slate-900">
+              {loading ? "Reading..." : "Click to upload CSV"}
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 space-y-4">
+             <div className="flex items-center gap-2 text-green-600 bg-green-50 p-3 rounded-md text-sm">
+                <Check className="h-4 w-4" />
+                Selected: <b>{fileName}</b>
+             </div>
+
+             {/* Preview */}
+             {previewData.length > 0 && (
+                <div className="border rounded-md overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-50">
+                            <tr>
+                                <th className="p-2">Date</th>
+                                <th className="p-2">Description</th>
+                                <th className="p-2 text-right">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {previewData.map((row, i) => (
+                                <tr key={i} className="border-t">
+                                    <td className="p-2">{row.date}</td>
+                                    <td className="p-2">{row.description}</td>
+                                    <td className="p-2 text-right">{row.amount}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+             )}
+          </div>
+        )}
+
+        {error && (
+            <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-md text-sm mt-2">
+            <AlertCircle className="h-4 w-4" />
+            {error}
+            </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={handleUpload} disabled={!fileName || loading} className="bg-blue-600 hover:bg-blue-700">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : null}
+            Upload File
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
