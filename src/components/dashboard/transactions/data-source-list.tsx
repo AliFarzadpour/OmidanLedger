@@ -20,6 +20,7 @@ interface DataSource {
   accountType: 'checking' | 'savings' | 'credit-card' | 'cash' | 'other';
   accountNumber?: string;
   plaidAccessToken?: string;
+  historicalDataPending?: boolean;
 }
 
 interface DataSourceListProps {
@@ -85,7 +86,13 @@ export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, onDel
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-semibold">{source.accountName}</CardTitle>
               <div className="flex items-center gap-2">
-                {source.plaidAccessToken && <Badge variant="secondary">Plaid</Badge>}
+                {source.historicalDataPending ? (
+                    <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200">
+                        <span className="animate-pulse mr-1">⏳</span> Syncing...
+                    </Badge>
+                ) : source.plaidAccessToken && (
+                    <Badge variant="secondary">Plaid</Badge>
+                )}
                 {typeIcons[source.accountType as keyof typeof typeIcons] || typeIcons.other}
               </div>
             </CardHeader>

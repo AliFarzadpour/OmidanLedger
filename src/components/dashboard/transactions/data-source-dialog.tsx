@@ -101,6 +101,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
 
     try {
       const { accessToken } = await exchangePublicToken({ publicToken: public_token });
+      
       await createBankAccountFromPlaid({
         userId: user.uid,
         accessToken: accessToken,
@@ -108,8 +109,9 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
       });
 
       toast({
-        title: 'Account Connected!',
-        description: `${metadata.institution.name} has been successfully linked.`,
+        title: "Bank Connected Successfully!",
+        description: "We are downloading your history. The last 30 days are ready now. The rest will appear automatically in about 5-10 minutes.",
+        duration: 8000,
       });
 
     } catch (error) {
@@ -121,6 +123,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
       });
     } finally {
       setIsSubmitting(false);
+      onOpenChange(false);
     }
   };
 
@@ -181,6 +184,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource }: DataSourc
   useEffect(() => {
     if (!isOpen) {
         setStartDate(getDefaultDate());
+        setLinkToken(null); // Reset link token when dialog closes
     }
   }, [isOpen]);
 
