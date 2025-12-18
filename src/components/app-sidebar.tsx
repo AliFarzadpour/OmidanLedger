@@ -10,7 +10,7 @@ import {
   Settings,
   Landmark,
   LayoutDashboard,
-  Wallet, // Changed from FileText
+  FileText,
 } from "lucide-react";
 
 import {
@@ -50,9 +50,9 @@ const data = {
       icon: CreditCard,
     },
     {
-      title: "Revenue Center", // Renamed from 'Invoices & Billing'
+      title: "Invoices & Billing",
       url: "/dashboard/sales",
-      icon: Wallet, // Changed icon
+      icon: FileText,
     },
     {
       title: "Reports",
