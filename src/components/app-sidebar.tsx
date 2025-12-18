@@ -28,6 +28,11 @@ import {
 const data = {
   // Zone 1: The "Physical" World (Real Estate)
   realEstate: [
+    {
+      title: "Real Estate Dashboard",
+      url: "/dashboard/sales",
+      icon: LayoutDashboard,
+    },
     { title: "Properties", url: "/dashboard/properties", icon: Building2 },
     { title: "Tenants", url: "/dashboard/properties?view=tenants", icon: Users },
   ],
