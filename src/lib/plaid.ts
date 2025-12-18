@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -114,7 +113,7 @@ const createLinkTokenFlow = ai.defineFlow(
         country_codes: ['US'],
         language: 'en',
         transactions: {
-          days_requested: 730 // <-- REQUEST MORE HISTORY
+          days_requested: 730
         }
       });
       return response.data.link_token;
@@ -280,5 +279,3 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     }
   }
 );
-
-    
