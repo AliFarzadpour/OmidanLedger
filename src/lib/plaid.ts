@@ -11,7 +11,7 @@ import {
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
 
-// --- INITIALIZATION ---
+// 1. Initialize Admin SDK (Bypasses Security Rules)
 function getAdminDB() {
   if (!getApps().length) {
     initializeApp();
@@ -19,6 +19,7 @@ function getAdminDB() {
   return getFirestore();
 }
 
+// 2. Configure Plaid Client
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
@@ -37,14 +38,63 @@ function getPlaidClient() {
   return new PlaidApi(plaidConfig);
 }
 
-// --- HELPER: Clean Text (NEW) ---
-// Converts "LOAN_PAYMENTS" -> "Loan Payments"
-function formatCategory(raw: string | undefined): string {
-  if (!raw) return '';
-  return raw
-    .split('_')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(' ');
+// --- SMART MAPPING: Plaid -> Accountant ---
+// This turns ugly Plaid tags into professional Chart of Accounts buckets
+function mapPlaidToBusinessCategory(plaidPrimary: string | undefined, plaidDetailed: string | undefined, description: string): { primary: string, secondary: string, sub: string } {
+  const rawDetailed = (plaidDetailed || '').toUpperCase();
+  const rawPrimary = (plaidPrimary || '').toUpperCase();
+  const desc = description.toUpperCase();
+
+  // 1. Check for obvious Income (Negative Expense logic handles the sign, this handles categorization)
+  if (rawPrimary === 'INCOME' || rawDetailed.includes('DIVIDENDS') || rawDetailed.includes('INTEREST')) {
+    if (rawDetailed.includes('INTEREST')) return { primary: 'Income', secondary: 'Non-Operating Income', sub: 'Interest Income' };
+    return { primary: 'Income', secondary: 'Operating Income', sub: 'Sales / Service' };
+  }
+
+  // 2. Specific Logic based on Description (Overrides Plaid)
+  if (desc.includes('UBER') || desc.includes('LYFT')) {
+    return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Taxis & Rideshare' };
+  }
+  if (desc.includes('AIRLINES') || desc.includes('HOTEL') || desc.includes('AIRBNB')) {
+    return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel' };
+  }
+  if (desc.includes('EDISON') || desc.includes('WATER') || desc.includes('PG&E') || desc.includes('ENERGY')) {
+    return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Utilities' };
+  }
+
+  // 3. Map Plaid Categories to Business Buckets
+  if (rawPrimary === 'RENT_AND_UTILITIES') {
+     return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities' };
+  }
+  
+  if (rawPrimary === 'FOOD_AND_DRINK') {
+     return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Meals' };
+  }
+
+  if (rawPrimary === 'TRANSPORTATION') {
+     if (rawDetailed.includes('GAS') || rawDetailed.includes('FUEL')) {
+        return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel' };
+     }
+     return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'General Transport' };
+  }
+
+  if (rawPrimary === 'LOAN_PAYMENTS') {
+     return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment' };
+  }
+
+  if (rawPrimary === 'TRANSFER_IN' || rawPrimary === 'TRANSFER_OUT') {
+     return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer' };
+  }
+
+  // 4. Default / Fallback (Clean up the text at least)
+  const cleanSub = rawDetailed.split('_').pop() || 'General'; // Get last part "FAST_FOOD" -> "FOOD"
+  const formattedSub = cleanSub.charAt(0).toUpperCase() + cleanSub.slice(1).toLowerCase();
+  
+  return { 
+      primary: 'Operating Expenses', // Default bucket for businesses
+      secondary: 'Uncategorized', 
+      sub: formattedSub 
+  };
 }
 
 // --- FLOWS ---
@@ -130,7 +180,6 @@ export async function syncAndCategorizePlaidTransactions(input: z.infer<typeof S
   return syncAndCategorizePlaidTransactionsFlow(input);
 }
 
-// 👇 UPDATED SYNC FLOW WITH CATEGORY CLEANING
 const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
   {
     name: 'syncAndCategorizePlaidTransactionsFlow',
@@ -156,7 +205,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         let hasMore = true;
         let loopCount = 0;
 
-        // Fetch up to 5000 transactions (Current + Previous Year)
+        // Fetch Transactions
         while (hasMore && loopCount < 50) {
             loopCount++;
             const response = await plaidClient.transactionsSync({
@@ -170,11 +219,10 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = newData.next_cursor;
         }
 
-        // Filter: Start from Jan 1st of Previous Year (e.g., Jan 1, 2024 if today is 2025)
+        // Filter for relevant date range
         const today = new Date();
         const targetYear = today.getFullYear() - 1; 
         const startDate = `${targetYear}-01-01`; 
-        
         const relevantTransactions = allTransactions.filter(tx => tx.date >= startDate);
 
         if (relevantTransactions.length === 0) {
@@ -188,33 +236,30 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         relevantTransactions.forEach((tx) => {
             const docRef = transactionsRef.doc(tx.transaction_id);
             
-            // --- 🧹 CLEANING LOGIC START ---
-            let primary = formatCategory(tx.personal_finance_category?.primary); // "Food And Drink"
-            let secondary = formatCategory(tx.personal_finance_category?.detailed); // "Food And Drink Fast Food"
-            
-            // Remove redundancy: "Food And Drink Fast Food" -> "Fast Food"
-            if (secondary.startsWith(primary)) {
-                secondary = secondary.replace(primary, '').trim();
-            }
-            if (!secondary) secondary = 'General'; // Fallback if empty
-            // --- CLEANING LOGIC END ---
+            // 👇 USE THE NEW SMART MAPPER
+            const smartCategory = mapPlaidToBusinessCategory(
+                tx.personal_finance_category?.primary,
+                tx.personal_finance_category?.detailed,
+                tx.name
+            );
 
             batch.set(docRef, {
                 date: tx.date,
                 description: tx.name,
+                // Invert amount (Expenses become negative)
                 amount: tx.amount * -1,
                 merchantName: tx.merchant_name || tx.name,
                 
-                // Use the Cleaned Categories
-                primaryCategory: primary || 'Uncategorized',
-                secondaryCategory: secondary,
-                subcategory: secondary, // Fill subcategory so it's not empty in UI
+                // Use Smart Categories
+                primaryCategory: smartCategory.primary,
+                secondaryCategory: smartCategory.secondary,
+                subcategory: smartCategory.sub,
                 
                 plaidTransactionId: tx.transaction_id,
                 bankAccountId: bankAccountId,
                 userId: userId,
                 status: 'pending_review',
-                confidence: 0.5,
+                confidence: 0.8, // Higher confidence since we mapped it logicially
                 createdAt: FieldValue.serverTimestamp()
             }, { merge: true });
         });
