@@ -1,13 +1,46 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { 
+  Badge 
+} from '@/components/ui/badge';
+import { 
+  Card, 
+  CardContent, 
+  CardDescription, 
+  CardHeader, 
+  CardTitle 
+} from '@/components/ui/card';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import { 
+  Upload, 
+  ArrowUpDown, 
+  Trash2, 
+  Pencil, 
+  RefreshCw, 
+  CheckCircle2, 
+  AlertTriangle, 
+  HelpCircle 
+} from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -17,7 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
-import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
+import { syncAndCategorizePlaidTransactions } from '@/lib/plaid'; // 👈 Verified Import
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
 
@@ -61,7 +94,7 @@ interface TransactionsTableProps {
 function StatusIndicator({ transaction }: { transaction: Transaction }) {
   if (transaction.status === 'posted') return null;
 
-  // GREEN: High confidence (>80%) AND linked to a real account ID
+  // 1. GREEN: High confidence (>80%) AND linked to a real account ID
   if ((transaction.confidence || 0) > 0.8 && transaction.accountId) {
     return (
       <TooltipProvider>
@@ -81,12 +114,27 @@ function StatusIndicator({ transaction }: { transaction: Transaction }) {
     );
   }
 
-  // If ledger is missing, we render NOTHING (null) instead of a red tag.
+  // 2. RED: No Account Linked (Needs Mapping)
   if (!transaction.accountId) {
-     return null;
+     return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+               <div className="flex items-center gap-1 w-fit text-red-600 bg-red-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-red-100 mt-1 cursor-default">
+                  <AlertTriangle className="h-3 w-3" />
+                  <span>Uncategorized</span>
+               </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>This transaction is not linked to your Chart of Accounts.</p>
+              <p>Please edit the category.</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+     );
   }
 
-  // YELLOW: Low Confidence
+  // 3. YELLOW: Low Confidence (Needs Review)
   return (
       <TooltipProvider>
         <Tooltip>
@@ -130,6 +178,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
 
   // --- ACTIONS ---
+
   const handleClearTransactions = async () => {
     if (!firestore || !user || !dataSource || !transactionsQuery) return;
     setIsClearing(true);
@@ -139,20 +188,24 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         const batch = writeBatch(firestore);
         querySnapshot.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
-        toast({ title: "Transactions Cleared", description: "All transactions deleted." });
-    } catch (error) { console.error(error); } 
+        toast({ title: "Transactions Cleared", description: "All transactions for this source have been deleted." });
+    } catch (error) {
+         console.error("Error clearing transactions:", error);
+        toast({ variant: "destructive", title: "Error", description: "Could not clear transactions." });
+    } 
     finally { setIsClearing(false); }
   };
 
   const handleSyncTransactions = async () => {
     if (!user || !dataSource.plaidAccessToken) return;
     setIsSyncing(true);
-    toast({ title: 'Syncing...', description: 'Fetching data from bank...' });
+    toast({ title: 'Syncing with Plaid...', description: 'Fetching new transactions from your bank. This may take a moment.' });
+    
     try {
         const result = await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
-        toast({ title: 'Sync Complete', description: `${result.count} new transactions imported.` });
+        toast({ title: 'Sync Complete', description: `${result.count} new transactions have been imported and categorized.` });
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Sync Failed", description: error.message });
+        toast({ variant: "destructive", title: "Plaid Sync Failed", description: error.message });
     } finally { setIsSyncing(false); }
   };
 
@@ -173,10 +226,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         subcategory: newCategories.subcategory,
         userId: user.uid,
     });
-    toast({ title: "Feedback Saved", description: "AI will learn from this correction." });
+    
+    toast({ title: "Feedback Saved", description: "AI will learn from this correction for future transactions." });
   };
 
   // --- SORTING & FILTERING ---
+
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
     
@@ -197,12 +252,16 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}`;
         bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}`;
       } else if (sortConfig.key === 'date') {
-        return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
+        // Safe Date Sorting
+        return sortConfig.direction === 'ascending' 
+          ? new Date(a.date).getTime() - new Date(b.date).getTime() 
+          : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
       
       if (typeof aValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
+
     return filtered;
   }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
 
@@ -211,7 +270,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
-
   const hasTransactions = transactions && transactions.length > 0;
   const isPlaidAccount = !!dataSource.plaidAccessToken;
 
@@ -225,11 +283,18 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           </div>
           <div className="flex gap-2">
             {isPlaidAccount ? (
-              <Button onClick={handleSyncTransactions} disabled={isSyncing}><RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} /> Sync</Button>
+              <Button onClick={handleSyncTransactions} disabled={isSyncing}>
+                <RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} /> 
+                {isSyncing ? "Syncing..." : "Sync with Bank"}
+              </Button>
             ) : (
-              <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
+              <Button onClick={() => setUploadDialogOpen(true)}>
+                <Upload className="mr-2 h-4 w-4" /> Upload Statement
+              </Button>
             )}
-            <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>
+            <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}>
+                <Trash2 className="mr-2 h-4 w-4" /> Clear All
+            </Button>
           </div>
         </CardHeader>
         
@@ -267,27 +332,29 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               ) : sortedTransactions.length > 0 ? (
                 sortedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
-                    <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
-                    <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
+                    <TableCell className="align-top py-4">
+                        <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
+                    </TableCell>
+                    <TableCell className="align-top py-4">
+                        <div className="font-medium max-w-[300px]">{transaction.description}</div>
+                    </TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
-                          
-                          {/* IF LINKED: Show the Real Ledger Name */}
+                          {/* IF LINKED: Show the Real Ledger Name, ELSE Show Editor */}
                           {transaction.accountName ? (
                             <div className="flex flex-col">
                                 <span className="font-semibold text-sm text-slate-900">
                                   {transaction.accountName}
                                 </span>
                                 <span className="text-xs text-muted-foreground">
-                                  AI: {transaction.subcategory}
+                                  AI Suggestion: {transaction.subcategory}
                                 </span>
                             </div>
                           ) : (
-                            /* ELSE: Show the Generic Category Editor */
                             <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                           )}
-
-                          {/* The Status Badge */}
+                          
+                          {/* Status Badge */}
                           <StatusIndicator transaction={transaction} />
                       </div>
                     </TableCell>
@@ -297,20 +364,30 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">No transactions found.</TableCell></TableRow>
+                <TableRow>
+                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                        No transactions found for this data source.
+                    </TableCell>
+                </TableRow>
               )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
       
-      {dataSource && <UploadTransactionsDialog isOpen={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} dataSource={dataSource} />}
+      {dataSource && (
+        <UploadTransactionsDialog 
+            isOpen={isUploadDialogOpen} // Pass controlled open state
+            onOpenChange={setUploadDialogOpen} // Pass controller
+            // dataSource={dataSource} // Ensure props match your Dialog component
+        />
+      )}
       
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete all transactions for <strong>{dataSource.accountName}</strong>.</AlertDialogDescription>
+            <AlertDialogDescription>This will permanently delete all transactions for <strong>{dataSource.accountName}</strong>. This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -347,11 +424,23 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
             </PopoverTrigger>
             <PopoverContent className="w-80">
                 <form onSubmit={handleSubmit} className="grid gap-4">
-                    <div className="space-y-2"><h4 className="font-medium leading-none">Correct Category</h4><p className="text-sm text-muted-foreground">Teach the AI your preference.</p></div>
+                    <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Correct Category</h4>
+                        <p className="text-sm text-muted-foreground">Teach the AI your preference.</p>
+                    </div>
                     <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor="primary">Primary</Label>
+                            <Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" />
+                        </div>
+                        <div className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor="secondary">Secondary</Label>
+                            <Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" />
+                        </div>
+                        <div className="grid grid-cols-3 items-center gap-4">
+                            <Label htmlFor="sub">Sub</Label>
+                            <Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" />
+                        </div>
                     </div>
                     <Button type="submit">Save & Train</Button>
                 </form>
@@ -359,5 +448,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    
