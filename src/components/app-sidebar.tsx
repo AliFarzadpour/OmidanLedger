@@ -6,11 +6,11 @@ import {
   Building2,
   Users,
   CreditCard,
+  FileText,
   PieChart,
   Settings,
   Landmark,
   LayoutDashboard,
-  FileText,
 } from "lucide-react";
 
 import {
@@ -33,7 +33,11 @@ const data = {
       url: "/dashboard/sales",
       icon: LayoutDashboard,
     },
-    { title: "Properties", url: "/dashboard/properties", icon: Building2 },
+    {
+      title: "Properties",
+      url: "/dashboard/properties",
+      icon: Building2,
+    },
     { title: "Tenants", url: "/dashboard/properties?view=tenants", icon: Users },
   ],
   
@@ -53,6 +57,11 @@ const data = {
       title: "Invoices & Billing",
       url: "/dashboard/sales",
       icon: FileText,
+    },
+    {
+      title: "Vendors",
+      url: "/dashboard/vendors",
+      icon: Users,
     },
     {
       title: "Reports",
