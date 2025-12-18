@@ -29,7 +29,7 @@ const data = {
   // Zone 1: The "Physical" World (Real Estate)
   realEstate: [
     {
-      title: "Real Estate Dashboard",
+      title: "Revenue Center",
       url: "/dashboard/sales",
       icon: LayoutDashboard,
     },
