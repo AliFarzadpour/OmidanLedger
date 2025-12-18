@@ -43,7 +43,7 @@ export default function TransactionsPage() {
     return collection(firestore, `users/${user.uid}/bankAccounts`);
   }, [firestore, user]);
 
-  const { data: dataSources, isLoading: isLoadingDataSources, refetch: refetchDataSources } = useCollection<DataSource>(bankAccountsQuery);
+  const { data: dataSources, isLoading: isLoadingDataSources } = useCollection<DataSource>(bankAccountsQuery);
 
   const handleAdd = () => {
     setEditingDataSource(null);
@@ -96,8 +96,7 @@ export default function TransactionsPage() {
         if (selectedDataSource?.id === deletingDataSource.id) {
             setSelectedDataSource(null);
         }
-        refetchDataSources(); // Re-fetch the list of data sources
-
+        
     } catch (error) {
         console.error("Error deleting data source:", error);
         toast({
