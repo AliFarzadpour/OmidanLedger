@@ -6,7 +6,6 @@ import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, query, or
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -22,8 +21,8 @@ export default function SmartRulesPage() {
   const [rules, setRules] = useState<any[]>([]);
   const [merchant, setMerchant] = useState('');
   const [primaryCategory, setPrimaryCategory] = useState('Operating Expenses');
-  const [secondaryCategory, setSecondaryCategory] = useState('General & Administrative');
-  const [subcategory, setSubcategory] = useState('General Expense');
+  const [secondaryCategory, setSecondaryCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -51,7 +50,10 @@ export default function SmartRulesPage() {
   }, [user, firestore, isAdminMode]);
 
   const handleSave = async () => {
-    if (!merchant || !user || !firestore) return;
+    if (!merchant || !primaryCategory || !secondaryCategory || !subcategory || !user || !firestore) {
+        toast({ variant: 'destructive', title: "Missing Fields", description: "Please fill out all keyword and category fields." });
+        return;
+    }
     setIsSaving(true);
 
     const cleanId = merchant.toUpperCase()
@@ -70,9 +72,11 @@ export default function SmartRulesPage() {
     const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
 
     try {
-      await setDoc(doc(firestore, collectionPath, cleanId), ruleData);
+      await setDoc(doc(firestore, collectionPath, cleanId), ruleData, { merge: true });
       toast({ title: "Rule Saved", description: `Rule for "${merchant}" has been created.` });
       setMerchant('');
+      setSecondaryCategory('');
+      setSubcategory('');
       fetchRules();
     } catch (error: any) {
       toast({ variant: 'destructive', title: "Error", description: error.message });
@@ -123,41 +127,33 @@ export default function SmartRulesPage() {
         <CardHeader>
           <CardTitle>Teach the AI a new rule</CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Input 
-            value={merchant}
-            onChange={(e) => setMerchant(e.target.value)}
-            placeholder="If vendor name contains..."
-            className="md:col-span-1"
-          />
-          <Select value={subcategory} onValueChange={setSubcategory}>
-            <SelectTrigger className="md:col-span-1">
-              <SelectValue placeholder="Assign this category..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                <SelectLabel>Operating Expenses</SelectLabel>
-                <SelectItem value="Rent & Utilities">Rent & Utilities</SelectItem>
-                <SelectItem value="Office Supplies">Office Supplies</SelectItem>
-                <SelectItem value="Meals & Entertainment">Meals & Entertainment</SelectItem>
-                <SelectItem value="Travel & Lodging">Travel & Lodging</SelectItem>
-                <SelectItem value="Software & Subscriptions">Software & Subscriptions</SelectItem>
-                <SelectItem value="Advertising & Marketing">Advertising & Marketing</SelectItem>
-                <SelectItem value="Repairs & Maintenance">Repairs & Maintenance</SelectItem>
-                <SelectItem value="Fuel">Fuel</SelectItem>
-              </SelectGroup>
-              <SelectGroup>
-                <SelectLabel>Personal / Equity</SelectLabel>
-                <SelectItem value="Personal Expense">Personal Expense</SelectItem>
-                <SelectItem value="Owner's Draw">Owner's Draw</SelectItem>
-              </SelectGroup>
-              <SelectGroup>
-                <SelectLabel>Liabilities</SelectLabel>
-                <SelectItem value="Credit Card Payment">Credit Card Payment</SelectItem>
-                <SelectItem value="Loan Payment">Loan Payment</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+        <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Input 
+                    value={merchant}
+                    onChange={(e) => setMerchant(e.target.value)}
+                    placeholder="If vendor name contains..."
+                    className="md:col-span-1"
+                />
+                <Input 
+                    value={primaryCategory}
+                    onChange={(e) => setPrimaryCategory(e.target.value)}
+                    placeholder="Primary Category"
+                    className="md:col-span-1"
+                />
+                <Input 
+                    value={secondaryCategory}
+                    onChange={(e) => setSecondaryCategory(e.target.value)}
+                    placeholder="Secondary Category"
+                    className="md:col-span-1"
+                />
+                 <Input 
+                    value={subcategory}
+                    onChange={(e) => setSubcategory(e.target.value)}
+                    placeholder="Subcategory"
+                    className="md:col-span-1"
+                />
+            </div>
           <Button onClick={handleSave} disabled={isSaving || !merchant} className="w-full md:w-auto">
             {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Rule'}
           </Button>
@@ -183,11 +179,14 @@ export default function SmartRulesPage() {
               ) : (
                 rules.map((rule) => (
                   <TableRow key={rule.id}>
-                    <TableCell className="font-medium">{rule.originalKeyword || rule.id}</TableCell>
+                    <TableCell className="font-medium">{rule.originalKeyword || rule.transactionDescription || rule.id}</TableCell>
                     <TableCell>
-                      <Badge variant={rule.subcategory === 'Personal Expense' ? 'destructive' : 'secondary'}>
-                        {rule.subcategory}
-                      </Badge>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{rule.primaryCategory || rule.primary}</span>
+                        <span className="text-xs text-muted-foreground">
+                            {rule.secondaryCategory || rule.secondary} &gt; {rule.subcategory || rule.sub}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{rule.source || 'Unknown'}</Badge>
