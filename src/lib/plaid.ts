@@ -13,6 +13,7 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { CATEGORIZATION_SYSTEM_PROMPT, BatchCategorizationSchema } from '@/ai/prompts/categorization';
 import { deepCategorizeTransaction } from '@/ai/flows/deep-categorize-transaction';
+import { incrementPropertyStats } from '@/actions/update-property-stats';
 
 // --- INITIALIZATION ---
 function getAdminDB() {
@@ -441,7 +442,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     
                     const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
                     
-                    batch.set(docRef, {
+                    const txData = {
                         date: originalTx.date,
                         description: originalTx.name,
                         amount: signedAmount,
@@ -451,7 +452,17 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         createdAt: FieldValue.serverTimestamp(),
                         ...enforcedCategory,
                         propertyId: enforcedCategory.propertyId || null
-                    }, { merge: true });
+                    };
+
+                    batch.set(docRef, txData, { merge: true });
+
+                    if (txData.propertyId) {
+                        incrementPropertyStats({
+                            propertyId: txData.propertyId,
+                            date: txData.date,
+                            amount: txData.amount
+                        }).catch(console.error);
+                    }
                 }
                 
                 return batch.commit();
