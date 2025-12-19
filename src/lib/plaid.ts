@@ -72,7 +72,7 @@ function sanitizeVendorId(text: string): string {
     .trim();
 }
 
-export function getCategoryFromDatabase(
+export async function getCategoryFromDatabase(
   merchantName: string, 
   context: UserContext,
   db: FirebaseFirestore.Firestore
@@ -81,8 +81,9 @@ export function getCategoryFromDatabase(
 
   const desc = merchantName.toUpperCase();
 
+  // 1. Check for Matches
   const matchedRule = context.userRules.find(rule => 
-      desc.includes(rule.keyword)
+      desc.includes(rule.keyword) 
   );
 
   if (matchedRule) {
@@ -90,7 +91,7 @@ export function getCategoryFromDatabase(
           primaryCategory: matchedRule.primaryCategory,
           secondaryCategory: matchedRule.secondaryCategory,
           subcategory: matchedRule.subcategory,
-          confidence: 1.0,
+          confidence: 1.0, 
           source: 'User Rule' 
       };
   }
@@ -366,7 +367,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     const signedAmount = originalTx.amount * -1;
                     let finalCategory: any;
 
-                    const ruleResult = getCategoryFromDatabase(originalTx.name, userContext, db);
+                    const ruleResult = await getCategoryFromDatabase(originalTx.name, userContext, db);
 
                     if (ruleResult) {
                         finalCategory = {
