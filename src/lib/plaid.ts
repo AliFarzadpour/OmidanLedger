@@ -1,7 +1,4 @@
 
-
-
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -54,6 +51,49 @@ interface UserContext {
   tenantNames: string[];
   vendorMap: Record<string, { category: string; subcategory: string }>;
   propertyAddresses: string[];
+}
+
+// New Helper: Fetches rules from DB instead of hardcoding
+export async function getCategoryFromDatabase(
+  merchantName: string, 
+  userId: string, 
+  db: FirebaseFirestore.Firestore
+) {
+  const desc = merchantName.toUpperCase();
+  
+  // 1. Generate search tokens (e.g., "Home Depot" -> ["HOME", "DEPOT", "HOMEDEPOT"])
+  // This creates keys to search the database with
+  const tokens = desc.split(/[\s,.*]+/).filter(t => t.length > 2);
+  
+  // 2. CHECK USER'S PERSONAL RULES (Override Global)
+  // We query if the user has defined a rule for any of these tokens
+  const cleanId = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").replace(/\s/g, '_');
+  
+  const userRuleRef = db.collection('users').doc(userId).collection('vendorRules').doc(cleanId);
+  const userRuleSnap = await userRuleRef.get();
+
+  if (userRuleSnap.exists) {
+      console.log(`[Categorization] Found User Rule for ${merchantName}`);
+      return { ...userRuleSnap.data(), confidence: 1.0, source: 'User Rule' };
+  }
+
+  // 3. CHECK GLOBAL MASTER DATABASE
+  // We loop through our known tokens from the description to find a match
+  for (const token of tokens) {
+      const globalDoc = await db.collection('globalVendorMap').doc(token).get();
+      if (globalDoc.exists) {
+          console.log(`[Categorization] Found Global Rule for ${merchantName} via token ${token}`);
+          return { ...globalDoc.data(), confidence: 0.95, source: 'Global DB' };
+      }
+  }
+  
+  // Try combined string (e.g. "HOMEDEPOT") as a backup
+  const globalDocFull = await db.collection('globalVendorMap').doc(cleanId).get();
+  if (globalDocFull.exists) {
+      return { ...globalDocFull.data(), confidence: 0.95, source: 'Global DB' };
+  }
+
+  return null; // No rule found -> Fallback to AI
 }
 
 /**
@@ -139,7 +179,8 @@ async function categorizeBatchWithAI(
   return llmResponse.output?.results || [];
 }
 
-function categorizeWithContext(
+// RENAMED: This is now the fallback heuristic engine
+function categorizeWithHeuristics(
   description: string, 
   amount: number, 
   plaidCategory: any,
@@ -147,113 +188,68 @@ function categorizeWithContext(
 ): { primary: string, secondary: string, sub: string, confidence: number } {
   
   const desc = description.toUpperCase();
-  // Remove special chars to help matching "T.J.MAXX" vs "TJ MAXX"
-  const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
-  
   const isIncome = amount > 0;
-  const { industry, defaultIncomeCategory } = context.business;
+  const { defaultIncomeCategory } = context.business;
 
-  // =========================================================
-  // TIER 1: EXACT DATABASE MATCHES
-  // =========================================================
-  if (isIncome) {
-    const matchedTenant = context.tenantNames.find(name => desc.includes(name));
-    if (matchedTenant) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.95 };
-  } else {
-    const matchedVendor = Object.keys(context.vendorMap).find(name => desc.includes(name));
-    if (matchedVendor) {
-        const mapping = context.vendorMap[matchedVendor];
-        return { primary: 'Operating Expenses', secondary: mapping.category, sub: mapping.subcategory, confidence: 0.95 };
-    }
-  }
+  // Tier 1: User-defined logic (already handled by getCategoryFromDatabase)
 
-  // =========================================================
-  // TIER 2: HIGH PRIORITY (Personal & Travel)
-  // =========================================================
-
-  if (!isIncome) {
-      // 1. AIRLINES & TRAVEL (Fixes Frontier collision)
-      // We check specific airline codes FIRST before checking "Frontier" as a utility
-      if (desc.includes('AIRLINE') || desc.includes('AIRWAYS') || desc.includes('DELTA') || desc.includes('UNITED') || 
-          desc.includes('SOUTHWEST') || desc.includes('AMERICAN AIR') || desc.includes('SPIRIT AIR') || 
-          desc.includes('FRONTIER A') || desc.includes('FRONTIER K') || // "FRONTIER KH5UGT" is the airline format
-          desc.includes('TRIP.COM') || desc.includes('EXPEDIA') || desc.includes('SIXT') || desc.includes('HERTZ') || 
-          desc.includes('HUDSONNEWS') || desc.includes('HUDSON NEWS')) { // Hudson News is Travel Meal/Snack
-         if (desc.includes('HUDSON')) return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Travel Meals', confidence: 0.85 };
-         return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
-      }
-
-      // 2. PERSONAL / OWNER DRAW (Retail Fix)
-      // Expanded list based on your log
-      if (cleanDesc.includes('TJ MAXX') || desc.includes('MACY') || desc.includes('NORDSTROM') || desc.includes('DILLARD') || 
-          desc.includes('MARSHALLS') || desc.includes('ROSS') || desc.includes('H&M') || desc.includes('ZARA') || 
-          desc.includes('UNIQLO') || desc.includes('SKECHERS') || desc.includes('NIKE') || desc.includes('ADIDAS') || 
-          desc.includes('LULULEMON') || desc.includes('CALVIN KLEIN') || desc.includes('CALVIN') || 
-          desc.includes('NAUTICA') || desc.includes('COLUMBIA') || desc.includes('BEYOND CLIPS') || 
-          desc.includes('STONEBRIAR') || // Mall Name = Shopping
-          desc.includes('NAIL') || desc.includes('BEAUTY') || desc.includes('SALON') || desc.includes('SPA ') || 
-          desc.includes('FITNESS') || desc.includes('GYM') || desc.includes('CINEMARK')) {
-         return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.85 };
-      }
-  }
-
-  // =========================================================
-  // TIER 3: UTILITIES & SOFTWARE
-  // =========================================================
-  
-  if (!isIncome) {
-      // 3. UTILITIES
-      if (desc.includes('FRONTIER') || // Frontier without airline codes is likely internet
-          desc.includes('CITY OF') || desc.includes('TOWN OF') || desc.includes('UTILITIES') || 
-          desc.includes('WATER') || desc.includes('ELECTRIC') || desc.includes('POWER') || desc.includes('ATMOS')) {
-         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.8 };
-      }
-
-      // 4. SOFTWARE & CLOUD
-      if (desc.includes('OPENAI') || desc.includes('CHATGPT') || desc.includes('DIGITALOCEAN') || 
-          desc.includes('GODADDY') || desc.includes('NAME-CHEAP') || desc.includes('ADOBE') || 
-          desc.includes('INTUIT') || desc.includes('GOOGLE') || desc.includes('MICROSOFT') || 
-          desc.includes('VPN') || desc.includes('ESIGN') || desc.includes('TRADE IDEAS') || 
-          desc.includes('GSUITE') || desc.includes('CLOUD') || desc.includes('ADS')) {
-         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
-      }
-  }
-
-  // =========================================================
-  // TIER 4: RESTAURANTS (The "Catch-All" for Food)
-  // =========================================================
-
-  if (!isIncome) {
-      if (desc.includes('RESTAURANT') || desc.includes('CAFE') || desc.includes('COFFEE') || desc.includes('GRILL') || 
-          desc.includes('BAR') || desc.includes('PIZZA') || desc.includes('BURGER') || desc.includes('DINER') || 
-          desc.includes('STEAK') || desc.includes('SUSHI') || desc.includes('TACO') || desc.includes('DONUT') || 
-          desc.includes('BAKERY') || desc.includes('KITCHEN') || 
-          desc.includes('STARBUCKS') || desc.includes('MCDONALD') || desc.includes('CHICK-FIL-A') || 
-          desc.includes('IN-N-OUT') || desc.includes('WENDY') || desc.includes('DENNY') || desc.includes('PANERA') || 
-          desc.includes('CHUY') || desc.includes('CHEESECAKE') || desc.includes('BRAUMS') || 
-          desc.includes('TB REST') || desc.includes('TB RET')) { // TB REST = Taco Bell
-         return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
-      }
-      
-      // 7-Eleven is often Fuel or Meals. Defaulting to Fuel for safety if it's a road trip context.
-      if (desc.includes('7-ELEVEN') || desc.includes('RACETRAC') || desc.includes('QT') || desc.includes('SHELL')) {
-          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.7 };
-      }
-  }
-
-  // =========================================================
-  // TIER 5: LOANS & TRANSFERS
-  // =========================================================
+  // Tier 2: Universal Keywords
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD')) {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.95 };
   }
   if (desc.includes('LOAN') || desc.includes('MORTGAGE')) {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment', confidence: 0.95 };
   }
+  if (desc.includes('ZELLE') || desc.includes('TRANSFER')) {
+      if (isIncome) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.7 };
+      return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'Contractor or Draw?', confidence: 0.4 };
+  }
+  
+  // Tier 3: Plaid Category Mapping
+  const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
+  const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
 
-  // Safety Net for Income
+  if (!isIncome) {
+      if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
+          if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
+             return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.9 };
+          }
+      }
+      if (plaidPrimary === 'FOOD_AND_DRINK') {
+          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.9 };
+      }
+      if (plaidPrimary === 'TRAVEL') {
+          if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
+             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Tolls & Parking', confidence: 0.9 };
+          }
+          if (plaidDetailed.includes('GAS')) {
+             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.9 };
+          }
+          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
+      }
+      if (plaidPrimary === 'SERVICE') {
+          if (plaidDetailed.includes('INTERNET') || plaidDetailed.includes('TELEPHONE')) {
+             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Telephone & Internet', confidence: 0.9 };
+          }
+          if (plaidDetailed.includes('UTILITIES')) {
+             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
+          }
+      }
+  }
+
+  // Tier 4: Keyword Fallback
+  if (!isIncome) {
+      if (desc.includes('OPENAI') || desc.includes('GSUITE') || desc.includes('CLOUD') || desc.includes('ADS')) {
+         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
+      }
+      if (desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
+         return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.7 };
+      }
+  }
+
+  // Tier 5: Safety Net
   if (isIncome) return { primary: 'Income', secondary: 'Uncategorized', sub: 'Uncategorized Income', confidence: 0.5 };
-
+  
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
 
@@ -317,81 +313,75 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             return { count: 0 };
         }
 
-        // 4. BATCH PROCESSING WITH SAFETY FALLBACK
+        // 4. BATCH PROCESSING WITH NEW DB LOOKUP
         const BATCH_SIZE = 10; 
         const batchPromises = [];
 
         for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
             const chunk = relevantTransactions.slice(i, i + BATCH_SIZE);
             
-            const p = categorizeBatchWithAI(chunk, userContext)
-                .catch(err => {
-                    console.error("AI Batch Failed:", err);
-                    return []; // Return empty list so we trigger the fallback below
-                })
-                .then(aiResults => {
-                    const batch = db.batch();
-                    
-                    chunk.forEach(originalTx => {
-                        const docRef = db.collection('users').doc(userId)
-                            .collection('bankAccounts').doc(bankAccountId)
-                            .collection('transactions').doc(originalTx.transaction_id);
+            const p = (async () => {
+                const batch = db.batch();
+                
+                for (const originalTx of chunk) {
+                    const docRef = db.collection('users').doc(userId)
+                        .collection('bankAccounts').doc(bankAccountId)
+                        .collection('transactions').doc(originalTx.transaction_id);
 
-                        const signedAmount = originalTx.amount * -1; // Invert amount
+                    const signedAmount = originalTx.amount * -1; // Invert amount
+                    let finalCategory: any;
 
-                        const aiResult = aiResults.find(r => r.transactionId === originalTx.transaction_id);
+                    // A. Check our new DB rules FIRST
+                    const dbRule = await getCategoryFromDatabase(originalTx.name, userId, db);
 
-                        let finalCategory;
-                        
-                        // STRICTOR CHECK: Reject AI if it guesses "General Expense" or has low confidence
-                        const isAiUseless = 
-                            !aiResult || 
-                            aiResult.primaryCategory === 'Uncategorized' ||
-                            aiResult.secondaryCategory === 'Uncategorized' ||
-                            aiResult.secondaryCategory === 'General Expense' || // <--- ADD THIS
-                            aiResult.subcategory === 'General Expense' ||       // <--- ADD THIS
-                            aiResult.confidence < 0.85;                         // <--- Force high standard
+                    if (dbRule) {
+                        finalCategory = {
+                            primaryCategory: dbRule.primary,
+                            secondaryCategory: dbRule.secondary,
+                            subcategory: dbRule.sub,
+                            confidence: dbRule.confidence,
+                            aiExplanation: `Matched using ${dbRule.source}`,
+                            merchantName: originalTx.merchant_name || originalTx.name,
+                            status: 'posted'
+                        };
+                    } else {
+                        // B. If no DB rule, fallback to AI
+                        const aiResults = await categorizeBatchWithAI([originalTx], userContext);
+                        const aiResult = aiResults[0];
+
+                        const isAiUseless = !aiResult || aiResult.confidence < 0.85;
 
                         if (!isAiUseless) {
-                            // AI did a good job, use it
                             finalCategory = { ...aiResult, status: 'posted' };
                         } else {
-                            // AI failed, was vague, or low confidence -> FORCE RULES
-                            const ruleResult = categorizeWithContext(
-                                originalTx.name, 
-                                signedAmount, 
-                                originalTx.personal_finance_category, 
-                                userContext
-                            );
-                            
+                            // C. If AI is also useless, fallback to heuristics
+                            const ruleResult = categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
                                 subcategory: ruleResult.sub,
                                 confidence: ruleResult.confidence,
-                                aiExplanation: aiResult 
-                                    ? `AI result (${aiResult.subcategory}) rejected, used Smart Rules` 
-                                    : 'AI Failed, used Smart Rules',
+                                aiExplanation: `AI/DB failed, used Heuristics`,
                                 merchantName: originalTx.merchant_name || originalTx.name,
                                 status: ruleResult.confidence > 0.8 ? 'posted' : 'review'
                             };
                         }
-
-                        // Save to Database
-                        batch.set(docRef, {
-                            date: originalTx.date,
-                            description: originalTx.name,
-                            amount: signedAmount,
-                            plaidTransactionId: originalTx.transaction_id,
-                            bankAccountId: originalTx.account_id,
-                            userId: userId,
-                            createdAt: FieldValue.serverTimestamp(),
-                            ...finalCategory 
-                        }, { merge: true });
-                    });
+                    }
                     
-                    return batch.commit();
-                });
+                    batch.set(docRef, {
+                        date: originalTx.date,
+                        description: originalTx.name,
+                        amount: signedAmount,
+                        plaidTransactionId: originalTx.transaction_id,
+                        bankAccountId: originalTx.account_id,
+                        userId: userId,
+                        createdAt: FieldValue.serverTimestamp(),
+                        ...finalCategory 
+                    }, { merge: true });
+                }
+                
+                return batch.commit();
+            })();
             batchPromises.push(p);
         }
 
@@ -507,14 +497,3 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
-  
-  
-  
-
-    
-
-    
-
-    
-
-    
