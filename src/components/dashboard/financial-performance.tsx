@@ -2,14 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { doc, collectionGroup, query, where, getDocs } from 'firebase/firestore'; // Added collectionGroup tools
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const { user } = useUser();
@@ -17,27 +17,77 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // 1. Determine Month: Defaults to current month (e.g., "2025-12")
+  // State for Global Stats (when no propertyId is passed)
+  const [globalStats, setGlobalStats] = useState<{ income: number, expenses: number, netIncome: number } | null>(null);
+  const [globalLoading, setGlobalLoading] = useState(false);
+
   const currentMonthKey = format(new Date(), 'yyyy-MM');
-  
-  // 2. Listen to the Real Data
+
+  // A. SINGLE PROPERTY MODE
   const docRef = propertyId 
     ? doc(db, `properties/${propertyId}/monthlyStats/${currentMonthKey}`)
-    : null; // If no property is passed, we show nothing (or a global summary later)
+    : null;
+  const { data: singleStats, isLoading: singleLoading } = useDoc(docRef);
 
-  const { data: stats, isLoading: loading } = useDoc(docRef);
+  // B. GLOBAL PORTFOLIO MODE (Runs if propertyId is missing)
+  useEffect(() => {
+    if (propertyId || !user || !db) return; // Skip if we are looking at a specific property or if firebase is not ready
 
-  // 3. The "Recalculate" Action
+    const fetchGlobalStats = async () => {
+        setGlobalLoading(true);
+        try {
+            // Find all monthly stats for this month across all properties owned by the user
+            // This requires a composite index on (userId, month) for the 'monthlyStats' collection group
+            const q = query(
+                collectionGroup(db, 'monthlyStats'),
+                where('userId', '==', user.uid),
+                where('month', '==', currentMonthKey)
+            );
+            
+            const snapshot = await getDocs(q);
+            
+            let inc = 0, exp = 0, net = 0;
+            snapshot.forEach(doc => {
+                const d = doc.data();
+                inc += d.income || 0;
+                exp += d.expenses || 0;
+                net += d.netIncome || 0;
+            });
+
+            setGlobalStats({ income: inc, expenses: exp, netIncome: net });
+        } catch (error: any) {
+            console.error("Failed to fetch portfolio stats:", error);
+            // Add a helpful toast if it's an index error
+            if (error.code === 'failed-precondition') {
+                toast({
+                    variant: 'destructive',
+                    title: 'Database Index Required',
+                    description: 'A database index is needed for portfolio view. Please check the console for a link to create it.',
+                });
+                console.error("Firestore Index Creation Link:", error.message);
+            }
+        } finally {
+            setGlobalLoading(false);
+        }
+    };
+
+    fetchGlobalStats();
+  }, [propertyId, user, db, currentMonthKey, isRefreshing]); // Re-run if we refresh
+
+  // Determine which data to show
+  const stats = propertyId ? singleStats : globalStats;
+  const loading = propertyId ? singleLoading : globalLoading;
+
   const handleRecalculate = async () => {
     if(!user) return;
     setIsRefreshing(true);
     try {
         const res = await recalculateAllStats(user.uid);
         toast({ title: "Financials Updated", description: `Scanned and updated ${res.count} monthly records.` });
+        
+        // If global, the useEffect will re-fetch automatically via the 'isRefreshing' dependency.
     } catch(e: any) {
         toast({ variant: 'destructive', title: "Error", description: e.message });
-        
-        // Helpful Tip for Index Errors
         if (e.message.includes("requires an index")) {
             console.error("OPEN THIS LINK TO FIX INDEX:", e.message);
         }
@@ -46,16 +96,15 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     }
   };
 
-  // Helper to format currency
   const fmt = (n: number) => Math.abs(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
-
-  if (!propertyId) return null; // Don't crash if used outside property context
 
   return (
     <Card className="col-span-4 shadow-sm border-blue-100 mb-6">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="space-y-1">
-            <CardTitle className="text-lg font-medium">Financial Performance</CardTitle>
+            <CardTitle className="text-lg font-medium">
+                {propertyId ? "Financial Performance" : "Portfolio Performance"}
+            </CardTitle>
             <p className="text-xs text-muted-foreground">Live data for {format(new Date(), 'MMMM yyyy')}</p>
         </div>
         <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={isRefreshing} className="gap-2">
@@ -72,7 +121,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
             {/* INCOME */}
             <div className="p-4 border rounded-lg bg-green-50/40 border-green-100">
                 <div className="flex items-center gap-2 text-sm font-medium text-green-800">
-                <ArrowUpRight className="h-4 w-4" /> Income
+                <ArrowUpRight className="h-4 w-4" /> Total Income
                 </div>
                 <div className="mt-2 text-2xl font-bold text-green-700">
                 {stats ? fmt(stats.income) : '$0.00'}
@@ -82,7 +131,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
             {/* EXPENSES */}
             <div className="p-4 border rounded-lg bg-red-50/40 border-red-100">
                 <div className="flex items-center gap-2 text-sm font-medium text-red-800">
-                <ArrowDownRight className="h-4 w-4" /> Expenses
+                <ArrowDownRight className="h-4 w-4" /> Total Expenses
                 </div>
                 <div className="mt-2 text-2xl font-bold text-red-700">
                 {stats ? fmt(stats.expenses) : '$0.00'}
