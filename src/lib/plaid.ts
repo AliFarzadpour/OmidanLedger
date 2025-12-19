@@ -10,6 +10,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -209,12 +210,12 @@ async function categorizeBatchWithAI(
 }
 
 // RENAMED: This is now the fallback heuristic engine
-export function categorizeWithHeuristics(
+export async function categorizeWithHeuristics(
   description: string, 
   amount: number, 
   plaidCategory: any, 
   context: UserContext
-): { primary: string, secondary: string, sub: string, confidence: number } {
+): Promise<{ primary: string, secondary: string, sub: string, confidence: number }> {
   
   const desc = description.toUpperCase();
   const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
@@ -613,6 +614,7 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
+
 
 
 

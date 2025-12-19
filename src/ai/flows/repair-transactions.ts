@@ -55,7 +55,7 @@ export const repairUncategorizedTransactions = ai.defineFlow(
         };
       } else {
         // If DB fails, use the fallback heuristics
-        ruleResult = categorizeWithHeuristics(
+        ruleResult = await categorizeWithHeuristics(
           data.description,
           data.amount,
           null, // We don't have raw Plaid data here easily, that's fine
