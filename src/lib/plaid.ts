@@ -1,6 +1,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -56,7 +57,17 @@ interface UserContext {
   propertyAddresses: string[];
 }
 
-// New Helper: Fetches rules from DB instead of hardcoding
+// src/lib/categorization.ts
+// Helper to make IDs safe for Firestore (Fixes the "SAIZERIYA/NFC" crash)
+function sanitizeVendorId(text: string): string {
+  return text.toUpperCase()
+    .replace(/\//g, '_')       // 1. Replace slash with underscore (Critical Fix)
+    .replace(/\\/g, '_')       // 2. Replace backslash
+    .replace(/[#\?]/g, '')     // 3. Remove other illegal Firestore chars
+    .replace(/[^\w\s_]/g, '')  // 4. Remove remaining punctuation
+    .replace(/\s+/g, '_');     // 5. Spaces to underscores
+}
+
 export async function getCategoryFromDatabase(
   merchantName: string, 
   userId: string, 
@@ -64,14 +75,17 @@ export async function getCategoryFromDatabase(
 ) {
   const desc = merchantName.toUpperCase();
   
-  // 1. Generate search tokens (e.g., "Home Depot" -> ["HOME", "DEPOT", "HOMEDEPOT"])
-  // This creates keys to search the database with
-  const tokens = desc.split(/[\s,.*]+/).filter(t => t.length > 2);
+  // 1. Generate search tokens
+  // We split by slash as well now to handle "COM/BILL" or "SAIZERIYA/NFC"
+  const tokens = desc.split(/[\s,.*\/]+/).filter(t => t.length > 2);
   
-  // 2. CHECK USER'S PERSONAL RULES (Override Global)
-  // We query if the user has defined a rule for any of these tokens
-  const cleanId = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").replace(/\s/g, '_');
+  // 2. CHECK USER'S PERSONAL RULES
+  // Sanitize the ID using the new helper
+  const cleanId = sanitizeVendorId(desc);
   
+  // Safety Check: If ID is empty after cleaning, skip DB
+  if (!cleanId) return null;
+
   const userRuleRef = db.collection('users').doc(userId).collection('vendorRules').doc(cleanId);
   const userRuleSnap = await userRuleRef.get();
 
@@ -81,23 +95,27 @@ export async function getCategoryFromDatabase(
   }
 
   // 3. CHECK GLOBAL MASTER DATABASE
-  // We loop through our known tokens from the description to find a match
   for (const token of tokens) {
-      const globalDoc = await db.collection('globalVendorMap').doc(token).get();
+      // Also sanitize tokens just in case
+      const safeToken = sanitizeVendorId(token);
+      if (!safeToken) continue;
+
+      const globalDoc = await db.collection('globalVendorMap').doc(safeToken).get();
       if (globalDoc.exists) {
           console.log(`[Categorization] Found Global Rule for ${merchantName} via token ${token}`);
           return { ...globalDoc.data(), confidence: 0.95, source: 'Global DB' };
       }
   }
   
-  // Try combined string (e.g. "HOMEDEPOT") as a backup
+  // Try combined string backup
   const globalDocFull = await db.collection('globalVendorMap').doc(cleanId).get();
   if (globalDocFull.exists) {
       return { ...globalDocFull.data(), confidence: 0.95, source: 'Global DB' };
   }
 
-  return null; // No rule found -> Fallback to AI
+  return null;
 }
+
 
 /**
  * Fetches User Settings, Tenants, Vendors, and Properties to give the AI context.
