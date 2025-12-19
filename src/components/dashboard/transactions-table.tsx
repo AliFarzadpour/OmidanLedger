@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle, Edit } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -20,6 +20,7 @@ import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
+import { BatchEditDialog } from './transactions/batch-edit-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -36,7 +37,7 @@ interface DataSource {
   plaidAccessToken?: string;
 }
 
-interface Transaction {
+export interface Transaction {
   id: string;
   date: string;
   description: string;
@@ -57,12 +58,9 @@ interface TransactionsTableProps {
   dataSource: DataSource;
 }
 
-// --- STATUS INDICATOR (Trust the Link) ---
 function StatusIndicator({ transaction }: { transaction: Transaction }) {
   if (transaction.status === 'posted') return null;
 
-  // GREEN: Trusted Match
-  // If we have an Account ID, we trust the link.
   if (transaction.accountId) {
     return (
        <div className="flex items-center gap-1 w-fit text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-emerald-100 mt-1 cursor-default">
@@ -72,7 +70,6 @@ function StatusIndicator({ transaction }: { transaction: Transaction }) {
     );
   }
 
-  // SLATE: Unassigned 
   return (
        <TooltipProvider>
         <Tooltip>
@@ -97,6 +94,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { toast } = useToast();
   
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isClearAlertOpen, setClearAlertOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -113,22 +111,18 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
 
   const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
 
-  // 👇 UPDATED FUNCTION
   const handleClearTransactions = async () => {
     if (!firestore || !user || !dataSource || !transactionsQuery) return;
     setIsClearing(true);
     setClearAlertOpen(false);
     
     try {
-        // 1. Delete all transactions
         const querySnapshot = await getDocs(transactionsQuery);
         const batch = writeBatch(firestore);
         querySnapshot.forEach((doc) => batch.delete(doc.ref));
         
-        // 2. Reset the "Bookmark" (Cursor) on the Bank Account
-        // This forces Plaid to treat the next sync as a "First Import"
         const bankAccountRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}`);
-        batch.update(bankAccountRef, { plaidSyncCursor: null }); // 👈 THIS IS THE FIX
+        batch.update(bankAccountRef, { plaidSyncCursor: null });
 
         await batch.commit();
         
@@ -206,6 +200,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const hasTransactions = transactions && transactions.length > 0;
   const isPlaidAccount = !!dataSource.plaidAccessToken;
 
+  const isFilterActive = filterTerm || filterDate || (filterCategory && filterCategory !== 'all');
+
   return (
     <>
       <Card className="h-full shadow-lg">
@@ -225,12 +221,26 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         
         <CardContent>
-          <TransactionToolbar 
-              onSearch={setFilterTerm}
-              onDateChange={setFilterDate}
-              onCategoryFilter={setFilterCategory}
-              onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
-          />
+          <div className="flex justify-between items-center">
+            <TransactionToolbar 
+                onSearch={setFilterTerm}
+                onDateChange={setFilterDate}
+                onCategoryFilter={setFilterCategory}
+                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
+            />
+            {isFilterActive && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setBatchEditDialogOpen(true)}
+                disabled={sortedTransactions.length === 0}
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                Batch Edit ({sortedTransactions.length})
+              </Button>
+            )}
+          </div>
+
 
           <Table>
             <TableHeader>
@@ -288,6 +298,14 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       </Card>
       
       {dataSource && <UploadTransactionsDialog isOpen={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} dataSource={dataSource} />}
+      {isBatchEditDialogOpen && (
+        <BatchEditDialog
+          isOpen={isBatchEditDialogOpen}
+          onOpenChange={setBatchEditDialogOpen}
+          transactions={sortedTransactions}
+          dataSource={dataSource}
+        />
+      )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -304,7 +322,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   );
 }
 
-// --- UPDATED CATEGORY EDITOR (Shows Full Context + Pen) ---
 function CategoryEditor({ transaction, onSave, displayName }: { transaction: Transaction, onSave: any, displayName?: string }) {
     const [isOpen, setIsOpen] = useState(false);
     const [primary, setPrimary] = useState(transaction.primaryCategory);
@@ -322,18 +339,15 @@ function CategoryEditor({ transaction, onSave, displayName }: { transaction: Tra
             <PopoverTrigger asChild>
                 <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
                     
-                    {/* 1. REAL LEDGER NAME (If linked) */}
                     {displayName && (
                          <span className="font-bold text-sm text-slate-900 mb-1">
                             {displayName}
                          </span>
                     )}
 
-                    {/* 2. FULL CATEGORY DISPLAY (Always Visible) */}
                     <div className="flex flex-col">
                         <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
                             {transaction.primaryCategory}
-                            {/* Always show Pen on hover */}
                             <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
                         </Badge>
                         <span className="text-xs text-muted-foreground pl-1 mt-0.5">
