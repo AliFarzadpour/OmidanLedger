@@ -1,10 +1,9 @@
 'use server';
 
-import { getAdminDB } from '@/lib/admin-db';
+import { db } from '@/lib/admin-db';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function initializeUserSchema(userId: string, email: string, provider: string) {
-  const db = getAdminDB();
   const userRef = db.collection('users').doc(userId);
 
   const doc = await userRef.get();
