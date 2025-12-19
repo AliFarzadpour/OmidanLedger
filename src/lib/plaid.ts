@@ -1,6 +1,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -141,117 +142,117 @@ async function categorizeBatchWithAI(
 function categorizeWithContext(
   description: string, 
   amount: number, 
-  plaidCategory: any, 
+  plaidCategory: any,
   context: UserContext
 ): { primary: string, secondary: string, sub: string, confidence: number } {
   
   const desc = description.toUpperCase();
-  // Clean punctuation (e.g. "T.J.MAXX" -> "TJ MAXX")
+  // Remove special chars to help matching "T.J.MAXX" vs "TJ MAXX"
   const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
   
   const isIncome = amount > 0;
-  const { defaultIncomeCategory } = context.business;
+  const { industry, defaultIncomeCategory } = context.business;
 
   // =========================================================
-  // TIER 1: EXACT DATABASE MATCHES (Memory)
+  // TIER 1: EXACT DATABASE MATCHES
   // =========================================================
   if (isIncome) {
     const matchedTenant = context.tenantNames.find(name => desc.includes(name));
-    if (matchedTenant) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.99 };
+    if (matchedTenant) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.95 };
   } else {
     const matchedVendor = Object.keys(context.vendorMap).find(name => desc.includes(name));
     if (matchedVendor) {
         const mapping = context.vendorMap[matchedVendor];
-        return { primary: 'Operating Expenses', secondary: mapping.category, sub: mapping.subcategory, confidence: 0.99 };
+        return { primary: 'Operating Expenses', secondary: mapping.category, sub: mapping.subcategory, confidence: 0.95 };
     }
   }
 
   // =========================================================
-  // TIER 2: HIGH PRIORITY KEYWORDS (The "Missed Items" Fix)
+  // TIER 2: HIGH PRIORITY (Personal & Travel)
   // =========================================================
 
-  // 1. Zelle & Transfers
-  if (desc.includes('ZELLE') || desc.includes('TRANSFER')) {
-      if (isIncome) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.7 };
-      return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'Contractor or Draw?', confidence: 0.4 };
-  }
-
-  // 2. Loans & Credit Card
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card/Loan Payment', confidence: 0.95 };
-  }
-
   if (!isIncome) {
-      // 3. UTILITIES & GOV (Catches "City of Anna", "Permits")
-      if (desc.includes('CITY OF') || desc.includes('TOWN OF') || desc.includes('UTILITIES') || desc.includes('WATER') || 
-          desc.includes('ELECTRIC') || desc.includes('POWER') || desc.includes('ATMOS') || desc.includes('WASTE') || 
-          desc.includes('PERMITS') || desc.includes('TAX') || desc.includes('FRONTIER')) {
-          
-          // Exception: "Frontier Airlines" -> Travel
-          if (desc.includes('FRONTIER A') || desc.includes('FRONTIER K')) {
-             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
-          }
-          return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
+      // 1. AIRLINES & TRAVEL (Fixes Frontier collision)
+      // We check specific airline codes FIRST before checking "Frontier" as a utility
+      if (desc.includes('AIRLINE') || desc.includes('AIRWAYS') || desc.includes('DELTA') || desc.includes('UNITED') || 
+          desc.includes('SOUTHWEST') || desc.includes('AMERICAN AIR') || desc.includes('SPIRIT AIR') || 
+          desc.includes('FRONTIER A') || desc.includes('FRONTIER K') || // "FRONTIER KH5UGT" is the airline format
+          desc.includes('TRIP.COM') || desc.includes('EXPEDIA') || desc.includes('SIXT') || desc.includes('HERTZ') || 
+          desc.includes('HUDSONNEWS') || desc.includes('HUDSON NEWS')) { // Hudson News is Travel Meal/Snack
+         if (desc.includes('HUDSON')) return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Travel Meals', confidence: 0.85 };
+         return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
       }
 
-      // 4. REPAIRS & MAINTENANCE (Catches "Quality Septic")
-      if (desc.includes('SEPTIC') || desc.includes('PLUMBING') || desc.includes('ROOF') || desc.includes('REPAIR') || desc.includes('POOL')) {
-         return { primary: 'Operating Expenses', secondary: 'Repairs & Maintenance', sub: 'Repairs', confidence: 0.9 };
-      }
-
-      // 5. OFFICE SUPPLIES (Catches "Home Depot", "Micro Center")
-      if (desc.includes('HOME DEPOT') || desc.includes('LOWES') || desc.includes('MICRO CENTER') || desc.includes('OFFICE') || 
-          desc.includes('STAPLES') || desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART') || desc.includes('TARGET')) {
-         return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.8 };
-      }
-
-      // 6. PERSONAL / RETAIL (Catches "Macy's", "Nordstrom", "Stonebriar")
+      // 2. PERSONAL / OWNER DRAW (Retail Fix)
+      // Expanded list based on your log
       if (cleanDesc.includes('TJ MAXX') || desc.includes('MACY') || desc.includes('NORDSTROM') || desc.includes('DILLARD') || 
           desc.includes('MARSHALLS') || desc.includes('ROSS') || desc.includes('H&M') || desc.includes('ZARA') || 
-          desc.includes('UNIQLO') || desc.includes('SKECHERS') || desc.includes('NIKE') || desc.includes('LULULEMON') || 
-          desc.includes('CALVIN') || desc.includes('NAUTICA') || desc.includes('COLUMBIA') || desc.includes('STONEBRIAR') || 
-          desc.includes('KAISER') || desc.includes('MEDICAL')) { // Kaiser added here
+          desc.includes('UNIQLO') || desc.includes('SKECHERS') || desc.includes('NIKE') || desc.includes('ADIDAS') || 
+          desc.includes('LULULEMON') || desc.includes('CALVIN KLEIN') || desc.includes('CALVIN') || 
+          desc.includes('NAUTICA') || desc.includes('COLUMBIA') || desc.includes('BEYOND CLIPS') || 
+          desc.includes('STONEBRIAR') || // Mall Name = Shopping
+          desc.includes('NAIL') || desc.includes('BEAUTY') || desc.includes('SALON') || desc.includes('SPA ') || 
+          desc.includes('FITNESS') || desc.includes('GYM') || desc.includes('CINEMARK')) {
          return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.85 };
       }
+  }
+
+  // =========================================================
+  // TIER 3: UTILITIES & SOFTWARE
+  // =========================================================
+  
+  if (!isIncome) {
+      // 3. UTILITIES
+      if (desc.includes('FRONTIER') || // Frontier without airline codes is likely internet
+          desc.includes('CITY OF') || desc.includes('TOWN OF') || desc.includes('UTILITIES') || 
+          desc.includes('WATER') || desc.includes('ELECTRIC') || desc.includes('POWER') || desc.includes('ATMOS')) {
+         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.8 };
+      }
+
+      // 4. SOFTWARE & CLOUD
+      if (desc.includes('OPENAI') || desc.includes('CHATGPT') || desc.includes('DIGITALOCEAN') || 
+          desc.includes('GODADDY') || desc.includes('NAME-CHEAP') || desc.includes('ADOBE') || 
+          desc.includes('INTUIT') || desc.includes('GOOGLE') || desc.includes('MICROSOFT') || 
+          desc.includes('VPN') || desc.includes('ESIGN') || desc.includes('TRADE IDEAS') || 
+          desc.includes('GSUITE') || desc.includes('CLOUD') || desc.includes('ADS')) {
+         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
+      }
+  }
+
+  // =========================================================
+  // TIER 4: RESTAURANTS (The "Catch-All" for Food)
+  // =========================================================
+
+  if (!isIncome) {
+      if (desc.includes('RESTAURANT') || desc.includes('CAFE') || desc.includes('COFFEE') || desc.includes('GRILL') || 
+          desc.includes('BAR') || desc.includes('PIZZA') || desc.includes('BURGER') || desc.includes('DINER') || 
+          desc.includes('STEAK') || desc.includes('SUSHI') || desc.includes('TACO') || desc.includes('DONUT') || 
+          desc.includes('BAKERY') || desc.includes('KITCHEN') || 
+          desc.includes('STARBUCKS') || desc.includes('MCDONALD') || desc.includes('CHICK-FIL-A') || 
+          desc.includes('IN-N-OUT') || desc.includes('WENDY') || desc.includes('DENNY') || desc.includes('PANERA') || 
+          desc.includes('CHUY') || desc.includes('CHEESECAKE') || desc.includes('BRAUMS') || 
+          desc.includes('TB REST') || desc.includes('TB RET')) { // TB REST = Taco Bell
+         return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
+      }
       
-      // 7. FUEL (Catches "7-Eleven")
-      if (desc.includes('7-ELEVEN') || desc.includes('RACETRAC') || desc.includes('QT') || desc.includes('SHELL') || desc.includes('EXXON') || desc.includes('CHEVRON')) {
+      // 7-Eleven is often Fuel or Meals. Defaulting to Fuel for safety if it's a road trip context.
+      if (desc.includes('7-ELEVEN') || desc.includes('RACETRAC') || desc.includes('QT') || desc.includes('SHELL')) {
           return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.7 };
       }
   }
 
   // =========================================================
-  // TIER 3: PLAID CATEGORY FALLBACK (The Scalable Part)
+  // TIER 5: LOANS & TRANSFERS
   // =========================================================
-  // This catches things NOT in the lists above (like random restaurants)
-  
-  const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
-  const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
-
-  if (!isIncome) {
-      if (plaidPrimary === 'FOOD_AND_DRINK') {
-          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
-      }
-      if (plaidPrimary === 'TRAVEL') {
-          if (plaidDetailed.includes('GAS')) return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.8 };
-          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.8 };
-      }
-      if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
-          return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.7 }; // Catch-all for other shopping
-      }
+  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD')) {
+      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.95 };
+  }
+  if (desc.includes('LOAN') || desc.includes('MORTGAGE')) {
+      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment', confidence: 0.95 };
   }
 
-  // =========================================================
-  // TIER 4: SAFETY NET
-  // =========================================================
-  
-  if (isIncome) {
-      // Refunds from vendors
-      if (desc.includes('HOME DEPOT') || desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
-          return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Refunds/Credits', confidence: 0.6 };
-      }
-      return { primary: 'Income', secondary: 'Uncategorized', sub: 'Uncategorized Income', confidence: 0.5 };
-  }
+  // Safety Net for Income
+  if (isIncome) return { primary: 'Income', secondary: 'Uncategorized', sub: 'Uncategorized Income', confidence: 0.5 };
 
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
@@ -342,16 +343,17 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
                         let finalCategory;
                         
+                        // STRICTOR CHECK: Reject AI if it guesses "General Expense" or has low confidence
                         const isAiUseless = 
                             !aiResult || 
                             aiResult.primaryCategory === 'Uncategorized' ||
                             aiResult.secondaryCategory === 'Uncategorized' ||
-                            aiResult.secondaryCategory === 'General Expense' ||
-                            aiResult.subcategory === 'General Expense' ||
-                            aiResult.confidence < 0.85;
+                            aiResult.secondaryCategory === 'General Expense' || // <--- ADD THIS
+                            aiResult.subcategory === 'General Expense' ||       // <--- ADD THIS
+                            aiResult.confidence < 0.85;                         // <--- Force high standard
 
                         if (!isAiUseless) {
-                            // AI is confident and specific -> Use it
+                            // AI did a good job, use it
                             finalCategory = { ...aiResult, status: 'posted' };
                         } else {
                             // AI failed, was vague, or low confidence -> FORCE RULES
