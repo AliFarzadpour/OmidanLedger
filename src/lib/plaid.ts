@@ -11,6 +11,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -67,14 +68,17 @@ interface UserContext {
 }
 
 // src/lib/categorization.ts
-// Helper to make IDs safe for Firestore (Fixes the "SAIZERIYA/NFC" crash)
-function sanitizeVendorId(text: string): string {
+// 1. ROBUST SANITIZER (Fixes the "/" crash)
+export function sanitizeVendorId(text: string): string {
+  if (!text) return 'UNKNOWN_VENDOR';
+  
   return text.toUpperCase()
-    .replace(/\//g, '_')       // 1. Replace slash with underscore (Critical Fix)
-    .replace(/\\/g, '_')       // 2. Replace backslash
-    .replace(/[#\?]/g, '')     // 3. Remove other illegal Firestore chars
-    .replace(/[^\w\s_]/g, '')  // 4. Remove remaining punctuation
-    .replace(/\s+/g, '_');     // 5. Spaces to underscores
+    .replace(/\//g, '_')       // REPLACE SLASH WITH UNDERSCORE (Critical Fix)
+    .replace(/\\/g, '_')       // Replace backslash
+    .replace(/[#\?]/g, '')     // Remove illegal Firestore chars
+    .replace(/[^\w\s_]/g, '')  // Remove other punctuation
+    .replace(/\s+/g, '_')      // Replace spaces with underscores
+    .trim();
 }
 
 export async function getCategoryFromDatabase(
@@ -82,47 +86,44 @@ export async function getCategoryFromDatabase(
   userId: string, 
   db: FirebaseFirestore.Firestore
 ) {
+  // SAFETY CHECK: If name is missing, skip DB
+  if (!merchantName) return null;
+
   const desc = merchantName.toUpperCase();
   
-  // 1. Generate search tokens
-  // We split by slash as well now to handle "COM/BILL" or "SAIZERIYA/NFC"
+  // Generate tokens, handling slashes as splitters too
   const tokens = desc.split(/[\s,.*\/]+/).filter(t => t.length > 2);
   
-  // 2. CHECK USER'S PERSONAL RULES
-  // Sanitize the ID using the new helper
+  // Sanitize the full ID
   const cleanId = sanitizeVendorId(desc);
   
-  // Safety Check: If ID is empty after cleaning, skip DB
-  if (!cleanId) return null;
-
+  // 1. CHECK USER'S PERSONAL RULES
   const userRuleRef = db.collection('users').doc(userId).collection('vendorRules').doc(cleanId);
   const userRuleSnap = await userRuleRef.get();
 
   if (userRuleSnap.exists) {
-      console.log(`[Categorization] Found User Rule for ${merchantName}`);
       return { ...userRuleSnap.data(), confidence: 1.0, source: 'User Rule' };
   }
 
-  // 3. CHECK GLOBAL MASTER DATABASE
+  // 2. CHECK GLOBAL MASTER DATABASE
+  // Check tokens individually (sanitized)
   for (const token of tokens) {
-      // Also sanitize tokens just in case
       const safeToken = sanitizeVendorId(token);
       if (!safeToken) continue;
 
       const globalDoc = await db.collection('globalVendorMap').doc(safeToken).get();
       if (globalDoc.exists) {
-          console.log(`[Categorization] Found Global Rule for ${merchantName} via token ${token}`);
           return { ...globalDoc.data(), confidence: 0.95, source: 'Global DB' };
       }
   }
   
-  // Try combined string backup
+  // Check full string match
   const globalDocFull = await db.collection('globalVendorMap').doc(cleanId).get();
   if (globalDocFull.exists) {
       return { ...globalDocFull.data(), confidence: 0.95, source: 'Global DB' };
   }
 
-  return null; // No rule found -> Fallback to AI
+  return null;
 }
 
 
@@ -217,10 +218,15 @@ export async function categorizeWithHeuristics(
   context: UserContext
 ): Promise<{ primary: string, secondary: string, sub: string, confidence: number }> {
   
-  const desc = description.toUpperCase();
+  // CRITICAL FIX: Handle null/undefined values safely
+  const safeDesc = description || ''; 
+  const desc = safeDesc.toUpperCase();
+  
+  // Remove punctuation for cleaner matching
   const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
+  
   const isIncome = amount > 0;
-  const { defaultIncomeCategory } = context.business;
+  const { defaultIncomeCategory } = context.business || {}; // Safety check on context
 
   // =========================================================
   // CRITICAL: HARD OVERRIDES (Direction Check)
@@ -268,18 +274,23 @@ export async function categorizeWithHeuristics(
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan/Card Payment', confidence: 0.95 };
   }
+  
+  // =========================================================
+  // TIER 3: PLAID CATEGORY FALLBACK
+  // =========================================================
+  
+  // CRITICAL FIX: Handle missing Plaid data safely
+  const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
+  const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
 
-  // 2. Specific Vendors (Your Existing Rules)
-    const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
-    const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
-
-    if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
+  if (!isIncome) {
+      if (plaidPrimary === 'FOOD_AND_DRINK') {
+          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
+      }
+       if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
         if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
             return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.9 };
         }
-    }
-    if (plaidPrimary === 'FOOD_AND_DRINK') {
-        return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.9 };
     }
     if (plaidPrimary === 'TRAVEL') {
         if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
@@ -298,20 +309,13 @@ export async function categorizeWithHeuristics(
             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
         }
     }
-    
-    if (desc.includes('OPENAI') || desc.includes('GSUITE') || desc.includes('CLOUD') || desc.includes('ADS')) {
-        return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
-    }
-    if (desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
-        return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.7 };
-    }
-  
+  }
+
   // Example for Rent EXPENSE (Paying a landlord)
   if (desc.includes('RENT') || desc.includes('LEASE')) {
       return { primary: 'Operating Expenses', secondary: 'Rent & Lease', sub: 'Rent Expense', confidence: 0.9 };
   }
 
-  // ... (Rest of your expense logic) ...
 
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
@@ -469,7 +473,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             };
                         } else {
                             // C. If AI also failed, use Heuristics as final fallback
-                            const ruleResult = categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
+                            const ruleResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
@@ -614,6 +618,7 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
+
 
 
 
