@@ -4,17 +4,25 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Timestamp } from 'firebase-admin/firestore';
 
 export default async function UserManagementPage() {
   const usersSnap = await db.collection('users')
     .where('role', '==', 'landlord')
-    .orderBy('metadata.createdAt', 'desc')
     .get();
 
   const landlords = usersSnap.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
   }));
+
+  // Sort the data in the application code after fetching
+  landlords.sort((a, b) => {
+    const timeA = (a.metadata?.createdAt as Timestamp)?.toMillis() || 0;
+    const timeB = (b.metadata?.createdAt as Timestamp)?.toMillis() || 0;
+    return timeB - timeA; // Descending order
+  });
+
 
   return (
     <div className="space-y-6">
