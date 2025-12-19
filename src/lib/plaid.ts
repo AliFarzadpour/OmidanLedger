@@ -1,6 +1,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -75,29 +76,35 @@ export async function getCategoryFromDatabase(
   userId: string, 
   db: FirebaseFirestore.Firestore
 ) {
+  // SAFETY CHECK
   if (!merchantName) return null;
 
   const desc = merchantName.toUpperCase();
+  // Create tokens to check partial matches (e.g. "Zelle Israel" -> checks "ISRAEL")
   const tokens = desc.split(/[\s,.*\/]+/).filter(t => t.length > 1);
   const cleanId = sanitizeVendorId(desc);
-
-  // --- A. CHECK USER RULES (Improved) ---
+  
+  // 1. POINT TO THE CORRECT COLLECTION 
+  // (Must match where 'learnCategoryMapping' saves data)
   const userRulesRef = db.collection('users').doc(userId).collection('categoryMappings');
 
-  // 1. Check Exact Match
+  // --- A. CHECK EXACT MATCH ---
+  // We check the sanitized ID first
   const exactDoc = await userRulesRef.doc(cleanId).get();
   if (exactDoc.exists) {
       const data = exactDoc.data();
       return { 
+          // MAP THE DATABASE FIELDS CORRECTLY
           primary: data?.primaryCategory, 
           secondary: data?.secondaryCategory, 
-          sub: data?.subcategory,
+          sub: data?.subcategory, 
           confidence: 1.0, 
-          source: 'User Rule (Exact)' 
+          source: 'User Rule' 
       };
   }
 
-  // 2. Check Tokens (Partial Match) - THIS WAS MISSING
+  // --- B. CHECK PARTIAL MATCH (The "Israel" Fix) ---
+  // If the transaction is "Zelle payment to Israel", this loop finds the "ISRAEL" rule.
   for (const token of tokens) {
       const safeToken = sanitizeVendorId(token);
       if (!safeToken) continue;
@@ -108,27 +115,42 @@ export async function getCategoryFromDatabase(
           return { 
               primary: data?.primaryCategory, 
               secondary: data?.secondaryCategory, 
-              sub: data?.subcategory,
+              sub: data?.subcategory, 
               confidence: 1.0, 
-              source: 'User Rule (Partial)' 
+              source: 'User Rule' 
           };
       }
   }
-  
-  // --- B. CHECK GLOBAL MASTER DATABASE ---
+
+  // --- C. CHECK GLOBAL DATABASE ---
+  // (Keep this as fallback)
   for (const token of tokens) {
       const safeToken = sanitizeVendorId(token);
       if (!safeToken) continue;
-
+      
       const globalDoc = await db.collection('globalVendorMap').doc(safeToken).get();
       if (globalDoc.exists) {
-          return { ...globalDoc.data(), confidence: 0.95, source: 'Global DB' };
+          const data = globalDoc.data();
+          return { 
+             primary: data?.primaryCategory || data?.primary,
+             secondary: data?.secondaryCategory || data?.secondary,
+             sub: data?.subcategory || data?.sub,
+             confidence: 0.95, 
+             source: 'Global DB' 
+          };
       }
   }
-  
+
   const globalDocFull = await db.collection('globalVendorMap').doc(cleanId).get();
   if (globalDocFull.exists) {
-      return { ...globalDocFull.data(), confidence: 0.95, source: 'Global DB' };
+      const data = globalDocFull.data();
+       return { 
+         primary: data?.primaryCategory || data?.primary,
+         secondary: data?.secondaryCategory || data?.secondary,
+         sub: data?.subcategory || data?.sub,
+         confidence: 0.95, 
+         source: 'Global DB' 
+      };
   }
 
   return null;
@@ -332,8 +354,8 @@ export async function enforceAccountingRules(
   category: any, 
   amount: number
 ) {
-  // CRITICAL FIX: If this came from a User Rule, DO NOT TOUCH IT.
-  if (category.aiExplanation && category.aiExplanation.includes('User Rule')) {
+  // 🛑 STOP: If this is a User Rule, do not enforce logic.
+  if (category.source === 'User Rule' || (category.aiExplanation && category.aiExplanation.includes('User Rule'))) {
       return category;
   }
     
