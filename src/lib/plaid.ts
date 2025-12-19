@@ -6,6 +6,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -205,85 +206,109 @@ async function categorizeBatchWithAI(
 }
 
 // RENAMED: This is now the fallback heuristic engine
-function categorizeWithHeuristics(
+function categorizeWithContext(
   description: string, 
   amount: number, 
-  plaidCategory: any,
+  plaidCategory: any, 
   context: UserContext
 ): { primary: string, secondary: string, sub: string, confidence: number } {
   
   const desc = description.toUpperCase();
+  const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
   const isIncome = amount > 0;
   const { defaultIncomeCategory } = context.business;
 
-  // Tier 1: User-defined logic (already handled by getCategoryFromDatabase)
-
   // =========================================================
-  // TIER 2: HIGH PRIORITY (Transfers & Income Logic)
+  // CRITICAL: HARD OVERRIDES (Direction Check)
   // =========================================================
 
-  // 1. Internal Transfers (Fixing the $120k error)
-  if (desc.includes('ONLINE BANKING TRANSFER') || desc.includes('TRANSFER TO CHK') || desc.includes('TRANSFER FROM CHK') || desc.includes('INTERNAL TRANSFER')) {
+  // 1. Internal Transfers (Check this FIRST for both Income and Expense)
+  // Moves money between accounts -> Balance Sheet
+  if (desc.includes('ONLINE BANKING TRANSFER') || 
+      desc.includes('TRANSFER TO CHK') || 
+      desc.includes('TRANSFER FROM CHK') || 
+      desc.includes('INTERNAL TRANSFER')) {
       return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 1.0 };
   }
 
-  // 2. RENT INCOME (Fixing the "Rent Expense" error)
-  // If amount is POSITIVE (Income) and description says "Rent", it is INCOME.
-  if (isIncome && (desc.includes('RENT') || desc.includes('LEASE'))) {
-      return { primary: 'Income', secondary: 'Operating Income', sub: 'Rental Income', confidence: 1.0 };
+  // 2. FORCE INCOME (If Amount > 0)
+  // This prevents "Rent" from ever being an Expense if money came IN.
+  if (isIncome) {
+      // Specific Income Types
+      if (desc.includes('RENT') || desc.includes('LEASE')) {
+          return { primary: 'Income', secondary: 'Rental Income', sub: 'Residential/Commercial Rent', confidence: 1.0 };
+      }
+      if (desc.includes('DEPOSIT') && !desc.includes('REFUND')) {
+          // Security deposits received could be Liabilities (Held for tenant) or Income depending on accounting method.
+          // For now, let's map to Rental Income > Deposits to keep it simple, or Liability if you prefer.
+          return { primary: 'Income', secondary: 'Rental Income', sub: 'Security Deposit', confidence: 0.9 };
+      }
+      if (desc.includes('INTEREST')) {
+          return { primary: 'Income', secondary: 'Other Income', sub: 'Interest Income', confidence: 1.0 };
+      }
+      if (desc.includes('REFUND') || desc.includes('RETURN')) {
+           // Refunds usually map back to the expense category, but "Uncategorized Income" is safer if unknown.
+           return { primary: 'Income', secondary: 'Uncategorized', sub: 'Refunds/Credits', confidence: 0.8 };
+      }
+
+      // Default Catch-All for ALL other Positive Amounts
+      // This is the safety net that stops "Home Depot Refund" from becoming "Supplies Expense"
+      return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory || 'Sales', confidence: 0.7 };
   }
 
-  // 3. Zelle & Transfers (Existing logic)
-  if (desc.includes('ZELLE') || desc.includes('TRANSFER')) {
-      if (isIncome) return { primary: 'Income', secondary: 'Operating Income', sub: 'Rental Income', confidence: 0.8 }; // Default Zelle Income to Rent
-      return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'Contractor or Draw?', confidence: 0.4 };
-  }
+  // =========================================================
+  // EXPENSES ONLY (Amount < 0)
+  // =========================================================
   
-  // Tier 3: Plaid Category Mapping
-  const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
-  const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
-
-  if (!isIncome) {
-      if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
-          if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
-             return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.9 };
-          }
-      }
-      if (plaidPrimary === 'FOOD_AND_DRINK') {
-          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.9 };
-      }
-      if (plaidPrimary === 'TRAVEL') {
-          if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
-             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Tolls & Parking', confidence: 0.9 };
-          }
-          if (plaidDetailed.includes('GAS')) {
-             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.9 };
-          }
-          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
-      }
-      if (plaidPrimary === 'SERVICE') {
-          if (plaidDetailed.includes('INTERNET') || plaidDetailed.includes('TELEPHONE')) {
-             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Telephone & Internet', confidence: 0.9 };
-          }
-          if (plaidDetailed.includes('UTILITIES')) {
-             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
-          }
-      }
+  // 1. Debt Payments (Liabilities)
+  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
+      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan/Card Payment', confidence: 0.95 };
   }
 
-  // Tier 4: Keyword Fallback
-  if (!isIncome) {
-      if (desc.includes('OPENAI') || desc.includes('GSUITE') || desc.includes('CLOUD') || desc.includes('ADS')) {
-         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
-      }
-      if (desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
-         return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.7 };
-      }
-  }
+  // 2. Specific Vendors (Your Existing Rules)
+    const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
+    const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
 
-  // Tier 5: Safety Net
-  if (isIncome) return { primary: 'Income', secondary: 'Uncategorized', sub: 'Uncategorized Income', confidence: 0.5 };
+    if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
+        if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
+            return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.9 };
+        }
+    }
+    if (plaidPrimary === 'FOOD_AND_DRINK') {
+        return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.9 };
+    }
+    if (plaidPrimary === 'TRAVEL') {
+        if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
+            return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Tolls & Parking', confidence: 0.9 };
+        }
+        if (plaidDetailed.includes('GAS')) {
+            return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.9 };
+        }
+        return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
+    }
+    if (plaidPrimary === 'SERVICE') {
+        if (plaidDetailed.includes('INTERNET') || plaidDetailed.includes('TELEPHONE')) {
+            return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Telephone & Internet', confidence: 0.9 };
+        }
+        if (plaidDetailed.includes('UTILITIES')) {
+            return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
+        }
+    }
+    
+    if (desc.includes('OPENAI') || desc.includes('GSUITE') || desc.includes('CLOUD') || desc.includes('ADS')) {
+        return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
+    }
+    if (desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
+        return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.7 };
+    }
   
+  // Example for Rent EXPENSE (Paying a landlord)
+  if (desc.includes('RENT') || desc.includes('LEASE')) {
+      return { primary: 'Operating Expenses', secondary: 'Rent & Lease', sub: 'Rent Expense', confidence: 0.9 };
+  }
+
+  // ... (Rest of your expense logic) ...
+
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
 
@@ -399,7 +424,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             };
                         } else {
                             // C. If AI also failed, use Heuristics as final fallback
-                            const ruleResult = categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
+                            const ruleResult = categorizeWithContext(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
@@ -541,4 +566,5 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
+
 
