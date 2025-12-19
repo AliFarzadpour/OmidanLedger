@@ -11,3 +11,4 @@ import '@/lib/plaid.ts';
 import '@/ai/flows/generate-financial-report.ts';
 import '@/ai/flows/identify-contacts.ts';
 import '@/ai/flows/analyze-transaction-entity.ts';
+import '@/ai/flows/deep-categorize-transaction.ts';
