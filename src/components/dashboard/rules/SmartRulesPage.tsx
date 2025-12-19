@@ -34,11 +34,20 @@ export default function SmartRulesPage() {
       const collectionPath = isAdminMode 
         ? 'globalVendorMap' 
         : `users/${user.uid}/categoryMappings`;
-      // FIX: Removed the orderBy('updatedAt', 'desc') which was causing issues
-      // as not all documents have this field, leading to silent failures.
+      
       const q = query(collection(firestore, collectionPath));
       const snapshot = await getDocs(q);
-      setRules(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      
+      const fetchedRules = snapshot.docs.map(d => ({ 
+          id: d.id, 
+          // Normalize data for consistent display
+          primaryCategory: d.data().primaryCategory || d.data().primary,
+          secondaryCategory: d.data().secondaryCategory || d.data().secondary,
+          subcategory: d.data().subcategory || d.data().sub,
+          originalKeyword: d.data().originalKeyword || d.data().transactionDescription || d.id,
+          ...d.data() 
+      }));
+      setRules(fetchedRules);
     } catch (error) {
       console.error("Error fetching rules:", error);
       toast({ variant: 'destructive', title: "Error", description: "Could not fetch rules." });
@@ -62,14 +71,29 @@ export default function SmartRulesPage() {
       .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "_")
       .replace(/\s+/g, '_');
 
-    const ruleData = {
-      originalKeyword: merchant,
-      primaryCategory,
-      secondaryCategory,
-      subcategory,
+    let ruleData: any = {
       updatedAt: serverTimestamp(),
       source: isAdminMode ? 'Admin Manual' : 'User Manual'
     };
+
+    if (isAdminMode) {
+      ruleData = {
+        ...ruleData,
+        originalKeyword: merchant,
+        primary: primaryCategory,
+        secondary: secondaryCategory,
+        sub: subcategory
+      };
+    } else {
+      ruleData = {
+        ...ruleData,
+        userId: user.uid,
+        transactionDescription: merchant,
+        primaryCategory,
+        secondaryCategory,
+        subcategory,
+      };
+    }
 
     const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
 
@@ -181,12 +205,12 @@ export default function SmartRulesPage() {
               ) : (
                 rules.map((rule) => (
                   <TableRow key={rule.id}>
-                    <TableCell className="font-medium">{rule.originalKeyword || rule.transactionDescription || rule.id}</TableCell>
+                    <TableCell className="font-medium">{rule.originalKeyword}</TableCell>
                     <TableCell>
                       <div className="flex flex-col">
-                        <span className="font-medium">{rule.primaryCategory || rule.primary}</span>
+                        <span className="font-medium">{rule.primaryCategory}</span>
                         <span className="text-xs text-muted-foreground">
-                            {rule.secondaryCategory || rule.secondary} &gt; {rule.subcategory || rule.sub}
+                            {rule.secondaryCategory} &gt; {rule.subcategory}
                         </span>
                       </div>
                     </TableCell>
