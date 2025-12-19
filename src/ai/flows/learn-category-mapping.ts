@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that learns user-provided categorizations.
@@ -10,7 +11,6 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { initializeServerFirebase } from '@/ai/utils';
 import { createHash } from 'crypto';
-import { generalizeTransactionDescription } from './generalize-transaction-description';
 
 
 const LearnCategoryMappingInputSchema = z.object({
@@ -41,11 +41,11 @@ const learnCategoryMappingFlow = ai.defineFlow(
     const { firestore } = initializeServerFirebase();
     const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
     
-    // First, generalize the description to create a better rule.
-    const { generalizedDescription } = await generalizeTransactionDescription({ transactionDescription });
+    // FIX: Use the user-provided description directly, without generalization.
+    const keywordForMatching = transactionDescription;
 
-    // Create a consistent ID based on the *generalized* description to prevent duplicates.
-    const mappingId = createHash('md5').update(userId + generalizedDescription.toUpperCase()).digest('hex');
+    // Create a consistent ID based on the *exact* keyword to prevent duplicates.
+    const mappingId = createHash('md5').update(userId + keywordForMatching.toUpperCase()).digest('hex');
 
     // 2. USE ADMIN SDK SYNTAX
     await firestore
@@ -55,7 +55,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
       .doc(mappingId)
       .set({
         userId,
-        transactionDescription: generalizedDescription, // The generalized keyword for matching
+        transactionDescription: keywordForMatching, // The keyword for matching
         primaryCategory,
         secondaryCategory,
         subcategory,

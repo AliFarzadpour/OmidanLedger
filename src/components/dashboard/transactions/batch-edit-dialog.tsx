@@ -66,9 +66,9 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       await batch.commit();
 
       const keywordForRule = ruleName.trim();
-      if (keywordForRule && transactions.length > 0) {
+      if (keywordForRule) {
         await learnCategoryMapping({
-            transactionDescription: transactions[0].description, 
+            transactionDescription: keywordForRule, // FIX: Use the user-entered rule name
             primaryCategory,
             secondaryCategory,
             subcategory,
@@ -76,7 +76,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         });
         toast({
           title: 'Update & Rule Created',
-          description: `${transactions.length} transactions updated and a new rule was saved.`,
+          description: `${transactions.length} transactions updated and a new rule for "${keywordForRule}" was saved.`,
         });
       } else {
         toast({
