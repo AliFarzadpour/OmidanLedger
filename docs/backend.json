@@ -401,6 +401,36 @@
             "createdAt": { "type": "string", "format": "date-time" }
         },
         "required": ["id", "userId", "propertyId", "vendorId", "expenseAccountId", "amount", "status", "date"]
+    },
+    "MonthlyStat": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MonthlyStat",
+      "type": "object",
+      "description": "Stores aggregated financial and occupancy statistics for a property for a single month.",
+      "properties": {
+        "income": {
+          "type": "number",
+          "description": "Total income for the month."
+        },
+        "expense": {
+          "type": "number",
+          "description": "Total expenses for the month."
+        },
+        "netIncome": {
+          "type": "number",
+          "description": "Calculated net income (income - expense)."
+        },
+        "occupancy": {
+          "type": "number",
+          "description": "Occupancy rate for the month (e.g., 0.95 for 95%)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last update."
+        }
+      },
+      "required": ["income", "expense", "netIncome", "updatedAt"]
     }
   },
   "auth": {
@@ -482,6 +512,26 @@
             {
               "name": "propertyId",
               "description": "The unique ID of the property."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/properties/{propertyId}/monthlyStats/{monthId}",
+        "definition": {
+          "entityName": "MonthlyStat",
+          "schema": {
+            "$ref": "#/backend/entities/MonthlyStat"
+          },
+          "description": "Stores pre-aggregated monthly financial stats for a property. The ID is the year-month (e.g., '2024-07'). Access is inherited from the parent property.",
+          "params": [
+            {
+              "name": "propertyId",
+              "description": "The unique ID of the property."
+            },
+            {
+              "name": "monthId",
+              "description": "The year and month in YYYY-MM format."
             }
           ]
         }
