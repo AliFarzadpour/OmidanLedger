@@ -16,7 +16,7 @@ const db = admin.firestore();
 // 2. Define the Master List (The "Universal Truths")
 const globalRules = [
   // RESTAURANTS
-  { keywords: ['STARBUCKS', 'MCDONALD', 'CHICK-FIL-A', 'IN-N-OUT', 'DUNKIN', 'CHUY', 'CHEESECAKE', 'BRAUMS', 'ROADHOUSE', 'WHATABURGER', 'PANERA', 'DENNY', 'WENDY', 'BURGER KING', 'TACO BELL', 'TB REST', 'TB RET'], 
+  { keywords: ['STARBUCKS', 'MCDONALD', 'CHICK-FIL-A', 'IN-N-OUT', 'DUNKIN', 'CHUY', 'CHEESECAKE', 'BRAUMS', 'ROADHOUSE', 'WHATABURGER', 'PANERA', 'DENNY', 'WENDY', 'BURGER KING', 'TACO BELL', 'TB REST', 'TB RET', 'MISSION RANCH MARKET', 'SAIZERIYA'], 
     primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals' },
   
   // RETAIL / PERSONAL
@@ -28,11 +28,11 @@ const globalRules = [
     primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies' },
 
   // SOFTWARE
-  { keywords: ['OPENAI', 'CHATGPT', 'DIGITALOCEAN', 'GODADDY', 'NAME-CHEAP', 'ADOBE', 'INTUIT', 'GOOGLE', 'MICROSOFT', 'VPN', 'ESIGN', 'TRADE IDEAS', 'GSUITE', 'AWS', 'CLOUD', 'INVIDEO'], 
+  { keywords: ['OPENAI', 'CHATGPT', 'DIGITALOCEAN', 'GODADDY', 'NAME-CHEAP', 'ADOBE', 'INTUIT', 'GOOGLE', 'MICROSOFT', 'VPN', 'ESIGN', 'TRADE IDEAS', 'GSUITE', 'AWS', 'CLOUD', 'INVIDEO', 'ADROLL'], 
     primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions' },
 
   // TRAVEL
-  { keywords: ['TRIP.COM', 'EXPEDIA', 'KLOOK', 'AGODA', 'AIRBNB', 'HOTEL', 'INN', 'LODGE', 'RESORT', 'HILTON', 'SHERATON', 'MARRIOTT', 'HYATT', 'WESTIN', 'FAIRMONT', 'SIXT', 'HERTZ', 'AVIS', 'BUDGET', 'ENTERPRISE', 'FRONTIER A', 'FRONTIER K', 'AMERICAN AIR', 'DELTA', 'UNITED', 'SOUTHWEST'], 
+  { keywords: ['TRIP.COM', 'EXPEDIA', 'KLOOK', 'AGODA', 'AIRBNB', 'HOTEL', 'INN', 'LODGE', 'RESORT', 'HILTON', 'SHERATON', 'MARRIOTT', 'HYATT', 'WESTIN', 'FAIRMONT', 'SIXT', 'HERTZ', 'AVIS', 'BUDGET', 'ENTERPRISE', 'FRONTIER A', 'FRONTIER K', 'AMERICAN AIR', 'DELTA', 'UNITED', 'SOUTHWEST', 'TRAVELOCITY', 'WISECARS'], 
     primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging' },
 
   // UTILITIES & GOV
@@ -53,8 +53,11 @@ async function seedDatabase() {
     // We create a document for EACH keyword so lookup is fast O(1)
     // Doc ID: "STARBUCKS" -> Data: { category: "Meals" }
     for (const keyword of group.keywords) {
-        // Create a clean ID: "FRONTIER K" -> "FRONTIER_K"
-        const cleanId = keyword.toUpperCase().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"").replace(/\s/g, '_');
+        // FIX: Sanitize ID by replacing slashes and special chars with underscores
+        const cleanId = keyword.toUpperCase()
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "_") // Replace punctuation with _
+            .replace(/\s+/g, '_'); // Replace spaces with _
+
         const docRef = db.collection('globalVendorMap').doc(cleanId);
         
         batch.set(docRef, {
