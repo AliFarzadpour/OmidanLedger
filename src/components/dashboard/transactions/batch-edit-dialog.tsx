@@ -28,6 +28,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
   const [primaryCategory, setPrimaryCategory] = useState('Operating Expenses');
   const [secondaryCategory, setSecondaryCategory] = useState('');
   const [subcategory, setSubcategory] = useState('');
+  const [ruleName, setRuleName] = useState(''); // New state for the rule name
 
   const handleBatchUpdate = async () => {
     if (!user || !firestore || transactions.length === 0) return;
@@ -51,22 +52,32 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       });
       await batch.commit();
 
-      // Teach the AI based on the first transaction
-      if (transactions[0]) {
+      // If a rule name is provided, learn the mapping
+      const keywordForRule = ruleName.trim();
+      if (keywordForRule) {
         await learnCategoryMapping({
-            transactionDescription: transactions[0].description,
+            transactionDescription: keywordForRule, // Use the new rule name as the keyword
             primaryCategory,
             secondaryCategory,
             subcategory,
             userId: user.uid,
         });
+        toast({
+          title: 'Update & Rule Created',
+          description: `${transactions.length} transactions updated and a new rule for "${keywordForRule}" was saved.`,
+        });
+      } else {
+        toast({
+          title: 'Batch Update Successful',
+          description: `${transactions.length} transactions have been re-categorized.`,
+        });
       }
       
-      toast({
-        title: 'Batch Update Successful',
-        description: `${transactions.length} transactions have been re-categorized.`,
-      });
       onOpenChange(false);
+      // Reset local state
+      setRuleName('');
+      setSecondaryCategory('');
+      setSubcategory('');
     } catch (error: any) {
       console.error(error);
       toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -81,8 +92,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         <DialogHeader>
           <DialogTitle>Batch Edit Transactions</DialogTitle>
           <DialogDescription>
-            You are about to re-categorize <strong>{transactions.length}</strong> transactions.
-            This action cannot be undone.
+            You are re-categorizing <strong>{transactions.length}</strong> transactions. This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
@@ -97,6 +107,19 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
           <div className="grid gap-2">
             <Label htmlFor="sub">Subcategory</Label>
             <Input id="sub" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g., Office Supplies" />
+          </div>
+
+          <div className="border-t pt-4 space-y-2">
+             <Label htmlFor="ruleName">Rule Name (Optional)</Label>
+             <Input 
+                id="ruleName" 
+                value={ruleName} 
+                onChange={(e) => setRuleName(e.target.value)} 
+                placeholder="e.g., 'UBER TRIP' or 'STARBUCKS'" 
+            />
+             <p className="text-xs text-muted-foreground">
+                If provided, a new Smart Rule will be created with this keyword and the categories above.
+             </p>
           </div>
         </div>
         <DialogFooter>
