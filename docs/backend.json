@@ -434,6 +434,36 @@
         }
       },
       "required": ["income", "expense", "netIncome", "updatedAt"]
+    },
+    "GlobalStats": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "GlobalStats",
+      "type": "object",
+      "description": "Stores aggregated statistics for the entire platform, like total users and properties.",
+      "properties": {
+        "totalLandlords": {
+          "type": "number",
+          "description": "Total number of users with the 'landlord' role."
+        },
+        "totalTenants": {
+          "type": "number",
+          "description": "Total number of users with the 'tenant' role."
+        },
+        "totalProperties": {
+          "type": "number",
+          "description": "Total number of properties across all users."
+        },
+        "totalTransactionVolume": {
+          "type": "number",
+          "description": "Sum of all transaction amounts for a billing period across all users."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the last update."
+        }
+      },
+      "required": ["totalLandlords", "totalTenants", "totalProperties"]
     }
   },
   "auth": {
@@ -569,6 +599,17 @@
               "description": "The unique ID of the bill."
             }
           ]
+        }
+      },
+      {
+        "path": "/system/global_stats",
+        "definition": {
+          "entityName": "GlobalStats",
+          "schema": {
+            "$ref": "#/backend/entities/GlobalStats"
+          },
+          "description": "Singleton document for platform-wide statistics. Should only be writable by admin-level server processes.",
+          "params": []
         }
       }
     ],
