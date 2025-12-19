@@ -4,81 +4,84 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user of the FiscalFlow application.",
+      "description": "Represents a user of the FiscalFlow application, including their role and billing status.",
       "properties": {
-        "id": {
+        "uid": {
           "type": "string",
-          "description": "Unique identifier for the User entity."
+          "description": "Unique identifier for the User entity, matching Firebase Auth UID."
         },
         "email": {
           "type": "string",
           "description": "User's email address.",
           "format": "email"
         },
-        "firstName": {
+        "role": {
           "type": "string",
-          "description": "User's first name."
+          "description": "Defines the user's access level and capabilities within the app.",
+          "enum": ["admin", "landlord", "tenant"]
         },
-        "lastName": {
+        "authProvider": {
           "type": "string",
-          "description": "User's last name."
+          "description": "The authentication method used by the user.",
+          "enum": ["password", "google.com", "apple.com"]
         },
-        "trade": {
-          "type": "string",
-          "description": "The user's self-identified industry or trade, selected during signup."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "Date and time when the user account was created.",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "description": "Date and time when the user account was last updated.",
-          "format": "date-time"
-        },
-        "businessProfile": {
+        "billing": {
           "type": "object",
-          "description": "Stores information about the user's business.",
+          "description": "Stores all billing and subscription information for the user.",
           "properties": {
-            "businessName": {
-              "type": "string"
+            "subscriptionTier": {
+              "type": "string",
+              "enum": ["free", "pro", "enterprise"],
+              "description": "The user's current subscription plan."
             },
-            "businessType": {
-              "type": "string"
+            "status": {
+              "type": "string",
+              "description": "The status of the subscription (e.g., active, past_due, canceled)."
             },
-            "industry": {
-              "type": "string"
+            "stripeCustomerId": {
+              "type": "string",
+              "description": "The customer ID from Stripe."
             },
-            "address": {
-              "type": "string"
+            "baseFee": {
+              "type": "number",
+              "description": "The base monthly or annual fee for the subscription."
             },
-            "city": {
-              "type": "string"
+            "propertyRate": {
+              "type": "number",
+              "description": "The additional cost per property managed."
             },
-            "state": {
-              "type": "string"
+            "transactionFeePercent": {
+              "type": "number",
+              "description": "A percentage fee charged on transaction volume, if applicable."
+            }
+          }
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Stores system-generated metadata about the user's activity.",
+          "properties": {
+            "propertyCount": {
+              "type": "number",
+              "description": "The total number of properties managed by the user."
             },
-            "zip": {
-              "type": "string"
+            "totalTransactionVolume": {
+              "type": "number",
+              "description": "The sum of transaction amounts for a billing period, used for variable billing."
             },
-            "country": {
-              "type": "string"
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Timestamp of when the user account was created."
             },
-            "taxId": {
-              "type": "string"
-            },
-            "logoUrl": {
-                "type": "string",
-                "description": "URL of the business logo stored in Firebase Storage."
+            "lastLogin": {
+              "type": "string",
+              "format": "date-time",
+              "description": "Timestamp of the user's last login."
             }
           }
         }
       },
-      "required": [
-        "id",
-        "email"
-      ]
+      "required": ["uid", "email", "role"]
     },
     "BankAccount": {
       "$schema": "http://json-schema.org/draft-07/schema#",
