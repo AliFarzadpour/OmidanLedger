@@ -72,7 +72,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     };
 
     fetchGlobalStats();
-  }, [propertyId, user, db, currentMonthKey, isRefreshing]); // Re-run if we refresh
+  }, [propertyId, user, db, currentMonthKey, isRefreshing, toast]); // Re-run if we refresh
 
   // Determine which data to show
   const stats = propertyId ? singleStats : globalStats;
