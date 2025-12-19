@@ -2,14 +2,14 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
-import { doc, collectionGroup, query, where, getDocs } from 'firebase/firestore'; // Added collectionGroup tools
+import { doc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { useDoc } from '@/firebase/firestore/use-doc';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const { user } = useUser();
@@ -23,21 +23,22 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
 
   const currentMonthKey = format(new Date(), 'yyyy-MM');
 
+  // FIX: Use useMemo to prevent the "Infinite Flicker Loop"
+  const docRef = useMemo(() => {
+    if (!db || !propertyId) return null;
+    return doc(db, `properties/${propertyId}/monthlyStats/${currentMonthKey}`);
+  }, [db, propertyId, currentMonthKey]);
+
   // A. SINGLE PROPERTY MODE
-  const docRef = propertyId 
-    ? doc(db, `properties/${propertyId}/monthlyStats/${currentMonthKey}`)
-    : null;
   const { data: singleStats, isLoading: singleLoading } = useDoc(docRef);
 
-  // B. GLOBAL PORTFOLIO MODE (Runs if propertyId is missing)
+  // B. GLOBAL PORTFOLIO MODE
   useEffect(() => {
-    if (propertyId || !user || !db) return; // Skip if we are looking at a specific property or if firebase is not ready
+    if (propertyId || !user || !db) return; 
 
     const fetchGlobalStats = async () => {
         setGlobalLoading(true);
         try {
-            // Find all monthly stats for this month across all properties owned by the user
-            // This requires a composite index on (userId, month) for the 'monthlyStats' collection group
             const q = query(
                 collectionGroup(db, 'monthlyStats'),
                 where('userId', '==', user.uid),
@@ -57,7 +58,6 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
             setGlobalStats({ income: inc, expenses: exp, netIncome: net });
         } catch (error: any) {
             console.error("Failed to fetch portfolio stats:", error);
-            // Add a helpful toast if it's an index error
             if (error.code === 'failed-precondition') {
                 toast({
                     variant: 'destructive',
@@ -72,9 +72,9 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     };
 
     fetchGlobalStats();
-  }, [propertyId, user, db, currentMonthKey, isRefreshing, toast]); // Re-run if we refresh
+  }, [propertyId, user, currentMonthKey, db, isRefreshing, toast]); 
 
-  // Determine which data to show
+  // Determine view mode
   const stats = propertyId ? singleStats : globalStats;
   const loading = propertyId ? singleLoading : globalLoading;
 
@@ -84,12 +84,10 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     try {
         const res = await recalculateAllStats(user.uid);
         toast({ title: "Financials Updated", description: `Scanned and updated ${res.count} monthly records.` });
-        
-        // If global, the useEffect will re-fetch automatically via the 'isRefreshing' dependency.
     } catch(e: any) {
         toast({ variant: 'destructive', title: "Error", description: e.message });
         if (e.message.includes("requires an index")) {
-            console.error("OPEN THIS LINK TO FIX INDEX:", e.message);
+            console.error("INDEX LINK:", e.message);
         }
     } finally {
         setIsRefreshing(false);
