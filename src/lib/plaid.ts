@@ -9,6 +9,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -127,7 +128,7 @@ export async function getCategoryFromDatabase(
 /**
  * Fetches User Settings, Tenants, Vendors, and Properties to give the AI context.
  */
-async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: string): Promise<UserContext> {
+export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: string): Promise<UserContext> {
   // A. Fetch Business Settings (Defaults to General/Sales if missing)
   const settingsSnap = await db.doc(`users/${userId}`).get();
   const settings = settingsSnap.data() || {};
@@ -314,7 +315,7 @@ export function categorizeWithHeuristics(
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
 
-export function enforceAccountingRules(
+export async function enforceAccountingRules(
   category: any, 
   amount: number
 ) {
@@ -481,7 +482,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     }
 
                     // Enforce accounting rules as a final check
-                    const enforcedCategory = enforceAccountingRules(finalCategory, signedAmount);
+                    const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
                     
                     batch.set(docRef, {
                         date: originalTx.date,
@@ -612,6 +613,7 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
+
 
 
 
