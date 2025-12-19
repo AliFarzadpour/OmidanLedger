@@ -1,5 +1,6 @@
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -12,7 +13,8 @@ import {
 } from 'plaid';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { CATEGORIZATION_SYSTEM_PROMPT, BatchCategorizationSchema } from '@/lib/prompts/categorization';
+import { CATEGORIZATION_SYSTEM_PROMPT, BatchCategorizationSchema } from '@/ai/prompts/categorization';
+import { deepCategorizeTransaction } from '@/ai/flows/deep-categorize-transaction';
 
 // --- INITIALIZATION ---
 function getAdminDB() {
@@ -313,7 +315,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             return { count: 0 };
         }
 
-        // 4. BATCH PROCESSING WITH NEW DB LOOKUP
+        // 4. BATCH PROCESSING
         const BATCH_SIZE = 10; 
         const batchPromises = [];
 
@@ -346,26 +348,35 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             status: 'posted' // Auto-approve known items
                         };
                     } else {
-                        // CASE B: Unknown -> Send to AI (Slow & Costly)
-                        const aiResults = await categorizeBatchWithAI([originalTx], userContext);
-                        const aiResult = aiResults[0];
+                        // CASE B: Unknown -> Send to Deep AI (Slower & Costly)
+                        const deepResult = await deepCategorizeTransaction({
+                            description: originalTx.name,
+                            amount: signedAmount,
+                            date: originalTx.date
+                        });
                         
-                        const isAiUseless = !aiResult || aiResult.confidence < 0.85;
-
-                        if (!isAiUseless) {
+                        if (deepResult && deepResult.confidence > 0.7) {
                             // Good AI Result
-                            finalCategory = { ...aiResult, status: 'posted' };
+                            finalCategory = {
+                                primaryCategory: deepResult.primaryCategory,
+                                secondaryCategory: deepResult.secondaryCategory,
+                                subcategory: deepResult.subcategory,
+                                confidence: deepResult.confidence,
+                                aiExplanation: deepResult.reasoning,
+                                merchantName: deepResult.merchantName,
+                                status: 'posted'
+                            };
                         } else {
-                            // C. If AI is also useless, fallback to heuristics
+                            // C. If AI also failed, use Heuristics as final fallback
                             const ruleResult = categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
                                 subcategory: ruleResult.sub,
                                 confidence: ruleResult.confidence,
-                                aiExplanation: `AI/DB failed, used Heuristics`,
+                                aiExplanation: 'Deep AI failed, used standard Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
-                                status: ruleResult.confidence > 0.8 ? 'posted' : 'review'
+                                status: 'review'
                             };
                         }
                     }
