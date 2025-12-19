@@ -45,30 +45,30 @@ export function EnterBillDialog({ triggerButton }: { triggerButton?: React.React
   // 1. Fetch Properties on Load
   useEffect(() => {
     const loadProps = async () => {
-      if (!user || !firestore) return;
+      if (!user || !firestore || !isOpen) return; // <-- Ensure firestore is ready and dialog is open
       const q = query(collection(firestore, 'properties'), where('userId', '==', user.uid));
       const snap = await getDocs(q);
       setProperties(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
-    if (isOpen) loadProps();
+    loadProps();
   }, [user, firestore, isOpen]);
 
   // 2. When Property Changes -> Fetch ITS Ledger Accounts
   useEffect(() => {
     const loadAccounts = async () => {
-      if (!selectedPropertyId || !firestore || !user) return; // Added user check
+      if (!selectedPropertyId || !firestore || !user) return; 
       
       const q = query(
         collection(firestore, 'accounts'), 
         where('propertyId', '==', selectedPropertyId),
         where('type', '==', 'Expense'),
-        where('userId', '==', user.uid) // <--- FIXED: ADDED USER ID CHECK
+        where('userId', '==', user.uid)
       );
       const snap = await getDocs(q);
       setPropertyAccounts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     loadAccounts();
-  }, [selectedPropertyId, firestore, user]); // Added user to dependency array
+  }, [selectedPropertyId, firestore, user]); 
 
   // 3. Auto-Select Expense Account if Vendor has a Default
   useEffect(() => {
@@ -273,5 +273,3 @@ function DatePicker({ date, setDate }: { date: Date, setDate: (d: Date | undefin
      </Popover>
    );
 }
-
-    
