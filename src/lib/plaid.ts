@@ -138,7 +138,7 @@ async function categorizeBatchWithAI(
 
 function categorizeWithContext(
   description: string, 
-  amount: number, 
+  amount: number, // Positive = Income, Negative = Expense
   plaidCategory: any,
   context: UserContext
 ): { primary: string, secondary: string, sub: string, confidence: number } {
@@ -172,6 +172,11 @@ function categorizeWithContext(
   // Catch "PAYMENT RECEIVED" as a Liability reduction, NOT Income
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD PAYMENT') || desc.includes('BA ELECTRONIC PAYMENT')) {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.95 };
+  }
+
+  // 12. INTERNAL BANK TRANSFERS (Checking <-> Savings)
+  if (desc.includes('ONLINE BANKING TRANSFER') || desc.includes('TRANSFER FROM SAV') || desc.includes('TRANSFER TO CHK') || desc.includes('TRANSFER TO SAV')) {
+      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 0.95 };
   }
 
   // 2. Loans & Mortgages
@@ -332,38 +337,29 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             
                         const signedAmount = originalTx.amount * -1; // Invert amount
             
-                        // 1. Try to find the AI Result
+                        // NEW LOGIC: If AI is missing OR if AI returned "Uncategorized", use Rules
                         const aiResult = aiResults.find(r => r.transactionId === originalTx.transaction_id);
+                        const isAiUseless = !aiResult || aiResult.secondaryCategory === 'Uncategorized' || aiResult.primaryCategory === 'Uncategorized';
             
                         let finalCategory;
             
-                        if (aiResult) {
-                            // CASE A: AI Succeeded
-                            finalCategory = {
-                                primaryCategory: aiResult.primaryCategory,
-                                secondaryCategory: aiResult.secondaryCategory,
-                                subcategory: aiResult.subcategory,
-                                confidence: aiResult.confidence,
-                                aiExplanation: aiResult.explanation,
-                                merchantName: aiResult.merchantName,
-                                status: aiResult.confidence > 0.85 ? 'posted' : 'review'
-                            };
+                        if (!isAiUseless) {
+                            // AI did a good job, use it
+                            finalCategory = { ...aiResult, status: 'posted' };
                         } else {
-                            // CASE B: AI Failed -> USE SMART RULES (The Fix!)
-                            // Instead of "General Expense", we run your specific rules
+                            // AI failed or didn't know -> USE SMART RULES
                             const ruleResult = categorizeWithContext(
                                 originalTx.name, 
                                 signedAmount, 
                                 originalTx.personal_finance_category, 
                                 userContext
                             );
-            
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
                                 subcategory: ruleResult.sub,
                                 confidence: ruleResult.confidence,
-                                aiExplanation: 'AI failed, fell back to Smart Rules',
+                                aiExplanation: aiResult ? 'AI returned Uncategorized, overridden by Rules' : 'AI Failed, used Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
                                 status: ruleResult.confidence > 0.8 ? 'posted' : 'review'
                             };
@@ -505,6 +501,8 @@ const CreateLinkTokenInputSchema = z.object({
   
   
   
+
+    
 
     
 
