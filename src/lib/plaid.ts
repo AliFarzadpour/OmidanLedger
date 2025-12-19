@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -302,10 +303,9 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             cursor = response.data.next_cursor;
         }
 
-        // 3. Filter for 2025
-        const STRICT_START_DATE = '2025-01-01'; 
+        // 3. Filter for relevant transactions
         const relevantTransactions = allTransactions.filter(tx => {
-            return tx.date >= STRICT_START_DATE && tx.account_id === bankAccountId;
+            return tx.account_id === bankAccountId;
         });
 
         if (relevantTransactions.length === 0) {
@@ -331,27 +331,29 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     const signedAmount = originalTx.amount * -1; // Invert amount
                     let finalCategory: any;
 
-                    // A. Check our new DB rules FIRST
-                    const dbRule = await getCategoryFromDatabase(originalTx.name, userId, db);
+                    // A. Try DB Lookup First (Fast & Cheap)
+                    const dbResult = await getCategoryFromDatabase(originalTx.name, userId, db);
 
-                    if (dbRule) {
+                    if (dbResult) {
+                         // CASE A: Database Match Found (User or Global)
                         finalCategory = {
-                            primaryCategory: dbRule.primary,
-                            secondaryCategory: dbRule.secondary,
-                            subcategory: dbRule.sub,
-                            confidence: dbRule.confidence,
-                            aiExplanation: `Matched using ${dbRule.source}`,
+                            primaryCategory: dbResult.primary,
+                            secondaryCategory: dbResult.secondary,
+                            subcategory: dbResult.sub,
+                            confidence: dbResult.confidence,
+                            aiExplanation: `Matched rule via ${dbResult.source}`,
                             merchantName: originalTx.merchant_name || originalTx.name,
-                            status: 'posted'
+                            status: 'posted' // Auto-approve known items
                         };
                     } else {
-                        // B. If no DB rule, fallback to AI
+                        // CASE B: Unknown -> Send to AI (Slow & Costly)
                         const aiResults = await categorizeBatchWithAI([originalTx], userContext);
                         const aiResult = aiResults[0];
-
+                        
                         const isAiUseless = !aiResult || aiResult.confidence < 0.85;
 
                         if (!isAiUseless) {
+                            // Good AI Result
                             finalCategory = { ...aiResult, status: 'posted' };
                         } else {
                             // C. If AI is also useless, fallback to heuristics
