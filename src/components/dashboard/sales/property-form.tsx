@@ -239,11 +239,11 @@ export function PropertyForm({
       const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
       batch.set(ruleRef, {
         userId,
-        transactionDescription: shortAddress,
+        originalKeyword: shortAddress,
         primaryCategory: "Operating Expenses",
         secondaryCategory: "Uncategorized",
         subcategory: "General",
-        propertyId: propertyId, // Link to this property!
+        propertyId: propertyId,
         source: "System - Property Address",
         updatedAt: new Date().toISOString()
       }, { merge: true });
@@ -258,11 +258,11 @@ export function PropertyForm({
         const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
         batch.set(ruleRef, {
           userId,
-          transactionDescription: fullName,
+          originalKeyword: fullName,
           primaryCategory: "Income",
           secondaryCategory: "Rental Income",
           subcategory: "Residential Rent",
-          propertyId: propertyId, // Link to this property!
+          propertyId: propertyId,
           source: "System - Tenant Lease",
           updatedAt: new Date().toISOString()
         }, { merge: true });
@@ -277,7 +277,7 @@ export function PropertyForm({
   
       batch.set(ruleRef, {
         userId,
-        transactionDescription: mgmtName,
+        originalKeyword: mgmtName,
         primaryCategory: "Operating Expenses",
         secondaryCategory: "Property Management",
         subcategory: "Management Fees",
