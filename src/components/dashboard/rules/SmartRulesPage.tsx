@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,9 @@ export default function SmartRulesPage() {
       const collectionPath = isAdminMode 
         ? 'globalVendorMap' 
         : `users/${user.uid}/categoryMappings`;
-      const q = query(collection(firestore, collectionPath), orderBy('updatedAt', 'desc'));
+      // FIX: Removed the orderBy('updatedAt', 'desc') which was causing issues
+      // as not all documents have this field, leading to silent failures.
+      const q = query(collection(firestore, collectionPath));
       const snapshot = await getDocs(q);
       setRules(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (error) {
