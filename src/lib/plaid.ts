@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -57,6 +58,7 @@ interface UserContext {
     primaryCategory: string;
     secondaryCategory: string;
     subcategory: string;
+    propertyId?: string;
   }>;
 }
 
@@ -80,8 +82,7 @@ export async function getCategoryFromDatabase(
   if (!merchantName) return null;
 
   const desc = merchantName.toUpperCase();
-
-  // 1. Check for Matches
+  
   const matchedRule = context.userRules.find(rule => 
       desc.includes(rule.keyword) 
   );
@@ -91,6 +92,7 @@ export async function getCategoryFromDatabase(
           primaryCategory: matchedRule.primaryCategory,
           secondaryCategory: matchedRule.secondaryCategory,
           subcategory: matchedRule.subcategory,
+          propertyId: matchedRule.propertyId, // Pass the property ID
           confidence: 1.0, 
           source: 'User Rule' 
       };
@@ -98,6 +100,7 @@ export async function getCategoryFromDatabase(
   
   return null; 
 }
+
 
 export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: string): Promise<UserContext> {
   const settingsSnap = await db.doc(`users/${userId}`).get();
@@ -125,7 +128,8 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
               keyword: keyword,
               primaryCategory: data.primaryCategory,
               secondaryCategory: data.secondaryCategory,
-              subcategory: data.subcategory
+              subcategory: data.subcategory,
+              propertyId: data.propertyId, // Fetch the propertyId
           });
       }
   });
@@ -374,6 +378,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             primaryCategory: ruleResult.primaryCategory,
                             secondaryCategory: ruleResult.secondaryCategory,
                             subcategory: ruleResult.subcategory,
+                            propertyId: ruleResult.propertyId, // Include propertyId
                             confidence: 1.0,
                             aiExplanation: `Matched User Rule: ${originalTx.name}`,
                             merchantName: originalTx.merchant_name || originalTx.name,
@@ -543,3 +548,4 @@ const CreateLinkTokenInputSchema = z.object({
   );
 
     
+
