@@ -1,11 +1,9 @@
 
-import { getAdminDB } from '@/lib/admin-db';
+import { db } from '@/lib/admin-db';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Users, Building2, CreditCard, Activity } from 'lucide-react';
 
 export default async function SuperAdminDashboard() {
-  const db = getAdminDB();
-  
   // Fetch Global Stats
   const globalStats = (await db.doc('system/global_stats').get()).data() || {};
 
