@@ -11,6 +11,7 @@ import {
   Settings,
   Landmark,
   LayoutDashboard,
+  BrainCircuit, // New Icon
 } from "lucide-react";
 
 import {
@@ -62,6 +63,11 @@ const data = {
       title: "Vendors",
       url: "/dashboard/vendors",
       icon: Users,
+    },
+    {
+      title: "Smart Rules", // New Nav Item
+      url: "/dashboard/rules",
+      icon: BrainCircuit,
     },
     {
       title: "Reports",
