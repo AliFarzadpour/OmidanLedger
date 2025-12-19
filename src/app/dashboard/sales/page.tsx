@@ -13,6 +13,7 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 
 export default function SalesHubPage() {
   const router = useRouter();
@@ -31,41 +32,7 @@ export default function SalesHubPage() {
         </div>
       </div>
 
-      {/* KPI Section (Placeholder - can be connected to real data later) */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="shadow-sm border-l-4 border-l-green-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Collected Rent (Nov)</CardTitle>
-            <Wallet className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$12,450.00</div>
-            <p className="text-xs text-muted-foreground mt-1">92% of expected rent</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-sm border-l-4 border-l-amber-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Overdue / Late</CardTitle>
-            <ClockIcon className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">$1,250.00</div>
-            <p className="text-xs text-muted-foreground mt-1">2 tenants pending</p>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm border-l-4 border-l-blue-500">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Occupancy Rate</CardTitle>
-            <Home className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">94%</div>
-            <p className="text-xs text-muted-foreground mt-1">1 unit vacant</p>
-          </CardContent>
-        </Card>
-      </div>
+      <FinancialPerformance />
 
       {/* Action Cards Grid - The "Plan A" Focus */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

@@ -16,7 +16,6 @@ import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 
 type Transaction = {
   id: string;
@@ -195,7 +194,34 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <FinancialPerformance />
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          title="Total Income"
+          value={stats.totalIncome}
+          icon={<DollarSign className="h-4 w-4 text-muted-foreground" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Total Expenses"
+          value={stats.totalExpenses}
+          icon={<CreditCard className="h-4 w-4 text-muted-foreground" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Net Income"
+          value={stats.netIncome}
+          icon={<Activity className="h-4 w-4 text-muted-foreground" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Profit Margin"
+          value={stats.profitMargin}
+          format="percent"
+          icon={<Percent className="h-4 w-4 text-muted-foreground" />}
+          isLoading={isLoading}
+        />
+      </div>
+
 
       {!isLoading && stats.filteredTransactions.length === 0 && (
         <Alert className="bg-blue-50 border-blue-200 text-blue-800">
