@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Trash2, BrainCircuit } from 'lucide-react';
+import { Loader2, Trash2, BrainCircuit, Edit2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 export default function SmartRulesPage() {
   const { user } = useUser();
@@ -26,6 +27,10 @@ export default function SmartRulesPage() {
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
+  
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<any>(null);
+
 
   const fetchRules = async () => {
     if (!user || !firestore) return;
@@ -40,7 +45,6 @@ export default function SmartRulesPage() {
       
       const fetchedRules = snapshot.docs.map(d => ({ 
           id: d.id, 
-          // Normalize data for consistent display
           primaryCategory: d.data().primaryCategory || d.data().primary,
           secondaryCategory: d.data().secondaryCategory || d.data().secondary,
           subcategory: d.data().subcategory || d.data().sub,
@@ -60,6 +64,23 @@ export default function SmartRulesPage() {
     fetchRules();
   }, [user, firestore, isAdminMode]);
 
+  const handleOpenDialog = (rule: any = null) => {
+    if (rule) {
+        setEditingRule(rule);
+        setMerchant(rule.originalKeyword);
+        setPrimaryCategory(rule.primaryCategory);
+        setSecondaryCategory(rule.secondaryCategory);
+        setSubcategory(rule.subcategory);
+    } else {
+        setEditingRule(null);
+        setMerchant('');
+        setPrimaryCategory('Operating Expenses');
+        setSecondaryCategory('');
+        setSubcategory('');
+    }
+    setIsDialogOpen(true);
+  };
+
   const handleSave = async () => {
     if (!merchant || !primaryCategory || !secondaryCategory || !subcategory || !user || !firestore) {
         toast({ variant: 'destructive', title: "Missing Fields", description: "Please fill out all keyword and category fields." });
@@ -67,7 +88,7 @@ export default function SmartRulesPage() {
     }
     setIsSaving(true);
 
-    const cleanId = merchant.toUpperCase()
+    const cleanId = editingRule?.id || merchant.toUpperCase()
       .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "_")
       .replace(/\s+/g, '_');
 
@@ -99,11 +120,11 @@ export default function SmartRulesPage() {
 
     try {
       await setDoc(doc(firestore, collectionPath, cleanId), ruleData, { merge: true });
-      toast({ title: "Rule Saved", description: `Rule for "${merchant}" has been created.` });
-      setMerchant('');
-      setSecondaryCategory('');
-      setSubcategory('');
+      toast({ title: editingRule ? "Rule Updated" : "Rule Saved", description: `Rule for "${merchant}" has been saved.` });
+      
+      setIsDialogOpen(false);
       fetchRules();
+
     } catch (error: any) {
       toast({ variant: 'destructive', title: "Error", description: error.message });
     } finally {
@@ -114,7 +135,7 @@ export default function SmartRulesPage() {
   const handleDelete = async (id: string) => {
     if (!user || !firestore) return;
     const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
-    if (window.confirm("Are you sure you want to delete this rule?")) {
+    if (window.confirm("Are you sure you want to delete this rule? This cannot be undone.")) {
       try {
         await deleteDoc(doc(firestore, collectionPath, id));
         toast({ title: "Rule Deleted" });
@@ -126,6 +147,7 @@ export default function SmartRulesPage() {
   };
 
   return (
+    <>
     <div className="p-8 max-w-5xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
@@ -137,55 +159,23 @@ export default function SmartRulesPage() {
             {isAdminMode ? 'Editing the Global Master Rules for all users.' : 'Managing your personal categorization rules.'}
           </p>
         </div>
-        <div className="flex items-center space-x-2 bg-muted p-2 rounded-lg">
-          <Label htmlFor="admin-mode" className="font-normal text-sm">Personal</Label>
-          <Switch
-            id="admin-mode"
-            checked={isAdminMode}
-            onCheckedChange={setIsAdminMode}
-            disabled={user?.uid !== 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2'}
-          />
-          <Label htmlFor="admin-mode" className="font-normal text-sm">Admin (Global)</Label>
+        <div className="flex items-center gap-4">
+            <div className="flex items-center space-x-2 bg-muted p-2 rounded-lg">
+                <Label htmlFor="admin-mode" className="font-normal text-sm">Personal</Label>
+                <Switch
+                    id="admin-mode"
+                    checked={isAdminMode}
+                    onCheckedChange={setIsAdminMode}
+                    disabled={user?.uid !== 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2'}
+                />
+                <Label htmlFor="admin-mode" className="font-normal text-sm">Admin</Label>
+            </div>
+            <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" /> Add Rule
+            </Button>
         </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Teach the AI a new rule</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Input 
-                    value={merchant}
-                    onChange={(e) => setMerchant(e.target.value)}
-                    placeholder="If vendor name contains..."
-                    className="md:col-span-1"
-                />
-                <Input 
-                    value={primaryCategory}
-                    onChange={(e) => setPrimaryCategory(e.target.value)}
-                    placeholder="Primary Category"
-                    className="md:col-span-1"
-                />
-                <Input 
-                    value={secondaryCategory}
-                    onChange={(e) => setSecondaryCategory(e.target.value)}
-                    placeholder="Secondary Category"
-                    className="md:col-span-1"
-                />
-                 <Input 
-                    value={subcategory}
-                    onChange={(e) => setSubcategory(e.target.value)}
-                    placeholder="Subcategory"
-                    className="md:col-span-1"
-                />
-            </div>
-          <Button onClick={handleSave} disabled={isSaving || !merchant} className="w-full md:w-auto">
-            {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Rule'}
-          </Button>
-        </CardContent>
-      </Card>
-
+      
       <Card>
         <CardContent className="p-0">
           <Table>
@@ -194,14 +184,14 @@ export default function SmartRulesPage() {
                 <TableHead>Keyword</TableHead>
                 <TableHead>Assigned Category</TableHead>
                 <TableHead>Source</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/></TableCell></TableRow>
               ) : rules.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No rules found. Add one above to teach the system!</TableCell></TableRow>
+                <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No rules found. Add one to teach the system!</TableCell></TableRow>
               ) : (
                 rules.map((rule) => (
                   <TableRow key={rule.id}>
@@ -218,8 +208,11 @@ export default function SmartRulesPage() {
                       <Badge variant="outline">{rule.source || 'Unknown'}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                       <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(rule)}>
+                          <Edit2 className="h-4 w-4 text-slate-500 hover:text-blue-600"/>
+                       </Button>
+                       <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)}>
+                        <Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -230,5 +223,54 @@ export default function SmartRulesPage() {
         </CardContent>
       </Card>
     </div>
+
+    <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+            <DialogTitle>{editingRule ? 'Edit Rule' : 'Add New Rule'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                <div className="grid gap-2">
+                    <Label>If vendor name contains...</Label>
+                    <Input 
+                        value={merchant}
+                        onChange={(e) => setMerchant(e.target.value)}
+                        placeholder="e.g., STARBUCKS"
+                    />
+                </div>
+                <div className="grid gap-2">
+                    <Label>Assign Primary Category</Label>
+                    <Input 
+                        value={primaryCategory}
+                        onChange={(e) => setPrimaryCategory(e.target.value)}
+                        placeholder="e.g., Operating Expenses"
+                    />
+                </div>
+                 <div className="grid gap-2">
+                    <Label>Assign Secondary Category</Label>
+                    <Input 
+                        value={secondaryCategory}
+                        onChange={(e) => setSecondaryCategory(e.target.value)}
+                        placeholder="e.g., Meals & Entertainment"
+                    />
+                </div>
+                 <div className="grid gap-2">
+                    <Label>Assign Subcategory</Label>
+                    <Input 
+                        value={subcategory}
+                        onChange={(e) => setSubcategory(e.target.value)}
+                        placeholder="e.g., Business Meals"
+                    />
+                </div>
+            </div>
+            <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Rule'}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }
