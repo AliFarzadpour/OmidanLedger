@@ -5,6 +5,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -217,15 +218,24 @@ function categorizeWithHeuristics(
 
   // Tier 1: User-defined logic (already handled by getCategoryFromDatabase)
 
-  // Tier 2: Universal Keywords
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.95 };
+  // =========================================================
+  // TIER 2: HIGH PRIORITY (Transfers & Income Logic)
+  // =========================================================
+
+  // 1. Internal Transfers (Fixing the $120k error)
+  if (desc.includes('ONLINE BANKING TRANSFER') || desc.includes('TRANSFER TO CHK') || desc.includes('TRANSFER FROM CHK') || desc.includes('INTERNAL TRANSFER')) {
+      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 1.0 };
   }
-  if (desc.includes('LOAN') || desc.includes('MORTGAGE')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment', confidence: 0.95 };
+
+  // 2. RENT INCOME (Fixing the "Rent Expense" error)
+  // If amount is POSITIVE (Income) and description says "Rent", it is INCOME.
+  if (isIncome && (desc.includes('RENT') || desc.includes('LEASE'))) {
+      return { primary: 'Income', secondary: 'Operating Income', sub: 'Rental Income', confidence: 1.0 };
   }
+
+  // 3. Zelle & Transfers (Existing logic)
   if (desc.includes('ZELLE') || desc.includes('TRANSFER')) {
-      if (isIncome) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.7 };
+      if (isIncome) return { primary: 'Income', secondary: 'Operating Income', sub: 'Rental Income', confidence: 0.8 }; // Default Zelle Income to Rent
       return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'Contractor or Draw?', confidence: 0.4 };
   }
   
@@ -531,3 +541,4 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
+
