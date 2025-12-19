@@ -2,6 +2,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -113,7 +114,7 @@ export async function getCategoryFromDatabase(
       return { ...globalDocFull.data(), confidence: 0.95, source: 'Global DB' };
   }
 
-  return null;
+  return null; // No rule found -> Fallback to AI
 }
 
 
@@ -334,7 +335,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
 
         // 4. BATCH PROCESSING
-        const BATCH_SIZE = 10; 
+        const BATCH_SIZE = 5; 
         const batchPromises = [];
 
         for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
