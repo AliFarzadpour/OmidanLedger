@@ -3,7 +3,7 @@ import { useUser } from '@/firebase';
 import { isSuperAdmin } from '@/lib/auth-utils';
 import { useEffect, useState } from 'react';
 import { redirect, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import DashboardLayout from '@/app/dashboard/layout'; // Use standard layout
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
@@ -39,20 +39,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return <div>Loading & Verifying Access...</div>;
   }
 
-  // If checks pass, render the admin layout
+  // If checks pass, render the standard dashboard layout
   return (
-    <div className="flex min-h-screen">
-       <nav className="w-64 border-r bg-slate-50 p-6">
-        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-4">Admin</h3>
-        <ul className="space-y-2">
-          <li><Link href="/admin" className="text-blue-600 font-medium">Dashboard</Link></li>
-          <li><Link href="/admin/users" className="hover:text-blue-600">Landlords</Link></li>
-          <li><a href="#" className="hover:text-blue-600 text-slate-400 cursor-not-allowed">Billing Logs</a></li>
-        </ul>
-      </nav>
-      <main className="flex-1 p-10 bg-slate-50/50">
+    <DashboardLayout>
         {children}
-      </main>
-    </div>
+    </DashboardLayout>
   );
 }

@@ -11,7 +11,8 @@ import {
   Settings,
   Landmark,
   LayoutDashboard,
-  BrainCircuit, // New Icon
+  BrainCircuit,
+  ShieldCheck, // New Icon for Admin
 } from "lucide-react";
 
 import {
@@ -25,6 +26,8 @@ import {
   SidebarGroupLabel,
   SidebarGroupContent,
 } from "@/components/ui/sidebar";
+import { useUser } from "@/firebase";
+import { isSuperAdmin } from "@/lib/auth-utils";
 
 const data = {
   // Zone 1: The "Physical" World (Real Estate)
@@ -65,7 +68,7 @@ const data = {
       icon: Users,
     },
     {
-      title: "Smart Rules", // New Nav Item
+      title: "Smart Rules",
       url: "/dashboard/rules",
       icon: BrainCircuit,
     },
@@ -74,6 +77,20 @@ const data = {
       url: "/dashboard/reports",
       icon: PieChart,
     },
+  ],
+  
+  // NEW: Zone 4: Admin
+  admin: [
+    {
+      title: "Admin Dashboard",
+      url: "/admin",
+      icon: ShieldCheck,
+    },
+    {
+      title: "User Management",
+      url: "/admin/users",
+      icon: Users,
+    }
   ],
 
   // Zone 3: System
@@ -89,6 +106,15 @@ const data = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
   const pathname = usePathname();
+  const { user } = useUser();
+  const [isAdmin, setIsAdmin] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user?.uid) {
+      isSuperAdmin(user.uid).then(setIsAdmin);
+    }
+  }, [user]);
+
 
   return (
     <Sidebar variant="inset" className="border-r bg-white" {...props}>
@@ -152,6 +178,34 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        
+        {/* NEW: ADMIN GROUP (CONDITIONAL) */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="tracking-widest text-red-500 font-bold text-xs mt-8 mb-3 px-2">
+              SUPER ADMIN
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {data.admin.map((item) => {
+                  const isActive = pathname.startsWith(item.url);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton 
+                        isActive={isActive} 
+                        onClick={() => router.push(item.url)} 
+                        className={`h-10 mb-1 ${isActive ? "bg-red-50 text-red-700 border-red-100 shadow-sm font-medium" : "text-slate-600 hover:bg-red-50/50"}`}
+                      >
+                        <item.icon className={`mr-2 h-4 w-4 ${isActive ? 'text-red-600' : 'text-slate-400'}`} />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* SYSTEM GROUP */}
         <SidebarGroup className="mt-auto pb-4">
