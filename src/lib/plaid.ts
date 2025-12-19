@@ -4,6 +4,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -336,7 +337,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
 
         // 4. BATCH PROCESSING
-        const BATCH_SIZE = 5; 
+        const BATCH_SIZE = 3; 
         const batchPromises = [];
 
         for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
