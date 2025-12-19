@@ -39,6 +39,8 @@ const learnCategoryMappingFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
+    // FIX: Initialize Firestore instance inside the flow.
+    const { firestore } = initializeServerFirebase();
     const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
     
     // First, generalize the description to create a better rule.
@@ -47,7 +49,6 @@ const learnCategoryMappingFlow = ai.defineFlow(
     // Create a consistent ID based on the *generalized* description to prevent duplicates.
     const mappingId = createHash('md5').update(userId + generalizedDescription).digest('hex');
 
-    const { firestore } = initializeServerFirebase();
     const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
 
     // Save the generalized description as the key for the rule.
