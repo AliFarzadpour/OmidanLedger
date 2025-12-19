@@ -7,6 +7,7 @@
 
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -206,7 +207,7 @@ async function categorizeBatchWithAI(
 }
 
 // RENAMED: This is now the fallback heuristic engine
-function categorizeWithContext(
+export function categorizeWithHeuristics(
   description: string, 
   amount: number, 
   plaidCategory: any, 
@@ -310,6 +311,47 @@ function categorizeWithContext(
   // ... (Rest of your expense logic) ...
 
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
+}
+
+export function enforceAccountingRules(
+  category: any, 
+  amount: number
+) {
+  const isIncome = amount > 0;
+  const isExpense = amount < 0;
+  
+  // CLONE the category object so we don't mutate the original
+  let final = { ...category };
+
+  // RULE 1: Positive Amount CANNOT be an Operating Expense
+  // (Unless it's a refund, but usually "Rental Income" is the safer default for large amounts)
+  if (isIncome && (final.primaryCategory.includes('Expense') || final.primaryCategory === 'Property Expenses' || final.primaryCategory === 'Real Estate')) {
+      
+      // If description mentions Rent/Lease, force it to Income
+      if (final.subcategory?.includes('Rent') || final.subcategory?.includes('Lease')) {
+          final.primaryCategory = 'Income';
+          final.secondaryCategory = 'Rental Income';
+          final.subcategory = 'Residential Rent';
+          final.aiExplanation = 'Forced to Income by Accounting Enforcer (Positive Amount)';
+      } 
+      // General catch-all for other positive "expenses"
+      else {
+          final.primaryCategory = 'Income';
+          final.secondaryCategory = 'Uncategorized Income';
+      }
+  }
+
+  // RULE 2: Transfers & Credit Card Payments are ALWAYS Balance Sheet
+  // (This ensures your previous fix stays locked in)
+  if (final.subcategory === 'Credit Card Payment' || final.subcategory === 'Internal Transfer') {
+      final.primaryCategory = 'Balance Sheet';
+      if (amount > 0 && final.subcategory === 'Credit Card Payment') {
+          // Positive credit card payment = Paying off the debt (Liability)
+          final.secondaryCategory = 'Liabilities';
+      }
+  }
+
+  return final;
 }
 
 // --- 3. MAIN SYNC FLOW ---
@@ -424,7 +466,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             };
                         } else {
                             // C. If AI also failed, use Heuristics as final fallback
-                            const ruleResult = categorizeWithContext(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
+                            const ruleResult = categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
@@ -436,6 +478,9 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             };
                         }
                     }
+
+                    // Enforce accounting rules as a final check
+                    const enforcedCategory = enforceAccountingRules(finalCategory, signedAmount);
                     
                     batch.set(docRef, {
                         date: originalTx.date,
@@ -445,7 +490,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         bankAccountId: originalTx.account_id,
                         userId: userId,
                         createdAt: FieldValue.serverTimestamp(),
-                        ...finalCategory 
+                        ...enforcedCategory 
                     }, { merge: true });
                 }
                 
@@ -566,5 +611,6 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
   
+
 
 
