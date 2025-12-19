@@ -1,5 +1,6 @@
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -140,16 +141,20 @@ async function categorizeBatchWithAI(
 function categorizeWithContext(
   description: string, 
   amount: number, 
-  plaidCategory: any, // We will leverage this heavily now!
+  plaidCategory: any, 
   context: UserContext
 ): { primary: string, secondary: string, sub: string, confidence: number } {
   
   const desc = description.toUpperCase();
+  // Clean punctuation (e.g. "T.J.MAXX" -> "TJ MAXX")
+  const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
+  
   const isIncome = amount > 0;
   const { defaultIncomeCategory } = context.business;
 
-  // 1. EXACT DB MATCH (User's specific vendors - High Priority)
-  // This is the "Memory" part. If the user fixed it once, we obey.
+  // =========================================================
+  // TIER 1: EXACT DATABASE MATCHES (Memory)
+  // =========================================================
   if (isIncome) {
     const matchedTenant = context.tenantNames.find(name => desc.includes(name));
     if (matchedTenant) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.99 };
@@ -161,73 +166,93 @@ function categorizeWithContext(
     }
   }
 
-  // 2. UNIVERSAL KEYWORDS (Things that never change)
-  // Loans, Zelle, and Credit Card Payments are structural, not merchant-specific.
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card Payment', confidence: 0.99 };
-  }
-  if (desc.includes('LOAN') || desc.includes('MORTGAGE')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan Payment', confidence: 0.99 };
-  }
+  // =========================================================
+  // TIER 2: HIGH PRIORITY KEYWORDS (The "Missed Items" Fix)
+  // =========================================================
+
+  // 1. Zelle & Transfers
   if (desc.includes('ZELLE') || desc.includes('TRANSFER')) {
       if (isIncome) return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory, confidence: 0.7 };
       return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'Contractor or Draw?', confidence: 0.4 };
   }
 
-  // 3. PLAID CATEGORY MAPPING (The Scalable Solution)
-  // Instead of listing 1,000 restaurants, we trust Plaid's classification.
+  // 2. Loans & Credit Card
+  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
+      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Credit Card/Loan Payment', confidence: 0.95 };
+  }
+
+  if (!isIncome) {
+      // 3. UTILITIES & GOV (Catches "City of Anna", "Permits")
+      if (desc.includes('CITY OF') || desc.includes('TOWN OF') || desc.includes('UTILITIES') || desc.includes('WATER') || 
+          desc.includes('ELECTRIC') || desc.includes('POWER') || desc.includes('ATMOS') || desc.includes('WASTE') || 
+          desc.includes('PERMITS') || desc.includes('TAX') || desc.includes('FRONTIER')) {
+          
+          // Exception: "Frontier Airlines" -> Travel
+          if (desc.includes('FRONTIER A') || desc.includes('FRONTIER K')) {
+             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
+          }
+          return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
+      }
+
+      // 4. REPAIRS & MAINTENANCE (Catches "Quality Septic")
+      if (desc.includes('SEPTIC') || desc.includes('PLUMBING') || desc.includes('ROOF') || desc.includes('REPAIR') || desc.includes('POOL')) {
+         return { primary: 'Operating Expenses', secondary: 'Repairs & Maintenance', sub: 'Repairs', confidence: 0.9 };
+      }
+
+      // 5. OFFICE SUPPLIES (Catches "Home Depot", "Micro Center")
+      if (desc.includes('HOME DEPOT') || desc.includes('LOWES') || desc.includes('MICRO CENTER') || desc.includes('OFFICE') || 
+          desc.includes('STAPLES') || desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART') || desc.includes('TARGET')) {
+         return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.8 };
+      }
+
+      // 6. PERSONAL / RETAIL (Catches "Macy's", "Nordstrom", "Stonebriar")
+      if (cleanDesc.includes('TJ MAXX') || desc.includes('MACY') || desc.includes('NORDSTROM') || desc.includes('DILLARD') || 
+          desc.includes('MARSHALLS') || desc.includes('ROSS') || desc.includes('H&M') || desc.includes('ZARA') || 
+          desc.includes('UNIQLO') || desc.includes('SKECHERS') || desc.includes('NIKE') || desc.includes('LULULEMON') || 
+          desc.includes('CALVIN') || desc.includes('NAUTICA') || desc.includes('COLUMBIA') || desc.includes('STONEBRIAR') || 
+          desc.includes('KAISER') || desc.includes('MEDICAL')) { // Kaiser added here
+         return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.85 };
+      }
+      
+      // 7. FUEL (Catches "7-Eleven")
+      if (desc.includes('7-ELEVEN') || desc.includes('RACETRAC') || desc.includes('QT') || desc.includes('SHELL') || desc.includes('EXXON') || desc.includes('CHEVRON')) {
+          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.7 };
+      }
+  }
+
+  // =========================================================
+  // TIER 3: PLAID CATEGORY FALLBACK (The Scalable Part)
+  // =========================================================
+  // This catches things NOT in the lists above (like random restaurants)
   
   const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
 
   if (!isIncome) {
-      // A. PERSONAL / DRAW (Catches Nail Bars, Spas, Gyms, Clothing automatically)
-      if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
-          if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
-             return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.9 };
-          }
-      }
-
-      // B. MEALS (Catches ALL Restaurants automatically)
       if (plaidPrimary === 'FOOD_AND_DRINK') {
-          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.9 };
+          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
       }
-
-      // C. TRAVEL (Catches Airlines, Hotels, Car Rentals)
       if (plaidPrimary === 'TRAVEL') {
-          if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
-             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Tolls & Parking', confidence: 0.9 };
-          }
-          if (plaidDetailed.includes('GAS')) {
-             return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.9 };
-          }
-          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
+          if (plaidDetailed.includes('GAS')) return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.8 };
+          return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.8 };
       }
-
-      // D. SERVICES / UTILITIES
-      if (plaidPrimary === 'SERVICE') {
-          if (plaidDetailed.includes('INTERNET') || plaidDetailed.includes('TELEPHONE')) {
-             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Telephone & Internet', confidence: 0.9 };
-          }
-          if (plaidDetailed.includes('UTILITIES')) {
-             return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
-          }
+      if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
+          return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.7 }; // Catch-all for other shopping
       }
   }
 
-  // 4. FALLBACK TO KEYWORDS (Only for things Plaid misses like Software)
-  if (!isIncome) {
-      if (desc.includes('OPENAI') || desc.includes('DIGITALOCEAN') || desc.includes('AWS') || desc.includes('GSUITE')) {
-         return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions', confidence: 0.9 };
-      }
-      if (desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
-         return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies', confidence: 0.7 };
-      }
-  }
-
-  // 5. SAFETY NET
-  if (isIncome) return { primary: 'Income', secondary: 'Uncategorized', sub: 'Uncategorized Income', confidence: 0.5 };
+  // =========================================================
+  // TIER 4: SAFETY NET
+  // =========================================================
   
+  if (isIncome) {
+      // Refunds from vendors
+      if (desc.includes('HOME DEPOT') || desc.includes('AMAZON') || desc.includes('COSTCO') || desc.includes('WALMART')) {
+          return { primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Refunds/Credits', confidence: 0.6 };
+      }
+      return { primary: 'Income', secondary: 'Uncategorized', sub: 'Uncategorized Income', confidence: 0.5 };
+  }
+
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
 
@@ -300,48 +325,57 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             
             const p = categorizeBatchWithAI(chunk, userContext)
                 .catch(err => {
-                    console.error("AI Batch Failed, falling back to defaults", err);
-                    return []; // Return empty if AI crashes so we still save data
+                    console.error("AI Batch Failed:", err);
+                    return []; // Return empty list so we trigger the fallback below
                 })
                 .then(aiResults => {
                     const batch = db.batch();
                     
-                    // CRITICAL FIX: Loop over the REAL DATA (chunk), not the AI results
                     chunk.forEach(originalTx => {
                         const docRef = db.collection('users').doc(userId)
                             .collection('bankAccounts').doc(bankAccountId)
                             .collection('transactions').doc(originalTx.transaction_id);
 
-                        // Try to find the matching AI result
-                        const aiResult = aiResults.find(r => r.transactionId === originalTx.transaction_id);
                         const signedAmount = originalTx.amount * -1; // Invert amount
 
+                        const aiResult = aiResults.find(r => r.transactionId === originalTx.transaction_id);
+
                         let finalCategory;
-                        // NEW LOGIC: If AI is missing OR if AI returned "Uncategorized", use Rules
-                        const isAiUseless = !aiResult || aiResult.secondaryCategory === 'Uncategorized' || aiResult.primaryCategory === 'Uncategorized' || aiResult.secondaryCategory === 'General Expense' || aiResult.subcategory === 'General Expense' || aiResult.confidence < 0.85;
+                        
+                        const isAiUseless = 
+                            !aiResult || 
+                            aiResult.primaryCategory === 'Uncategorized' ||
+                            aiResult.secondaryCategory === 'Uncategorized' ||
+                            aiResult.secondaryCategory === 'General Expense' ||
+                            aiResult.subcategory === 'General Expense' ||
+                            aiResult.confidence < 0.85;
 
                         if (!isAiUseless) {
-                            // AI did a good job, use it
+                            // AI is confident and specific -> Use it
                             finalCategory = { ...aiResult, status: 'posted' };
                         } else {
-                            // AI failed or didn't know -> USE SMART RULES
+                            // AI failed, was vague, or low confidence -> FORCE RULES
                             const ruleResult = categorizeWithContext(
                                 originalTx.name, 
                                 signedAmount, 
                                 originalTx.personal_finance_category, 
                                 userContext
                             );
+                            
                             finalCategory = {
                                 primaryCategory: ruleResult.primary,
                                 secondaryCategory: ruleResult.secondary,
                                 subcategory: ruleResult.sub,
                                 confidence: ruleResult.confidence,
-                                aiExplanation: aiResult ? 'AI returned Uncategorized, overridden by Rules' : 'AI Failed, used Rules',
+                                aiExplanation: aiResult 
+                                    ? `AI result (${aiResult.subcategory}) rejected, used Smart Rules` 
+                                    : 'AI Failed, used Smart Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
                                 status: ruleResult.confidence > 0.8 ? 'posted' : 'review'
                             };
                         }
 
+                        // Save to Database
                         batch.set(docRef, {
                             date: originalTx.date,
                             description: originalTx.name,
@@ -350,7 +384,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             bankAccountId: originalTx.account_id,
                             userId: userId,
                             createdAt: FieldValue.serverTimestamp(),
-                            ...finalCategory // Spread the category data (AI or Default)
+                            ...finalCategory 
                         }, { merge: true });
                     });
                     
