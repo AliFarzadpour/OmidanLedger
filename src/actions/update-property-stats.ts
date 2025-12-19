@@ -66,6 +66,7 @@ export async function recalculateAllStats(userId: string) {
         netIncome: stats.net,
         month: month,
         propertyId: propId,
+        userId: userId, // ✅ ADD THIS FIELD
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
 
@@ -95,14 +96,16 @@ export async function incrementPropertyStats({
   propertyId,
   date,
   amount,
+  userId,
   multiplier = 1
 }: {
   propertyId: string;
   date: string | Date; // Accept string or Date
   amount: number;
+  userId: string;
   multiplier?: 1 | -1; // To handle additions and subtractions
 }) {
-  if (!propertyId || !amount) return;
+  if (!propertyId || !amount || !userId) return;
 
   const db = adminDb;
   const dateObj = typeof date === 'string' ? new Date(date) : date;
@@ -133,6 +136,7 @@ export async function incrementPropertyStats({
             netIncome: finalAmount,
             month: monthKey,
             propertyId: propertyId,
+            userId: userId, // Also add userId on creation
             updatedAt: FieldValue.serverTimestamp()
           });
         } else {
@@ -140,6 +144,7 @@ export async function incrementPropertyStats({
             income: FieldValue.increment(incomeDelta),
             expense: FieldValue.increment(Math.abs(expenseDelta)),
             netIncome: FieldValue.increment(finalAmount),
+            userId: userId, // And ensure it's on updates too
             updatedAt: FieldValue.serverTimestamp()
           });
         }
