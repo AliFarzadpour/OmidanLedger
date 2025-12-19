@@ -66,9 +66,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       await batch.commit();
 
       // If a rule name is provided, use the FIRST transaction's description to learn from.
-      if (ruleName.trim() && transactions.length > 0) {
+      const keywordForRule = ruleName.trim();
+      if (keywordForRule && transactions.length > 0) {
         await learnCategoryMapping({
-            transactionDescription: transactions[0].description, // Use a real description
+            transactionDescription: transactions[0].description, // Use a real description from the batch
             primaryCategory,
             secondaryCategory,
             subcategory,
@@ -76,7 +77,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         });
         toast({
           title: 'Update & Rule Created',
-          description: `${transactions.length} transactions updated and a new rule for "${ruleName.trim()}" was saved.`,
+          description: `${transactions.length} transactions updated and a new rule was saved.`,
         });
       } else {
         toast({
@@ -124,7 +125,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
                 id="ruleName" 
                 value={ruleName} 
                 onChange={(e) => setRuleName(e.target.value)} 
-                placeholder="Name your rule, e.g., 'Uber Trips'" 
+                placeholder="Confirm by re-typing the vendor name" 
             />
              <p className="text-xs text-muted-foreground">
                 If provided, a new Smart Rule will be created based on the transactions' content.

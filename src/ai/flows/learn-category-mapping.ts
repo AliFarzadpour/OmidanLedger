@@ -47,7 +47,9 @@ const learnCategoryMappingFlow = ai.defineFlow(
     const { generalizedDescription } = await generalizeTransactionDescription({ transactionDescription });
 
     // Create a consistent ID based on the *generalized* description to prevent duplicates.
-    const mappingId = createHash('md5').update(userId + generalizedDescription).digest('hex');
+    // Use the raw merchant name for the ID to ensure consistency.
+    const mappingId = createHash('md5').update(userId + transactionDescription.toUpperCase()).digest('hex');
+
 
     const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
 
