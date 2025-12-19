@@ -1,5 +1,6 @@
 
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -82,7 +83,10 @@ export async function getCategoryFromDatabase(
   if (!merchantName) return null;
 
   const desc = merchantName.toUpperCase();
-  
+  const cleanId = sanitizeVendorId(desc); // Ensure this helper is available in the file
+
+  // --- A. CHECK USER RULES (IN-MEMORY) - Priority 1 ---
+  // This is the fast check we just fixed
   const matchedRule = context.userRules.find(rule => 
       desc.includes(rule.keyword) 
   );
@@ -92,12 +96,40 @@ export async function getCategoryFromDatabase(
           primaryCategory: matchedRule.primaryCategory,
           secondaryCategory: matchedRule.secondaryCategory,
           subcategory: matchedRule.subcategory,
-          propertyId: matchedRule.propertyId, // Pass the property ID
-          confidence: 1.0, 
+          // If the rule has a propertyId (from your new property form), pass it along!
+          propertyId: (matchedRule as any).propertyId || null, 
+          confidence: 1.0,
           source: 'User Rule' 
       };
   }
-  
+
+  // --- B. CHECK GLOBAL MASTER DATABASE (FIRESTORE) - Priority 2 ---
+  // This runs only if no User Rule matched.
+  try {
+      // 1. Check Exact Vendor Name (e.g. "HOME_DEPOT")
+      const globalDoc = await db.collection('globalVendorMap').doc(cleanId).get();
+      
+      if (globalDoc.exists) {
+          const data = globalDoc.data();
+          return { 
+              primaryCategory: data?.primaryCategory || data?.primary,
+              secondaryCategory: data?.secondaryCategory || data?.secondary,
+              subcategory: data?.subcategory || data?.sub,
+              confidence: 0.95, 
+              source: 'Global DB' 
+          };
+      }
+
+      // 2. Optional: Token-based Global Lookup
+      // If "HOME DEPOT 1234" fails, check "HOME_DEPOT"
+      // (This assumes you sanitize and check parts of the string, similar to how we did before)
+      // For performance, a simple exact match on the sanitized name is usually best for Global DBs.
+
+  } catch (error) {
+      // If global DB fails (e.g. permission error), just log and move to AI
+      console.warn("Global DB Lookup failed:", error);
+  }
+
   return null; 
 }
 
@@ -375,15 +407,16 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
                     if (ruleResult) {
                         finalCategory = {
-                            primaryCategory: ruleResult.primaryCategory,
+                            primaryCategory: ruleResult.primaryCategory, // Ensure these field names match your DB schema
                             secondaryCategory: ruleResult.secondaryCategory,
                             subcategory: ruleResult.subcategory,
-                            propertyId: ruleResult.propertyId, // Include propertyId
-                            confidence: 1.0,
-                            aiExplanation: `Matched User Rule: ${originalTx.name}`,
+                            confidence: ruleResult.confidence,
+                            propertyId: ruleResult.propertyId, // Pass the property ID
+                            // This string is CRITICAL for the Enforcer bypass to work:
+                            aiExplanation: `Matched rule via ${ruleResult.source}`, 
                             merchantName: originalTx.merchant_name || originalTx.name,
                             status: 'posted',
-                            source: 'User Rule'
+                            source: ruleResult.source
                         };
                     } else {
                         const deepResult = await deepCategorizeTransaction({
@@ -548,4 +581,5 @@ const CreateLinkTokenInputSchema = z.object({
   );
 
     
+
 
