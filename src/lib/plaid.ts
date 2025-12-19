@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -46,7 +47,6 @@ interface BusinessProfile {
   defaultIncomeCategory: string; 
 }
 
-// ✅ UPDATED: Added 'userRules' to the context
 interface UserContext {
   business: BusinessProfile;
   tenantNames: string[];
@@ -72,23 +72,17 @@ function sanitizeVendorId(text: string): string {
     .trim();
 }
 
-// ✅ NEW LOGIC: Uses In-Memory Context for instant, accurate matching
 export function getCategoryFromDatabase(
   merchantName: string, 
-  context: UserContext, // Now takes Context, not DB
-  db: FirebaseFirestore.Firestore // Kept for Global DB fallback
+  context: UserContext,
+  db: FirebaseFirestore.Firestore
 ) {
   if (!merchantName) return null;
 
   const desc = merchantName.toUpperCase();
 
-  // --- A. CHECK USER RULES (IN-MEMORY) ---
-  // This iterates through your loaded rules to find "Interest Earned" inside the transaction
-  // It fixes the "Hash ID" problem completely.
-  
-  // 1. Check for Matches
   const matchedRule = context.userRules.find(rule => 
-      desc.includes(rule.keyword) // e.g., Does "INTEREST EARNED" include "INTEREST EARNED"? Yes.
+      desc.includes(rule.keyword)
   );
 
   if (matchedRule) {
@@ -100,22 +94,10 @@ export function getCategoryFromDatabase(
           source: 'User Rule' 
       };
   }
-
-  // --- B. CHECK GLOBAL MASTER DATABASE (Fallback) ---
-  // (This is synchronous in this function, so we might need to make this async or accept it returns a Promise)
-  // For simplicity in this fix, we will assume Global DB lookup happens here if you want it, 
-  // but usually, User Rules are the priority. 
-  // If you need Global DB, you would keep the async/await logic here.
   
   return null; 
 }
-// Note: You'll need to update the caller to handle async if you keep Global DB calls here. 
-// For now, I've optimized for User Rules which is your blocker.
 
-
-/**
- * Fetches User Settings, Tenants, Vendors, Properties AND RULES.
- */
 export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: string): Promise<UserContext> {
   const settingsSnap = await db.doc(`users/${userId}`).get();
   const settings = settingsSnap.data() || {};
@@ -130,15 +112,12 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
     tenantNames: [],
     vendorMap: {},
     propertyAddresses: [],
-    userRules: [] // Initialize array
+    userRules: []
   };
 
-  // ✅ NEW: Fetch ALL User Rules at once
-  // This reads the 'categoryMappings' collection you showed in the image
   const rulesSnap = await db.collection('users').doc(userId).collection('categoryMappings').get();
   rulesSnap.forEach(doc => {
       const data = doc.data();
-      // Ensure we have the keyword to match against
       const keyword = (data.transactionDescription || data.originalKeyword || '').toUpperCase();
       if (keyword) {
           context.userRules.push({
@@ -150,7 +129,6 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
       }
   });
 
-  // Fetch Tenants
   const propertiesSnapWithTenants = await db.collection(`properties`).where('userId', '==', userId).get();
   propertiesSnapWithTenants.forEach(doc => {
     const data = doc.data();
@@ -161,53 +139,47 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
             }
         });
     }
-    // Fetch Addresses
     if (data.address?.street) {
         const streetPart = data.address.street.split(',')[0].toUpperCase(); 
         context.propertyAddresses.push(streetPart);
     }
   });
   
-    // C. Fetch Vendors (for matching Expenses)
-    const vendorsSnap = await db.collection(`vendors`).where('userId', '==', userId).get();
-    vendorsSnap.forEach(doc => {
-        const data = doc.data();
-        if (data.name) {
-        context.vendorMap[data.name.toUpperCase()] = {
-            category: data.defaultCategory || 'Operating Expenses',
-            subcategory: data.defaultCategory || 'Uncategorized'
-        };
-        }
-    });
+  const vendorsSnap = await db.collection(`vendors`).where('userId', '==', userId).get();
+  vendorsSnap.forEach(doc => {
+      const data = doc.data();
+      if (data.name) {
+      context.vendorMap[data.name.toUpperCase()] = {
+          category: data.defaultCategory || 'Operating Expenses',
+          subcategory: data.defaultCategory || 'Uncategorized'
+      };
+      }
+  });
 
   return context;
 }
 
-// NEW HELPER: Process a Batch with AI
 async function categorizeBatchWithAI(
   transactions: PlaidTransaction[], 
   userContext: UserContext
 ) {
-  // 1. Prepare the Data for the Prompt
   const txListString = transactions.map(t => 
     `ID: ${t.transaction_id} | Date: ${t.date} | Desc: "${t.name}" | Amount: ${t.amount}`
   ).join('\n');
 
-  // 2. Call the LLM
   const llmResponse = await ai.generate({
     prompt: CATEGORIZATION_SYSTEM_PROMPT
       .replace('{{industry}}', userContext.business.industry)
       .replace('{{tenantNames}}', userContext.tenantNames.join(', '))
       .replace('{{vendorNames}}', Object.keys(userContext.vendorMap).join(', '))
       .replace('{{propertyAddresses}}', userContext.propertyAddresses.join(', ')),
-    input: txListString, // Pass the raw text list
-    output: { schema: BatchCategorizationSchema } // Force structured JSON
+    input: txListString,
+    output: { schema: BatchCategorizationSchema }
   });
 
   return llmResponse.output?.results || [];
 }
 
-// RENAMED: This is now the fallback heuristic engine
 export async function categorizeWithHeuristics(
   description: string, 
   amount: number, 
@@ -215,22 +187,14 @@ export async function categorizeWithHeuristics(
   context: UserContext
 ): Promise<{ primary: string, secondary: string, sub: string, confidence: number }> {
   
-  // CRITICAL FIX: Handle null/undefined values safely
   const safeDesc = description || ''; 
   const desc = safeDesc.toUpperCase();
   
-  // Remove punctuation for cleaner matching
   const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
   
   const isIncome = amount > 0;
-  const { defaultIncomeCategory } = context.business || {}; // Safety check on context
+  const { defaultIncomeCategory } = context.business || {};
 
-  // =========================================================
-  // CRITICAL: HARD OVERRIDES (Direction Check)
-  // =========================================================
-
-  // 1. Internal Transfers (Check this FIRST for both Income and Expense)
-  // Moves money between accounts -> Balance Sheet
   if (desc.includes('ONLINE BANKING TRANSFER') || 
       desc.includes('TRANSFER TO CHK') || 
       desc.includes('TRANSFER FROM CHK') || 
@@ -238,45 +202,26 @@ export async function categorizeWithHeuristics(
       return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 1.0 };
   }
 
-  // 2. FORCE INCOME (If Amount > 0)
-  // This prevents "Rent" from ever being an Expense if money came IN.
   if (isIncome) {
-      // Specific Income Types
       if (desc.includes('RENT') || desc.includes('LEASE')) {
           return { primary: 'Income', secondary: 'Rental Income', sub: 'Residential/Commercial Rent', confidence: 1.0 };
       }
       if (desc.includes('DEPOSIT') && !desc.includes('REFUND')) {
-          // Security deposits received could be Liabilities (Held for tenant) or Income depending on accounting method.
-          // For now, let's map to Rental Income > Deposits to keep it simple, or Liability if you prefer.
           return { primary: 'Income', secondary: 'Rental Income', sub: 'Security Deposit', confidence: 0.9 };
       }
       if (desc.includes('INTEREST')) {
           return { primary: 'Income', secondary: 'Other Income', sub: 'Interest Income', confidence: 1.0 };
       }
       if (desc.includes('REFUND') || desc.includes('RETURN')) {
-           // Refunds usually map back to the expense category, but "Uncategorized Income" is safer if unknown.
            return { primary: 'Income', secondary: 'Uncategorized', sub: 'Refunds/Credits', confidence: 0.8 };
       }
-
-      // Default Catch-All for ALL other Positive Amounts
-      // This is the safety net that stops "Home Depot Refund" from becoming "Supplies Expense"
       return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory || 'Sales', confidence: 0.7 };
   }
-
-  // =========================================================
-  // EXPENSES ONLY (Amount < 0)
-  // =========================================================
   
-  // 1. Debt Payments (Liabilities)
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
       return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan/Card Payment', confidence: 0.95 };
   }
   
-  // =========================================================
-  // TIER 3: PLAID CATEGORY FALLBACK
-  // =========================================================
-  
-  // CRITICAL FIX: Handle missing Plaid data safely
   const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
 
@@ -308,11 +253,9 @@ export async function categorizeWithHeuristics(
     }
   }
 
-  // Example for Rent EXPENSE (Paying a landlord)
   if (desc.includes('RENT') || desc.includes('LEASE')) {
       return { primary: 'Operating Expenses', secondary: 'Rent & Lease', sub: 'Rent Expense', confidence: 0.9 };
   }
-
 
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
@@ -321,19 +264,14 @@ export async function enforceAccountingRules(
   category: any, 
   amount: number
 ) {
-  // ✅ CRITICAL FIX: Respect User Rules
-  // If the source is 'User Rule', bypass all enforcement. 
-  // This ensures "Interest Earned" stays as Income even if the logic thinks otherwise.
   if (category.source === 'User Rule' || (category.aiExplanation && category.aiExplanation.includes('User Rule'))) {
       return category;
   }
     
   const isIncome = amount > 0;
   
-  // CLONE the category object so we don't mutate the original
   let final = { ...category };
 
-  // RULE 1: Positive Amount CANNOT be an Operating Expense
   if (isIncome && (final.primaryCategory.includes('Expense') || final.primaryCategory === 'Property Expenses' || final.primaryCategory === 'Real Estate')) {
       if (final.subcategory?.includes('Rent') || final.subcategory?.includes('Lease')) {
           final.primaryCategory = 'Income';
@@ -347,7 +285,6 @@ export async function enforceAccountingRules(
       }
   }
 
-  // RULE 2: Transfers & Credit Card Payments are ALWAYS Balance Sheet
   if (final.subcategory === 'Credit Card Payment' || final.subcategory === 'Internal Transfer') {
       final.primaryCategory = 'Balance Sheet';
       if (amount > 0 && final.subcategory === 'Credit Card Payment') {
@@ -357,8 +294,6 @@ export async function enforceAccountingRules(
 
   return final;
 }
-
-// --- 3. MAIN SYNC FLOW ---
 
 const SyncTransactionsInputSchema = z.object({ userId: z.string(), bankAccountId: z.string() });
 
@@ -387,10 +322,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
         if (!accessToken) throw new Error("No access token.");
 
-        // 1. Fetch User Context (NOW INCLUDES RULES)
         const userContext = await fetchUserContext(db, userId);
 
-        // 2. Fetch from Plaid
         let allTransactions: PlaidTransaction[] = [];
         let hasMore = true;
         let loopCount = 0;
@@ -406,8 +339,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             hasMore = response.data.has_more;
             cursor = response.data.next_cursor;
         }
-
-        // 3. Filter for relevant transactions for the specific bank account
+        
         const relevantTransactions = allTransactions.filter(tx => {
             return tx.account_id === bankAccountId;
         });
@@ -417,7 +349,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             return { count: 0 };
         }
 
-        // 4. BATCH PROCESSING
         const BATCH_SIZE = 3; 
         const batchPromises = [];
 
@@ -432,16 +363,12 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         .collection('bankAccounts').doc(bankAccountId)
                         .collection('transactions').doc(originalTx.transaction_id);
 
-                    const signedAmount = originalTx.amount * -1; // Invert amount
+                    const signedAmount = originalTx.amount * -1;
                     let finalCategory: any;
 
-                    // ✅ UPDATED: Call getCategoryFromDatabase (Synchronous Rule Check)
-                    // We pass 'userContext' which holds the rules map
                     const ruleResult = getCategoryFromDatabase(originalTx.name, userContext, db);
 
-
                     if (ruleResult) {
-                         // CASE A: User Rule Found
                         finalCategory = {
                             primaryCategory: ruleResult.primaryCategory,
                             secondaryCategory: ruleResult.secondaryCategory,
@@ -450,10 +377,9 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             aiExplanation: `Matched User Rule: ${originalTx.name}`,
                             merchantName: originalTx.merchant_name || originalTx.name,
                             status: 'posted',
-                            source: 'User Rule' // Important for Enforcer
+                            source: 'User Rule'
                         };
                     } else {
-                        // CASE B: Fallback to AI / Heuristics
                         const deepResult = await deepCategorizeTransaction({
                             description: originalTx.name,
                             amount: signedAmount,
@@ -461,7 +387,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         });
                         
                         if (deepResult && deepResult.confidence > 0.7) {
-                            // Good AI Result
                             finalCategory = {
                                 primaryCategory: deepResult.primaryCategory,
                                 secondaryCategory: deepResult.secondaryCategory,
@@ -472,21 +397,19 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                                 status: 'posted'
                             };
                         } else {
-                            // C. If AI also failed, use Heuristics as final fallback
-                            const ruleResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
+                            const heuristicResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
-                                primaryCategory: ruleResult.primary,
-                                secondaryCategory: ruleResult.secondary,
-                                subcategory: ruleResult.sub,
-                                confidence: ruleResult.confidence,
+                                primaryCategory: heuristicResult.primary,
+                                secondaryCategory: heuristicResult.secondary,
+                                subcategory: heuristicResult.sub,
+                                confidence: heuristicResult.confidence,
                                 aiExplanation: 'Deep AI failed, used standard Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
                                 status: 'review'
                             };
                         }
                     }
-
-                    // Enforce accounting rules (Now respects User Rules)
+                    
                     const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
                     
                     batch.set(docRef, {
@@ -602,7 +525,7 @@ const CreateLinkTokenInputSchema = z.object({
             bankName: institutionName,
             accountNumber: accountData.mask || 'N/A',
             plaidSyncCursor: null,
-            historicalDataPending: true, // <--- DEFAULT TO TRUE
+            historicalDataPending: true,
             lastSyncedAt: FieldValue.serverTimestamp()
           };
           const accountDocRef = db.collection('users').doc(userId).collection('bankAccounts').doc(accountData.account_id);
@@ -617,6 +540,5 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
-    
 
-```
+    
