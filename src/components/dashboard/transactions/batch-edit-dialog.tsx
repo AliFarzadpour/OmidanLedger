@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { writeBatch, doc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -25,10 +25,22 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
 
-  const [primaryCategory, setPrimaryCategory] = useState('Operating Expenses');
+  const [primaryCategory, setPrimaryCategory] = useState('');
   const [secondaryCategory, setSecondaryCategory] = useState('');
   const [subcategory, setSubcategory] = useState('');
-  const [ruleName, setRuleName] = useState(''); // New state for the rule name
+  const [ruleName, setRuleName] = useState('');
+
+  // Pre-populate the fields when the dialog opens with a new set of transactions
+  useEffect(() => {
+    if (transactions.length > 0) {
+      const firstTx = transactions[0];
+      setPrimaryCategory(firstTx.primaryCategory || 'Operating Expenses');
+      setSecondaryCategory(firstTx.secondaryCategory || '');
+      setSubcategory(firstTx.subcategory || '');
+      setRuleName(''); // Always reset the rule name
+    }
+  }, [transactions, isOpen]); // Rerun when dialog opens or transactions change
+
 
   const handleBatchUpdate = async () => {
     if (!user || !firestore || transactions.length === 0) return;
@@ -52,11 +64,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       });
       await batch.commit();
 
-      // If a rule name is provided, learn the mapping
       const keywordForRule = ruleName.trim();
       if (keywordForRule) {
         await learnCategoryMapping({
-            transactionDescription: keywordForRule, // Use the new rule name as the keyword
+            transactionDescription: keywordForRule,
             primaryCategory,
             secondaryCategory,
             subcategory,
@@ -74,10 +85,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       }
       
       onOpenChange(false);
-      // Reset local state
-      setRuleName('');
-      setSecondaryCategory('');
-      setSubcategory('');
+      
     } catch (error: any) {
       console.error(error);
       toast({ variant: 'destructive', title: 'Error', description: error.message });
@@ -110,7 +118,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
           </div>
 
           <div className="border-t pt-4 space-y-2">
-             <Label htmlFor="ruleName">Rule Name (Optional)</Label>
+             <Label htmlFor="ruleName">Create Rule from Selection (Optional)</Label>
              <Input 
                 id="ruleName" 
                 value={ruleName} 
