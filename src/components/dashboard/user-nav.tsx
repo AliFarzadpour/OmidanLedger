@@ -17,12 +17,18 @@ import { CreditCard, LogOut, Settings, User as UserIcon } from 'lucide-react';
 import { useAuth, useUser } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 export function UserNav({ isMobile }: { isMobile: boolean }) {
   const auth = useAuth();
   const { user } = useUser();
   const router = useRouter();
   const userAvatar = PlaceHolderImages.find((img) => img.id === 'user-avatar');
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleLogout = async () => {
     await auth.signOut();
@@ -37,6 +43,10 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     }
     return parts.substring(0, 2).toUpperCase();
   };
+
+  if (!isClient) {
+    return null; // Don't render on the server
+  }
 
   const trigger = (
     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
