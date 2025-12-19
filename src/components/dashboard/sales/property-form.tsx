@@ -20,7 +20,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -202,8 +202,6 @@ export function PropertyForm({
   });
 
   useEffect(() => {
-    // Only reset if we actually switched to a DIFFERENT property
-    // This prevents the infinite loop if initialData is unstable but the ID is the same.
     if (initialData && initialData.id !== currentPropertyId) {
       const merged = {
           ...DEFAULT_VALUES,
@@ -218,23 +216,92 @@ export function PropertyForm({
       form.reset(merged);
       setCurrentPropertyId(initialData.id);
     }
-  }, [initialData, form, currentPropertyId]); // Added currentPropertyId to deps
+  }, [initialData, form, currentPropertyId]);
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
+
+  const syncPropertySmartRules = (
+    batch: WriteBatch,
+    propertyData: PropertyFormValues,
+    userId: string,
+    propertyId: string
+  ) => {
+    if (!firestore) return;
+  
+    // 1. RULE: Property Address Mapping
+    if (propertyData.address.street) {
+      const streetParts = propertyData.address.street.toUpperCase().split(' ');
+      const shortAddress = streetParts.slice(0, 2).join(' ');
+      const ruleId = `RULE_PROP_${propertyId}_${shortAddress.replace(/\s+/g, '_')}`;
+  
+      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+      batch.set(ruleRef, {
+        userId,
+        transactionDescription: shortAddress,
+        primaryCategory: "Operating Expenses",
+        secondaryCategory: "Uncategorized",
+        subcategory: "General",
+        propertyId: propertyId, // Link to this property!
+        source: "System - Property Address",
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+  
+    // 2. RULE: Tenant Name Mapping
+    propertyData.tenants?.forEach(tenant => {
+      if (tenant.firstName && tenant.lastName) {
+        const fullName = `${tenant.firstName} ${tenant.lastName}`.toUpperCase();
+        const ruleId = `RULE_TENANT_${propertyId}_${fullName.replace(/\s+/g, '_')}`;
+  
+        const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+        batch.set(ruleRef, {
+          userId,
+          transactionDescription: fullName,
+          primaryCategory: "Income",
+          secondaryCategory: "Rental Income",
+          subcategory: "Residential Rent",
+          propertyId: propertyId, // Link to this property!
+          source: "System - Tenant Lease",
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    });
+  
+    // 3. RULE: Management Company
+    if (propertyData.management.isManaged === 'professional' && propertyData.management.companyName) {
+      const mgmtName = propertyData.management.companyName.toUpperCase();
+      const ruleId = `RULE_MGMT_${propertyId}_${mgmtName.replace(/\s+/g, '_')}`;
+      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+  
+      batch.set(ruleRef, {
+        userId,
+        transactionDescription: mgmtName,
+        primaryCategory: "Operating Expenses",
+        secondaryCategory: "Property Management",
+        subcategory: "Management Fees",
+        propertyId: propertyId,
+        source: "System - Mgmt Company",
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+  };
 
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user || !firestore) return;
     setIsSaving(true);
     
     try {
+        const batch = writeBatch(firestore);
+
         if (isEditMode && currentPropertyId) {
             const propertyRef = doc(firestore, 'properties', currentPropertyId);
-            await updateDoc(propertyRef, data);
-            toast({ title: "Property Updated", description: "Changes saved successfully." });
+            batch.update(propertyRef, data);
+            syncPropertySmartRules(batch, data, user.uid, currentPropertyId);
+            await batch.commit();
+            toast({ title: "Property Updated", description: "Changes and smart rules saved." });
         } else {
-            const batch = writeBatch(firestore);
             const timestamp = new Date().toISOString();
             const propertyRef = doc(collection(firestore, 'properties'));
             
@@ -287,9 +354,11 @@ export function PropertyForm({
                 accounting: accountingMap
             });
 
+            syncPropertySmartRules(batch, data, user.uid, propertyRef.id);
+
             await batch.commit();
             setCurrentPropertyId(propertyRef.id);
-            toast({ title: "Property Suite Created", description: `Generated property record and full Chart of Accounts for ${data.name}.` });
+            toast({ title: "Property Suite Created", description: `Generated property, ledgers, and smart rules for ${data.name}.` });
         }
         
         if (onSuccess) onSuccess();
@@ -715,5 +784,3 @@ export function PropertyForm({
     </div>
   );
 }
-
-    
