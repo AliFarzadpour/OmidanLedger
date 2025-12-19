@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -73,27 +74,47 @@ export async function getCategoryFromDatabase(
   userId: string, 
   db: FirebaseFirestore.Firestore
 ) {
-  // SAFETY CHECK: If name is missing, skip DB
   if (!merchantName) return null;
 
   const desc = merchantName.toUpperCase();
-  
-  // Generate tokens, handling slashes as splitters too
-  const tokens = desc.split(/[\s,.*\/]+/).filter(t => t.length > 2);
-  
-  // Sanitize the full ID
+  const tokens = desc.split(/[\s,.*\/]+/).filter(t => t.length > 1);
   const cleanId = sanitizeVendorId(desc);
-  
-  // 1. CHECK USER'S PERSONAL RULES
-  const userRuleRef = db.collection('users').doc(userId).collection('vendorRules').doc(cleanId);
-  const userRuleSnap = await userRuleRef.get();
 
-  if (userRuleSnap.exists) {
-      return { ...userRuleSnap.data(), confidence: 1.0, source: 'User Rule' };
+  // --- A. CHECK USER RULES (Improved) ---
+  const userRulesRef = db.collection('users').doc(userId).collection('categoryMappings');
+
+  // 1. Check Exact Match
+  const exactDoc = await userRulesRef.doc(cleanId).get();
+  if (exactDoc.exists) {
+      const data = exactDoc.data();
+      return { 
+          primary: data?.primaryCategory, 
+          secondary: data?.secondaryCategory, 
+          sub: data?.subcategory,
+          confidence: 1.0, 
+          source: 'User Rule (Exact)' 
+      };
   }
 
-  // 2. CHECK GLOBAL MASTER DATABASE
-  // Check tokens individually (sanitized)
+  // 2. Check Tokens (Partial Match) - THIS WAS MISSING
+  for (const token of tokens) {
+      const safeToken = sanitizeVendorId(token);
+      if (!safeToken) continue;
+
+      const tokenDoc = await userRulesRef.doc(safeToken).get();
+      if (tokenDoc.exists) {
+          const data = tokenDoc.data();
+          return { 
+              primary: data?.primaryCategory, 
+              secondary: data?.secondaryCategory, 
+              sub: data?.subcategory,
+              confidence: 1.0, 
+              source: 'User Rule (Partial)' 
+          };
+      }
+  }
+  
+  // --- B. CHECK GLOBAL MASTER DATABASE ---
   for (const token of tokens) {
       const safeToken = sanitizeVendorId(token);
       if (!safeToken) continue;
@@ -104,7 +125,6 @@ export async function getCategoryFromDatabase(
       }
   }
   
-  // Check full string match
   const globalDocFull = await db.collection('globalVendorMap').doc(cleanId).get();
   if (globalDocFull.exists) {
       return { ...globalDocFull.data(), confidence: 0.95, source: 'Global DB' };
