@@ -75,7 +75,8 @@ export async function recalculateAllStats(userId: string) {
       // Commit if batch gets too big (rare for personal apps, but good practice)
       if (operationCount >= batchSize) {
           await batch.commit();
-          operationCount = 0; // Reset logic would go here for a new batch
+          // This reset logic is simplified; a new batch would be created here in a real-world, large-scale operation.
+          operationCount = 0; 
       }
     }
 
@@ -88,70 +89,5 @@ export async function recalculateAllStats(userId: string) {
   } catch (error: any) {
       console.error("Recalculation Failed:", error);
       throw new Error(error.message);
-  }
-}
-
-// ✅ THE BETTER "EASY" WAY: Incremental Updates
-export async function incrementPropertyStats({
-  propertyId,
-  date,
-  amount,
-  userId,
-  multiplier = 1
-}: {
-  propertyId: string;
-  date: string | Date; // Accept string or Date
-  amount: number;
-  userId: string;
-  multiplier?: 1 | -1; // To handle additions and subtractions
-}) {
-  if (!propertyId || !amount || !userId) return;
-
-  const db = adminDb;
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  const monthKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
-  
-  const statsRef = db.doc(`properties/${propertyId}/monthlyStats/${monthKey}`);
-  
-  const finalAmount = amount * multiplier;
-
-  // Determine buckets
-  let incomeDelta = 0;
-  let expenseDelta = 0;
-
-  if (finalAmount > 0) {
-    incomeDelta = finalAmount;
-  } else {
-    expenseDelta = finalAmount; // e.g. -50
-  }
-
-  try {
-    await db.runTransaction(async (t) => {
-        const doc = await t.get(statsRef);
-        
-        if (!doc.exists) {
-          t.set(statsRef, {
-            income: incomeDelta,
-            expense: Math.abs(expenseDelta), // Store as positive number
-            netIncome: finalAmount,
-            month: monthKey,
-            propertyId: propertyId,
-            userId: userId, // Also add userId on creation
-            updatedAt: FieldValue.serverTimestamp()
-          });
-        } else {
-          t.update(statsRef, {
-            income: FieldValue.increment(incomeDelta),
-            expense: FieldValue.increment(Math.abs(expenseDelta)),
-            netIncome: FieldValue.increment(finalAmount),
-            userId: userId, // And ensure it's on updates too
-            updatedAt: FieldValue.serverTimestamp()
-          });
-        }
-      });
-  } catch (error) {
-      console.error("Error updating property stats:", error);
-      // We don't re-throw here to prevent the client operation from failing
-      // if the stats update has an issue. Logging is sufficient.
   }
 }
