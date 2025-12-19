@@ -1,9 +1,11 @@
 // scripts/seedGlobalRules.ts
 import * as admin from 'firebase-admin';
+import * as path from 'path';
 
 // 1. Initialize Admin SDK (Run this locally with service account credentials)
-// Download your service-account-key.json from Firebase Console > Project Settings > Service Accounts
-const serviceAccount = require('./service-account-key.json'); 
+// Use path.join to create a reliable, absolute path to the service account key
+const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+const serviceAccount = require(serviceAccountPath); 
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount)
