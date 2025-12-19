@@ -16,14 +16,17 @@ import { cn } from '@/lib/utils';
 import { CreditCard, LogOut, Settings, User as UserIcon } from 'lucide-react';
 import { useAuth, useUser } from '@/firebase';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export function UserNav({ isMobile }: { isMobile: boolean }) {
   const auth = useAuth();
   const { user } = useUser();
+  const router = useRouter();
   const userAvatar = PlaceHolderImages.find((img) => img.id === 'user-avatar');
 
-  const handleLogout = () => {
-    auth.signOut();
+  const handleLogout = async () => {
+    await auth.signOut();
+    router.push('/login');
   };
   
   const getInitials = (email: string | null | undefined) => {

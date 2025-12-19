@@ -2,10 +2,11 @@
 import { useUser } from '@/firebase';
 import { isSuperAdmin } from '@/lib/auth-utils';
 import { useEffect, useState } from 'react';
-import { redirect } from 'next/navigation';
+import { redirect, useRouter } from 'next/navigation';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
+  const router = useRouter();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -14,19 +15,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
     if (!user) {
-      redirect('/login');
+      router.push('/login');
       return;
     }
 
     isSuperAdmin(user.uid).then(result => {
       if (!result) {
-        redirect('/dashboard');
+        router.push('/dashboard');
       } else {
         setIsAdmin(true);
       }
       setIsChecking(false);
     });
-  }, [user, isUserLoading]);
+  }, [user, isUserLoading, router]);
 
   if (isChecking || !isAdmin) {
     // You can replace this with a proper loading spinner
