@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview An AI agent that learns user-provided categorizations.
@@ -10,7 +9,6 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { initializeServerFirebase } from '@/ai/utils';
-import { doc, setDoc } from 'firebase/firestore';
 import { createHash } from 'crypto';
 import { generalizeTransactionDescription } from './generalize-transaction-description';
 
@@ -39,7 +37,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    // FIX: Initialize Firestore instance inside the flow to ensure it's always available.
+    // 1. Initialize Server-Side Admin Firestore
     const { firestore } = initializeServerFirebase();
     const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
     
@@ -47,20 +45,22 @@ const learnCategoryMappingFlow = ai.defineFlow(
     const { generalizedDescription } = await generalizeTransactionDescription({ transactionDescription });
 
     // Create a consistent ID based on the *generalized* description to prevent duplicates.
-    // Use the raw merchant name for the ID to ensure consistency.
-    const mappingId = createHash('md5').update(userId + transactionDescription.toUpperCase()).digest('hex');
+    const mappingId = createHash('md5').update(userId + generalizedDescription.toUpperCase()).digest('hex');
 
-
-    const mappingRef = doc(firestore, `users/${userId}/categoryMappings`, mappingId);
-
-    // Save the generalized description as the key for the rule.
-    await setDoc(mappingRef, {
+    // 2. USE ADMIN SDK SYNTAX
+    await firestore
+      .collection('users')
+      .doc(userId)
+      .collection('categoryMappings')
+      .doc(mappingId)
+      .set({
         userId,
         transactionDescription: generalizedDescription, // The generalized keyword for matching
         primaryCategory,
         secondaryCategory,
         subcategory,
         source: 'User Manual',
+        updatedAt: new Date(), 
     }, { merge: true });
   }
 );

@@ -65,11 +65,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       });
       await batch.commit();
 
-      // If a rule name is provided, use the FIRST transaction's description to learn from.
       const keywordForRule = ruleName.trim();
       if (keywordForRule && transactions.length > 0) {
         await learnCategoryMapping({
-            transactionDescription: transactions[0].description, // Use a real description from the batch
+            transactionDescription: transactions[0].description, 
             primaryCategory,
             secondaryCategory,
             subcategory,
