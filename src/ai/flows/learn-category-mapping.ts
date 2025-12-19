@@ -18,7 +18,7 @@ import { generalizeTransactionDescription } from './generalize-transaction-descr
 const LearnCategoryMappingInputSchema = z.object({
     transactionDescription: z
         .string()
-        .describe('The original transaction description.'),
+        .describe('The original transaction description from which a rule will be created.'),
     primaryCategory: z.string().describe('The user-corrected primary category.'),
     secondaryCategory: z.string().describe('The user-corrected secondary category.'),
     subcategory: z.string().describe('The user-corrected subcategory.'),
@@ -39,7 +39,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    // FIX: Initialize Firestore instance inside the flow.
+    // FIX: Initialize Firestore instance inside the flow to ensure it's always available.
     const { firestore } = initializeServerFirebase();
     const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
     
@@ -54,10 +54,11 @@ const learnCategoryMappingFlow = ai.defineFlow(
     // Save the generalized description as the key for the rule.
     await setDoc(mappingRef, {
         userId,
-        transactionDescription: generalizedDescription,
+        transactionDescription: generalizedDescription, // The generalized keyword for matching
         primaryCategory,
         secondaryCategory,
         subcategory,
+        source: 'User Manual',
     }, { merge: true });
   }
 );

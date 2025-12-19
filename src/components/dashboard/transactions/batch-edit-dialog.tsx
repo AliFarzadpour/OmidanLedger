@@ -39,7 +39,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       setSubcategory(firstTx.subcategory || '');
       setRuleName(''); // Always reset the rule name
     }
-  }, [transactions, isOpen]); // Rerun when dialog opens or transactions change
+  }, [transactions, isOpen]);
 
 
   const handleBatchUpdate = async () => {
@@ -64,10 +64,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       });
       await batch.commit();
 
-      const keywordForRule = ruleName.trim();
-      if (keywordForRule) {
+      // If a rule name is provided, use the FIRST transaction's description to learn from.
+      if (ruleName.trim() && transactions.length > 0) {
         await learnCategoryMapping({
-            transactionDescription: keywordForRule,
+            transactionDescription: transactions[0].description, // Use a real description
             primaryCategory,
             secondaryCategory,
             subcategory,
@@ -75,7 +75,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         });
         toast({
           title: 'Update & Rule Created',
-          description: `${transactions.length} transactions updated and a new rule for "${keywordForRule}" was saved.`,
+          description: `${transactions.length} transactions updated and a new rule for "${ruleName.trim()}" was saved.`,
         });
       } else {
         toast({
@@ -123,10 +123,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
                 id="ruleName" 
                 value={ruleName} 
                 onChange={(e) => setRuleName(e.target.value)} 
-                placeholder="e.g., 'UBER TRIP' or 'STARBUCKS'" 
+                placeholder="Name your rule, e.g., 'Uber Trips'" 
             />
              <p className="text-xs text-muted-foreground">
-                If provided, a new Smart Rule will be created with this keyword and the categories above.
+                If provided, a new Smart Rule will be created based on the transactions' content.
              </p>
           </div>
         </div>
