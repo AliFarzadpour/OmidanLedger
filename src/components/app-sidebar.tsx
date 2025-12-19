@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from "react";
@@ -42,7 +43,6 @@ const data = {
       url: "/dashboard/properties",
       icon: Building2,
     },
-    { title: "Tenants", url: "/dashboard/properties?view=tenants", icon: Users },
   ],
   
   // Zone 2: The "Money" World (Bookkeeping)
