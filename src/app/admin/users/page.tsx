@@ -1,12 +1,11 @@
 
-import { getAdminDB } from '@/lib/admin-db';
+import { db } from '@/lib/admin-db';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
 export default async function UserManagementPage() {
-  const db = getAdminDB();
   const usersSnap = await db.collection('users')
     .where('role', '==', 'landlord')
     .orderBy('metadata.createdAt', 'desc')
