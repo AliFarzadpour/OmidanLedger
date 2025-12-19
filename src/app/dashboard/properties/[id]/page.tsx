@@ -26,6 +26,7 @@ import {
   CardTitle, 
   CardDescription 
 } from '@/components/ui/card';
+import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -94,6 +95,8 @@ export default function PropertyDetailsPage() {
           </DialogContent>
         </Dialog>
       </div>
+
+      <FinancialPerformance propertyId={id as string} />
 
       <PropertySetupBanner 
          propertyId={id as string}
