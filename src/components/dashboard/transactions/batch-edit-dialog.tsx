@@ -32,7 +32,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
 
   // Pre-populate the fields when the dialog opens with a new set of transactions
   useEffect(() => {
-    if (transactions.length > 0) {
+    if (isOpen && transactions.length > 0) {
       const firstTx = transactions[0];
       setPrimaryCategory(firstTx.primaryCategory || 'Operating Expenses');
       setSecondaryCategory(firstTx.secondaryCategory || '');
