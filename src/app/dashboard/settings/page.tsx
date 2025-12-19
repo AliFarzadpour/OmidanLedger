@@ -3,6 +3,7 @@
 import { BusinessProfileForm } from '@/components/dashboard/settings/business-profile-form';
 import { AccountSettingsForm } from '@/components/dashboard/settings/account-settings-form';
 import { Separator } from '@/components/ui/separator';
+import { AdminPublishButton } from '@/components/dashboard/settings/admin-publish-button';
 
 export default function SettingsPage() {
   return (
@@ -17,6 +18,9 @@ export default function SettingsPage() {
       <BusinessProfileForm />
       <Separator />
       <AccountSettingsForm />
+      
+      {/* Admin-only section */}
+      <AdminPublishButton />
     </div>
   );
 }
