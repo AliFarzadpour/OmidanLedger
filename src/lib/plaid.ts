@@ -93,14 +93,15 @@ export async function getCategoryFromDatabase(
           primaryCategory: matchedRule.primaryCategory,
           secondaryCategory: matchedRule.secondaryCategory,
           subcategory: matchedRule.subcategory,
-          propertyId: matchedRule.propertyId, // ✅ PASS THE PROPERTY ID
+          propertyId: matchedRule.propertyId || null, // ✅ PASS THE PROPERTY ID
           confidence: 1.0,
           source: 'User Rule' 
       };
   }
-
-  // --- B. CHECK GLOBAL MASTER DATABASE (FIRESTORE) - Priority 2 ---
+  
+    // --- B. CHECK GLOBAL MASTER DATABASE (FIRESTORE) - Priority 2 ---
   try {
+      // 1. Check Exact Vendor Name (e.g. "HOME_DEPOT")
       const globalDoc = await db.collection('globalVendorMap').doc(cleanId).get();
       
       if (globalDoc.exists) {
@@ -109,7 +110,6 @@ export async function getCategoryFromDatabase(
               primaryCategory: data?.primaryCategory || data?.primary,
               secondaryCategory: data?.secondaryCategory || data?.secondary,
               subcategory: data?.subcategory || data?.sub,
-              propertyId: data?.propertyId || null,
               confidence: 0.95, 
               source: 'Global DB' 
           };
@@ -117,6 +117,7 @@ export async function getCategoryFromDatabase(
   } catch (error) {
       console.warn("Global DB Lookup failed:", error);
   }
+
 
   return null; 
 }
@@ -149,7 +150,6 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
               primaryCategory: data.primaryCategory,
               secondaryCategory: data.secondaryCategory,
               subcategory: data.subcategory,
-              // ✅ CRITICAL FIX: Default to null if missing
               propertyId: data.propertyId || null 
           });
       }
@@ -185,7 +185,7 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
   return context;
 }
 
-async function categorizeBatchWithAI(
+export async function categorizeBatchWithAI(
   transactions: PlaidTransaction[], 
   userContext: UserContext
 ) {
@@ -399,12 +399,12 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             primaryCategory: ruleResult.primaryCategory,
                             secondaryCategory: ruleResult.secondaryCategory,
                             subcategory: ruleResult.subcategory,
-                            confidence: ruleResult.confidence,
-                            propertyId: ruleResult.propertyId,
-                            aiExplanation: `Matched rule via ${ruleResult.source}`, 
+                            confidence: 1.0,
+                            aiExplanation: `Matched User Rule: ${originalTx.name}`,
                             merchantName: originalTx.merchant_name || originalTx.name,
                             status: 'posted',
-                            source: ruleResult.source
+                            source: 'User Rule',
+                            propertyId: ruleResult.propertyId || null 
                         };
                     } else {
                         const deepResult = await deepCategorizeTransaction({
@@ -421,7 +421,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                                 confidence: deepResult.confidence,
                                 aiExplanation: deepResult.reasoning,
                                 merchantName: deepResult.merchantName,
-                                status: 'posted'
+                                status: 'posted',
+                                propertyId: null
                             };
                         } else {
                             const heuristicResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
@@ -432,7 +433,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                                 confidence: heuristicResult.confidence,
                                 aiExplanation: 'Deep AI failed, used standard Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
-                                status: 'review'
+                                status: 'review',
+                                propertyId: null
                             };
                         }
                     }
@@ -447,7 +449,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         bankAccountId: originalTx.account_id,
                         userId: userId,
                         createdAt: FieldValue.serverTimestamp(),
-                        ...enforcedCategory 
+                        ...enforcedCategory,
+                        propertyId: enforcedCategory.propertyId || null
                     }, { merge: true });
                 }
                 
@@ -569,6 +572,3 @@ const CreateLinkTokenInputSchema = z.object({
   );
 
     
-
-
-
