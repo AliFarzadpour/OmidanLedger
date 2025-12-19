@@ -1,8 +1,10 @@
+
 'use client';
 import { useUser } from '@/firebase';
 import { isSuperAdmin } from '@/lib/auth-utils';
 import { useEffect, useState } from 'react';
 import { redirect, useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isUserLoading } = useUser();
@@ -38,7 +40,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="flex">
       <aside className="w-64 bg-slate-800 text-white p-4 h-screen">
         <h2 className="font-bold text-lg mb-4">Admin Panel</h2>
-        {/* Admin Navigation: User Management, Billing Logs, System Health */}
+        <nav>
+          <ul>
+            <li className="mb-2">
+              <Link href="/admin" className="hover:text-slate-300">Overview</Link>
+            </li>
+            <li className="mb-2">
+              <Link href="/admin/users" className="hover:text-slate-300">User Management</Link>
+            </li>
+          </ul>
+        </nav>
       </aside>
       <main className="flex-1 p-8">{children}</main>
     </div>
