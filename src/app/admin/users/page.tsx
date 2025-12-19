@@ -25,7 +25,7 @@ export default async function UserManagementPage() {
 
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-8">
       <h2 className="text-2xl font-bold">Landlord Management</h2>
       <div className="border rounded-lg bg-white">
         <Table>
