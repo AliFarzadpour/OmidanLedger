@@ -5,6 +5,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
+import { UserNav } from "@/components/dashboard/user-nav"
 
 export default function DashboardLayout({
   children,
@@ -22,6 +23,7 @@ export default function DashboardLayout({
              {/* Dynamic Breadcrumbs could go here later */}
              Dashboard
           </div>
+          <UserNav isMobile={false} />
         </header>
         <div className="flex-1 overflow-auto bg-slate-50/30">
           {children}
