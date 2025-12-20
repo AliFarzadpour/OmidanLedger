@@ -32,6 +32,7 @@ import { useStorage } from '@/firebase/storage/use-storage';
 import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { useRouter } from 'next/navigation';
 
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
@@ -53,6 +54,7 @@ export function BusinessProfileForm() {
   const firestore = useFirestore();
   const storage = useStorage();
   const { toast } = useToast();
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -102,7 +104,9 @@ export function BusinessProfileForm() {
     if (!userDocRef) return;
 
     try {
-      const sanitizedData = JSON.parse(JSON.stringify(data));
+      const sanitizedData = Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, v === undefined ? "" : v])
+      );
       await setDoc(userDocRef, { businessProfile: sanitizedData }, { merge: true });
       
       toast({
@@ -146,15 +150,17 @@ export function BusinessProfileForm() {
 
       const downloadURL = await getDownloadURL(snapshot.ref);
       
-      form.setValue('logoUrl', downloadURL, { shouldDirty: true });
-      
       const currentValues = form.getValues();
       await onSubmit({ ...currentValues, logoUrl: downloadURL });
 
       toast({
-        title: 'Logo Uploaded',
-        description: 'Your new business logo has been saved.',
+        title: 'Logo Uploaded!',
+        description: 'Your new business logo has been saved. Refreshing...',
       });
+      
+      // Refresh the page to show the new logo
+      router.refresh();
+
     } catch (error: any) {
       console.error('Error uploading logo:', error);
       toast({
