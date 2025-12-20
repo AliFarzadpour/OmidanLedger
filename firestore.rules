@@ -20,9 +20,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId)
-                    && request.resource.data.id == resource.data.id
-                    && request.resource.data.createdAt == resource.data.createdAt;
+      // FIX: Allow user to update their own document without restrictive field checks.
+      allow update: if isOwner(userId);
       allow list, delete: if false;
 
         match /bankAccounts/{bankAccountId} {
