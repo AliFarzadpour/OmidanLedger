@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle, Edit } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -127,9 +127,9 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         await batch.commit();
         
         toast({ title: "Transactions Cleared", description: "History reset. You can now re-sync from scratch." });
-    } catch (error) {
+    } catch (error: any) {
          console.error("Error clearing transactions:", error);
-        toast({ variant: "destructive", title: "Error", description: "Could not clear transactions." });
+        toast({ variant: "destructive", title: "Error", description: `Could not clear transactions. ${error.message}` });
     } 
     finally { setIsClearing(false); }
   };
@@ -310,7 +310,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete all transactions for <strong>{dataSource.accountName}</strong>.</AlertDialogDescription>
+            <AlertDialogDescription>This will permanently delete all transactions for <strong>{dataSource.accountName}</strong> and reset the sync history. This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
