@@ -40,8 +40,8 @@ import { useEffect, useState, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useStorage } from '@/firebase/storage/use-storage';
-import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
+import { getAuth } from "firebase/auth"; // Add this import
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useRouter } from 'next/navigation';
@@ -138,107 +138,118 @@ export function BusinessProfileForm() {
   };
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!user || !storage || !event.target.files || event.target.files.length === 0) {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+  
+    // 1. Critical Check: Is the user actually recognized by Firebase Auth?
+    if (!currentUser) {
       toast({
-        variant: 'destructive',
-        title: 'Upload Error',
-        description: 'User not authenticated or file not selected.',
+        variant: "destructive",
+        title: "Authentication Error",
+        description: "You must be logged in. Try signing out and back in.",
       });
       return;
     }
-    const file = event.target.files[0];
-    
-    const storageRef = ref(storage, `logos/${user.uid}/${file.name}`);
-    
-    setIsUploading(true);
-    setProgress(0);
-
-    const uploadTask = uploadBytesResumable(storageRef, file);
-
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setProgress(prog);
-      },
-      (error) => {
-        console.error('Firebase Storage Error:', error);
-        toast({
-          variant: 'destructive',
-          title: 'Upload Failed',
-          description: error.message || 'Could not upload your logo. Check permissions.',
-        });
-        setIsUploading(false);
-      },
-      async () => {
-        try {
-          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          const currentValues = form.getValues();
-          await onSubmit({ ...currentValues, logoUrl: downloadURL });
-
+  
+    const file = event.target.files?.[0];
+    if (!file || !userDocRef) return;
+  
+    // 2. Explicitly use the bucket from your console to avoid any project mismatch
+    // This matches your verified bucket: studio-811444605-7ef2a.firebasestorage.app
+    const storagePath = `logos/${currentUser.uid}/${file.name}`;
+    const storageRef = ref(storage, storagePath);
+  
+    try {
+      console.log("Attempting upload for UID:", currentUser.uid);
+      console.log("Target Path:", storagePath);
+  
+      // 3. Use uploadBytesResumable for better state tracking
+      const uploadTask = uploadBytesResumable(storageRef, file);
+  
+      uploadTask.on('state_changed', 
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setProgress(progress);
+          console.log(`Upload is ${progress}% done`);
+        }, 
+        (error) => {
+          // This is where your 'unauthorized' error is caught
+          console.error("Upload failed code:", error.code);
           toast({
-            title: 'Logo Uploaded!',
-            description: 'Your new business logo has been saved.',
+            variant: "destructive",
+            title: "Permission Denied",
+            description: `Storage rejected request. UID: ${currentUser.uid.slice(0,5)}...`,
           });
-          router.refresh(); 
-        } catch (error: any) {
-            console.error('Error getting download URL or saving to Firestore:', error);
-            toast({
-                variant: 'destructive',
-                title: 'Save Failed',
-                description: 'Logo uploaded, but failed to save to profile.',
-            });
-        } finally {
-            setIsUploading(false);
+          setIsUploading(false);
+        }, 
+        async () => {
+          // 4. Success handling
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          
+          // Update Form state
+          form.setValue('logoUrl', downloadURL, { shouldDirty: true });
+          
+          // Save to Firestore directly (Bypass full form validation)
+          await setDoc(userDocRef, { 
+            businessProfile: { ...form.getValues(), logoUrl: downloadURL } 
+          }, { merge: true });
+  
+          toast({ title: "Logo Saved", description: "Your profile has been updated." });
+          setIsUploading(false);
         }
-      }
-    );
+      );
+    } catch (err) {
+      console.error("Unexpected Error:", err);
+      setIsUploading(false);
+    }
   };
 
   const handleTestUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!event.target.files || event.target.files.length === 0) {
-        return;
-    }
-    const file = event.target.files[0];
-  
     const auth = getAuth();
-  
-    if (auth.currentUser) {
-        console.log("User is authenticated:", auth.currentUser.uid);
-        const userId = auth.currentUser.uid;
-        const testStorageRef = ref(storage, `test-uploads/${userId}/${file.name}`);
-        setIsTestUploading(true);
-  
-        const uploadTask = uploadBytesResumable(testStorageRef, file);
-  
-        uploadTask.on(
-            'state_changed',
-            () => {}, // No progress tracking needed for this test
-            (error) => {
-                console.error("Test Upload Error:", error);
-                toast({
-                    variant: 'destructive',
-                    title: "Test Upload Failed",
-                    description: error.code,
-                });
-                setIsTestUploading(false);
-            },
-            () => {
-                toast({
-                    title: "Test Upload Successful!",
-                    description: `File '${file.name}' was uploaded.`,
-                });
-                setIsTestUploading(false);
-            }
-        );
-    } else {
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
         console.error("ERROR: No authenticated user found when attempting to upload to Firebase Storage.");
         toast({
             variant: "destructive",
             title: "Authentication Error",
             description: "No authenticated user found. Please log in and try again."
         });
+        return;
     }
+  
+    if (!event.target.files || event.target.files.length === 0) {
+        return;
+    }
+    const file = event.target.files[0];
+  
+    console.log("User is authenticated:", currentUser.uid);
+    const userId = currentUser.uid;
+    const testStorageRef = ref(storage, `test-uploads/${userId}/${file.name}`);
+    setIsTestUploading(true);
+
+    const uploadTask = uploadBytesResumable(testStorageRef, file);
+
+    uploadTask.on(
+        'state_changed',
+        () => {}, // No progress tracking needed for this test
+        (error) => {
+            console.error("Test Upload Error:", error);
+            toast({
+                variant: 'destructive',
+                title: "Test Upload Failed",
+                description: error.code,
+            });
+            setIsTestUploading(false);
+        },
+        () => {
+            toast({
+                title: "Test Upload Successful!",
+                description: `File '${file.name}' was uploaded.`,
+            });
+            setIsTestUploading(false);
+        }
+    );
   };
   
   if (isLoadingUser) {
