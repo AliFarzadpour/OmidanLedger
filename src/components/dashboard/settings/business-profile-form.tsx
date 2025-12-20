@@ -125,51 +125,68 @@ export function BusinessProfileForm() {
 
   const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!user || !storage || !event.target.files || event.target.files.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Upload Error',
+        description: 'User not authenticated or file not selected.',
+      });
       return;
     }
     const file = event.target.files[0];
+    
+    // Explicitly use the user's UID from the hook at the time of upload.
     const storageRef = ref(storage, `logos/${user.uid}/${file.name}`);
     
     setIsUploading(true);
     setProgress(0);
 
-    try {
-      const uploadTask = uploadBytesResumable(storageRef, file);
+    const uploadTask = uploadBytesResumable(storageRef, file);
 
-      const snapshot = await new Promise<any>((resolve, reject) => {
-        uploadTask.on(
-          'state_changed',
-          (snap) => {
-            const prog = (snap.bytesTransferred / snap.totalBytes) * 100;
-            setProgress(prog);
-          },
-          (error) => reject(error),
-          () => resolve(uploadTask.snapshot)
-        );
-      });
-
-      const downloadURL = await getDownloadURL(snapshot.ref);
-      
-      const currentValues = form.getValues();
-      await onSubmit({ ...currentValues, logoUrl: downloadURL });
-
-      toast({
-        title: 'Logo Uploaded!',
-        description: 'Your new business logo has been saved. Refreshing...',
-      });
-      
-      router.refresh();
-
-    } catch (error: any) {
-      console.error('Error uploading logo:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Upload Failed',
-        description: error.message || 'Could not upload your logo.',
-      });
-    } finally {
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const prog = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setProgress(prog);
+      },
+      (error) => {
+        // This is where storage/unauthorized errors are caught.
+        console.error('Firebase Storage Error:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Upload Failed',
+          description: error.message || 'Could not upload your logo. Check permissions.',
+        });
         setIsUploading(false);
-    }
+      },
+      async () => {
+        // Upload completed successfully, now get the download URL.
+        try {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          
+          // Directly call onSubmit with the new URL, bypassing form-wide validation.
+          const currentValues = form.getValues();
+          await onSubmit({ ...currentValues, logoUrl: downloadURL });
+
+          toast({
+            title: 'Logo Uploaded!',
+            description: 'Your new business logo has been saved.',
+          });
+
+          // A page refresh is a robust way to ensure the new image is shown,
+          // especially after fixing CORS or rule issues.
+          router.refresh(); 
+        } catch (error: any) {
+            console.error('Error getting download URL or saving to Firestore:', error);
+            toast({
+                variant: 'destructive',
+                title: 'Save Failed',
+                description: 'Logo uploaded, but failed to save to profile.',
+            });
+        } finally {
+            setIsUploading(false);
+        }
+      }
+    );
   };
   
   if (isLoadingUser) {
