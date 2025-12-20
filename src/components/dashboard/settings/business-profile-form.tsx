@@ -21,6 +21,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc } from 'firebase/firestore';
@@ -56,9 +67,11 @@ export function BusinessProfileForm() {
   const { toast } = useToast();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const testFileInputRef = useRef<HTMLInputElement>(null); // New ref for test input
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  
+  const [isTestUploading, setIsTestUploading] = useState(false); // New state for test upload
+
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -134,7 +147,6 @@ export function BusinessProfileForm() {
     }
     const file = event.target.files[0];
     
-    // Explicitly use the user's UID from the hook at the time of upload.
     const storageRef = ref(storage, `logos/${user.uid}/${file.name}`);
     
     setIsUploading(true);
@@ -149,7 +161,6 @@ export function BusinessProfileForm() {
         setProgress(prog);
       },
       (error) => {
-        // This is where storage/unauthorized errors are caught.
         console.error('Firebase Storage Error:', error);
         toast({
           variant: 'destructive',
@@ -159,11 +170,8 @@ export function BusinessProfileForm() {
         setIsUploading(false);
       },
       async () => {
-        // Upload completed successfully, now get the download URL.
         try {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-          
-          // Directly call onSubmit with the new URL, bypassing form-wide validation.
           const currentValues = form.getValues();
           await onSubmit({ ...currentValues, logoUrl: downloadURL });
 
@@ -171,9 +179,6 @@ export function BusinessProfileForm() {
             title: 'Logo Uploaded!',
             description: 'Your new business logo has been saved.',
           });
-
-          // A page refresh is a robust way to ensure the new image is shown,
-          // especially after fixing CORS or rule issues.
           router.refresh(); 
         } catch (error: any) {
             console.error('Error getting download URL or saving to Firestore:', error);
@@ -185,6 +190,39 @@ export function BusinessProfileForm() {
         } finally {
             setIsUploading(false);
         }
+      }
+    );
+  };
+
+  // New simplified test upload handler
+  const handleTestUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !storage || !event.target.files || !event.target.files.length === 0) {
+      return;
+    }
+    const file = event.target.files[0];
+    const testStorageRef = ref(storage, `test-uploads/${user.uid}/${file.name}`);
+    setIsTestUploading(true);
+    
+    const uploadTask = uploadBytesResumable(testStorageRef, file);
+
+    uploadTask.on(
+      'state_changed',
+      () => {}, // No progress tracking needed for this test
+      (error) => {
+        console.error("Test Upload Error:", error);
+        toast({
+          variant: 'destructive',
+          title: "Test Upload Failed",
+          description: error.code
+        });
+        setIsTestUploading(false);
+      },
+      () => {
+        toast({
+          title: "Test Upload Successful!",
+          description: `File '${file.name}' was uploaded to the test-uploads folder.`
+        });
+        setIsTestUploading(false);
       }
     );
   };
@@ -226,34 +264,54 @@ export function BusinessProfileForm() {
               Upload your company logo. This will appear on reports.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex items-center gap-6">
-            <Avatar className="h-24 w-24 rounded-lg">
-                <AvatarImage src={form.watch('logoUrl')} alt="Business Logo" />
-                <AvatarFallback className="rounded-lg">
-                    <Building2 className="h-10 w-10 text-muted-foreground" />
-                </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 space-y-2">
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-6">
+              <Avatar className="h-24 w-24 rounded-lg">
+                  <AvatarImage src={form.watch('logoUrl')} alt="Business Logo" />
+                  <AvatarFallback className="rounded-lg">
+                      <Building2 className="h-10 w-10 text-muted-foreground" />
+                  </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 space-y-2">
+                  <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading}
+                  >
+                      <Upload className="mr-2 h-4 w-4" />
+                      {isUploading ? `Uploading... ${Math.round(progress)}%` : 'Upload Logo'}
+                  </Button>
+                  <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                      accept="image/png, image/jpeg, image/gif, image/webp"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                      Recommended size: 256x256px. PNG, JPG, or GIF.
+                  </p>
+                  {isUploading && <Progress value={progress} className="w-full" />}
+              </div>
+            </div>
+            {/* New Test Upload Section */}
+            <div className="border-t pt-4">
                 <Button
                     type="button"
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isUploading}
+                    variant="secondary"
+                    onClick={() => testFileInputRef.current?.click()}
+                    disabled={isTestUploading}
                 >
-                    <Upload className="mr-2 h-4 w-4" />
-                    {isUploading ? `Uploading... ${Math.round(progress)}%` : 'Upload Logo'}
+                    {isTestUploading ? "Testing..." : "New Test Upload"}
                 </Button>
                 <input
                     type="file"
-                    ref={fileInputRef}
-                    onChange={handleLogoUpload}
+                    ref={testFileInputRef}
+                    onChange={handleTestUpload}
                     className="hidden"
-                    accept="image/png, image/jpeg, image/gif, image/webp"
                 />
-                <p className="text-xs text-muted-foreground">
-                    Recommended size: 256x256px. PNG, JPG, or GIF.
-                </p>
-                {isUploading && <Progress value={progress} className="w-full" />}
+                <p className="text-xs text-muted-foreground mt-2">A separate button to test a different upload path.</p>
             </div>
           </CardContent>
         </Card>
