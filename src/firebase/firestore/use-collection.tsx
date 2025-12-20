@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Query,
   onSnapshot,
@@ -8,7 +8,8 @@ import {
   FirestoreError,
   QuerySnapshot,
   CollectionReference,
-  collection
+  collection,
+  getDocs,
 } from 'firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -19,6 +20,7 @@ export interface UseCollectionResult<T> {
   data: WithId<T>[] | null;
   isLoading: boolean;
   error: FirestoreError | Error | null;
+  refetch: () => void;
 }
 
 // Helper Interface for internal Firestore types
@@ -27,14 +29,16 @@ export interface InternalQuery extends Query<DocumentData> {
     path: {
       canonicalString(): string;
       toString(): string;
-    }
-  }
+    };
+  };
 }
 
 /**
  * Helper: Safely extracts the string path from a Reference or Query.
  */
-function getFirestorePath(target: CollectionReference<DocumentData> | Query<DocumentData>): string {
+function getFirestorePath(
+  target: CollectionReference<DocumentData> | Query<DocumentData>
+): string {
   if (target.type === 'collection') {
     return (target as CollectionReference).path;
   }
@@ -43,7 +47,11 @@ function getFirestorePath(target: CollectionReference<DocumentData> | Query<Docu
 }
 
 export function useCollection<T = any>(
-  targetRefOrQuery: ((CollectionReference<DocumentData> | Query<DocumentData>)) | null | undefined,
+  targetRefOrQuery:
+    | CollectionReference<DocumentData>
+    | Query<DocumentData>
+    | null
+    | undefined
 ): UseCollectionResult<T> {
   type ResultItemType = WithId<T>;
   type StateDataType = ResultItemType[] | null;
@@ -51,6 +59,11 @@ export function useCollection<T = any>(
   const [data, setData] = useState<StateDataType>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<FirestoreError | Error | null>(null);
+  const [refetchCount, setRefetchCount] = useState(0);
+
+  const refetch = useCallback(() => {
+    setRefetchCount((prev) => prev + 1);
+  }, []);
 
   const path = useMemo(() => {
     if (!targetRefOrQuery) return null;
@@ -88,7 +101,7 @@ export function useCollection<T = any>(
         // Construct a helpful permission error
         const contextualError = new FirestorePermissionError({
           operation: 'list',
-          path: path, 
+          path: path,
         });
 
         console.error(`Firestore Permission Error at path: ${path}`, err);
@@ -101,7 +114,7 @@ export function useCollection<T = any>(
     );
 
     return () => unsubscribe();
-  }, [targetRefOrQuery, path]); 
+  }, [targetRefOrQuery, path, refetchCount]);
 
-  return { data, isLoading, error };
+  return { data, isLoading, error, refetch };
 }
