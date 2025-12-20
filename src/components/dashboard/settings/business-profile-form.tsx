@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -28,12 +28,11 @@ import { useToast } from '@/hooks/use-toast';
 import { useEffect, useState, useRef } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { useStorage, useUploadFile } from '@/firebase/storage/use-storage';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { useStorage } from '@/firebase/storage/use-storage';
+import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 
-// FIX 1: Update schema to allow empty strings for logoUrl
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
   businessType: z.string().optional(),
@@ -44,7 +43,6 @@ const businessProfileSchema = z.object({
   state: z.string().optional(),
   zip: z.string().optional(),
   country: z.string().optional(),
-  // This allows the field to be a valid URL, OR an exact empty string, OR undefined.
   logoUrl: z.union([z.literal(''), z.string().trim().url()]).optional(),
 });
 
@@ -56,13 +54,8 @@ export function BusinessProfileForm() {
   const storage = useStorage();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const {
-    uploadFile,
-    isUploading,
-    progress,
-    error: uploadError,
-  } = useUploadFile();
+  const [isUploading, setIsUploading] = useState(false);
+  const [progress, setProgress] = useState(0);
   
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -89,7 +82,6 @@ export function BusinessProfileForm() {
 
   useEffect(() => {
     if (userData?.businessProfile) {
-      // Ensure all fields are at least empty strings
       const profile = userData.businessProfile;
       form.reset({
         businessName: profile.businessName || '',
@@ -110,9 +102,7 @@ export function BusinessProfileForm() {
     if (!userDocRef) return;
 
     try {
-      // FIX 2: Sanitize data to remove 'undefined' values before sending to Firestore
       const sanitizedData = JSON.parse(JSON.stringify(data));
-
       await setDoc(userDocRef, { businessProfile: sanitizedData }, { merge: true });
       
       toast({
@@ -135,30 +125,43 @@ export function BusinessProfileForm() {
     }
     const file = event.target.files[0];
     const storageRef = ref(storage, `logos/${user.uid}/${file.name}`);
+    setIsUploading(true);
+    setProgress(0);
 
     try {
-      const snapshot = await uploadFile(storageRef, file);
-      if (snapshot) {
-        const downloadURL = await getDownloadURL(snapshot.ref);
-        
-        // This is the critical fix: Update the form's internal state with the new URL
-        form.setValue('logoUrl', downloadURL, { shouldDirty: true });
-        
-        // Now that the form has the new URL, programmatically trigger the submission
-        await form.handleSubmit(onSubmit)();
+      const uploadTask = uploadBytesResumable(storageRef, file);
 
-        toast({
-          title: 'Logo Uploaded',
-          description: 'Your new business logo has been saved.',
-        });
-      }
-    } catch (error) {
+      const snapshot = await new Promise((resolve, reject) => {
+        uploadTask.on(
+          'state_changed',
+          (snap) => {
+            const prog = (snap.bytesTransferred / snap.totalBytes) * 100;
+            setProgress(prog);
+          },
+          (error) => reject(error),
+          () => resolve(uploadTask.snapshot)
+        );
+      });
+
+      const downloadURL = await getDownloadURL((snapshot as any).ref);
+      form.setValue('logoUrl', downloadURL, { shouldDirty: true });
+      
+      const currentValues = form.getValues();
+      await onSubmit({ ...currentValues, logoUrl: downloadURL });
+
+      toast({
+        title: 'Logo Uploaded',
+        description: 'Your new business logo has been saved.',
+      });
+    } catch (error: any) {
       console.error('Error uploading logo:', error);
       toast({
         variant: 'destructive',
         title: 'Upload Failed',
-        description: uploadError?.message || 'Could not upload your logo.',
+        description: error.message || 'Could not upload your logo.',
       });
+    } finally {
+        setIsUploading(false);
     }
   };
   
@@ -214,7 +217,7 @@ export function BusinessProfileForm() {
                     disabled={isUploading}
                 >
                     <Upload className="mr-2 h-4 w-4" />
-                    {isUploading ? 'Uploading...' : 'Upload Logo'}
+                    {isUploading ? `Uploading... ${Math.round(progress)}%` : 'Upload Logo'}
                 </Button>
                 <input
                     type="file"
@@ -227,7 +230,6 @@ export function BusinessProfileForm() {
                     Recommended size: 256x256px. PNG, JPG, or GIF.
                 </p>
                 {isUploading && <Progress value={progress} className="w-full" />}
-                {uploadError && <p className="text-xs text-destructive">{uploadError.message}</p>}
             </div>
           </CardContent>
         </Card>
