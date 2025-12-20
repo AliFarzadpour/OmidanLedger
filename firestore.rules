@@ -41,7 +41,8 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      allow list, read, create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn();
       allow delete: if isOwner(resource.data.userId);
     }
 
