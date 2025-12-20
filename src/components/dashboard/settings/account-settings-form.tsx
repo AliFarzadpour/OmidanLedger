@@ -3,7 +3,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -21,13 +21,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useUser, useFirestore, useAuth } from '@/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { updateProfile, sendPasswordResetEmail } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { deleteAllUserData } from '@/actions/user-actions';
+import { useRouter } from 'next/navigation';
 
 // Same list from signup page for consistency
 const TRADE_OPTIONS = [
@@ -54,6 +67,8 @@ export function AccountSettingsForm() {
   const firestore = useFirestore();
   const auth = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const form = useForm<AccountSettingsFormValues>({
     resolver: zodResolver(accountSettingsSchema),
@@ -134,6 +149,29 @@ export function AccountSettingsForm() {
       });
     }
   };
+
+  const handleResetAccount = async () => {
+    if (!user) return;
+    setIsDeleting(true);
+    try {
+        await deleteAllUserData(user.uid);
+        toast({
+            title: "Account Data Deleted",
+            description: "All your data has been cleared. Please delete your account from the Firebase console now.",
+        });
+        // Log the user out client-side
+        await auth.signOut();
+        router.push('/signup'); // Redirect to signup page
+    } catch (error: any) {
+        toast({
+            variant: "destructive",
+            title: "Reset Failed",
+            description: error.message,
+        });
+    } finally {
+        setIsDeleting(false);
+    }
+  };
   
   if (isUserLoading) {
       return (
@@ -154,6 +192,7 @@ export function AccountSettingsForm() {
   }
 
   return (
+    <>
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <Card>
@@ -220,5 +259,43 @@ export function AccountSettingsForm() {
         </div>
       </form>
     </Form>
+
+    {/* Danger Zone */}
+    <Card className="border-destructive">
+        <CardHeader>
+            <CardTitle className="text-destructive">Danger Zone</CardTitle>
+            <CardDescription>
+                These actions are permanent and cannot be undone.
+            </CardDescription>
+        </CardHeader>
+        <CardContent>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">Reset Account Data</Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete ALL your data, including properties,
+                    transactions, and settings. Your login will remain, but all
+                    associated database records will be erased.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className={buttonVariants({ variant: "destructive" })}
+                    onClick={handleResetAccount}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? 'Deleting Data...' : 'Yes, Delete Everything'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+        </CardContent>
+    </Card>
+    </>
   );
 }
