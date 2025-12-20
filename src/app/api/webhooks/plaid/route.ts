@@ -1,4 +1,3 @@
-
 // app/api/webhooks/plaid/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/admin-db';
@@ -78,7 +77,7 @@ export async function POST(req: Request) {
             
             batch.set(txRef, {
               amount: amount, // Positive amount for income
-              description: `Rent from ${tenantName || `Tenant ${tenantId}`}`,
+              description: `Rent from ${tenantName || `Tenant ${tenantId}`} via Plaid`,
               date: new Date().toISOString().split('T')[0],
               primaryCategory: "Income",
               secondaryCategory: "Rental Income",
@@ -86,6 +85,7 @@ export async function POST(req: Request) {
               status: 'posted',
               propertyId: propertyId,
               userId: landlordId,
+              tenantId: tenantId, // <<< The critical link for tenant history
               bankAccountId: landlordBankAccountId,
               createdAt: FieldValue.serverTimestamp()
             });
