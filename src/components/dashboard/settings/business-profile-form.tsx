@@ -158,7 +158,6 @@ export function BusinessProfileForm() {
         description: 'Your new business logo has been saved. Refreshing...',
       });
       
-      // Refresh the page to show the new logo
       router.refresh();
 
     } catch (error: any) {
