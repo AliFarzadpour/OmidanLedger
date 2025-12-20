@@ -296,20 +296,23 @@ export function BusinessProfileForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                            <SelectTrigger>
-                            <SelectValue placeholder="Select a business type" />
-                            </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                            <SelectItem value="sole-proprietorship">Sole Proprietorship</SelectItem>
-                            <SelectItem value="llc">LLC</SelectItem>
-                            <SelectItem value="s-corp">S-Corporation</SelectItem>
-                            <SelectItem value="c-corp">C-Corporation</SelectItem>
-                            <SelectItem value="non-profit">Non-Profit</SelectItem>
-                            <SelectItem value="other">Other</SelectItem>
-                        </SelectContent>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a business type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="sole-proprietorship">Sole Proprietorship</SelectItem>
+                        <SelectItem value="llc">LLC</SelectItem>
+                        <SelectItem value="s-corp">S-Corporation</SelectItem>
+                        <SelectItem value="c-corp">C-Corporation</SelectItem>
+                        <SelectItem value="non-profit">Non-Profit</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
                     </Select>
                     <FormMessage />
                   </FormItem>
