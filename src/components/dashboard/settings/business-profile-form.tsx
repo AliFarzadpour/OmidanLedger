@@ -43,7 +43,7 @@ const businessProfileSchema = z.object({
   state: z.string().optional(),
   zip: z.string().optional(),
   country: z.string().optional(),
-  logoUrl: z.union([z.literal(''), z.string().trim().url()]).optional(),
+  logoUrl: z.string().optional(),
 });
 
 type BusinessProfileFormValues = z.infer<typeof businessProfileSchema>;
@@ -125,13 +125,14 @@ export function BusinessProfileForm() {
     }
     const file = event.target.files[0];
     const storageRef = ref(storage, `logos/${user.uid}/${file.name}`);
+    
     setIsUploading(true);
     setProgress(0);
 
     try {
       const uploadTask = uploadBytesResumable(storageRef, file);
 
-      const snapshot = await new Promise((resolve, reject) => {
+      const snapshot = await new Promise<any>((resolve, reject) => {
         uploadTask.on(
           'state_changed',
           (snap) => {
@@ -143,7 +144,8 @@ export function BusinessProfileForm() {
         );
       });
 
-      const downloadURL = await getDownloadURL((snapshot as any).ref);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
       form.setValue('logoUrl', downloadURL, { shouldDirty: true });
       
       const currentValues = form.getValues();
