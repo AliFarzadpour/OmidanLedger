@@ -68,10 +68,8 @@ export function BusinessProfileForm() {
   const { toast } = useToast();
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const testFileInputRef = useRef<HTMLInputElement>(null); // New ref for test input
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [isTestUploading, setIsTestUploading] = useState(false); // New state for test upload
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -155,7 +153,6 @@ export function BusinessProfileForm() {
     if (!file || !userDocRef) return;
   
     // 2. Explicitly use the bucket from your console to avoid any project mismatch
-    // This matches your verified bucket: studio-811444605-7ef2a.firebasestorage.app
     const storagePath = `logos/${currentUser.uid}/${file.name}`;
     const storageRef = ref(storage, storagePath);
   
@@ -204,54 +201,6 @@ export function BusinessProfileForm() {
     }
   };
 
-  const handleTestUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-        console.error("ERROR: No authenticated user found when attempting to upload to Firebase Storage.");
-        toast({
-            variant: "destructive",
-            title: "Authentication Error",
-            description: "No authenticated user found. Please log in and try again."
-        });
-        return;
-    }
-  
-    if (!event.target.files || event.target.files.length === 0) {
-        return;
-    }
-    const file = event.target.files[0];
-  
-    console.log("User is authenticated:", currentUser.uid);
-    const userId = currentUser.uid;
-    const testStorageRef = ref(storage, `test-uploads/${userId}/${file.name}`);
-    setIsTestUploading(true);
-
-    const uploadTask = uploadBytesResumable(testStorageRef, file);
-
-    uploadTask.on(
-        'state_changed',
-        () => {}, // No progress tracking needed for this test
-        (error) => {
-            console.error("Test Upload Error:", error);
-            toast({
-                variant: 'destructive',
-                title: "Test Upload Failed",
-                description: error.code,
-            });
-            setIsTestUploading(false);
-        },
-        () => {
-            toast({
-                title: "Test Upload Successful!",
-                description: `File '${file.name}' was uploaded.`,
-            });
-            setIsTestUploading(false);
-        }
-    );
-  };
-  
   if (isLoadingUser) {
       return (
           <Card>
@@ -319,24 +268,6 @@ export function BusinessProfileForm() {
                   </p>
                   {isUploading && <Progress value={progress} className="w-full" />}
               </div>
-            </div>
-            {/* New Test Upload Section */}
-            <div className="border-t pt-4">
-                <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => testFileInputRef.current?.click()}
-                    disabled={isTestUploading}
-                >
-                    {isTestUploading ? "Testing..." : "New Test Upload"}
-                </Button>
-                <input
-                    type="file"
-                    ref={testFileInputRef}
-                    onChange={handleTestUpload}
-                    className="hidden"
-                />
-                <p className="text-xs text-muted-foreground mt-2">A separate button to test a different upload path.</p>
             </div>
           </CardContent>
         </Card>
