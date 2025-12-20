@@ -140,9 +140,11 @@ export function BusinessProfileForm() {
       const snapshot = await uploadFile(storageRef, file);
       if (snapshot) {
         const downloadURL = await getDownloadURL(snapshot.ref);
+        
+        // This is the critical fix: Update the form's internal state with the new URL
         form.setValue('logoUrl', downloadURL, { shouldDirty: true });
         
-        // After getting the URL, programmatically submit the form
+        // Now that the form has the new URL, programmatically trigger the submission
         await form.handleSubmit(onSubmit)();
 
         toast({
@@ -164,7 +166,7 @@ export function BusinessProfileForm() {
       return (
           <Card>
               <CardHeader>
-                  <Skeleton className="h-7 w-1/3" />
+                  <Skeleton className="h-7 w-1/4" />
                   <Skeleton className="h-4 w-2/3" />
               </CardHeader>
               <CardContent className="space-y-6">
