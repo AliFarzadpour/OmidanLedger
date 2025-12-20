@@ -1,18 +1,33 @@
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collectionGroup, query, where, orderBy, doc } from 'firebase/firestore';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
-import { Wallet, FileText, Loader2 } from 'lucide-react';
+import { Wallet, FileText, Loader2, FileDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { generateTenantStatement } from '@/lib/pdf-generator';
 
 export default function TenantPaymentHistory() {
   const { user } = useUser();
   const firestore = useFirestore();
+
+  // --- DATA FETCHING ---
+  const tenantDocRef = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+  const { data: tenantData } = useDoc(tenantDocRef);
+
+  const propertyDocRef = useMemoFirebase(() => {
+    if (!firestore || !tenantData?.associatedPropertyId) return null;
+    return doc(firestore, 'properties', tenantData.associatedPropertyId);
+  }, [firestore, tenantData]);
+  const { data: propertyData } = useDoc(propertyDocRef);
 
   const paymentsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -25,6 +40,7 @@ export default function TenantPaymentHistory() {
 
   const { data: history, isLoading } = useCollection(paymentsQuery);
 
+  // --- RENDER LOGIC ---
   const getSourceIcon = (desc: string) => {
     const d = desc.toLowerCase();
     if (d.includes('zelle')) return 'Zelle';
@@ -35,11 +51,23 @@ export default function TenantPaymentHistory() {
     return 'Direct Deposit';
   };
 
+  const handleDownload = () => {
+    if (!tenantData || !propertyData || !history) return;
+    const currentMonth = format(new Date(), 'yyyy-MM');
+    generateTenantStatement(tenantData, propertyData, history, currentMonth);
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-2xl font-bold">Payment History</h1>
-        <p className="text-sm text-slate-500">A complete record of your rent and deposit payments.</p>
+      <div className="flex justify-between items-center">
+        <div>
+            <h1 className="text-2xl font-bold">Payment History</h1>
+            <p className="text-sm text-slate-500">A complete record of your rent and deposit payments.</p>
+        </div>
+        <Button variant="outline" onClick={handleDownload} disabled={!history || history.length === 0} className="gap-2">
+            <FileDown className="h-4 w-4" />
+            Download Statement
+        </Button>
       </div>
 
       <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
@@ -93,13 +121,6 @@ export default function TenantPaymentHistory() {
             )}
           </TableBody>
         </Table>
-      </div>
-
-      <div className="flex justify-center">
-        <button className="flex items-center gap-2 text-sm text-blue-600 hover:underline font-medium">
-          <FileText className="h-4 w-4" />
-          Download Full PDF Statement
-        </button>
       </div>
     </div>
   );
