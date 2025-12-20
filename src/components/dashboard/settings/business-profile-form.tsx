@@ -41,6 +41,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useStorage } from '@/firebase/storage/use-storage';
 import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useRouter } from 'next/navigation';
@@ -194,37 +195,50 @@ export function BusinessProfileForm() {
     );
   };
 
-  // New simplified test upload handler
   const handleTestUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!user || !storage || !event.target.files || !event.target.files.length === 0) {
-      return;
+    if (!event.target.files || event.target.files.length === 0) {
+        return;
     }
     const file = event.target.files[0];
-    const testStorageRef = ref(storage, `test-uploads/${user.uid}/${file.name}`);
-    setIsTestUploading(true);
-    
-    const uploadTask = uploadBytesResumable(testStorageRef, file);
-
-    uploadTask.on(
-      'state_changed',
-      () => {}, // No progress tracking needed for this test
-      (error) => {
-        console.error("Test Upload Error:", error);
+  
+    const auth = getAuth();
+  
+    if (auth.currentUser) {
+        console.log("User is authenticated:", auth.currentUser.uid);
+        const userId = auth.currentUser.uid;
+        const testStorageRef = ref(storage, `test-uploads/${userId}/${file.name}`);
+        setIsTestUploading(true);
+  
+        const uploadTask = uploadBytesResumable(testStorageRef, file);
+  
+        uploadTask.on(
+            'state_changed',
+            () => {}, // No progress tracking needed for this test
+            (error) => {
+                console.error("Test Upload Error:", error);
+                toast({
+                    variant: 'destructive',
+                    title: "Test Upload Failed",
+                    description: error.code,
+                });
+                setIsTestUploading(false);
+            },
+            () => {
+                toast({
+                    title: "Test Upload Successful!",
+                    description: `File '${file.name}' was uploaded.`,
+                });
+                setIsTestUploading(false);
+            }
+        );
+    } else {
+        console.error("ERROR: No authenticated user found when attempting to upload to Firebase Storage.");
         toast({
-          variant: 'destructive',
-          title: "Test Upload Failed",
-          description: error.code
+            variant: "destructive",
+            title: "Authentication Error",
+            description: "No authenticated user found. Please log in and try again."
         });
-        setIsTestUploading(false);
-      },
-      () => {
-        toast({
-          title: "Test Upload Successful!",
-          description: `File '${file.name}' was uploaded to the test-uploads folder.`
-        });
-        setIsTestUploading(false);
-      }
-    );
+    }
   };
   
   if (isLoadingUser) {
