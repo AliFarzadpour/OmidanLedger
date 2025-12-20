@@ -26,7 +26,7 @@ import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { deleteAllUserData } from '@/actions/user-actions';
 import { useRouter } from 'next/navigation';
-import { FormLabel } from '@/components/ui/label';
+import { Label } from '@/components/ui/label';
 
 const accountSettingsSchema = z.object({});
 
@@ -60,7 +60,7 @@ export function AccountSettingsForm() {
       await sendPasswordResetEmail(auth, user.email);
       toast({
         title: 'Password Reset Email Sent',
-        description: `Please check your inbox at ${user.email} to reset your password.`,
+        description: `A password reset link has been sent to ${user.email}.`,
       });
     } catch (error: any) {
       console.error('Error sending password reset email:', error);
@@ -126,7 +126,7 @@ export function AccountSettingsForm() {
           </CardHeader>
           <CardContent className="space-y-8">
             <div className="space-y-2">
-                <FormLabel>Password Reset</FormLabel>
+                <Label>Password Reset</Label>
                 <div className="flex items-center gap-4">
                     <p className="text-sm text-muted-foreground flex-1">For security, we will send a password reset link to your email.</p>
                     <Button type="button" variant="outline" onClick={handlePasswordReset}>Send Reset Email</Button>
