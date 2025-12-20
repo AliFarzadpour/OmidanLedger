@@ -63,6 +63,11 @@ service cloud.firestore {
         allow list, create, update, delete: if isSignedIn() && request.resource.data.userId == request.auth.uid;
         allow read: if isOwner(resource.data.userId);
     }
+
+    match /invoices/{invoiceId} {
+        allow read, write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow list: if isSignedIn();
+    }
   }
 }
 
