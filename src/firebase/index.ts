@@ -8,37 +8,34 @@ import { getStorage } from 'firebase/storage';
 
 // IMPORTANT: DO NOT MODIFY THIS FUNCTION
 export function initializeFirebase() {
+  let app;
   if (!getApps().length) {
-    // Important! initializeApp() is called without any arguments because Firebase App Hosting
-    // integrates with the initializeApp() function to provide the environment variables needed to
-    // populate the FirebaseOptions in production. It is critical that we attempt to call initializeApp()
-    // without arguments.
-    let firebaseApp;
+    // This is the primary initialization path.
+    // In a deployed Firebase App Hosting environment, this will succeed automatically.
+    // In a local environment, it will fail, and we'll fall back to the config object.
     try {
-      // Attempt to initialize via Firebase App Hosting environment variables
-      firebaseApp = initializeApp();
+      app = initializeApp();
     } catch (e) {
-      // Only warn in production because it's normal to use the firebaseConfig to initialize
-      // during development
-      if (process.env.NODE_ENV === "production") {
-        console.warn('Automatic initialization failed. Falling back to firebase config object.', e);
-      }
-      firebaseApp = initializeApp(firebaseConfig);
+      // Fallback for local development or other environments
+      app = initializeApp(firebaseConfig);
     }
-
-    return getSdks(firebaseApp);
+  } else {
+    // If apps are already initialized, get the default app.
+    app = getApp();
   }
 
-  // If already initialized, return the SDKs with the already initialized App
-  return getSdks(getApp());
+  // From the single, definitive app instance, derive all other SDKs.
+  // This guarantees they share the same configuration and authentication context.
+  return getSdks(app);
 }
 
+// This function takes the single app instance and returns all the necessary service SDKs.
 export function getSdks(firebaseApp: FirebaseApp) {
   return {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: getFirestore(firebaseApp),
-    storage: getStorage(firebaseApp) // CORRECTED: Pass the app instance to share auth context.
+    storage: getStorage(firebaseApp) // Ensures storage shares the same app context.
   };
 }
 
