@@ -157,6 +157,7 @@ export function BusinessProfileForm() {
     const storageRef = ref(storage, storagePath);
   
     try {
+      setIsUploading(true);
       console.log("Attempting upload for UID:", currentUser.uid);
       console.log("Target Path:", storagePath);
   
@@ -241,7 +242,7 @@ export function BusinessProfileForm() {
           <CardContent className="space-y-4">
             <div className="flex items-center gap-6">
               <Avatar className="h-24 w-24 rounded-lg">
-                  <AvatarImage src={form.watch('logoUrl')} alt="Business Logo" />
+                  <AvatarImage key={form.watch('logoUrl')} src={form.watch('logoUrl')} alt="Business Logo" />
                   <AvatarFallback className="rounded-lg">
                       <Building2 className="h-10 w-10 text-muted-foreground" />
                   </AvatarFallback>
