@@ -1,62 +1,116 @@
+
 // app/api/webhooks/plaid/route.ts
 import { NextResponse } from 'next/server';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { syncAndCategorizePlaidTransactions } from '@/lib/plaid'; // Import your Sync Flow
-
-// Init Admin DB for Webhook
-function getAdminDB() {
-  if (!getApps().length) initializeApp();
-  return getFirestore();
-}
+import { db } from '@/lib/admin-db';
+import { FieldValue } from 'firebase-admin/firestore';
+import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
+import { incrementPropertyStats } from '@/actions/update-property-stats';
 
 export async function POST(req: Request) {
   const body = await req.json();
-  const { webhook_type, webhook_code, item_id } = body;
+  const { webhook_type, webhook_code, item_id, transfer_id } = body;
 
   console.log(`Received Plaid Webhook: ${webhook_type} | ${webhook_code}`);
 
-  // We only care about HISTORICAL_UPDATE or SYNC_UPDATES_AVAILABLE
-  if (webhook_type === 'TRANSACTIONS') {
-    if (webhook_code === 'HISTORICAL_UPDATE' || 
-        webhook_code === 'SYNC_UPDATES_AVAILABLE' || 
-        webhook_code === 'DEFAULT_UPDATE') {
-      
-      try {
-        const db = getAdminDB();
-        
-        // 1. Find the User & Account associated with this Plaid Item ID
-        // Note: You need to create an index for 'plaidItemId' in Firestore if you haven't yet.
-        const accountsSnapshot = await db.collectionGroup('bankAccounts')
-          .where('plaidItemId', '==', item_id)
-          .get();
-
+  try {
+    // --- Handler for TRANSACTION Sync Updates ---
+    if (webhook_type === 'TRANSACTIONS') {
+      if (
+        webhook_code === 'HISTORICAL_UPDATE' ||
+        webhook_code === 'SYNC_UPDATES_AVAILABLE' ||
+        webhook_code === 'DEFAULT_UPDATE'
+      ) {
+        // Find the User & Account associated with this Plaid Item ID
+        const accountsSnapshot = await db.collectionGroup('bankAccounts').where('plaidItemId', '==', item_id).get();
         if (accountsSnapshot.empty) {
-          console.log('No matching account found for this Item ID');
-          return NextResponse.json({ received: true });
+          console.log(`[Webhook] No account found for item_id: ${item_id}`);
+          return NextResponse.json({ received: true, message: 'No account found' });
         }
 
-        // 2. Trigger Sync for each account found under this Item
+        // Trigger Sync for each account found under this Item
         const syncPromises = accountsSnapshot.docs.map(async (doc) => {
           const data = doc.data();
-          // Call your existing Genkit Flow
-          console.log(`Auto-syncing account: ${doc.id} for user ${data.userId}`);
-          return syncAndCategorizePlaidTransactions({
-            userId: data.userId,
-            bankAccountId: doc.id
-          });
+          console.log(`[Webhook] Auto-syncing account: ${doc.id} for user ${data.userId}`);
+          return syncAndCategorizePlaidTransactions({ userId: data.userId, bankAccountId: doc.id });
         });
-
         await Promise.all(syncPromises);
-        console.log('Auto-sync complete');
-
-      } catch (error) {
-        console.error('Webhook Error:', error);
-        // Return 200 anyway so Plaid stops retrying (unless you want it to retry)
-        return NextResponse.json({ received: true, error: 'Internal Error' }, { status: 200 });
+        console.log(`[Webhook] Auto-sync complete for item_id: ${item_id}`);
       }
     }
-  }
 
-  return NextResponse.json({ received: true });
+    // --- Handler for TRANSFER Status Updates (e.g., Rent Payments) ---
+    if (webhook_type === 'TRANSFER' && transfer_id) {
+      if (webhook_code === 'swept' || webhook_code === 'settled') { // 'swept' is often used as the final confirmation
+        
+        // 1. Find the pending payment record in Firestore
+        const paymentQuery = await db.collectionGroup('payments').where('transferId', '==', transfer_id).limit(1).get();
+        if (paymentQuery.empty) {
+          console.warn(`[Webhook] Payment record not found for transfer_id: ${transfer_id}`);
+          return NextResponse.json({ received: true, message: 'Payment not found' });
+        }
+
+        const paymentDoc = paymentQuery.docs[0];
+        const { amount, tenantId, propertyId, landlordId, tenantName } = paymentDoc.data();
+
+        // 2. Start a batch write to ensure atomicity
+        const batch = db.batch();
+
+        // 3. Mark payment as 'succeeded'
+        batch.update(paymentDoc.ref, {
+          status: 'succeeded',
+          settledAt: FieldValue.serverTimestamp(),
+        });
+
+        // 4. Create a Transaction record for the Landlord for bookkeeping
+        // Find a suitable bank account for the landlord to deposit into.
+        // For simplicity, we find the first available checking account.
+        const landlordAccountsSnap = await db.collection('users').doc(landlordId)
+          .collection('bankAccounts').where('accountType', '==', 'checking').limit(1).get();
+          
+        if (landlordAccountsSnap.empty) {
+            console.error(`[Webhook] Critical: No destination checking account found for landlord ${landlordId}.`);
+            // Still update payment status, but skip transaction creation
+        } else {
+            const landlordBankAccountId = landlordAccountsSnap.docs[0].id;
+            const txRef = db.collection('users').doc(landlordId)
+              .collection('bankAccounts').doc(landlordBankAccountId)
+              .collection('transactions').doc();
+            
+            batch.set(txRef, {
+              amount: amount, // Positive amount for income
+              description: `Rent from ${tenantName || `Tenant ${tenantId}`}`,
+              date: new Date().toISOString().split('T')[0],
+              primaryCategory: "Income",
+              secondaryCategory: "Rental Income",
+              subcategory: "Residential Rent",
+              status: 'posted',
+              propertyId: propertyId,
+              userId: landlordId,
+              bankAccountId: landlordBankAccountId,
+              createdAt: FieldValue.serverTimestamp()
+            });
+        }
+        
+        await batch.commit();
+        console.log(`[Webhook] Successfully processed transfer for ${amount} from tenant ${tenantId}`);
+
+        // 5. Update Financial Stats (this is an async server action, can run after batch)
+        if (propertyId && landlordId) {
+          await incrementPropertyStats({
+            propertyId,
+            date: new Date(),
+            amount: amount,
+            userId: landlordId
+          });
+          console.log(`[Webhook] Incremented stats for property ${propertyId}`);
+        }
+      }
+    }
+
+    return NextResponse.json({ received: true });
+
+  } catch (error: any) {
+    console.error('Plaid Webhook Error:', error);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
 }

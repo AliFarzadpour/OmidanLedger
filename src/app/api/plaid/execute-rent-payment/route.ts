@@ -34,22 +34,24 @@ export async function POST(req: Request) {
   const plaidClient = getPlaidClient();
 
   try {
-    // 1. Fetch tenant's name for the transfer description
+    // 1. Fetch tenant's info for the transfer description
     const tenantDoc = await db.collection('users').doc(tenantId).get();
     if (!tenantDoc.exists) {
         throw new Error('Tenant not found');
     }
-    const tenantData = tenantDoc.data();
-    const tenantName = tenantData?.email || `Tenant ${tenantId}`; // Fallback to email or ID
+    const tenantData = tenantDoc.data()!;
+    const tenantName = tenantData.email || `Tenant ${tenantId}`; // Fallback to email or ID
+    const landlordId = tenantData.landlordId;
+    const propertyId = tenantData.associatedPropertyId;
+
+    if (!landlordId || !propertyId) {
+        throw new Error('Tenant is not associated with a landlord or property.');
+    }
 
     // 2. Exchange public_token for a long-lived access_token
     const exchangeResponse = await plaidClient.itemPublicTokenExchange({ public_token });
     const accessToken = exchangeResponse.data.access_token;
     
-    // In a real app, you would securely save this accessToken with the user's account
-    // for future payments without needing them to re-link.
-    // For this example, we proceed directly.
-
     // 3. Create the ACH Transfer with Plaid
     const transferCreateResponse = await plaidClient.transferCreate({
       access_token: accessToken,
@@ -72,6 +74,10 @@ export async function POST(req: Request) {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       description: `Rent payment via Plaid`,
+      // Store IDs needed for webhook processing
+      landlordId: landlordId,
+      propertyId: propertyId,
+      tenantName: tenantName,
     });
 
     return NextResponse.json({ success: true, transferId: transferId });
