@@ -5,6 +5,38 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered } from 'lucide-react';
 
 export default function ReportsPage() {
+  const reports = [
+    {
+      title: 'AI-Powered Report',
+      description: 'Use natural language to ask questions about your financial data.',
+      href: '/dashboard/reports/ai-report',
+      icon: BrainCircuit,
+    },
+    // {
+    //   title: 'Profit & Loss',
+    //   description: 'Review your income, expenses, and profitability over a period.',
+    //   href: '/dashboard/reports/profit-and-loss',
+    //   icon: FileText,
+    // },
+    // {
+    //   title: 'General Ledger',
+    //   description: 'A detailed history of all transactions, grouped by account.',
+    //   href: '/dashboard/reports/general-ledger',
+    //   icon: BookUser,
+    // },
+    // {
+    //   title: 'Detailed Ledger',
+    //   description: 'An interactive report of all transactions, grouped by category.',
+    //   href: '/dashboard/reports/detailed-ledger',
+    //   icon: ListOrdered,
+    // },
+    // {
+    //   title: 'Chart of Accounts',
+    //   description: 'Summary of total income and expenses by category.',
+    //   href: '/dashboard/reports/chart-of-accounts',
+    //   icon: BookUser,
+    // },
+  ]
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
       <div>
@@ -15,23 +47,25 @@ export default function ReportsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Link href="/dashboard/reports/ai-report" className="group">
-            <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                    <CardTitle className="text-xl">AI Report</CardTitle>
-                    <BrainCircuit className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <CardDescription>Use AI to ask questions about your financial data.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
-                  Generate Report
-                  <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </div>
-              </CardContent>
-            </Card>
-        </Link>
+        {reports.map((report) => (
+          <Link href={report.href} className="group" key={report.title}>
+              <Card className="flex flex-col justify-between h-full hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                      <CardTitle className="text-xl">{report.title}</CardTitle>
+                      <report.icon className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <CardDescription>{report.description}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center text-sm font-medium text-primary group-hover:underline">
+                    Generate Report
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </div>
+                </CardContent>
+              </Card>
+          </Link>
+        ))}
       </div>
     </div>
   );

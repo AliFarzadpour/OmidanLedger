@@ -12,25 +12,21 @@ import { UserBillingForm } from '@/components/admin/user-billing-form';
 export default async function UserManagementPage() {
   const usersSnap = await db.collection('users')
     .where('role', '==', 'landlord')
+    .orderBy('metadata.createdAt', 'desc')
     .get();
 
   const landlords = usersSnap.docs.map(doc => {
     const data = doc.data();
+    // Convert Firestore Timestamp to ISO string for client-side serialization
+    const createdAt = data.metadata?.createdAt;
     return {
       id: doc.id,
       ...data,
-      // Safely convert timestamp for client component
       metadata: {
         ...data.metadata,
-        createdAt: data.metadata?.createdAt?.toDate()?.toISOString() || null,
+        createdAt: createdAt instanceof Timestamp ? createdAt.toDate().toISOString() : null,
       }
     };
-  });
-
-  landlords.sort((a, b) => {
-    const timeA = a.metadata?.createdAt ? new Date(a.metadata.createdAt).getTime() : 0;
-    const timeB = b.metadata?.createdAt ? new Date(b.metadata.createdAt).getTime() : 0;
-    return timeB - timeA;
   });
 
   return (
