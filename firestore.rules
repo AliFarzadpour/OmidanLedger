@@ -41,9 +41,17 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      allow read, create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, create, update: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn();
       allow delete: if isOwner(resource.data.userId);
+
+      match /monthlyStats/{monthId} {
+        allow read, write: if isOwner(resource.data.userId);
+      }
+    }
+
+    match /{path=**}/monthlyStats/{monthId} {
+        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /vendors/{vendorId} {
