@@ -45,6 +45,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
@@ -139,7 +140,6 @@ export function BusinessProfileForm() {
     const auth = getAuth();
     const currentUser = auth.currentUser;
   
-    // 1. Critical Check: Is the user actually recognized by Firebase Auth?
     if (!currentUser) {
       toast({
         variant: "destructive",
@@ -152,26 +152,20 @@ export function BusinessProfileForm() {
     const file = event.target.files?.[0];
     if (!file || !userDocRef) return;
   
-    // 2. Explicitly use the bucket from your console to avoid any project mismatch
     const storagePath = `logos/${currentUser.uid}/${file.name}`;
     const storageRef = ref(storage, storagePath);
   
     try {
       setIsUploading(true);
-      console.log("Attempting upload for UID:", currentUser.uid);
-      console.log("Target Path:", storagePath);
   
-      // 3. Use uploadBytesResumable for better state tracking
       const uploadTask = uploadBytesResumable(storageRef, file);
   
       uploadTask.on('state_changed', 
         (snapshot) => {
           const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
           setProgress(progress);
-          console.log(`Upload is ${progress}% done`);
         }, 
         (error) => {
-          // This is where your 'unauthorized' error is caught
           console.error("Upload failed code:", error.code);
           toast({
             variant: "destructive",
@@ -181,13 +175,10 @@ export function BusinessProfileForm() {
           setIsUploading(false);
         }, 
         async () => {
-          // 4. Success handling
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           
-          // Update Form state
           form.setValue('logoUrl', downloadURL, { shouldDirty: true });
           
-          // Save to Firestore directly (Bypass full form validation)
           await setDoc(userDocRef, { 
             businessProfile: { ...form.getValues(), logoUrl: downloadURL } 
           }, { merge: true });
@@ -228,6 +219,8 @@ export function BusinessProfileForm() {
           </Card>
       )
   }
+  
+  const logoUrl = form.watch('logoUrl');
 
   return (
     <Form {...form}>
@@ -241,12 +234,13 @@ export function BusinessProfileForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-6">
-              <Avatar className="h-24 w-24 rounded-lg">
-                  <AvatarImage key={form.watch('logoUrl')} src={form.watch('logoUrl')} alt="Business Logo" />
-                  <AvatarFallback className="rounded-lg">
-                      <Building2 className="h-10 w-10 text-muted-foreground" />
-                  </AvatarFallback>
-              </Avatar>
+              <div className="w-24 h-24 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
+                {logoUrl ? (
+                    <Image src={logoUrl} alt="Business Logo" width={96} height={96} className="object-contain" />
+                ) : (
+                    <Building2 className="h-10 w-10 text-muted-foreground" />
+                )}
+              </div>
               <div className="flex-1 space-y-2">
                   <Button
                       type="button"
