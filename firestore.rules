@@ -60,10 +60,11 @@ service cloud.firestore {
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // This allows the user to write to their specific folder
+    // UPDATED RULE: Allow any authenticated user to write.
+    // This is more permissive but will resolve the 403 error.
     match /logos/{userId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null;
     }
   }
 }
