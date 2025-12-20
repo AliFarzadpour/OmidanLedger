@@ -17,15 +17,31 @@ export default async function UserManagementPage() {
 
   const landlords = usersSnap.docs.map(doc => {
     const data = doc.data();
-    // Convert Firestore Timestamp to ISO string for client-side serialization
-    const createdAt = data.metadata?.createdAt;
+    
+    // Safely convert all potential timestamps to ISO strings
+    const serializeTimestamps = (obj: any): any => {
+      if (!obj) return obj;
+      if (obj instanceof Timestamp) {
+        return obj.toDate().toISOString();
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(serializeTimestamps);
+      }
+      if (typeof obj === 'object') {
+        const newObj: { [key: string]: any } = {};
+        for (const key in obj) {
+          newObj[key] = serializeTimestamps(obj[key]);
+        }
+        return newObj;
+      }
+      return obj;
+    };
+    
+    const safeData = serializeTimestamps(data);
+
     return {
       id: doc.id,
-      ...data,
-      metadata: {
-        ...data.metadata,
-        createdAt: createdAt instanceof Timestamp ? createdAt.toDate().toISOString() : null,
-      }
+      ...safeData,
     };
   });
 
