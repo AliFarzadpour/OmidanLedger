@@ -18,6 +18,7 @@ import { useAuth, useUser } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function UserNav({ isMobile }: { isMobile: boolean }) {
   const auth = useAuth();
@@ -44,8 +45,19 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     return parts.substring(0, 2).toUpperCase();
   };
 
-  if (!isClient) {
-    return null; // Don't render on the server
+  // Render a skeleton while not on the client or user is loading
+  if (!isClient || !user) {
+    return (
+      <div className="flex items-center gap-4 p-2">
+        <Skeleton className="h-10 w-10 rounded-full" />
+        {!isMobile && (
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+        )}
+      </div>
+    );
   }
 
   const trigger = (
