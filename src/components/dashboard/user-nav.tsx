@@ -1,6 +1,13 @@
 'use client';
 
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import {
+  useUser,
+  useAuth,
+  useFirestore,
+  useDoc,
+  useMemoFirebase,
+} from '@/firebase';
+import { doc } from 'firebase/firestore';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +21,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { CreditCard, LogOut, Settings, User as UserIcon } from 'lucide-react';
-import { useAuth, useUser } from '@/firebase';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -23,8 +29,19 @@ import { Skeleton } from '@/components/ui/skeleton';
 export function UserNav({ isMobile }: { isMobile: boolean }) {
   const auth = useAuth();
   const { user } = useUser();
+  const firestore = useFirestore();
   const router = useRouter();
-  const userAvatar = PlaceHolderImages.find((img) => img.id === 'user-avatar');
+
+  // Fetch the user's full profile to get the logo URL
+  const userDocRef = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [firestore, user]);
+
+  const { data: userData } = useDoc<{
+    businessProfile?: { logoUrl?: string };
+  }>(userDocRef);
+
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -35,12 +52,16 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     await auth.signOut();
     router.push('/login');
   };
-  
+
   const getInitials = (email: string | null | undefined) => {
     if (!email) return '..';
     const parts = email.split('@')[0];
     if (parts.includes('.')) {
-      return parts.split('.').map(p => p[0]).join('').toUpperCase();
+      return parts
+        .split('.')
+        .map((p) => p[0])
+        .join('')
+        .toUpperCase();
     }
     return parts.substring(0, 2).toUpperCase();
   };
@@ -60,15 +81,13 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     );
   }
 
+  const logoUrl = userData?.businessProfile?.logoUrl;
+
   const trigger = (
     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
       <Avatar className="h-10 w-10 border-2 border-primary/50">
-        {userAvatar && (
-          <AvatarImage
-            src={userAvatar.imageUrl}
-            alt="User avatar"
-            data-ai-hint={userAvatar.imageHint}
-          />
+        {logoUrl && (
+          <AvatarImage src={logoUrl} alt="User avatar" />
         )}
         <AvatarFallback>{getInitials(user?.email)}</AvatarFallback>
       </Avatar>
@@ -79,7 +98,9 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
     <DropdownMenuContent className="w-56" align="end" forceMount>
       <DropdownMenuLabel className="font-normal">
         <div className="flex flex-col space-y-1">
-          <p className="text-sm font-medium leading-none">{user?.displayName || user?.email?.split('@')[0]}</p>
+          <p className="text-sm font-medium leading-none">
+            {user?.displayName || user?.email?.split('@')[0]}
+          </p>
           <p className="text-xs leading-none text-muted-foreground">
             {user?.email}
           </p>
@@ -122,27 +143,25 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
   }
 
   return (
-    <div className={cn("hidden md:block")}>
+    <div className={cn('hidden md:block')}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-           <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer">
-              <Avatar className="h-10 w-10 border-2 border-primary/50">
-                {userAvatar && (
-                  <AvatarImage
-                    src={userAvatar.imageUrl}
-                    alt="User avatar"
-                    data-ai-hint={userAvatar.imageHint}
-                  />
-                )}
-                <AvatarFallback>{getInitials(user?.email)}</AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
-                <p className="text-sm font-medium leading-none text-foreground">{user?.displayName || user?.email?.split('@')[0]}</p>
-                <p className="text-xs leading-none text-muted-foreground">
-                   {user?.email}
-                </p>
-              </div>
+          <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-sidebar-accent transition-colors cursor-pointer">
+            <Avatar className="h-10 w-10 border-2 border-primary/50">
+              {logoUrl && (
+                <AvatarImage src={logoUrl} alt="User avatar" />
+              )}
+              <AvatarFallback>{getInitials(user?.email)}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col group-data-[collapsible=icon]:hidden transition-opacity duration-300">
+              <p className="text-sm font-medium leading-none text-foreground">
+                {user?.displayName || user?.email?.split('@')[0]}
+              </p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {user?.email}
+              </p>
             </div>
+          </div>
         </DropdownMenuTrigger>
         {content}
       </DropdownMenu>
