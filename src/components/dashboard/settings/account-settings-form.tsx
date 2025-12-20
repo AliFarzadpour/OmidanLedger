@@ -199,7 +199,7 @@ export function AccountSettingsForm() {
           <CardHeader>
             <CardTitle>Account Settings</CardTitle>
             <CardDescription>
-              Manage your personal account details and password.
+              Manage your personal account details and password functionality.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-8">
