@@ -6,7 +6,7 @@ import { doc, onSnapshot } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Wallet } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form'; 
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials'; 
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/card';
 import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
+import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -162,6 +163,11 @@ export default function PropertyDetailsPage() {
                                     <p className="font-medium">${t.rentAmount}/mo</p>
                                     <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
                                  </div>
+                                  <RecordPaymentModal 
+                                    tenant={t}
+                                    propertyId={property.id}
+                                    landlordId={user.uid}
+                                  />
                               </div>
                           ))}
                        </div>

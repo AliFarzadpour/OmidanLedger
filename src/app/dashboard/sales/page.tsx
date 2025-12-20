@@ -14,27 +14,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FinancialPerformance } from '@/components/dashboard/financial-performance';
-
-// Simple icon component for the KPI card
-function ClockIcon(props: any) {
-  return (
-    <svg
-      {...props}
-      xmlns="http://www.w3.org/2000/svg"
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  )
-}
+import { EnterBillDialog } from '@/components/dashboard/sales/enter-bill-dialog';
 
 export default function SalesHubPage() {
   const router = useRouter();
@@ -68,9 +48,11 @@ export default function SalesHubPage() {
             <CardDescription>Log monthly rent payments from tenants.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full bg-green-600 hover:bg-green-700" asChild>
-              <Link href="/dashboard/properties">Record Payment</Link>
-            </Button>
+             <EnterBillDialog 
+                triggerButton={
+                    <Button className="w-full bg-green-600 hover:bg-green-700">Record Payment</Button>
+                } 
+             />
           </CardContent>
         </Card>
 
