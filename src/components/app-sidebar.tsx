@@ -64,11 +64,6 @@ const data = {
       icon: FileText,
     },
     {
-      title: "Tenants",
-      url: "/dashboard/tenants",
-      icon: Users,
-    },
-    {
       title: "Vendors",
       url: "/dashboard/vendors",
       icon: Users,

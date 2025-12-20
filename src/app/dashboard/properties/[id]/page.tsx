@@ -196,12 +196,14 @@ export default function PropertyDetailsPage() {
         </Tabs>
       </div>
 
-      <InviteTenantModal
-        isOpen={isInviteOpen}
-        onOpenChange={setIsInviteOpen}
-        propertyId={property.id}
-        landlordId={user.uid}
-      />
+      {isInviteOpen && (
+        <InviteTenantModal
+          isOpen={isInviteOpen}
+          onOpenChange={setIsInviteOpen}
+          propertyId={property.id}
+          landlordId={user.uid}
+        />
+      )}
     </>
   );
 }

@@ -16,7 +16,7 @@ interface InviteTenantModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   landlordId: string;
-  propertyId?: string; // Optional: if provided, the property is pre-selected
+  propertyId: string; // Made required
 }
 
 export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId }: InviteTenantModalProps) {
@@ -24,29 +24,15 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
   const [rent, setRent] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const firestore = useFirestore();
-  const [selectedPropertyId, setSelectedPropertyId] = useState(propertyId || '');
-
-  // Fetch properties only if no specific propertyId is provided
-  const propertiesQuery = useCollection(
-    !propertyId && firestore ? query(collection(firestore, 'properties'), where('userId', '==', landlordId)) : null
-  );
-
-  useEffect(() => {
-    // If a propertyId is passed, ensure it's set in the state
-    if (propertyId) {
-      setSelectedPropertyId(propertyId);
-    }
-  }, [propertyId]);
 
   const handleInvite = async () => {
-    if (!selectedPropertyId) {
-      toast({ variant: "destructive", title: "Missing Property", description: "Please select a property for the tenant." });
+    if (!propertyId) {
+      toast({ variant: "destructive", title: "Error", description: "A property ID is required to invite a tenant." });
       return;
     }
     setLoading(true);
     try {
-      await inviteTenant({ email, propertyId: selectedPropertyId, landlordId, rentAmount: Number(rent) });
+      await inviteTenant({ email, propertyId, landlordId, rentAmount: Number(rent) });
       toast({ title: "Invite Sent", description: `Tenant ${email} has been added.` });
       setEmail('');
       setRent('');
@@ -62,9 +48,6 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     if (!open) {
       setEmail('');
       setRent('');
-      if (!propertyId) {
-        setSelectedPropertyId('');
-      }
     }
     onOpenChange(open);
   };
@@ -75,26 +58,10 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><UserPlus /> Invite New Tenant</DialogTitle>
           <DialogDescription>
-            Create a tenant account and link them to a property. They will be invited to set up their portal.
+            Create a tenant account and link them to this property. They will be invited to set up their portal.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
-          {!propertyId && (
-            <div className="grid gap-2">
-              <Label htmlFor="property">Property</Label>
-              <Select onValueChange={setSelectedPropertyId} value={selectedPropertyId}>
-                <SelectTrigger id="property">
-                  <SelectValue placeholder="Select a property..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {propertiesQuery.isLoading && <p>Loading...</p>}
-                  {propertiesQuery.data?.map((prop: any) => (
-                    <SelectItem key={prop.id} value={prop.id}>{prop.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div className="grid gap-2">
             <Label htmlFor="email">Tenant Email</Label>
             <Input id="email" placeholder="tenant@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
