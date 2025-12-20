@@ -236,7 +236,7 @@ export function BusinessProfileForm() {
             <div className="flex items-center gap-6">
               <div className="w-24 h-24 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
                 {logoUrl ? (
-                    <Image src={logoUrl} alt="Business Logo" width={96} height={96} className="object-contain" />
+                    <Image src={logoUrl} alt="Business Logo" width={96} height={96} className="object-contain" key={logoUrl} />
                 ) : (
                     <Building2 className="h-10 w-10 text-muted-foreground" />
                 )}
