@@ -38,7 +38,7 @@ export function getSdks(firebaseApp: FirebaseApp) {
     firebaseApp,
     auth: getAuth(firebaseApp),
     firestore: getFirestore(firebaseApp),
-    storage: getStorage(firebaseApp, firebaseConfig.storageBucket)
+    storage: getStorage(firebaseApp) // CORRECTED: Pass the app instance to share auth context.
   };
 }
 
