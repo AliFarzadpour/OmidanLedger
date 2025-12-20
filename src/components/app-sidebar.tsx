@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   BrainCircuit,
   ShieldCheck, // New Icon for Admin
+  Activity, // New Icon for Health
 } from "lucide-react";
 
 import {
@@ -90,6 +91,11 @@ const data = {
       title: "User Management",
       url: "/admin/users",
       icon: Users,
+    },
+    {
+      title: "System Health",
+      url: "/admin/health",
+      icon: Activity,
     }
   ],
 
