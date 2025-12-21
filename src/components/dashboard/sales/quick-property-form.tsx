@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,8 @@ import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Home, DollarSign, Building } from 'lucide-react';
-import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-
 
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
@@ -30,9 +28,36 @@ const quickSchema = z.object({
   bathrooms: z.coerce.number().optional(),
   squareFootage: z.coerce.number().optional(),
   numberOfUnits: z.coerce.number().optional(),
-  targetRent: z.coerce.number().min(0).optional(),
-  securityDeposit: z.coerce.number().min(0).optional(),
+  targetRent: z.coerce.number().optional(),
+  securityDeposit: z.coerce.number().optional(),
 });
+
+const generateUnitBatch = (firestore: any, propertyRef: any, count: number, userId: string, baseData: any) => {
+  const units = [];
+  for (let i = 1; i <= count; i++) {
+    const unitRef = doc(collection(propertyRef, 'units'));
+    units.push({
+      ref: unitRef,
+      data: {
+        userId,
+        unitNumber: `${100 + i}`,
+        status: 'vacant',
+        // Granular Fields
+        bedrooms: baseData.bedrooms || 1, 
+        bathrooms: baseData.bathrooms || 1,
+        sqft: Math.floor(baseData.squareFootage / count) || 0,
+        amenities: [], // e.g., ["Balcony", "Updated Appliances"]
+        financials: {
+          rent: baseData.targetRent / count || 0,
+          deposit: baseData.securityDeposit / count || 0,
+        },
+        createdAt: new Date().toISOString(),
+      }
+    });
+  }
+  return units;
+};
+
 
 export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
   const { user } = useUser();
@@ -116,19 +141,12 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     batch.set(propertyRef, propertyData);
   
     // --- 3. AUTO-PILOT: SUBCOLLECTION GENERATION ---
-    // This only triggers if the property is multi-unit.
     if (isMultiUnit) {
       const numUnits = data.numberOfUnits || 1;
-      for (let i = 1; i <= numUnits; i++) {
-        const unitRef = doc(collection(propertyRef, 'units'));
-        batch.set(unitRef, {
-          userId: user.uid,
-          unitNumber: `${100 + i}`, // e.g., 101, 102
-          status: 'vacant',
-          targetRent: data.type === 'commercial' ? 0 : (data.targetRent || 0) / numUnits,
-          createdAt: timestamp
-        });
-      }
+      const unitsToCreate = generateUnitBatch(firestore, propertyRef, numUnits, user.uid, data);
+      unitsToCreate.forEach(unit => {
+        batch.set(unit.ref, unit.data);
+      });
     }
   
     // Use a non-blocking commit with detailed error handling
@@ -209,16 +227,25 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </>
         ) : (
-          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-            <Label className="flex items-center gap-2 font-semibold mb-2">
-                <Building className="h-4 w-4 text-slate-500"/>
-                Number of Units
-            </Label>
-            <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
-            <p className="text-xs text-slate-600 mt-2">
-                Enter the number of units in this building. We will auto-generate these placeholders for you to manage individually.
-            </p>
-          </div>
+           <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <Label className="flex items-center gap-2 font-semibold mb-2">
+                    <Building className="h-4 w-4 text-slate-500"/>
+                    Building Configuration
+                </Label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label className="text-xs text-muted-foreground">Number of Units</Label>
+                        <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label className="text-xs text-muted-foreground">Total Square Footage</Label>
+                        <Input type="number" placeholder="e.g., 10000" {...form.register('squareFootage')} />
+                    </div>
+                </div>
+                <p className="text-xs text-slate-600 mt-2">
+                    Enter the number of units and total building size. We'll automatically distribute the square footage.
+                </p>
+            </div>
         )}
 
         <div className="grid gap-2">
