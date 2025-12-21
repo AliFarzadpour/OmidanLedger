@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -113,7 +114,7 @@ export default function PropertyDetailPage() {
     return doc(firestore, 'properties', id);
   }, [firestore, id]);
 
-  const { data: property, isLoading: isLoadingProperty, refetch: refetchProperty } = useDoc(propertyDocRef);
+  const { data: property, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
 
   const unitsQuery = useMemoFirebase(() => {
     if (!firestore || !id) return null;
@@ -170,7 +171,7 @@ export default function PropertyDetailPage() {
           </DialogHeader>
           <PropertyForm 
             initialData={{ id: property.id, ...property }} 
-            onSuccess={() => { refetchProperty(); setIsEditOpen(false); }} 
+            onSuccess={() => { setIsEditOpen(false); }} 
             defaultTab={formTab} 
           />
         </DialogContent>
@@ -180,5 +181,5 @@ export default function PropertyDetailPage() {
   }
 
   // Otherwise, return your original Single Family interface
-  return <PropertyDashboardSFH property={property} onUpdate={refetchProperty}/>;
+  return <PropertyDashboardSFH property={property} onUpdate={() => { /* Realtime updates handle this */ }} />;
 }
