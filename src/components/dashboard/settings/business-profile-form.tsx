@@ -306,15 +306,20 @@ export function BusinessProfileForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value || ""} // Explicitly bind the value
+                    >
                       <FormControl>
-                        <SelectTrigger key={field.value}>
+                        <SelectTrigger key={field.value}> {/* Key forces label update */}
                           <SelectValue placeholder="Select a business type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
                         {BUSINESS_TYPES.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.label}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>

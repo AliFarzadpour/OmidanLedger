@@ -77,8 +77,8 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-        allow read, write: if isSignedIn() && resource.data.userId == request.auth.uid;
-        allow list: if isSignedIn();
+      allow read, write: if resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn();
     }
   }
 }
