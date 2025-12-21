@@ -48,6 +48,7 @@ const getPropertyDataTool = ai.defineTool(
     }
 
     return {
+      userId: propertyData.userId, // <<< FIX: Added this line
       propertyName: propertyData.name,
       propertyAddress: `${propertyData.address.street}, ${propertyData.address.city}, ${propertyData.address.state} ${propertyData.address.zip}`,
       rentAmount: tenantData.rentAmount,
@@ -153,7 +154,7 @@ const leaseAgentFlow = ai.defineFlow(
     await docRef.set({
         id: documentId,
         propertyId: input.propertyId,
-        userId: propertyData.userId, // Assuming userId is on property data
+        userId: propertyData.userId, // <<< FIX: Was missing before
         fileName: fileName,
         fileType: 'lease',
         description: `Auto-generated lease for ${propertyData.tenantName}`,
