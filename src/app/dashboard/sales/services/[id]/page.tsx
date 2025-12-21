@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, use } from 'react'; // 👈 1. Import 'use'
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, getDoc, updateDoc, writeBatch, serverTimestamp, collection } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -19,9 +19,8 @@ import {
   Lock
 } from 'lucide-react';
 
-// 👈 2. Update types: params is now a Promise
-export default function EditServiceInvoicePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params); // 👈 3. Unwrap the params here using React.use()
+export default function EditServiceInvoicePage() {
+  const { id } = useParams();
   
   const router = useRouter();
   const { user } = useUser();
@@ -29,7 +28,6 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // ... (Keep your state definitions exactly the same) ...
   const [status, setStatus] = useState<string>('draft');
   const [invoiceData, setInvoiceData] = useState({
     invoiceNumber: '',
@@ -52,11 +50,10 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
   // Fetch Invoice Data
   useEffect(() => {
     const fetchInvoice = async () => {
-      if (!firestore || !user) return;
+      if (!firestore || !user || !id) return;
 
       try {
-        // 👇 Update this line: Use 'id' instead of 'params.id'
-        const docRef = doc(firestore, 'invoices', id);
+        const docRef = doc(firestore, 'invoices', id as string);
         const docSnap = await getDoc(docRef);
 
         if (docSnap.exists()) {
@@ -85,9 +82,8 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
     };
 
     fetchInvoice();
-  }, [firestore, user, id, router]); // 👈 Update dependency: 'id' instead of 'params.id'
+  }, [firestore, user, id, router]);
 
-  // ... (Keep existing handlers handleAddItem, handleRemoveItem, handleItemChange) ...
   const handleAddItem = () => {
     setItems([...items, { id: Date.now(), description: '', quantity: 1, rate: 0 }]);
   };
@@ -103,13 +99,12 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
 
   // Save / Update Logic
   const handleSave = async (newStatus: 'draft' | 'open') => {
-    if (!firestore || !user) return;
+    if (!firestore || !user || !id) return;
     setSaving(true);
 
     try {
       const batch = writeBatch(firestore);
-      // 👇 Update this line: Use 'id' instead of 'params.id'
-      const invoiceRef = doc(firestore, 'invoices', id);
+      const invoiceRef = doc(firestore, 'invoices', id as string);
 
       batch.update(invoiceRef, {
         status: newStatus,
@@ -129,7 +124,7 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
       if (newStatus === 'open' && status === 'draft') {
         const ledgerRef = doc(collection(firestore, 'ledgerEntries'));
         batch.set(ledgerRef, {
-          transactionId: id, // 👈 Update this line: Use 'id'
+          transactionId: id,
           date: serverTimestamp(),
           description: `Invoice #${invoiceData.invoiceNumber} for ${invoiceData.clientName}`,
           type: 'invoice',
@@ -158,10 +153,7 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="h-8 w-8 animate-spin text-blue-600"/></div>;
 
   return (
-    // ... (Your JSX remains exactly the same) ...
     <div className="max-w-5xl mx-auto p-6 space-y-8">
-      {/* Copy your JSX from the previous file, it doesn't need changes */}
-      {/* Just make sure you paste the full return (...) block here */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="icon" onClick={() => router.back()}>
@@ -331,3 +323,5 @@ export default function EditServiceInvoicePage({ params }: { params: Promise<{ i
     </div>
   );
 }
+
+    
