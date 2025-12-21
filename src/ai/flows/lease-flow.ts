@@ -143,10 +143,10 @@ const leaseAgentFlow = ai.defineFlow(
         },
     });
 
-    const downloadURL = await file.getSignedUrl({
+    const [downloadURL] = await file.getSignedUrl({
         action: 'read',
         expires: '03-09-2491'
-    }).then(urls => urls[0]);
+    });
 
 
     // 5. Save Metadata to Firestore
