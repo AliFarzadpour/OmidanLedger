@@ -1,6 +1,8 @@
 'use server';
 /**
  * @fileOverview An agentic workflow for generating state-compliant lease agreements.
+ * This file has been modified to remove client-side PDF generation libraries (jspdf)
+ * which were causing build errors in the server-side environment.
  */
 
 import { ai } from '@/ai/genkit';
