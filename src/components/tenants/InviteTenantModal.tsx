@@ -1,25 +1,23 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { inviteTenant } from '@/actions/tenant-actions';
 import { useToast } from '@/hooks/use-toast';
-import { useUser, useFirestore, useCollection } from '@/firebase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { collection, query, where } from 'firebase/firestore';
 
 interface InviteTenantModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   landlordId: string;
-  propertyId: string; // Made required
+  propertyId: string;
+  unitId?: string; // Optional unit ID
 }
 
-export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId }: InviteTenantModalProps) {
+export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId, unitId }: InviteTenantModalProps) {
   const [email, setEmail] = useState('');
   const [rent, setRent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -32,7 +30,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     }
     setLoading(true);
     try {
-      await inviteTenant({ email, propertyId, landlordId, rentAmount: Number(rent) });
+      await inviteTenant({ email, propertyId, unitId, landlordId, rentAmount: Number(rent) });
       toast({ title: "Invite Sent", description: `Tenant ${email} has been added.` });
       setEmail('');
       setRent('');

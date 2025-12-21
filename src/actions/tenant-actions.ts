@@ -6,11 +6,13 @@ import { FieldValue } from 'firebase-admin/firestore';
 export async function inviteTenant({
   email,
   propertyId,
+  unitId, // <-- ADDED
   landlordId,
   rentAmount
 }: {
   email: string;
   propertyId: string;
+  unitId?: string; // <-- ADDED
   landlordId: string;
   rentAmount: number;
 }) {
@@ -25,6 +27,7 @@ export async function inviteTenant({
       role: 'tenant', // Sets the restricted role
       landlordId: landlordId,
       associatedPropertyId: propertyId,
+      ...(unitId && { associatedUnitId: unitId }), // <-- ADDED: Link to unit
       status: 'invited',
       billing: {
         rentAmount: rentAmount,
@@ -35,11 +38,29 @@ export async function inviteTenant({
       }
     });
 
-    // 2. Link the tenant to the property
-    await db.collection('properties').doc(propertyId).update({
-      currentTenantId: tenantRef.id,
-      tenantEmail: email.toLowerCase()
-    });
+    // 2. Link the tenant to the property or unit
+    if (unitId) {
+        // For multi-family, add tenant to the unit's tenant array
+        const unitRef = db.doc(`properties/${propertyId}/units/${unitId}`);
+        await unitRef.update({
+            tenants: FieldValue.arrayUnion({
+                id: tenantRef.id,
+                email: email.toLowerCase(),
+                firstName: email.split('@')[0],
+                lastName: '',
+                rentAmount: rentAmount,
+                leaseStart: '',
+                leaseEnd: '',
+            })
+        });
+    } else {
+        // For single-family, link directly to the property
+        await db.collection('properties').doc(propertyId).update({
+            currentTenantId: tenantRef.id,
+            tenantEmail: email.toLowerCase()
+        });
+    }
+
 
     return { success: true, tenantId: tenantRef.id };
   } catch (error: any) {

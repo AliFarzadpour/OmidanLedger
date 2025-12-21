@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -10,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, View, Key, Wrench, FolderArchive, Fingerprint } from 'lucide-react';
+import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, View, Key, Wrench, FolderArchive, Fingerprint, UserPlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useStorage } from '@/firebase';
@@ -18,6 +17,7 @@ import { ref, deleteObject } from 'firebase/storage';
 import { Checkbox } from '@/components/ui/checkbox';
 import { generateRulesForProperty } from '@/lib/rule-engine';
 import { Textarea } from '@/components/ui/textarea';
+import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
 
 
 function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string; unitId: string; landlordId: string }) {
@@ -109,7 +109,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
-  const addTenantButtonRef = useRef<HTMLButtonElement>(null);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
   const { user } = useUser();
 
   const { register, control, handleSubmit, getValues, reset } = useForm({
@@ -143,15 +143,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     control,
     name: "tenants"
   });
-
-  useEffect(() => {
-    if (isOpen) {
-      const timer = setTimeout(() => {
-        addTenantButtonRef.current?.focus();
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen]);
 
   const onSubmit = async (data: any) => {
     if (!firestore || !unit || !user) return;
@@ -191,148 +182,168 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   };
 
   return (
-    <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent key={unit?.id} className="sm:max-w-[550px] overflow-y-auto">
-        <SheetHeader>
-          <div className="flex items-center gap-3">
-             <Input
-                id="unitNumber"
-                {...register('unitNumber')}
-                className="w-28 h-11 text-xl font-bold border-2 focus:border-blue-500"
-              />
-            <SheetTitle className="text-2xl font-black text-slate-900">
-              Unit Management
-            </SheetTitle>
-          </div>
-           <SheetDescription>Update tenant leases, unit specs, and documents.</SheetDescription>
-        </SheetHeader>
-        
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="space-y-1 pt-6">
-                <Accordion type="multiple">
-                
-                <AccordionItem value="tenants">
-                    <AccordionTrigger className="text-lg font-semibold"><Key className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
-                    <AccordionContent className="pt-2">
-                        <div className="space-y-4">
-                            {fields.map((field, index) => (
-                                <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
-                                    <Button 
-                                        type="button" 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        onClick={() => remove(index)}
-                                        className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
-                                        <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
-                                        <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                                        <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
-                                        <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
-                                        <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
-                                    </div>
-                                </div>
-                            ))}
-                            <Button 
-                                ref={addTenantButtonRef}
-                                type="button" 
-                                variant="outline" 
-                                className="w-full border-dashed"
-                                onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 })}
-                            >
-                                <Plus className="mr-2 h-4 w-4" /> Add Tenant
-                            </Button>
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
-
-                 <AccordionItem value="access">
-                    <AccordionTrigger className="text-lg font-semibold"><Fingerprint className="mr-2 h-5 w-5 text-slate-500" /> Access Codes</AccordionTrigger>
-                    <AccordionContent className="pt-4">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2"><Label>Building/Gate Code</Label><Input {...register('access.gateCode')} /></div>
-                                <div className="space-y-2"><Label>Unit Lockbox Code</Label><Input {...register('access.lockboxCode')} /></div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Access Notes</Label>
-                                <Textarea placeholder="e.g., 'Key is under the mat', 'Call before arriving'" {...register('access.notes')} />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
-                
-                <AccordionItem value="specs">
-                    <AccordionTrigger className="text-lg font-semibold"><Wrench className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
-                    <AccordionContent className="pt-4">
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-3 gap-2">
-                                <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
-                                <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
-                                <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
-                            </div>
-                            <div className="space-y-2 pt-4 border-t">
-                                <Label>Amenities</Label>
-                                <Controller
-                                    control={control}
-                                    name="amenities"
-                                    render={({ field }) => (
-                                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                                            {ALL_AMENITIES.map(amenity => (
-                                                <div key={amenity} className="flex items-center gap-2">
-                                                    <Checkbox
-                                                        id={`amenity-${amenity}`}
-                                                        checked={field.value?.includes(amenity)}
-                                                        onCheckedChange={(checked) => {
-                                                            const currentValues = field.value || [];
-                                                            const newValues = checked
-                                                                ? [...currentValues, amenity]
-                                                                : currentValues.filter(val => val !== amenity);
-                                                            field.onChange(newValues);
-                                                        }}
-                                                    />
-                                                    <Label htmlFor={`amenity-${amenity}`} className="font-normal text-sm">
-                                                        {amenity}
-                                                    </Label>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                />
-                            </div>
-                        </div>
-                    </AccordionContent>
-                </AccordionItem>
-
-                <AccordionItem value="documents">
-                    <AccordionTrigger className="text-lg font-semibold"><FolderArchive className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
-                    <AccordionContent className="pt-2">
-                    {unit && user && (
-                        <UnitDocuments propertyId={propertyId} unitId={unit.id} landlordId={user.uid} />
-                    )}
-                    </AccordionContent>
-                </AccordionItem>
-                </Accordion>
+    <>
+      <Sheet open={isOpen} onOpenChange={onOpenChange}>
+        <SheetContent key={unit?.id} className="sm:max-w-[550px] overflow-y-auto">
+          <SheetHeader>
+            <div className="flex items-center gap-3">
+              <Input
+                  id="unitNumber"
+                  {...register('unitNumber')}
+                  className="w-28 h-11 text-xl font-bold border-2 focus:border-blue-500"
+                />
+              <SheetTitle className="text-2xl font-black text-slate-900">
+                Unit Management
+              </SheetTitle>
             </div>
-            
-            <div className="pt-8">
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
-                {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
-              </Button>
-            </div>
-        </form>
-      </SheetContent>
-    </Sheet>
+            <SheetDescription>Update tenant leases, unit specs, and documents.</SheetDescription>
+          </SheetHeader>
+          
+          <form onSubmit={handleSubmit(onSubmit)}>
+              <div className="space-y-1 pt-6">
+                  <Accordion type="multiple" defaultValue={['tenants']}>
+                  
+                  <AccordionItem value="tenants">
+                      <AccordionTrigger className="text-lg font-semibold"><Key className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
+                      <AccordionContent className="pt-2">
+                          <div className="space-y-4">
+                              {fields.map((field, index) => (
+                                  <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
+                                      <Button 
+                                          type="button" 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          onClick={() => remove(index)}
+                                          className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
+                                      >
+                                          <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                      <div className="grid grid-cols-2 gap-4">
+                                          <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4">
+                                          <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                          <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4">
+                                          <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
+                                      </div>
+                                  </div>
+                              ))}
+                              <div className="flex gap-2">
+                                <Button 
+                                    type="button" 
+                                    variant="outline" 
+                                    className="w-full border-dashed"
+                                    onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 })}
+                                >
+                                    <Plus className="mr-2 h-4 w-4" /> Add Manually
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="default"
+                                    className="w-full"
+                                    onClick={() => setIsInviteOpen(true)}
+                                >
+                                    <UserPlus className="mr-2 h-4 w-4" /> Invite Tenant
+                                </Button>
+                              </div>
+                          </div>
+                      </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="access">
+                      <AccordionTrigger className="text-lg font-semibold"><Fingerprint className="mr-2 h-5 w-5 text-slate-500" /> Access Codes</AccordionTrigger>
+                      <AccordionContent className="pt-4">
+                          <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-2"><Label>Building/Gate Code</Label><Input {...register('access.gateCode')} /></div>
+                                  <div className="space-y-2"><Label>Unit Lockbox Code</Label><Input {...register('access.lockboxCode')} /></div>
+                              </div>
+                              <div className="space-y-2">
+                                  <Label>Access Notes</Label>
+                                  <Textarea placeholder="e.g., 'Key is under the mat', 'Call before arriving'" {...register('access.notes')} />
+                              </div>
+                          </div>
+                      </AccordionContent>
+                  </AccordionItem>
+                  
+                  <AccordionItem value="specs">
+                      <AccordionTrigger className="text-lg font-semibold"><Wrench className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
+                      <AccordionContent className="pt-4">
+                          <div className="space-y-4">
+                              <div className="grid grid-cols-3 gap-2">
+                                  <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
+                                  <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
+                                  <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
+                              </div>
+                              <div className="space-y-2 pt-4 border-t">
+                                  <Label>Amenities</Label>
+                                  <Controller
+                                      control={control}
+                                      name="amenities"
+                                      render={({ field }) => (
+                                          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                              {ALL_AMENITIES.map(amenity => (
+                                                  <div key={amenity} className="flex items-center gap-2">
+                                                      <Checkbox
+                                                          id={`amenity-${amenity}`}
+                                                          checked={field.value?.includes(amenity)}
+                                                          onCheckedChange={(checked) => {
+                                                              const currentValues = field.value || [];
+                                                              const newValues = checked
+                                                                  ? [...currentValues, amenity]
+                                                                  : currentValues.filter(val => val !== amenity);
+                                                              field.onChange(newValues);
+                                                          }}
+                                                      />
+                                                      <Label htmlFor={`amenity-${amenity}`} className="font-normal text-sm">
+                                                          {amenity}
+                                                      </Label>
+                                                  </div>
+                                              ))}
+                                          </div>
+                                      )}
+                                  />
+                              </div>
+                          </div>
+                      </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="documents">
+                      <AccordionTrigger className="text-lg font-semibold"><FolderArchive className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
+                      <AccordionContent className="pt-2">
+                      {unit && user && (
+                          <UnitDocuments propertyId={propertyId} unitId={unit.id} landlordId={user.uid} />
+                      )}
+                      </AccordionContent>
+                  </AccordionItem>
+                  </Accordion>
+              </div>
+              
+              <div className="pt-8">
+                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
+                  {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
+                </Button>
+              </div>
+          </form>
+        </SheetContent>
+      </Sheet>
+      {isInviteOpen && user && (
+        <InviteTenantModal
+          isOpen={isInviteOpen}
+          onOpenChange={setIsInviteOpen}
+          landlordId={user.uid}
+          propertyId={propertyId}
+          unitId={unit.id} // Pass the unit ID
+        />
+      )}
+    </>
   );
 }
