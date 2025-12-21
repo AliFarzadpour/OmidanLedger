@@ -45,14 +45,13 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       
       // Use 'resource' for existing documents to ensure only the owner can read/update/delete
-      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       // This allows the list view to work if the frontend uses a proper filter
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       match /monthlyStats/{monthId} {
-        allow read, write: if get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
     }
 
