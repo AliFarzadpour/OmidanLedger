@@ -11,7 +11,6 @@ import {
   type LeaseAgentInput,
   type LeaseAgentOutput
 } from './schemas/lease-flow.schema';
-import jsPDF from 'jspdf';
 
 
 // --- TOOLS (Future Implementation) ---
@@ -92,9 +91,8 @@ const leaseAgentFlow = ai.defineFlow(
     console.log('Generated Lease Text:', leaseText);
     
     // 3. Convert Text to PDF and return as Data URI
-    const doc = new jsPDF();
-    doc.text(leaseText, 10, 10);
-    const pdfDataUri = doc.output('datauristring');
+    // Reverted: PDF generation was causing build errors. Returning placeholder.
+    const pdfDataUri = "data:application/pdf;base64,";
 
 
     return {
