@@ -1,20 +1,22 @@
 
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, collection, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Hash, Users, Plus, Trash2, FileText, UploadCloud, Eye, Download } from 'lucide-react';
+import { Loader2, Hash, Users, Plus, Trash2, FileText, UploadCloud, Eye, View } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useStorage } from '@/firebase';
 import { ref, deleteObject } from 'firebase/storage';
+import { Checkbox } from '@/components/ui/checkbox';
+
 
 function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string; unitId: string; landlordId: string }) {
   const firestore = useFirestore();
@@ -95,6 +97,11 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   );
 }
 
+const ALL_AMENITIES = [
+  "Stove", "Fridge", "Washer", "Dryer", "Dishwasher", "Microwave",
+  "Balcony/Patio", "A/C", "Heating", "Parking", "Hardwood Floors", "Carpet"
+];
+
 
 export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpdate }: any) {
   const firestore = useFirestore();
@@ -109,8 +116,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       bedrooms: unit?.bedrooms || 0,
       bathrooms: unit?.bathrooms || 0,
       sqft: unit?.sqft || 0,
-      targetRent: unit?.financials?.rent || 0,
-      securityDeposit: unit?.financials?.deposit || 0,
+      amenities: unit?.amenities || [],
       tenants: unit?.tenants || []
     }
   });
@@ -122,8 +128,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         bedrooms: unit.bedrooms || 0,
         bathrooms: unit.bathrooms || 0,
         sqft: unit.sqft || 0,
-        targetRent: unit.financials?.rent || 0,
-        securityDeposit: unit.financials?.deposit || 0,
+        amenities: unit.amenities || [],
         tenants: unit.tenants || []
       });
     }
@@ -156,8 +161,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         bedrooms: Number(data.bedrooms),
         bathrooms: Number(data.bathrooms),
         sqft: Number(data.sqft),
-        'financials.rent': Number(data.targetRent),
-        'financials.deposit': Number(data.securityDeposit),
+        amenities: data.amenities,
         tenants: data.tenants
       });
       
@@ -229,7 +233,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                             type="button" 
                             variant="outline" 
                             className="w-full border-dashed"
-                            onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: getValues('targetRent') || 0, deposit: getValues('securityDeposit') || 0 })}
+                            onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 })}
                           >
                               <Plus className="mr-2 h-4 w-4" /> Add Tenant
                           </Button>
@@ -240,20 +244,51 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
               <AccordionItem value="specs">
                 <AccordionTrigger className="text-lg font-semibold"><Hash className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
                 <AccordionContent className="pt-4">
-                      <div className="space-y-4">
-                          <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-2">
                             <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
                             <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
                             <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
-                          </div>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2"><Label className="text-xs">Default Rent ($)</Label><Input type="number" {...register('targetRent')} /></div>
-                            <div className="space-y-2"><Label className="text-xs">Default Deposit ($)</Label><Input type="number" {...register('securityDeposit')} /></div>
-                          </div>
-                      </div>
+                        </div>
+                        <div className="space-y-2 pt-4 border-t">
+                            <Label>Amenities</Label>
+                            <Controller
+                                control={control}
+                                name="amenities"
+                                render={({ field }) => (
+                                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                                        {ALL_AMENITIES.map(amenity => (
+                                            <div key={amenity} className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id={`amenity-${amenity}`}
+                                                    checked={field.value?.includes(amenity)}
+                                                    onCheckedChange={(checked) => {
+                                                        const currentValues = field.value || [];
+                                                        const newValues = checked
+                                                            ? [...currentValues, amenity]
+                                                            : currentValues.filter(val => val !== amenity);
+                                                        field.onChange(newValues);
+                                                    }}
+                                                />
+                                                <Label htmlFor={`amenity-${amenity}`} className="font-normal text-sm">
+                                                    {amenity}
+                                                </Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            />
+                        </div>
+                    </div>
                 </AccordionContent>
               </AccordionItem>
             </Accordion>
+            
+            <div className="pt-4">
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
+              </Button>
+            </div>
           </form>
 
           <Accordion type="single" collapsible>
@@ -266,12 +301,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                 </AccordionContent>
             </AccordionItem>
           </Accordion>
-
-          <div className="pt-4 border-t">
-            <Button onClick={handleSubmit(onSubmit)} className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
-              {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
-            </Button>
-          </div>
         </div>
       </SheetContent>
     </Sheet>
