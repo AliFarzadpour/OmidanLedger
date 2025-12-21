@@ -26,8 +26,8 @@ const quickSchema = z.object({
   bathrooms: z.coerce.number().optional(),
   squareFootage: z.coerce.number().optional(),
   numberOfUnits: z.coerce.number().optional(),
-  targetRent: z.coerce.number().min(0),
-  securityDeposit: z.coerce.number().min(0),
+  targetRent: z.coerce.number().min(0).optional(),
+  securityDeposit: z.coerce.number().min(0).optional(),
 });
 
 export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
@@ -99,7 +99,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         userId: user.uid,
         ...data,
         isMultiUnit,
-        financials: { targetRent: data.targetRent, securityDeposit: data.securityDeposit },
+        financials: { targetRent: data.targetRent || 0, securityDeposit: data.securityDeposit || 0 },
         mortgage: { hasMortgage: 'no' }, 
         management: { isManaged: 'self' },
         tenants: [], 
@@ -115,7 +115,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
             userId: user.uid,
             unitNumber: `${100 + i}`,
             status: 'vacant',
-            targetRent: data.type === 'commercial' ? 0 : data.targetRent / numUnits,
+            targetRent: data.type === 'commercial' ? 0 : (data.targetRent || 0) / numUnits,
             createdAt: timestamp
           });
         }
@@ -180,7 +180,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
                 </div>
                 <div className="bg-slate-50 p-3 rounded-lg flex gap-3 items-center border border-slate-200">
                     <Building className="h-5 w-5 text-slate-500"/>
-                    <p className="text-xs text-slate-600">We will auto-generate placeholders for each unit to manage individually.</p>
+                    <p className="text-xs text-slate-600">You've selected a multi-unit property. We will auto-generate {form.watch('numberOfUnits') || 0} unit placeholders for you to manage.</p>
                 </div>
             </div>
         )}
@@ -195,23 +195,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
           <div className="grid gap-2"><Label>State</Label><Input {...form.register('address.state')} /></div>
           <div className="grid gap-2"><Label>Zip</Label><Input {...form.register('address.zip')} /></div>
         </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="grid gap-2">
-            <Label>{isMultiUnitType ? 'Total Building Rent ($)' : 'Target Rent ($)'}</Label>
-            <div className="relative">
-               <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-               <Input className="pl-8" type="number" {...form.register('targetRent')} />
-            </div>
-          </div>
-          <div className="grid gap-2">
-            <Label>Deposit ($)</Label>
-            <div className="relative">
-               <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-               <Input className="pl-8" type="number" {...form.register('securityDeposit')} />
-            </div>
-          </div>
-        </div>
+        
       </div>
 
       <div className="flex justify-end pt-4">
