@@ -65,6 +65,7 @@ service cloud.firestore {
     match /accounts/{accountId} {
         allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
         allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow list: if isSignedIn();
     }
 
     match /{path=**}/monthlyStats/{monthId} {
@@ -72,14 +73,14 @@ service cloud.firestore {
     }
 
     match /vendors/{vendorId} {
-        // A user can create/read/update/delete a vendor document if the document's userId matches their own.
-        allow read, write: if request.auth.uid == request.resource.data.userId;
+        // A user can manage vendors if the document's userId matches their own.
+        allow read, write: if request.resource.data.userId == request.auth.uid;
         allow list: if isSignedIn();
     }
     
     match /bills/{billId} {
         // A user can manage bills if the document's userId matches their own.
-        allow read, write: if request.auth.uid == request.resource.data.userId;
+        allow read, write: if request.resource.data.userId == request.auth.uid;
         allow list: if isSignedIn();
     }
 
