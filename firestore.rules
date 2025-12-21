@@ -60,6 +60,10 @@ service cloud.firestore {
       match /documents/{documentId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
+      
+      match /units/{unitId} {
+        allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+      }
     }
 
     match /accounts/{accountId} {
@@ -73,15 +77,15 @@ service cloud.firestore {
     }
 
     match /vendors/{vendorId} {
-        // A user can manage vendors if the document's userId matches their own.
-        allow read, write: if request.resource.data.userId == request.auth.uid;
-        allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn();
     }
     
     match /bills/{billId} {
-        // A user can manage bills if the document's userId matches their own.
-        allow read, write: if request.resource.data.userId == request.auth.uid;
-        allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn();
     }
 
     match /invoices/{invoiceId} {
