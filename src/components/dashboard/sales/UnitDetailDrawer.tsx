@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Hash } from 'lucide-react';
 
-export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange }: any) {
+export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpdate }: any) {
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -35,6 +35,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange }: any
       });
       
       toast({ title: "Success", description: "Unit identity and details updated." });
+      if (onUpdate) onUpdate(); // Call the refetch function from parent
       onOpenChange(false);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -57,7 +58,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange }: any
         </SheetHeader>
         
         <form onSubmit={handleUpdate} className="space-y-8 pt-6">
-          {/* SECTION 1: IDENTITY (THE MISSING EDITABLE PART) */}
+          {/* SECTION 1: IDENTITY (THE EDITABLE PART) */}
           <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
             <div className="space-y-2">
               <Label htmlFor="unitNumber" className="text-xs uppercase tracking-widest font-bold text-slate-500">

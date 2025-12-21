@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Bed, Bath, Square, Users, DollarSign } from 'lucide-react';
-import { UnitDetailDrawer } from '@/components/dashboard/properties/UnitDetailDrawer';
+import { UnitDetailDrawer } from '@/components/dashboard/sales/UnitDetailDrawer';
 
 export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string, units: any[], onUpdate: () => void }) {
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
@@ -55,7 +55,7 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
                 <div className="flex justify-between items-center">
                   <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Monthly Rent</span>
                   <span className="text-sm font-bold text-blue-600">
-                    ${unit.financials?.rent?.toLocaleString() || '0'}
+                    ${(unit.financials?.rent || unit.targetRent)?.toLocaleString() || '0'}
                   </span>
                 </div>
               </div>
