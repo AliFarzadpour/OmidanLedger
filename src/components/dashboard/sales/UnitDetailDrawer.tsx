@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -45,6 +44,24 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
       toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
     }
   };
+  
+  const handleDownload = async (url: string, fileName: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Download Error:", error);
+      toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download the file.' });
+    }
+  };
 
   const getSafeDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
@@ -56,33 +73,31 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   };
   
   return (
-    <>
-      <div className="space-y-3">
-        <Button type="button" size="sm" variant="outline" onClick={() => setUploaderOpen(true)} className="w-full gap-2 border-dashed">
-          <UploadCloud className="h-4 w-4" /> Upload Document to Unit
-        </Button>
-        {isLoading && <p className="text-xs text-center text-muted-foreground">Loading documents...</p>}
-        {!isLoading && (!documents || documents.length === 0) && (
-          <p className="text-xs text-center text-muted-foreground py-2">No documents for this unit.</p>
-        )}
-        <div className="space-y-2">
-          {documents?.map((doc: any) => (
-            <div key={doc.id} className="flex items-center justify-between p-2 bg-slate-100 border rounded-md">
-              <div className="flex items-center gap-2">
-                 <FileText className="h-4 w-4 text-slate-500"/>
-                 <div>
-                    <p className="text-sm font-medium">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground">{getSafeDate(doc.uploadedAt)}</p>
-                 </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer"><Button type="button" variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4"/></Button></a>
-                <a href={doc.downloadUrl} download><Button type="button" variant="ghost" size="icon" className="h-7 w-7"><Download className="h-4 w-4"/></Button></a>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-500" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4"/></Button>
-              </div>
+    <div className="space-y-3">
+      <Button type="button" size="sm" variant="outline" onClick={() => setUploaderOpen(true)} className="w-full gap-2 border-dashed">
+        <UploadCloud className="h-4 w-4" /> Upload Document to Unit
+      </Button>
+      {isLoading && <p className="text-xs text-center text-muted-foreground">Loading documents...</p>}
+      {!isLoading && (!documents || documents.length === 0) && (
+        <p className="text-xs text-center text-muted-foreground py-2">No documents for this unit.</p>
+      )}
+      <div className="space-y-2">
+        {documents?.map((doc: any) => (
+          <div key={doc.id} className="flex items-center justify-between p-2 bg-slate-100 border rounded-md">
+            <div className="flex items-center gap-2">
+               <FileText className="h-4 w-4 text-slate-500"/>
+               <div>
+                  <p className="text-sm font-medium">{doc.fileName}</p>
+                  <p className="text-xs text-muted-foreground">{getSafeDate(doc.uploadedAt)}</p>
+               </div>
             </div>
-          ))}
-        </div>
+            <div className="flex items-center gap-1">
+              <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer"><Button type="button" variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4"/></Button></a>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownload(doc.downloadUrl, doc.fileName)}><Download className="h-4 w-4" /></Button>
+              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-500" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4"/></Button>
+            </div>
+          </div>
+        ))}
       </div>
       {isUploaderOpen && (
         <TenantDocumentUploader
@@ -94,7 +109,7 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
           onSuccess={() => refetchDocs()}
         />
       )}
-    </>
+    </div>
   );
 }
 
@@ -191,85 +206,84 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         </SheetHeader>
         
         <div className="space-y-6 pt-6">
-          <Accordion type="multiple" defaultValue={['tenants', 'specs', 'documents']}>
-            
-            <AccordionItem value="tenants">
-              <AccordionTrigger className="text-lg font-semibold"><Users className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
-              <AccordionContent className="pt-2">
-                 <form onSubmit={handleSubmit(onSubmit)}>
-                    <div className="space-y-4">
-                        {fields.map((field, index) => (
-                            <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
-                                <Button 
-                                    type="button" 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={() => remove(index)}
-                                    className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
-                                    <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
-                                    <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                                    <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
-                                    <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
-                                    <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
-                                </div>
-                            </div>
-                        ))}
-                        <Button 
-                          ref={addTenantButtonRef}
-                          type="button" 
-                          variant="outline" 
-                          className="w-full border-dashed"
-                          onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: getValues('targetRent') || 0, deposit: getValues('securityDeposit') || 0 })}
-                        >
-                            <Plus className="mr-2 h-4 w-4" /> Add Tenant
-                        </Button>
-                    </div>
-                </form>
-              </AccordionContent>
-            </AccordionItem>
-            
+          <form onSubmit={handleSubmit(onSubmit)}>
+            <Accordion type="multiple" defaultValue={['tenants', 'specs']}>
+              
+              <AccordionItem value="tenants">
+                <AccordionTrigger className="text-lg font-semibold"><Users className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
+                <AccordionContent className="pt-2">
+                      <div className="space-y-4">
+                          {fields.map((field, index) => (
+                              <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
+                                  <Button 
+                                      type="button" 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      onClick={() => remove(index)}
+                                      className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
+                                  >
+                                      <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                      <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
+                                  </div>
+                              </div>
+                          ))}
+                          <Button 
+                            ref={addTenantButtonRef}
+                            type="button" 
+                            variant="outline" 
+                            className="w-full border-dashed"
+                            onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: getValues('targetRent') || 0, deposit: getValues('securityDeposit') || 0 })}
+                          >
+                              <Plus className="mr-2 h-4 w-4" /> Add Tenant
+                          </Button>
+                      </div>
+                </AccordionContent>
+              </AccordionItem>
+              
+              <AccordionItem value="specs">
+                <AccordionTrigger className="text-lg font-semibold"><Hash className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
+                <AccordionContent className="pt-4">
+                      <div className="space-y-4">
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
+                            <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
+                            <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2"><Label className="text-xs">Default Rent ($)</Label><Input type="number" {...register('targetRent')} /></div>
+                            <div className="space-y-2"><Label className="text-xs">Default Deposit ($)</Label><Input type="number" {...register('securityDeposit')} /></div>
+                          </div>
+                      </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </form>
+
+          <Accordion type="single" collapsible>
             <AccordionItem value="documents">
-              <AccordionTrigger className="text-lg font-semibold"><FileText className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
-              <AccordionContent className="pt-2">
-                 {unit && user && (
-                    <UnitDocuments propertyId={propertyId} unitId={unit.id} landlordId={user.uid} />
-                 )}
-              </AccordionContent>
-            </AccordionItem>
-            
-            <AccordionItem value="specs">
-              <AccordionTrigger className="text-lg font-semibold"><Hash className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
-              <AccordionContent className="pt-4">
-                 <form onSubmit={handleSubmit(onSubmit)}>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
-                          <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
-                          <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2"><Label className="text-xs">Default Rent ($)</Label><Input type="number" {...register('targetRent')} /></div>
-                          <div className="space-y-2"><Label className="text-xs">Default Deposit ($)</Label><Input type="number" {...register('securityDeposit')} /></div>
-                        </div>
-                    </div>
-                 </form>
-              </AccordionContent>
+                <AccordionTrigger className="text-lg font-semibold"><FileText className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
+                <AccordionContent className="pt-2">
+                  {unit && user && (
+                      <UnitDocuments propertyId={propertyId} unitId={unit.id} landlordId={user.uid} />
+                  )}
+                </AccordionContent>
             </AccordionItem>
           </Accordion>
-          
 
           <div className="pt-4 border-t">
             <Button onClick={handleSubmit(onSubmit)} className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
