@@ -283,17 +283,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                     </div>
                 </AccordionContent>
               </AccordionItem>
-            </Accordion>
-            
-            <div className="pt-6">
-              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
-                {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
-              </Button>
-            </div>
-          </form>
 
-          <Accordion type="multiple" className="pt-4">
-            <AccordionItem value="documents">
+              <AccordionItem value="documents">
                 <AccordionTrigger className="text-lg font-semibold"><FolderArchive className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
                 <AccordionContent className="pt-2">
                   {unit && user && (
@@ -301,7 +292,15 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                   )}
                 </AccordionContent>
             </AccordionItem>
-          </Accordion>
+            </Accordion>
+            
+            <div className="pt-8">
+              <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
+              </Button>
+            </div>
+          </form>
+
         </div>
       </SheetContent>
     </Sheet>
