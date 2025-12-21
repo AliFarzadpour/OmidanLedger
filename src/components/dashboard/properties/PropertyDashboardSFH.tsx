@@ -340,24 +340,6 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     }
   };
 
-  const handleDownload = async (url: string, fileName: string) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error("Download Error:", error);
-      toast({ variant: 'destructive', title: 'Download Failed', description: 'Could not download the file.' });
-    }
-  };
-
   const getSafeDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
     if (typeof timestamp === 'string') {
@@ -416,9 +398,9 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
                     <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="gap-1"><Eye className="h-3 w-3"/> View</Button>
                     </a>
-                    <Button variant="outline" size="sm" className="gap-1" onClick={() => handleDownload(doc.downloadUrl, doc.fileName)}>
-                        <Download className="h-3 w-3"/> Download
-                    </Button>
+                    <a href={doc.downloadUrl} download={doc.fileName}>
+                      <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
+                    </a>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
                         <Trash2 className="h-4 w-4"/>
                     </Button>
