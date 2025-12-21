@@ -7,15 +7,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import * as VisuallyHidden from '@radix-ui/react-visually-hidden'; 
+import { Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
 import { ImportPropertiesDialog } from '@/components/dashboard/properties/import-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AddPropertyModal } from '@/components/dashboard/sales/AddPropertyModal';
 
 export default function PropertiesListPage() {
   const { user } = useUser();
@@ -29,7 +27,6 @@ export default function PropertiesListPage() {
   
   const { data: properties, isLoading, refetch } = useCollection(propertiesQuery);
   
-  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
@@ -87,19 +84,7 @@ export default function PropertiesListPage() {
         
         <div className="flex items-center gap-2">
           <ImportPropertiesDialog />
-          <Dialog open={isQuickAddOpen} onOpenChange={setIsQuickAddOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="mr-2 h-4 w-4" /> Add New Property
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[500px]">
-               <DialogHeader>
-                 <DialogTitle>Add New Property</DialogTitle>
-               </DialogHeader>
-               <QuickPropertyForm onSuccess={() => { setIsQuickAddOpen(false); refetch(); }} />
-            </DialogContent>
-          </Dialog>
+          <AddPropertyModal onSuccess={refetch} />
         </div>
       </div>
 
@@ -110,7 +95,7 @@ export default function PropertiesListPage() {
           <Home className="h-12 w-12 mx-auto text-slate-300 mb-4" />
           <h3 className="text-lg font-medium">No properties yet</h3>
           <p className="text-sm text-muted-foreground">Add your first property to start tracking.</p>
-          <Button variant="outline" className="mt-4" onClick={() => setIsQuickAddOpen(true)}>Add Property</Button>
+          <AddPropertyModal onSuccess={refetch} />
         </div>
       )}
 
