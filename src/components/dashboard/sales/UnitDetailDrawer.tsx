@@ -64,21 +64,20 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent key={unit?.id} className="sm:max-w-[550px] overflow-y-auto">
-        <SheetHeader className="border-b pb-4">
-          <SheetTitle className="text-2xl font-black flex items-center gap-2 text-slate-900">
-            Unit Management
-          </SheetTitle>
+        <SheetHeader>
+          <div className="flex items-center gap-3">
+             <Input
+                id="unitNumber"
+                {...register('unitNumber')}
+                className="w-28 h-11 text-xl font-bold border-2 focus:border-blue-500"
+              />
+            <SheetTitle className="text-2xl font-black text-slate-900">
+              Unit Management
+            </SheetTitle>
+          </div>
         </SheetHeader>
         
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pt-6">
-          
-          <div className="space-y-2">
-            <Input 
-              id="unitNumber"
-              placeholder="Unit Number, e.g., 101, Penthouse..."
-              {...register('unitNumber')}
-            />
-          </div>
           
           {/* TENANTS SECTION */}
           <div>
