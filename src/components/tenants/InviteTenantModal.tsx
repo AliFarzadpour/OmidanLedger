@@ -19,7 +19,6 @@ interface InviteTenantModalProps {
 
 export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId, unitId }: InviteTenantModalProps) {
   const [email, setEmail] = useState('');
-  const [rent, setRent] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -30,10 +29,9 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     }
     setLoading(true);
     try {
-      await inviteTenant({ email, propertyId, unitId, landlordId, rentAmount: Number(rent) });
+      await inviteTenant({ email, propertyId, unitId, landlordId });
       toast({ title: "Invite Sent", description: `Tenant ${email} has been added.` });
       setEmail('');
-      setRent('');
       onOpenChange(false);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Error", description: e.message });
@@ -45,7 +43,6 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       setEmail('');
-      setRent('');
     }
     onOpenChange(open);
   };
@@ -63,10 +60,6 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
           <div className="grid gap-2">
             <Label htmlFor="email">Tenant Email</Label>
             <Input id="email" placeholder="tenant@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="rent">Monthly Rent Amount</Label>
-            <Input id="rent" placeholder="1500" type="number" value={rent} onChange={(e) => setRent(e.target.value)} />
           </div>
         </div>
         <DialogFooter>

@@ -8,13 +8,11 @@ export async function inviteTenant({
   propertyId,
   unitId, // <-- ADDED
   landlordId,
-  rentAmount
 }: {
   email: string;
   propertyId: string;
   unitId?: string; // <-- ADDED
   landlordId: string;
-  rentAmount: number;
 }) {
 
   try {
@@ -30,7 +28,7 @@ export async function inviteTenant({
       ...(unitId && { associatedUnitId: unitId }), // <-- ADDED: Link to unit
       status: 'invited',
       billing: {
-        rentAmount: rentAmount,
+        rentAmount: 0,
         balance: 0
       },
       metadata: {
@@ -48,7 +46,7 @@ export async function inviteTenant({
                 email: email.toLowerCase(),
                 firstName: email.split('@')[0],
                 lastName: '',
-                rentAmount: rentAmount,
+                rentAmount: 0,
                 leaseStart: '',
                 leaseEnd: '',
             })
