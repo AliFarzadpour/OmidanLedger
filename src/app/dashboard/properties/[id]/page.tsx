@@ -36,6 +36,7 @@ import { deleteObject, ref } from 'firebase/storage';
 import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
+import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
@@ -144,46 +145,65 @@ export default function PropertyDetailsPage() {
     setLeaseAgentOpen(true);
   };
   
-  const estimatedInterest = useMemo(() => {
-    if (!property?.mortgage?.loanBalance || !property?.mortgage?.interestRate) return 0;
-    // Simple interest calculation for the month
-    const monthlyRate = (property.mortgage.interestRate / 100) / 12;
-    return property.mortgage.loanBalance * monthlyRate;
-  }, [property]);
-
-
   if (isLoading || !user) return <div className="p-8 text-muted-foreground">Loading property details...</div>;
   if (!property) return <div className="p-8">Property not found.</div>;
+  
+  const isMultiUnit = property.isMultiUnit === true;
 
+  // --- COMMON HEADER ---
+  const header = (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard/properties">
+          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold">{property.name}</h1>
+          <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
+        </div>
+      </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogTrigger asChild>
+          <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
+        </DialogTrigger>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Property Settings</DialogTitle>
+            <DialogDescription>
+              Update tenants, mortgage details, and configuration for {property.name}.
+            </DialogDescription>
+          </DialogHeader>
+          <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} defaultTab={formTab} />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+  // --- MULTI-UNIT VIEW ---
+  if (isMultiUnit) {
+    return (
+      <div className="space-y-6 p-6">
+        {header}
+        <FinancialPerformance propertyId={id as string} />
+        <Card>
+           <CardHeader>
+             <CardTitle>Unit Matrix</CardTitle>
+             <CardDescription>Overview of all units in this building.</CardDescription>
+           </CardHeader>
+           <CardContent>
+             <UnitMatrix propertyId={id as string} />
+           </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // --- SINGLE-FAMILY VIEW ---
   return (
     <>
       <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/dashboard/properties">
-              <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold">{property.name}</h1>
-              <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
-            </div>
-          </div>
-
-          <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Property Settings</DialogTitle>
-                <DialogDescription>
-                  Update tenants, mortgage details, and configuration for {property.name}.
-                </DialogDescription>
-              </DialogHeader>
-              <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} defaultTab={formTab} />
-            </DialogContent>
-          </Dialog>
-        </div>
+        {header}
 
         <FinancialPerformance propertyId={id as string} />
 
