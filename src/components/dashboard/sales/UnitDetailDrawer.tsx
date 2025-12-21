@@ -10,13 +10,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, View, Key, Wrench, FolderArchive } from 'lucide-react';
+import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, View, Key, Wrench, FolderArchive, Fingerprint } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useStorage } from '@/firebase';
 import { ref, deleteObject } from 'firebase/storage';
 import { Checkbox } from '@/components/ui/checkbox';
 import { generateRulesForProperty } from '@/lib/rule-engine';
+import { Textarea } from '@/components/ui/textarea';
 
 
 function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string; unitId: string; landlordId: string }) {
@@ -118,7 +119,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       bathrooms: unit?.bathrooms || 0,
       sqft: unit?.sqft || 0,
       amenities: unit?.amenities || [],
-      tenants: unit?.tenants || []
+      tenants: unit?.tenants || [],
+      access: unit?.access || { gateCode: '', lockboxCode: '', notes: '' }
     }
   });
   
@@ -130,7 +132,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         bathrooms: unit.bathrooms || 0,
         sqft: unit.sqft || 0,
         amenities: unit.amenities || [],
-        tenants: unit.tenants || []
+        tenants: unit.tenants || [],
+        access: unit.access || { gateCode: '', lockboxCode: '', notes: '' }
       });
     }
   }, [unit, reset]);
@@ -163,7 +166,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         bathrooms: Number(data.bathrooms),
         sqft: Number(data.sqft),
         amenities: data.amenities,
-        tenants: data.tenants
+        tenants: data.tenants,
+        access: data.access,
       });
       
       toast({ title: "Success", description: "Unit identity and details updated." });
@@ -249,6 +253,22 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                             >
                                 <Plus className="mr-2 h-4 w-4" /> Add Tenant
                             </Button>
+                        </div>
+                    </AccordionContent>
+                </AccordionItem>
+
+                 <AccordionItem value="access">
+                    <AccordionTrigger className="text-lg font-semibold"><Fingerprint className="mr-2 h-5 w-5 text-slate-500" /> Access Codes</AccordionTrigger>
+                    <AccordionContent className="pt-4">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2"><Label>Building/Gate Code</Label><Input {...register('access.gateCode')} /></div>
+                                <div className="space-y-2"><Label>Unit Lockbox Code</Label><Input {...register('access.lockboxCode')} /></div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Access Notes</Label>
+                                <Textarea placeholder="e.g., 'Key is under the mat', 'Call before arriving'" {...register('access.notes')} />
+                            </div>
                         </div>
                     </AccordionContent>
                 </AccordionItem>
