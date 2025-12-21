@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch, getDoc, getDocs } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch, getDoc, getDocs, Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -209,7 +209,20 @@ export function PropertyForm({
         // Fetch existing units to merge with the update
         const unitsCollection = collection(firestore, `properties/${currentPropertyId}/units`);
         const unitsSnap = await getDocs(unitsCollection);
-        const units = unitsSnap.docs.map(d => d.data());
+        
+        // Convert Timestamps to ISO strings for serialization
+        const units = unitsSnap.docs.map(d => {
+            const unitData = d.data();
+            const sanitizedUnit: { [key: string]: any } = {};
+            for (const key in unitData) {
+                if (unitData[key] instanceof Timestamp) {
+                    sanitizedUnit[key] = unitData[key].toDate().toISOString();
+                } else {
+                    sanitizedUnit[key] = unitData[key];
+                }
+            }
+            return sanitizedUnit;
+        });
 
         const fullPropertyData = {
           ...data,
