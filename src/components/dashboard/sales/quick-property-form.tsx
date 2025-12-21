@@ -22,6 +22,9 @@ const quickSchema = z.object({
     state: z.string().min(2, "State is required"),
     zip: z.string().min(5, "Zip is required"),
   }),
+  bedrooms: z.coerce.number().optional(),
+  bathrooms: z.coerce.number().optional(),
+  squareFootage: z.coerce.number().optional(),
   targetRent: z.coerce.number().min(0),
   securityDeposit: z.coerce.number().min(0),
 });
@@ -38,6 +41,9 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       name: '',
       type: 'single-family',
       address: { street: '', city: '', state: '', zip: '' },
+      bedrooms: 0,
+      bathrooms: 0,
+      squareFootage: 0,
       targetRent: 0,
       securityDeposit: 0,
     }
@@ -150,6 +156,12 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
             </div>
         </div>
 
+        <div className="grid grid-cols-3 gap-2">
+            <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
+            <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
+            <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
+        </div>
+
         <div className="grid gap-2">
           <Label>Street Address</Label>
           <Input placeholder="123 Main St" {...form.register('address.street')} />
@@ -187,3 +199,5 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     </div>
   );
 }
+
+    

@@ -31,6 +31,9 @@ import { PropertyFinancials } from './property-financials';
 const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
   type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
+  bedrooms: z.coerce.number().optional(),
+  bathrooms: z.coerce.number().optional(),
+  squareFootage: z.coerce.number().optional(),
   address: z.object({
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "City is required"),
@@ -146,6 +149,9 @@ type PropertyFormValues = z.infer<typeof propertySchema>;
 const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   name: '',
   type: 'single-family',
+  bedrooms: 0,
+  bathrooms: 0,
+  squareFootage: 0,
   address: { street: '', city: '', state: '', zip: '' },
   financials: { targetRent: 0, securityDeposit: 0 },
   management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
@@ -596,16 +602,23 @@ export function PropertyForm({
                   <Input {...form.register('name')} />
                   {form.formState.errors.name && <span className="text-red-500 text-xs">Required</span>}
               </div>
-              <div className="grid gap-2"><Label>Type</Label>
-                <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
-                   <SelectTrigger><SelectValue/></SelectTrigger>
-                   <SelectContent>
-                      <SelectItem value="single-family">Single Family</SelectItem>
-                      <SelectItem value="multi-family">Multi-Family</SelectItem>
-                      <SelectItem value="condo">Condo</SelectItem>
-                      <SelectItem value="commercial">Commercial</SelectItem>
-                   </SelectContent>
-                </Select>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2"><Label>Type</Label>
+                    <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
+                    <SelectTrigger><SelectValue/></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="single-family">Single Family</SelectItem>
+                        <SelectItem value="multi-family">Multi-Family</SelectItem>
+                        <SelectItem value="condo">Condo</SelectItem>
+                        <SelectItem value="commercial">Commercial</SelectItem>
+                    </SelectContent>
+                    </Select>
+                </div>
+                 <div className="grid grid-cols-3 gap-2">
+                    <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
+                    <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
+                    <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
+                 </div>
               </div>
               <div className="grid gap-2">
                   <Label>Address</Label>
@@ -863,3 +876,4 @@ export function PropertyForm({
   );
 }
 
+    
