@@ -15,6 +15,7 @@ import {
 import { db } from '@/lib/admin-db';
 import legalDictionary from '../../../docs/legal/lease-dictionary.json';
 import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { getStorage } from 'firebase-admin/storage';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -25,7 +26,7 @@ import { v4 as uuidv4 } from 'uuid';
 const getPropertyDataTool = ai.defineTool(
   {
     name: 'getPropertyData',
-    description: 'Fetches property and tenant details from the database using their IDs.',
+    description: 'Fetches property, tenant, and landlord details from the database using their IDs.',
     inputSchema: z.object({ 
       propertyId: z.string().describe("The Firestore document ID for the property."), 
       tenantId: z.string().describe("The email address of the tenant, used as a temporary unique ID.") 
@@ -47,8 +48,22 @@ const getPropertyDataTool = ai.defineTool(
         throw new Error(`Tenant with email ${tenantId} not found in property ${propertyId}.`);
     }
 
+    // NEW: Fetch Landlord's Business Profile
+    let landlordName = 'Landlord'; // Default
+    if (propertyData.userId) {
+        const userDoc = await db.collection('users').doc(propertyData.userId).get();
+        if (userDoc.exists) {
+            const userData = userDoc.data();
+            if (userData?.businessProfile?.businessName) {
+                landlordName = userData.businessProfile.businessName;
+            }
+        }
+    }
+
+
     return {
       userId: propertyData.userId,
+      landlordName: landlordName,
       propertyName: propertyData.name,
       propertyAddress: `${propertyData.address.street}, ${propertyData.address.city}, ${propertyData.address.state} ${propertyData.address.zip}`,
       rentAmount: tenantData.rentAmount,
@@ -101,7 +116,7 @@ const leaseAgentFlow = ai.defineFlow(
         **Data Provided:**
         - **Property:** ${propertyData.propertyName} at ${propertyData.propertyAddress}
         - **Tenant:** ${propertyData.tenantName} (${propertyData.tenantEmail})
-        - **Landlord:** [Your Company Name Here] (You will act as the landlord)
+        - **Landlord:** ${propertyData.landlordName}
         - **Rent:** $${propertyData.rentAmount}/month, due on the 1st.
         - **Security Deposit:** $${propertyData.securityDeposit}
         - **Lease Term:** From ${propertyData.leaseStartDate} to ${propertyData.leaseEndDate}
@@ -113,7 +128,7 @@ const leaseAgentFlow = ai.defineFlow(
 
         **Formatting and Content Instructions:**
         1.  **Title:** Start with a clear title: "Residential Lease Agreement".
-        2.  **Structure:** Use clear, numbered headings for each section (e.g., "1. PARTIES", "2. PREMISES", "3. TERM", etc.).
+        2.  **Structure:** Use clear, numbered headings for each section (e.g., "1. PARTIES", "2. PREMISES", "3. TERM", etc.). In the Parties section, list the Landlord as "${propertyData.landlordName}".
         3.  **Completeness:** Generate a complete lease agreement. After the "Security Deposit" section, you MUST include the following standard clauses:
             - **USE OF PREMISES:** The premises shall be used and occupied by Tenant exclusively as a private single-family residence.
             - **UTILITIES:** Tenant shall be responsible for arranging and paying for all utility services required on the premises.
@@ -132,7 +147,7 @@ const leaseAgentFlow = ai.defineFlow(
     
     // 3. Generate PDF
     const doc = new jsPDF();
-    const splitText = doc.splitTextToSize(leaseText, 180);
+    const splitText = doc.splitTextToSize(leaseText, 180); // A4 width approx 210mm, margins 15mm
     doc.text(splitText, 15, 20);
     const pdfOutput = doc.output('arraybuffer');
     const pdfBuffer = Buffer.from(pdfOutput);
@@ -153,7 +168,7 @@ const leaseAgentFlow = ai.defineFlow(
 
     const [downloadURL] = await file.getSignedUrl({
         action: 'read',
-        expires: '03-09-2491'
+        expires: '03-09-2491' // Far-future expiration date
     });
 
 
@@ -174,7 +189,7 @@ const leaseAgentFlow = ai.defineFlow(
 
     return {
       leaseDocumentUrl: downloadURL,
-      summary: `Lease draft created and saved to documents tab for ${propertyData.tenantName} at ${propertyData.propertyName}.`,
+      summary: `Lease draft created for ${propertyData.tenantName} at ${propertyData.propertyName}.`,
       complianceStatus: 'review_needed', 
     };
   }
