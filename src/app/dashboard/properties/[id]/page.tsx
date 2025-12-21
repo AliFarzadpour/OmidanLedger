@@ -4,7 +4,7 @@ import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase
 import { doc, collection, query, writeBatch } from 'firebase/firestore';
 import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
-import { Loader2, ArrowLeft, Bot, Building } from 'lucide-react';
+import { Loader2, ArrowLeft, Bot, Building, Plus } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -20,6 +20,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { AddUnitDialog } from '@/components/dashboard/properties/AddUnitDialog';
 
 
 function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units: any[] }) {
@@ -139,7 +140,10 @@ export default function PropertyDetailPage() {
                   <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
                 </div>
             </div>
-            {units && <BulkOperationsDialog propertyId={id} units={units} />}
+            <div className="flex items-center gap-2">
+              {units && <BulkOperationsDialog propertyId={id} units={units} />}
+              <AddUnitDialog propertyId={id} onUnitAdded={refetchUnits} />
+            </div>
         </header>
         
         <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
