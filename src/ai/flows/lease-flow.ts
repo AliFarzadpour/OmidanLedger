@@ -144,61 +144,82 @@ const leaseAgentFlow = ai.defineFlow(
     }
     
     // 3. Generate PDF
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const margin = 25.4; // 1 inch margin
+    const doc = new jsPDF({ unit: 'in', format: 'letter' });
+    const margin = 1; // 1 inch margin
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const maxLineWidth = pageWidth - (margin * 2);
     let currentY = margin;
 
-    // Set Font Styles
-    const FONT_BODY = 11;
-    const FONT_H1 = 16;
-    const FONT_H2 = 12;
-
     const addHeaderFooter = () => {
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
-        // Header
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.setTextColor(150);
-        doc.text(`Lease Agreement | ${propertyData.propertyAddress}`, margin, margin - 15);
+        
+        // Header
+        doc.text(`Lease Agreement | ${propertyData.propertyAddress}`, margin, margin - 0.5);
+
         // Footer
-        doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - margin + 15, { align: 'center' });
+        const footerText = `Page ${i} of ${pageCount}`;
+        const textWidth = doc.getStringUnitWidth(footerText) * doc.getFontSize() / doc.internal.scaleFactor;
+        doc.text(footerText, (pageWidth - textWidth) / 2, pageHeight - (margin - 0.5));
       }
     };
 
-    // Process each line of the generated text
     const lines = leaseText.split('\n');
     for (const line of lines) {
-        if (currentY > pageHeight - margin) { // Check for page break
+        if (currentY > pageHeight - margin) {
             doc.addPage();
             currentY = margin;
         }
 
-        let isHeader = false;
-        if (line.match(/^\d+\.\s/)) { // Main section like "1. PARTIES"
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(FONT_H2);
-            isHeader = true;
-            currentY += 4; // Add space before main headers
-        } else if (line.match(/^\d+\.\d+\s/)) { // Subsection like "1.1 Landlord"
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(FONT_BODY);
-            isHeader = true;
-        } else {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(FONT_BODY);
+        let isHeader1 = false;
+        let isHeader2 = false;
+
+        // Main Title (e.g., "Residential Lease Agreement")
+        if (line.trim().toUpperCase() === "RESIDENTIAL LEASE AGREEMENT") {
+            doc.setFont('times', 'bold');
+            doc.setFontSize(16);
+            doc.text(line, pageWidth / 2, currentY, { align: 'center' });
+            currentY += 0.3;
+            doc.setDrawColor(200); // Light gray line
+            doc.line(margin, currentY, pageWidth - margin, currentY);
+            currentY += 0.3;
+            continue;
         }
 
+        // Main Section (e.g., "1. PARTIES")
+        if (line.match(/^\d+\.\s[A-Z\s]+$/)) {
+            isHeader1 = true;
+            doc.setFont('times', 'bold');
+            doc.setFontSize(12);
+            currentY += 0.2; // Space before main header
+        } 
+        // Sub-section (e.g., "1.1 Landlord")
+        else if (line.match(/^\d+\.\d+\s/)) {
+            isHeader2 = true;
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(10);
+        }
+        // Body text
+        else {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+        }
+        
         const splitText = doc.splitTextToSize(line, maxLineWidth);
         doc.text(splitText, margin, currentY);
-        currentY += (splitText.length * (isHeader ? 6 : 5)); // Adjust line height based on type
+        
+        // Adjust Y position based on text height
+        currentY += splitText.length * (isHeader1 ? 0.25 : 0.2);
+        
+        if (isHeader1) currentY += 0.1; // Extra space after main header
     }
-    
-    addHeaderFooter(); // Add headers and footers to all pages
+
+    addHeaderFooter();
 
     const pdfOutput = doc.output('arraybuffer');
     const pdfBuffer = Buffer.from(pdfOutput);
