@@ -214,9 +214,9 @@ export default function PropertyDetailsPage() {
               </Card>
               <Card>
                  <CardHeader className="pb-2">
-                  <CardDescription>Est. Monthly Interest</CardDescription>
+                  <CardDescription>Target Rent</CardDescription>
                   <CardTitle className="text-2xl font-bold">
-                    {formatCurrency(estimatedInterest)}
+                    {formatCurrency(property.financials?.targetRent || 0)}
                   </CardTitle>
                 </CardHeader>
               </Card>
