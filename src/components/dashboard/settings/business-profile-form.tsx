@@ -63,6 +63,16 @@ const businessProfileSchema = z.object({
 
 type BusinessProfileFormValues = z.infer<typeof businessProfileSchema>;
 
+// Define this outside your component or in a constants file
+const BUSINESS_TYPES = [
+  { id: 'sole-proprietorship', label: 'Sole Proprietorship' },
+  { id: 'llc', label: 'LLC' },
+  { id: 's-corp', label: 'S-Corporation' },
+  { id: 'c-corp', label: 'C-Corporation' },
+  { id: 'non-profit', label: 'Non-Profit' },
+  { id: 'other', label: 'Other' },
+];
+
 export function BusinessProfileForm() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -296,22 +306,16 @@ export function BusinessProfileForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Type</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || ""}
-                    >
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
                       <FormControl>
                         <SelectTrigger key={field.value}>
                           <SelectValue placeholder="Select a business type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="sole-proprietorship">Sole Proprietorship</SelectItem>
-                        <SelectItem value="llc">LLC</SelectItem>
-                        <SelectItem value="s-corp">S-Corporation</SelectItem>
-                        <SelectItem value="c-corp">C-Corporation</SelectItem>
-                        <SelectItem value="non-profit">Non-Profit</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        {BUSINESS_TYPES.map((type) => (
+                          <SelectItem key={type.id} value={type.id}>{type.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
