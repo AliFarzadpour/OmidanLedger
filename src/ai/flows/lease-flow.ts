@@ -13,7 +13,7 @@ import {
   type LeaseAgentOutput
 } from './schemas/lease-flow.schema';
 import { db } from '@/lib/admin-db';
-import legalDictionary from '../../../../docs/legal/lease-dictionary.json';
+import legalDictionary from '../../../docs/legal/lease-dictionary.json';
 
 
 // --- TOOLS ---
