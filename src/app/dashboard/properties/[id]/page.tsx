@@ -187,9 +187,12 @@ export default function PropertyDetailsPage() {
         {header}
         <FinancialPerformance propertyId={id as string} />
         <Card>
-           <CardHeader>
-             <CardTitle>Unit Matrix</CardTitle>
-             <CardDescription>Overview of all units in this building.</CardDescription>
+           <CardHeader className="flex flex-row items-center justify-between">
+             <div>
+                <CardTitle>Unit Matrix</CardTitle>
+                <CardDescription>Overview of all units in this building.</CardDescription>
+             </div>
+             <Button variant="outline">Building Operations</Button>
            </CardHeader>
            <CardContent>
              <UnitMatrix propertyId={id as string} />
