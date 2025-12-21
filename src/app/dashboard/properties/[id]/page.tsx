@@ -322,6 +322,10 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const { data: documents, isLoading } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
+    if (!firestore || !storage) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+        return;
+    }
     if (!docData?.storagePath) {
         toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
         return;
@@ -346,6 +350,12 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
 
   const getSafeDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
+    if (typeof timestamp === 'string') {
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString();
+        }
+    }
     if (timestamp.seconds) {
       return new Date(timestamp.seconds * 1000).toLocaleDateString();
     }
