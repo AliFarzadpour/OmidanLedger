@@ -2,7 +2,7 @@
 
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, writeBatch } from 'firebase/firestore';
-import { UnitMatrix } from '@/components/dashboard/properties/UnitMatrix';
+import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
 import { Loader2, ArrowLeft, Bot, Building } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -38,7 +38,7 @@ function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units
         
         units.forEach((unit: any) => {
             const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
-            batch.update(unitRef, { targetRent: rentValue });
+            batch.update(unitRef, { rent: rentValue });
         });
 
         try {
