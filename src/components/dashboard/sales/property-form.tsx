@@ -26,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PropertyFinancials } from './property-financials';
+import { generateRulesForProperty } from '@/lib/rule-engine';
 
 // --- SCHEMA DEFINITION (BUILDING-LEVEL) ---
 const propertySchema = z.object({
@@ -199,21 +200,18 @@ export function PropertyForm({
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
 
   const onSubmit = async (data: PropertyFormValues) => {
-    if (!user || !firestore) return;
+    if (!user || !firestore || !currentPropertyId) return;
     setIsSaving(true);
     
     try {
-        const batch = writeBatch(firestore);
+        const propertyRef = doc(firestore, 'properties', currentPropertyId);
+        await updateDoc(propertyRef, data);
+        
+        toast({ title: "Property Updated", description: "Building-level details have been saved." });
 
-        if (isEditMode && currentPropertyId) {
-            const propertyRef = doc(firestore, 'properties', currentPropertyId);
-            batch.update(propertyRef, data);
-            await batch.commit();
-            toast({ title: "Property Updated", description: "Building-level details have been saved." });
-        } else {
-           // Create logic is handled in QuickPropertyForm
-           throw new Error("Creation via this detailed form is not supported. Use Quick Add.");
-        }
+        // Generate rules after successful save
+        await generateRulesForProperty(currentPropertyId, data, user.uid);
+        toast({ title: "Smart Rules Updated", description: "AI categorization rules have been synced with property details." });
         
         if (onSuccess) onSuccess();
 
