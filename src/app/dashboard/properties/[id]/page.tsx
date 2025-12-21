@@ -52,7 +52,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
         state: 'TX',
       });
       setResult(flowResult);
-      toast({ title: 'Lease Sent!', description: 'The lease has been generated and sent for signature.' });
+      toast({ title: 'Lease Saved!', description: 'The lease has been generated and saved to your documents tab.' });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
@@ -74,7 +74,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
             <div className="bg-slate-50 p-4 rounded-lg border">
                 <h4 className="font-semibold text-slate-800">Smart Summary</h4>
                 <p className="text-sm text-slate-600 mt-1">
-                    I have prepared a Texas-compliant lease for {tenant.firstName} {tenant.lastName}. I adjusted the security deposit return to 30 days and added the 2025 Flood Disclosure required for {propertyId}.
+                    I will generate a Texas-compliant lease for {tenant.firstName} {tenant.lastName} and save it to this property's documents tab.
                 </p>
             </div>
             <div>
@@ -88,7 +88,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleConfirm} disabled={loading} className="bg-primary hover:bg-primary/90">
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
-            Confirm & Send
+            Confirm & Generate
           </Button>
         </DialogFooter>
       </DialogContent>

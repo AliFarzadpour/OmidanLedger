@@ -14,6 +14,9 @@ import {
 } from './schemas/lease-flow.schema';
 import { db } from '@/lib/admin-db';
 import legalDictionary from '../../../docs/legal/lease-dictionary.json';
+import jsPDF from 'jspdf';
+import { getStorage } from 'firebase-admin/storage';
+import { v4 as uuidv4 } from 'uuid';
 
 
 // --- TOOLS ---
@@ -119,18 +122,51 @@ const leaseAgentFlow = ai.defineFlow(
         throw new Error("AI failed to generate lease text.");
     }
     
-    console.log('Generated Lease Text:', leaseText);
-    
-    // The PDF generation has been removed as it was causing build errors.
-    // In a real application, this is where you would convert `leaseText` to a PDF
-    // and upload it to storage. For now, we return a placeholder.
-    const pdfDataUri = "data:application/pdf;base64,";
+    // 3. Generate PDF
+    const doc = new jsPDF();
+    doc.text(leaseText, 10, 10);
+    const pdfOutput = doc.output('arraybuffer');
+    const pdfBuffer = Buffer.from(pdfOutput);
+
+    // 4. Upload to Firebase Storage
+    const storage = getStorage();
+    const bucket = storage.bucket(process.env.GCLOUD_STORAGE_BUCKET || 'studio-7576922301-bac28.appspot.com');
+    const documentId = uuidv4();
+    const fileName = `lease-agreement-${input.tenantId.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+    const storagePath = `property_documents/${input.propertyId}/${documentId}-${fileName}`;
+    const file = bucket.file(storagePath);
+
+    await file.save(pdfBuffer, {
+        metadata: {
+            contentType: 'application/pdf',
+        },
+    });
+
+    const downloadURL = await file.getSignedUrl({
+        action: 'read',
+        expires: '03-09-2491'
+    }).then(urls => urls[0]);
+
+
+    // 5. Save Metadata to Firestore
+    const docRef = db.collection('properties').doc(input.propertyId).collection('documents').doc(documentId);
+    await docRef.set({
+        id: documentId,
+        propertyId: input.propertyId,
+        userId: propertyData.userId, // Assuming userId is on property data
+        fileName: fileName,
+        fileType: 'lease',
+        description: `Auto-generated lease for ${propertyData.tenantName}`,
+        downloadUrl: downloadURL,
+        storagePath: storagePath,
+        uploadedAt: new Date().toISOString(),
+    });
 
 
     return {
-      leaseDocumentUrl: pdfDataUri,
-      summary: `Lease draft created for ${propertyData.tenantName} at ${propertyData.propertyName}.`,
-      complianceStatus: 'review_needed', // Always requires review initially
+      leaseDocumentUrl: downloadURL,
+      summary: `Lease draft created and saved to documents tab for ${propertyData.tenantName} at ${propertyData.propertyName}.`,
+      complianceStatus: 'review_needed', 
     };
   }
 );
