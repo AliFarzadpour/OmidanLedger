@@ -18,7 +18,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const [isSaving, setIsSaving] = useState(false);
   const addTenantButtonRef = useRef<HTMLButtonElement>(null);
 
-  const { register, control, handleSubmit, getValues } = useForm({
+  const { register, control, handleSubmit, getValues, reset } = useForm({
     defaultValues: {
       unitNumber: unit?.unitNumber || '',
       bedrooms: unit?.bedrooms || 0,
@@ -29,6 +29,21 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       tenants: unit?.tenants || []
     }
   });
+  
+  useEffect(() => {
+    if (unit) {
+      reset({
+        unitNumber: unit.unitNumber || '',
+        bedrooms: unit.bedrooms || 0,
+        bathrooms: unit.bathrooms || 0,
+        sqft: unit.sqft || 0,
+        targetRent: unit.financials?.rent || 0,
+        securityDeposit: unit.financials?.deposit || 0,
+        tenants: unit.tenants || []
+      });
+    }
+  }, [unit, reset]);
+
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -37,7 +52,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
   useEffect(() => {
     if (isOpen) {
-      // Use a short timeout to ensure the button is in the DOM and focusable
       const timer = setTimeout(() => {
         addTenantButtonRef.current?.focus();
       }, 100);
