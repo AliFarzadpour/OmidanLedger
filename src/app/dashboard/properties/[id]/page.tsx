@@ -40,8 +40,6 @@ export default function PropertyDetailsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [isUploaderOpen, setUploaderOpen] = useState(false);
-  const [selectedTenantForUpload, setSelectedTenantForUpload] = useState<any>(null);
 
   const defaultTab = searchParams.get('tab') || 'overview';
   const [formTab, setFormTab] = useState('general');
@@ -69,11 +67,6 @@ export default function PropertyDetailsPage() {
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
     setIsEditOpen(true);
-  }
-
-  const handleOpenUploader = (tenant: any) => {
-    setSelectedTenantForUpload(tenant);
-    setUploaderOpen(true);
   }
 
   if (isLoading || !user) return <div className="p-8 text-muted-foreground">Loading property details...</div>;
@@ -188,7 +181,7 @@ export default function PropertyDetailsPage() {
           </TabsContent>
           
           <TabsContent value="documents" className="mt-6">
-              <TenantDocuments tenantId={property.currentTenantId} landlordId={user.uid} />
+              <PropertyDocuments propertyId={id as string} landlordId={user.uid} />
           </TabsContent>
 
           <TabsContent value="financials" className="mt-6">
@@ -217,41 +210,21 @@ export default function PropertyDetailsPage() {
           landlordId={user.uid}
         />
       )}
-      
-      {isUploaderOpen && selectedTenantForUpload && (
-        <TenantDocumentUploader
-          isOpen={isUploaderOpen}
-          onOpenChange={setUploaderOpen}
-          tenantId={selectedTenantForUpload.id}
-          landlordId={user.uid}
-        />
-      )}
     </>
   );
 }
 
 
-function TenantDocuments({ tenantId, landlordId }: { tenantId: string, landlordId: string}) {
+function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
   const firestore = useFirestore();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
 
   const docsQuery = useMemoFirebase(() => {
-    if (!firestore || !tenantId) return null;
-    return query(collection(firestore, `users/${tenantId}/documents`));
-  }, [firestore, tenantId]);
+    if (!firestore || !propertyId) return null;
+    return query(collection(firestore, `properties/${propertyId}/documents`));
+  }, [firestore, propertyId]);
 
   const { data: documents, isLoading } = useCollection(docsQuery);
-
-  if (!tenantId) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Documents</CardTitle>
-          <CardDescription>No tenant is currently assigned to this property.</CardDescription>
-        </CardHeader>
-      </Card>
-    )
-  }
 
   return (
     <>
@@ -259,7 +232,7 @@ function TenantDocuments({ tenantId, landlordId }: { tenantId: string, landlordI
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>Document Storage</CardTitle>
-            <CardDescription>Lease agreements, credit reports, and other files for the current tenant.</CardDescription>
+            <CardDescription>Lease agreements, inspection reports, and other files for this property.</CardDescription>
           </div>
           <Button size="sm" onClick={() => setUploaderOpen(true)} className="gap-2">
             <UploadCloud className="h-4 w-4" /> Upload File
@@ -270,7 +243,7 @@ function TenantDocuments({ tenantId, landlordId }: { tenantId: string, landlordI
           {!isLoading && (!documents || documents.length === 0) && (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
                 <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
-                <p className="text-sm text-muted-foreground">No documents uploaded for this tenant yet.</p>
+                <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
             </div>
           )}
           {!isLoading && documents && documents.length > 0 && (
@@ -279,7 +252,7 @@ function TenantDocuments({ tenantId, landlordId }: { tenantId: string, landlordI
                 <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 border rounded-md">
                   <div>
                     <p className="font-medium">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground">Type: {doc.fileType} | Uploaded: {new Date(doc.uploadedAt.seconds * 1000).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground">Type: {doc.fileType} | Uploaded: {new Date(doc.uploadedAt?.seconds * 1000).toLocaleDateString()}</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
@@ -297,10 +270,12 @@ function TenantDocuments({ tenantId, landlordId }: { tenantId: string, landlordI
         <TenantDocumentUploader
           isOpen={isUploaderOpen}
           onOpenChange={setUploaderOpen}
-          tenantId={tenantId}
+          propertyId={propertyId}
           landlordId={landlordId}
         />
       )}
     </>
   )
 }
+
+    

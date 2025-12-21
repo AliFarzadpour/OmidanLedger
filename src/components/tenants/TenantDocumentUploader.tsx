@@ -24,11 +24,11 @@ import { Loader2, FileUp, CheckCircle } from 'lucide-react';
 interface UploaderProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
-    tenantId: string;
+    propertyId: string;
     landlordId: string;
 }
 
-export function TenantDocumentUploader({ isOpen, onOpenChange, tenantId, landlordId }: UploaderProps) {
+export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landlordId }: UploaderProps) {
     const firestore = useFirestore();
     const storage = useStorage();
     const { toast } = useToast();
@@ -46,14 +46,14 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, tenantId, landlor
     };
 
     const handleUpload = async () => {
-        if (!file || !tenantId || !landlordId) {
+        if (!file || !propertyId || !landlordId) {
             toast({ variant: 'destructive', title: 'Missing Information', description: 'Please select a file and ensure IDs are set.' });
             return;
         }
         setIsUploading(true);
 
         const documentId = uuidv4();
-        const storagePath = `tenant_documents/${tenantId}/${documentId}-${file.name}`;
+        const storagePath = `property_documents/${propertyId}/${documentId}-${file.name}`;
         const storageRef = ref(storage, storagePath);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -69,12 +69,12 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, tenantId, landlor
             },
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                const docRef = doc(firestore, `users/${tenantId}/documents`, documentId);
+                const docRef = doc(firestore, `properties/${propertyId}/documents`, documentId);
 
                 await setDoc(docRef, {
                     id: documentId,
-                    userId: tenantId,
-                    landlordId: landlordId,
+                    propertyId: propertyId,
+                    userId: landlordId,
                     fileName: file.name,
                     fileType: fileType,
                     downloadUrl: downloadURL,
@@ -94,8 +94,8 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, tenantId, landlor
         <Dialog open={isOpen} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Upload Tenant Document</DialogTitle>
-                    <DialogDescription>Add a file to this tenant's secure document store.</DialogDescription>
+                    <DialogTitle>Upload Document</DialogTitle>
+                    <DialogDescription>Add a file to this property's secure document store.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div
@@ -122,6 +122,8 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, tenantId, landlor
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="lease">Lease Agreement</SelectItem>
+                                <SelectItem value="inspection">Inspection Report</SelectItem>
+                                <SelectItem value="deed">Deed / Title</SelectItem>
                                 <SelectItem value="credit_report">Credit Report</SelectItem>
                                 <SelectItem value="id">Identification</SelectItem>
                                 <SelectItem value="other">Other</SelectItem>
@@ -140,3 +142,4 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, tenantId, landlor
         </Dialog>
     );
 }
+    

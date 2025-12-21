@@ -37,13 +37,6 @@ service cloud.firestore {
         match /categoryMappings/{mappingId} {
             allow read, write: if isOwner(userId);
         }
-
-        match /documents/{documentId} {
-            // A tenant can read their own documents
-            allow get, list: if isOwner(userId) || isLandlordOfTenant(userId);
-            // Only the landlord can create/update/delete documents for their tenant
-            allow write: if isLandlordOfTenant(userId);
-        }
     }
     
     match /{path=**}/transactions/{transactionId} {
@@ -61,6 +54,10 @@ service cloud.firestore {
       allow list: if isSignedIn();
 
       match /monthlyStats/{monthId} {
+        allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+      }
+      
+      match /documents/{documentId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
     }
@@ -99,11 +96,11 @@ service firebase.storage {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Allow landlord to write to a tenant's document folder.
-    // Tenant can only read from their own folder.
-    match /tenant_documents/{tenantId}/{documentId} {
-        allow read: if request.auth != null && (request.auth.uid == tenantId || get(/databases/(default)/documents/users/$(tenantId)).data.landlordId == request.auth.uid);
-        allow write: if request.auth != null && get(/databases/(default)/documents/users/$(tenantId)).data.landlordId == request.auth.uid;
+    // Allow a user to read/write to the documents folder of a property they own.
+    match /property_documents/{propertyId}/{documentId} {
+        allow read, write: if request.auth != null && get(/databases/(default)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
     }
   }
 }
+
+    

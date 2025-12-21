@@ -465,22 +465,22 @@
       },
       "required": ["totalLandlords", "totalTenants", "totalProperties"]
     },
-    "TenantDocument": {
+    "PropertyDocument": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "TenantDocument",
+      "title": "PropertyDocument",
       "type": "object",
-      "description": "Represents a file uploaded for a specific tenant.",
+      "description": "Represents a file uploaded for a specific property (e.g. lease, inspection).",
       "properties": {
         "id": { "type": "string", "description": "Unique identifier for the document." },
-        "userId": { "type": "string", "description": "The UID of the user (tenant) this document belongs to." },
-        "landlordId": { "type": "string", "description": "The UID of the landlord who uploaded this document." },
+        "propertyId": { "type": "string", "description": "The ID of the property this document belongs to." },
+        "userId": { "type": "string", "description": "The UID of the user who owns the property." },
         "fileName": { "type": "string", "description": "The original name of the uploaded file." },
-        "fileType": { "type": "string", "enum": ["lease", "credit_report", "id", "other"], "description": "The type of document." },
+        "fileType": { "type": "string", "enum": ["lease", "credit_report", "id", "inspection", "deed", "other"], "description": "The type of document." },
         "downloadUrl": { "type": "string", "format": "uri", "description": "The public URL to download the file from Firebase Storage." },
         "storagePath": { "type": "string", "description": "The full path to the file in Firebase Storage." },
         "uploadedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["id", "userId", "landlordId", "fileName", "fileType", "downloadUrl", "storagePath", "uploadedAt"]
+      "required": ["id", "propertyId", "userId", "fileName", "fileType", "downloadUrl", "storagePath", "uploadedAt"]
     }
   },
   "auth": {
@@ -566,6 +566,26 @@
           ]
         }
       },
+       {
+        "path": "/properties/{propertyId}/documents/{documentId}",
+        "definition": {
+          "entityName": "PropertyDocument",
+          "schema": {
+            "$ref": "#/backend/entities/PropertyDocument"
+          },
+          "description": "Stores documents uploaded for a specific property. Access is inherited from the parent property.",
+          "params": [
+            {
+              "name": "propertyId",
+              "description": "The unique ID of the property."
+            },
+            {
+              "name": "documentId",
+              "description": "The unique ID of the document."
+            }
+          ]
+        }
+      },
       {
         "path": "/properties/{propertyId}/monthlyStats/{monthId}",
         "definition": {
@@ -628,28 +648,9 @@
           "description": "Singleton document for platform-wide statistics. Should only be writable by admin-level server processes.",
           "params": []
         }
-      },
-      {
-        "path": "/users/{userId}/documents/{documentId}",
-        "definition": {
-          "entityName": "TenantDocument",
-          "schema": {
-            "$ref": "#/backend/entities/TenantDocument"
-          },
-          "description": "Stores documents uploaded for a specific user (tenant). Access is restricted to the tenant and their landlord.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique ID of the user (tenant)."
-            },
-            {
-              "name": "documentId",
-              "description": "The unique ID of the document."
-            }
-          ]
-        }
       }
     ],
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
+    
