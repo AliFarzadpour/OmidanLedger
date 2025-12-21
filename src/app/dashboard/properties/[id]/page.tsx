@@ -48,7 +48,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
       // For now, hardcoding 'TX' as per the user story.
       const flowResult = await generateLease({
         propertyId: propertyId,
-        tenantId: tenant.id, // Assuming tenant object has an ID
+        tenantId: tenant.id, // tenant.id is now being passed correctly
         state: 'TX',
       });
       setResult(flowResult);
@@ -139,7 +139,8 @@ export default function PropertyDetailsPage() {
   }
 
   const handleOpenLeaseAgent = (tenant: any) => {
-    setSelectedTenantForLease(tenant);
+    // FIX: Assign the email as a temporary unique ID
+    setSelectedTenantForLease({...tenant, id: tenant.email });
     setLeaseAgentOpen(true);
   };
 
