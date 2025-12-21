@@ -305,13 +305,12 @@ export function BusinessProfileForm() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Business Type</FormLabel>
-                    <Select 
-                      onValueChange={field.onChange} 
-                      defaultValue={field.value}
-                      value={field.value || ""} // Forces Select to watch the form state
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value || ""}
                     >
                       <FormControl>
-                        <SelectTrigger key={field.value}> {/* Key forces a re-render when data arrives */}
+                        <SelectTrigger key={field.value || "loading"}>
                           <SelectValue placeholder="Select a business type" />
                         </SelectTrigger>
                       </FormControl>
