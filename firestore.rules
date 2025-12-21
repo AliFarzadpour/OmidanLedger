@@ -50,6 +50,10 @@ service cloud.firestore {
       }
     }
 
+    match /accounts/{accountId} {
+        allow read, create, update, delete: if request.auth.uid == request.resource.data.userId;
+    }
+
     match /{path=**}/monthlyStats/{monthId} {
         allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
@@ -65,7 +69,7 @@ service cloud.firestore {
     }
 
     match /invoices/{invoiceId} {
-        allow read, write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow read, write: if isSignedIn() && resource.data.userId == request.auth.uid;
         allow list: if isSignedIn();
     }
   }
