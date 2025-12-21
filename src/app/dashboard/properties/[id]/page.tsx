@@ -4,7 +4,7 @@ import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase
 import { doc, collection, query, writeBatch } from 'firebase/firestore';
 import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
-import { Loader2, ArrowLeft, Bot, Building, Plus } from 'lucide-react';
+import { Loader2, ArrowLeft, Bot, Building, Plus, Edit } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { AddUnitDialog } from '@/components/dashboard/properties/AddUnitDialog';
+import { PropertyForm } from '@/components/dashboard/sales/property-form';
 
 
 function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units: any[] }) {
@@ -99,6 +100,14 @@ export default function PropertyDetailPage() {
   const router = useRouter();
   const id = params.id as string;
 
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [formTab, setFormTab] = useState('general');
+
+  const handleOpenDialog = (tab: string) => {
+    setFormTab(tab);
+    setIsEditOpen(true);
+  }
+
   const propertyDocRef = useMemoFirebase(() => {
     if (!firestore || !id) return null;
     return doc(firestore, 'properties', id);
@@ -129,6 +138,7 @@ export default function PropertyDetailPage() {
   // If it's a multi-unit or commercial property, show the Central Hub (Unit Matrix)
   if (property?.isMultiUnit) {
     return (
+        <>
       <div className="space-y-6 p-8">
         <header className="flex justify-between items-end">
             <div className="flex items-center gap-4">
@@ -141,6 +151,7 @@ export default function PropertyDetailPage() {
                 </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
               {units && <BulkOperationsDialog propertyId={id} units={units} />}
               <AddUnitDialog propertyId={id} onUnitAdded={refetchUnits} />
             </div>
@@ -148,6 +159,23 @@ export default function PropertyDetailPage() {
         
         <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
       </div>
+
+       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Property Settings</DialogTitle>
+            <DialogDescription>
+              Update building-level details for {property.name}. Unit-specific details are managed in the unit drawer.
+            </DialogDescription>
+          </DialogHeader>
+          <PropertyForm 
+            initialData={{ id: property.id, ...property }} 
+            onSuccess={() => { refetchProperty(); setIsEditOpen(false); }} 
+            defaultTab={formTab} 
+          />
+        </DialogContent>
+      </Dialog>
+      </>
     );
   }
 
