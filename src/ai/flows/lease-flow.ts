@@ -125,7 +125,8 @@ const leaseAgentFlow = ai.defineFlow(
     
     // 3. Generate PDF
     const doc = new jsPDF();
-    doc.text(leaseText, 10, 10);
+    const splitText = doc.splitTextToSize(leaseText, 180);
+    doc.text(splitText, 15, 20);
     const pdfOutput = doc.output('arraybuffer');
     const pdfBuffer = Buffer.from(pdfOutput);
 
@@ -133,8 +134,8 @@ const leaseAgentFlow = ai.defineFlow(
     const storage = getStorage();
     const bucket = storage.bucket(); // Use the default bucket
     const documentId = uuidv4();
-    const fileName = `lease-agreement-${input.tenantId.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-    const storagePath = `property_documents/${input.propertyId}/${documentId}-${fileName}`;
+    const fileName = `lease-agreement-${input.tenantId.replace(/[^a-zA-Z0-9]/g, '_')}-${documentId}.pdf`;
+    const storagePath = `property_documents/${input.propertyId}/${fileName}`;
     const file = bucket.file(storagePath);
 
     await file.save(pdfBuffer, {
