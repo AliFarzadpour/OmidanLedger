@@ -12,6 +12,10 @@ import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Home, DollarSign, Building } from 'lucide-react';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
+
 
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
@@ -40,7 +44,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     resolver: zodResolver(quickSchema),
     defaultValues: {
       name: '',
-      type: 'single-family',
+      type: 'single-family' as const,
       address: { street: '', city: '', state: '', zip: '' },
       bedrooms: 0,
       bathrooms: 0,
@@ -58,81 +62,101 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     if (!user || !firestore) return;
     setIsSaving(true);
   
-    try {
-      const batch = writeBatch(firestore);
-      const timestamp = new Date().toISOString();
-      const propertyRef = doc(collection(firestore, 'properties'));
-      
-      const accountingMap: any = { utilities: {} };
-      const createAccount = (name: string, type: string, subtype: string) => {
-        const ref = doc(collection(firestore, 'accounts'));
-        batch.set(ref, {
+    const batch = writeBatch(firestore);
+    const timestamp = new Date().toISOString();
+    const propertyRef = doc(collection(firestore, 'properties'));
+    
+    // --- 1. CORE ACCOUNTING GENERATOR ---
+    const accountingMap: any = { utilities: {} };
+    const createAccount = (name: string, type: string, subtype: string) => {
+      const ref = doc(collection(firestore, 'accounts'));
+      batch.set(ref, {
+        userId: user.uid,
+        name, type, subtype,
+        balance: 0,
+        isSystemAccount: true,
+        propertyId: propertyRef.id,
+        createdAt: timestamp
+      });
+      return ref.id;
+    };
+  
+    // Assets, Liabilities, Income, Expenses (Preserved from your code)
+    accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
+    accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
+    accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
+    accountingMap.accountsPayableAccount = createAccount(`Accounts Payable - ${data.name}`, 'Liability', 'Accounts Payable');
+    accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
+    accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
+    accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
+    accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
+    accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
+    accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
+    accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
+    accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
+    accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
+    accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
+    accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
+  
+    // --- 2. BRANCHING LOGIC ---
+    const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial';
+    const propertyData = {
+      userId: user.uid,
+      ...data,
+      isMultiUnit,
+      financials: { targetRent: data.targetRent, securityDeposit: data.securityDeposit },
+      mortgage: { hasMortgage: 'no' }, 
+      management: { isManaged: 'self' },
+      tenants: [], 
+      createdAt: timestamp,
+      accounting: accountingMap
+    };
+
+    // Save the Main Property (The Hub)
+    batch.set(propertyRef, propertyData);
+  
+    // --- 3. AUTO-PILOT: SUBCOLLECTION GENERATION ---
+    // This only triggers if the property is multi-unit.
+    if (isMultiUnit) {
+      const numUnits = data.numberOfUnits || 1;
+      for (let i = 1; i <= numUnits; i++) {
+        const unitRef = doc(collection(propertyRef, 'units'));
+        batch.set(unitRef, {
           userId: user.uid,
-          name, type, subtype,
-          balance: 0,
-          isSystemAccount: true,
-          propertyId: propertyRef.id,
+          unitNumber: `${100 + i}`, // e.g., 101, 102
+          status: 'vacant',
+          targetRent: data.type === 'commercial' ? 0 : (data.targetRent || 0) / numUnits,
           createdAt: timestamp
         });
-        return ref.id;
-      };
-  
-      accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
-      accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
-      accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
-      accountingMap.accountsPayableAccount = createAccount(`Accounts Payable - ${data.name}`, 'Liability', 'Accounts Payable');
-      accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
-      accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
-      accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
-      accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
-      accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
-      accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
-      accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
-      accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
-  
-      const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial';
-  
-      batch.set(propertyRef, {
-        userId: user.uid,
-        ...data,
-        isMultiUnit,
-        financials: { targetRent: data.targetRent || 0, securityDeposit: data.securityDeposit || 0 },
-        mortgage: { hasMortgage: 'no' }, 
-        management: { isManaged: 'self' },
-        tenants: [], 
-        createdAt: timestamp,
-        accounting: accountingMap
-      });
-  
-      if (isMultiUnit) {
-        const numUnits = data.numberOfUnits || 1;
-        for (let i = 1; i <= numUnits; i++) {
-          const unitRef = doc(collection(propertyRef, 'units'));
-          batch.set(unitRef, {
-            userId: user.uid,
-            unitNumber: `${100 + i}`,
-            status: 'vacant',
-            targetRent: data.type === 'commercial' ? 0 : (data.targetRent || 0) / numUnits,
-            createdAt: timestamp
-          });
-        }
       }
-  
-      await batch.commit();
-      toast({ 
-        title: isMultiUnit ? "Central Hub Created" : "Property Added", 
-        description: isMultiUnit ? `Building and ${data.numberOfUnits} units are ready.` : "Property and 16 ledgers created." 
-      });
-      onSuccess();
-  
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
-    } finally {
-      setIsSaving(false);
     }
+  
+    // Use a non-blocking commit with detailed error handling
+    batch.commit()
+      .then(() => {
+        toast({ 
+          title: isMultiUnit ? "Central Hub Created" : "Property Added", 
+          description: isMultiUnit ? `Building and ${data.numberOfUnits || 1} units are ready.` : "Property and 16 ledgers created." 
+        });
+        onSuccess();
+      })
+      .catch((error) => {
+        console.error("Firestore batch commit failed:", error);
+        
+        // Create and emit the detailed error
+        const permissionError = new FirestorePermissionError({
+          path: propertyRef.path, // We report the error on the main property doc
+          operation: 'create',
+          requestResourceData: propertyData,
+        });
+        errorEmitter.emit('permission-error', permissionError);
+
+        // Also show a generic toast to the user
+        toast({ variant: "destructive", title: "Error", description: "Failed to save property due to a permission issue." });
+      })
+      .finally(() => {
+        setIsSaving(false);
+      });
   };
 
   return (
@@ -185,20 +209,16 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </>
         ) : (
-            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
-                <div className="grid grid-cols-2 gap-4 items-center">
-                    <div className="grid gap-2">
-                        <Label className="flex items-center gap-2 font-semibold">
-                            <Building className="h-4 w-4 text-slate-500"/>
-                            Number of Units
-                        </Label>
-                        <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
-                    </div>
-                    <p className="text-xs text-slate-600 mt-3">
-                        Enter the number of units in this building. We will auto-generate these placeholders for you to manage individually.
-                    </p>
-                </div>
-            </div>
+          <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <Label className="flex items-center gap-2 font-semibold mb-2">
+                <Building className="h-4 w-4 text-slate-500"/>
+                Number of Units
+            </Label>
+            <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
+            <p className="text-xs text-slate-600 mt-2">
+                Enter the number of units in this building. We will auto-generate these placeholders for you to manage individually.
+            </p>
+          </div>
         )}
 
         <div className="grid gap-2">
