@@ -109,33 +109,26 @@ const leaseAgentFlow = ai.defineFlow(
     const { text: leaseText } = await ai.generate({
       prompt: `
         You are a paralegal AI specializing in real estate law. Your task is to assemble a professional, well-formatted, and complete residential lease agreement using the provided data.
-
-        **Data Provided:**
-        - **Property:** ${propertyData.propertyName} at ${propertyData.propertyAddress}
-        - **Tenant:** ${propertyData.tenantName} (${propertyData.tenantEmail})
-        - **Landlord:** ${propertyData.landlordName}
-        - **Rent:** $${propertyData.rentAmount}/month, due on the 1st.
-        - **Security Deposit:** $${propertyData.securityDeposit}
-        - **Lease Term:** From ${propertyData.leaseStartDate} to ${propertyData.leaseEndDate}
-        - **Governing State:** ${input.state.toUpperCase()}
-        - **State-Specific Rules:**
-          - **Security Deposit:** ${legalClauses.security_deposit.notes} (Return Deadline: ${legalClauses.security_deposit.return_deadline_days} days)
-          - **Late Fees:** ${legalClauses.late_fees.notes} (Max Fee: ${legalClauses.late_fees.max_fee})
-          - **Landlord Entry:** ${legalClauses.notice_to_enter.notes} (Standard Notice: ${legalClauses.notice_to_enter.standard_notice_hours} hours)
-
+        
         **Formatting and Content Instructions:**
         1.  **Title:** Start with a clear title: "Residential Lease Agreement".
-        2.  **Structure:** Use a clear, hierarchical numbering system for each section (e.g., "1. PARTIES", "1.1 Landlord", "1.2 Tenant", "2. PREMISES", etc.).
-        3.  **Parties Section:** In the Parties section, list the Landlord as "${propertyData.landlordName}".
-        4.  **Completeness:** Generate a complete lease agreement. After the "Security Deposit" section, you MUST include the following standard clauses, each with its own hierarchical number:
+        2.  **Hierarchical Numbering:** Use a clear, hierarchical numbering system for each section (e.g., "1.0 PARTIES", "1.1 Landlord", "1.2 Tenant", "2.0 PREMISES", etc.). Main sections should be numbered X.0 and be in ALL CAPS.
+        3.  **Completeness:** Generate a complete lease agreement. You MUST include the following standard clauses, each with its own hierarchical number:
+            - **PARTIES:** List the Landlord as "${propertyData.landlordName}" and Tenant as "${propertyData.tenantName}".
+            - **PREMISES:** State the address is ${propertyData.propertyAddress}.
+            - **TERM:** State the lease term is from ${propertyData.leaseStartDate} to ${propertyData.leaseEndDate}.
+            - **RENT:** State the rent is $${propertyData.rentAmount} per month, due on the 1st.
+            - **SECURITY DEPOSIT:** State the deposit is $${propertyData.securityDeposit}. Incorporate this note: "${legalClauses.security_deposit.notes}".
+            - **LATE FEES:** Incorporate this rule: "${legalClauses.late_fees.notes}".
+            - **NOTICE TO ENTER:** Incorporate this rule: "${legalClauses.notice_to_enter.notes}".
             - **USE OF PREMISES:** The premises shall be used and occupied by Tenant exclusively as a private single-family residence.
             - **UTILITIES:** Tenant shall be responsible for arranging and paying for all utility services required on the premises.
             - **MAINTENANCE AND REPAIR:** Tenant will, at their sole expense, keep and maintain the premises in good, clean, and sanitary condition.
             - **DEFAULT:** If Tenant fails to pay rent or defaults on any other term, Landlord may give written notice of the default and intent to terminate the Lease.
             - **GOVERNING LAW:** This Lease shall be governed by the laws of the State of ${input.state.toUpperCase()}.
             - **ENTIRE AGREEMENT:** This document constitutes the entire agreement between the parties.
-        5.  **Signature Block:** Conclude with a proper signature section for both Landlord and Tenant, including lines for name, signature, and date.
-        6.  **Professional Tone:** The output must be only the full, final text of the lease agreement. Do not include any conversational text, introductions, or summaries.
+        4.  **Signature Block:** Conclude with a proper signature section for both Landlord and Tenant, including lines for name, signature, and date.
+        5.  **Professional Tone:** The output must be only the full, final text of the lease agreement. Do not include any conversational text, introductions, or summaries. Just the lease content.
       `,
     });
 
@@ -144,82 +137,54 @@ const leaseAgentFlow = ai.defineFlow(
     }
     
     // 3. Generate PDF
-    const doc = new jsPDF({ unit: 'in', format: 'letter' });
-    const margin = 1; // 1 inch margin
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const maxLineWidth = pageWidth - (margin * 2);
-    let currentY = margin;
-
-    const addHeaderFooter = () => {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const pageHeight = doc.internal.pageSize.height;
+    const pageWidth = doc.internal.pageSize.width;
+    const margin = 20; // 20mm margin
+    
+    const addPageDecorations = (data: any) => {
       const pageCount = doc.internal.getNumberOfPages();
-      for (let i = 1; i <= pageCount; i++) {
-        doc.setPage(i);
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.setTextColor(150);
-        
-        // Header
-        doc.text(`Lease Agreement | ${propertyData.propertyAddress}`, margin, margin - 0.5);
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      
+      // Header
+      doc.text(`Lease Agreement | ${propertyData.propertyAddress}`, margin, 15);
 
-        // Footer
-        const footerText = `Page ${i} of ${pageCount}`;
-        const textWidth = doc.getStringUnitWidth(footerText) * doc.getFontSize() / doc.internal.scaleFactor;
-        doc.text(footerText, (pageWidth - textWidth) / 2, pageHeight - (margin - 0.5));
-      }
+      // Footer
+      const footerText = `Page ${data.pageNumber} of ${pageCount}`;
+      doc.text(footerText, pageWidth / 2, pageHeight - 10, { align: 'center' });
     };
 
-    const lines = leaseText.split('\n');
-    for (const line of lines) {
-        if (currentY > pageHeight - margin) {
-            doc.addPage();
-            currentY = margin;
-        }
+    doc.setFont('times', 'normal');
+    doc.setFontSize(22);
+    doc.text("Residential Lease Agreement", pageWidth / 2, 30, { align: 'center' });
+    doc.setDrawColor(200);
+    doc.line(margin, 35, pageWidth - margin, 35);
+    
+    // Parse the AI's text into a format for autoTable
+    const body = leaseText.split('\n').filter(line => line.trim() !== '').map(line => {
+      const trimmedLine = line.trim();
+      // Check if the line is a main section header (e.g., "1.0 PARTIES")
+      if (trimmedLine.match(/^\d+\.0\s[A-Z\s,()-]+$/)) {
+        return [{ content: trimmedLine, styles: { fontStyle: 'bold', fontSize: 14, cellPadding: { top: 6, bottom: 2 } } }];
+      }
+      // Check if the line is a subsection header (e.g., "1.1 Landlord")
+      else if (trimmedLine.match(/^\d+\.\d+\s/)) {
+        return [{ content: trimmedLine, styles: { fontStyle: 'bold', fontSize: 11, cellPadding: { top: 3, bottom: 1 } } }];
+      }
+      // Otherwise, it's body text
+      else {
+        return [{ content: trimmedLine, styles: { fontSize: 11 } }];
+      }
+    });
 
-        let isHeader1 = false;
-        let isHeader2 = false;
-
-        // Main Title (e.g., "Residential Lease Agreement")
-        if (line.trim().toUpperCase() === "RESIDENTIAL LEASE AGREEMENT") {
-            doc.setFont('times', 'bold');
-            doc.setFontSize(16);
-            doc.text(line, pageWidth / 2, currentY, { align: 'center' });
-            currentY += 0.3;
-            doc.setDrawColor(200); // Light gray line
-            doc.line(margin, currentY, pageWidth - margin, currentY);
-            currentY += 0.3;
-            continue;
-        }
-
-        // Main Section (e.g., "1. PARTIES")
-        if (line.match(/^\d+\.\s[A-Z\s]+$/)) {
-            isHeader1 = true;
-            doc.setFont('times', 'bold');
-            doc.setFontSize(12);
-            currentY += 0.2; // Space before main header
-        } 
-        // Sub-section (e.g., "1.1 Landlord")
-        else if (line.match(/^\d+\.\d+\s/)) {
-            isHeader2 = true;
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(10);
-        }
-        // Body text
-        else {
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(10);
-        }
-        
-        const splitText = doc.splitTextToSize(line, maxLineWidth);
-        doc.text(splitText, margin, currentY);
-        
-        // Adjust Y position based on text height
-        currentY += splitText.length * (isHeader1 ? 0.25 : 0.2);
-        
-        if (isHeader1) currentY += 0.1; // Extra space after main header
-    }
-
-    addHeaderFooter();
+    (doc as any).autoTable({
+        startY: 45,
+        theme: 'plain',
+        body: body,
+        didDrawPage: addPageDecorations,
+        margin: { top: 25, bottom: 20, left: margin, right: margin }
+    });
 
     const pdfOutput = doc.output('arraybuffer');
     const pdfBuffer = Buffer.from(pdfOutput);
