@@ -28,7 +28,6 @@ export async function inviteTenant({
       ...(unitId && { associatedUnitId: unitId }), // <-- ADDED: Link to unit
       status: 'invited',
       billing: {
-        rentAmount: 0,
         balance: 0
       },
       metadata: {
@@ -37,28 +36,8 @@ export async function inviteTenant({
     });
 
     // 2. Link the tenant to the property or unit
-    if (unitId) {
-        // For multi-family, add tenant to the unit's tenant array
-        const unitRef = db.doc(`properties/${propertyId}/units/${unitId}`);
-        await unitRef.update({
-            tenants: FieldValue.arrayUnion({
-                id: tenantRef.id,
-                email: email.toLowerCase(),
-                firstName: email.split('@')[0],
-                lastName: '',
-                rentAmount: 0,
-                leaseStart: '',
-                leaseEnd: '',
-            })
-        });
-    } else {
-        // For single-family, link directly to the property
-        await db.collection('properties').doc(propertyId).update({
-            currentTenantId: tenantRef.id,
-            tenantEmail: email.toLowerCase()
-        });
-    }
-
+    // THIS LOGIC HAS BEEN REMOVED. The tenant is now managed manually in the drawer.
+    // This action's only job is to create the user account for the portal.
 
     return { success: true, tenantId: tenantRef.id };
   } catch (error: any) {
