@@ -48,7 +48,7 @@ const getPropertyDataTool = ai.defineTool(
     }
 
     return {
-      userId: propertyData.userId, // <<< FIX: Added this line
+      userId: propertyData.userId,
       propertyName: propertyData.name,
       propertyAddress: `${propertyData.address.street}, ${propertyData.address.city}, ${propertyData.address.state} ${propertyData.address.zip}`,
       rentAmount: tenantData.rentAmount,
@@ -131,7 +131,7 @@ const leaseAgentFlow = ai.defineFlow(
 
     // 4. Upload to Firebase Storage
     const storage = getStorage();
-    const bucket = storage.bucket(process.env.GCLOUD_STORAGE_BUCKET || 'studio-7576922301-bac28.appspot.com');
+    const bucket = storage.bucket(); // Use the default bucket
     const documentId = uuidv4();
     const fileName = `lease-agreement-${input.tenantId.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
     const storagePath = `property_documents/${input.propertyId}/${documentId}-${fileName}`;
@@ -154,7 +154,7 @@ const leaseAgentFlow = ai.defineFlow(
     await docRef.set({
         id: documentId,
         propertyId: input.propertyId,
-        userId: propertyData.userId, // <<< FIX: Was missing before
+        userId: propertyData.userId,
         fileName: fileName,
         fileType: 'lease',
         description: `Auto-generated lease for ${propertyData.tenantName}`,
