@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview An agentic workflow for generating state-compliant lease agreements.
@@ -12,6 +11,7 @@ import {
   type LeaseAgentInput,
   type LeaseAgentOutput
 } from './schemas/lease-flow.schema';
+import jsPDF from 'jspdf';
 
 
 // --- TOOLS (Future Implementation) ---
@@ -91,13 +91,14 @@ const leaseAgentFlow = ai.defineFlow(
 
     console.log('Generated Lease Text:', leaseText);
     
-    // 3. (Placeholder) Convert Text to PDF and Save to Storage
-    // In a real implementation, you'd use a library like 'jspdf' or a cloud function
-    // to create a PDF and save it to Firebase Storage.
-    const generatedUrl = `https://storage.googleapis.com/your-bucket/leases/${input.propertyId}/lease.pdf`;
+    // 3. Convert Text to PDF and return as Data URI
+    const doc = new jsPDF();
+    doc.text(leaseText, 10, 10);
+    const pdfDataUri = doc.output('datauristring');
+
 
     return {
-      leaseDocumentUrl: generatedUrl,
+      leaseDocumentUrl: pdfDataUri,
       summary: `Lease generated for ${propertyData.tenantName} at ${propertyData.propertyName}.`,
       complianceStatus: 'review_needed', // Always requires review initially
     };
