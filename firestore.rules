@@ -59,6 +59,8 @@ service cloud.firestore {
       
       match /documents/{documentId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        // Allow list so the UI can fetch the documents for the property
+        allow list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
       
       match /units/{unitId} {
@@ -91,28 +93,6 @@ service cloud.firestore {
     match /invoices/{invoiceId} {
       allow read, write: if resource.data.userId == request.auth.uid;
       allow list: if isSignedIn();
-    }
-  }
-}
-
-service firebase.storage {
-  match /b/{bucket}/o {
-    // SECURE RULE: Explicitly allows a user to write ONLY to their own folder.
-    match /logos/{userId}/{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    // Allow a user to read/write to the documents folder of a property they own.
-    match /property_documents/{propertyId}/{documentId} {
-        // Reads are allowed if the user owns the corresponding Firestore property document.
-        allow read: if request.auth != null && get(/databases/(default)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
-        
-        // Writes are allowed ONLY if the user is authenticated.
-        // The get() function is disallowed on create/write operations.
-        // We rely on the client to construct the correct path, which includes the propertyId.
-        // The Firestore rule on the document metadata write will provide the ultimate security.
-        allow write: if request.auth != null;
     }
   }
 }
