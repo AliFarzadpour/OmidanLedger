@@ -29,8 +29,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         bedrooms: Number(formData.get('bedrooms')),
         bathrooms: Number(formData.get('bathrooms')),
         sqft: Number(formData.get('sqft')),
-        targetRent: Number(formData.get('targetRent')),
-        securityDeposit: Number(formData.get('securityDeposit')),
+        'financials.rent': Number(formData.get('targetRent')),
+        'financials.deposit': Number(formData.get('securityDeposit')),
         amenities: formData.get('amenities')?.toString().split(',').map(s => s.trim()) || []
       });
       
@@ -58,20 +58,18 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         </SheetHeader>
         
         <form onSubmit={handleUpdate} className="space-y-8 pt-6">
-          {/* SECTION 1: IDENTITY (THE EDITABLE PART) */}
-          <div className="space-y-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          
+          {/* SECTION 1: IDENTITY */}
+          <div className="space-y-4">
+             <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-1 h-4 bg-blue-500 rounded-full" /> Unit Identity</h3>
             <div className="space-y-2">
-              <Label htmlFor="unitNumber" className="text-xs uppercase tracking-widest font-bold text-slate-500">
-                Display Number / Label
-              </Label>
+              <Label htmlFor="unitNumber">Display Number / Label</Label>
               <Input 
                 id="unitNumber"
                 name="unitNumber" 
                 defaultValue={unit?.unitNumber} 
-                placeholder="e.g., 101, Penthouse, or Suite A"
-                className="text-xl font-bold h-12 border-2 focus:border-blue-500 bg-white"
+                placeholder="e.g., 101, Penthouse"
               />
-              <p className="text-[10px] text-slate-400 italic">This name appears on the unit card in the central hub.</p>
             </div>
           </div>
 
@@ -97,7 +95,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
           <div className="pt-4 border-t">
             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
-              {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit Identity"}
+              {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
             </Button>
           </div>
         </form>
