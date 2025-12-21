@@ -82,8 +82,15 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
             <form onSubmit={handleUpdate} className="space-y-6 mt-6">
                 
                 <div className="space-y-2">
-                    <Label htmlFor="unitNumber">Unit Number / Name</Label>
-                    <Input id="unitNumber" value={unitNumber} onChange={e => setUnitNumber(e.target.value)} placeholder="e.g., 101, Apt A, or Suite 200" />
+                    <Label htmlFor="unitNumber" className="text-blue-600 font-bold">Unit Number / Name</Label>
+                    <Input 
+                      id="unitNumber"
+                      name="unitNumber"
+                      value={unitNumber} 
+                      onChange={e => setUnitNumber(e.target.value)} 
+                      placeholder="e.g., 101, Apt A, or Suite 200" 
+                      className="border-blue-200 focus:border-blue-500 font-bold text-lg"
+                    />
                 </div>
 
                 <div className="space-y-2">
