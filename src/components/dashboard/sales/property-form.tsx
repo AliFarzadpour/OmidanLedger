@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -669,7 +670,11 @@ export function PropertyForm({
               </div>
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <Label>Is there a mortgage?</Label>
-                <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} className="flex gap-4">
+                <RadioGroup 
+                    value={form.watch('mortgage.hasMortgage')} 
+                    onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} 
+                    className="flex gap-4"
+                >
                   <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
                   <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
                 </RadioGroup>
