@@ -76,8 +76,8 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
                  </div>
               </div>
               <div className="flex items-center gap-1">
-                <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4"/></Button></a>
-                <a href={doc.downloadUrl} download><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-4 w-4"/></Button></a>
+                <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer"><Button type="button" variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4"/></Button></a>
+                <a href={doc.downloadUrl} download><Button type="button" variant="ghost" size="icon" className="h-7 w-7"><Download className="h-4 w-4"/></Button></a>
                 <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-500" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4"/></Button>
               </div>
             </div>
@@ -190,55 +190,57 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
           </div>
         </SheetHeader>
         
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 pt-6">
-          <Accordion type="multiple" defaultValue={['tenants', 'specs']}>
+        <div className="space-y-6 pt-6">
+          <Accordion type="multiple" defaultValue={['tenants', 'specs', 'documents']}>
             
             <AccordionItem value="tenants">
               <AccordionTrigger className="text-lg font-semibold"><Users className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
               <AccordionContent className="pt-2">
-                <div className="space-y-4">
-                    {fields.map((field, index) => (
-                        <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
-                            <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={() => remove(index)}
-                                className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
+                 <form onSubmit={handleSubmit(onSubmit)}>
+                    <div className="space-y-4">
+                        {fields.map((field, index) => (
+                            <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
+                                <Button 
+                                    type="button" 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={() => remove(index)}
+                                    className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
+                                    <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
+                                    <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                    <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
+                                    <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
+                                    <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                                <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
-                            </div>
-                        </div>
-                    ))}
-                    <Button 
-                      ref={addTenantButtonRef}
-                      type="button" 
-                      variant="outline" 
-                      className="w-full border-dashed"
-                      onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: getValues('targetRent') || 0, deposit: getValues('securityDeposit') || 0 })}
-                    >
-                        <Plus className="mr-2 h-4 w-4" /> Add Tenant
-                    </Button>
-                </div>
+                        ))}
+                        <Button 
+                          ref={addTenantButtonRef}
+                          type="button" 
+                          variant="outline" 
+                          className="w-full border-dashed"
+                          onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: getValues('targetRent') || 0, deposit: getValues('securityDeposit') || 0 })}
+                        >
+                            <Plus className="mr-2 h-4 w-4" /> Add Tenant
+                        </Button>
+                    </div>
+                </form>
               </AccordionContent>
             </AccordionItem>
-
+            
             <AccordionItem value="documents">
               <AccordionTrigger className="text-lg font-semibold"><FileText className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
               <AccordionContent className="pt-2">
@@ -251,28 +253,30 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
             <AccordionItem value="specs">
               <AccordionTrigger className="text-lg font-semibold"><Hash className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
               <AccordionContent className="pt-4">
-                 <div className="space-y-4">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
-                      <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
-                      <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
+                 <form onSubmit={handleSubmit(onSubmit)}>
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="space-y-2"><Label className="text-xs">Beds</Label><Input type="number" {...register('bedrooms')} /></div>
+                          <div className="space-y-2"><Label className="text-xs">Baths</Label><Input type="number" {...register('bathrooms')} /></div>
+                          <div className="space-y-2"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...register('sqft')} /></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2"><Label className="text-xs">Default Rent ($)</Label><Input type="number" {...register('targetRent')} /></div>
+                          <div className="space-y-2"><Label className="text-xs">Default Deposit ($)</Label><Input type="number" {...register('securityDeposit')} /></div>
+                        </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2"><Label className="text-xs">Default Rent ($)</Label><Input type="number" {...register('targetRent')} /></div>
-                      <div className="space-y-2"><Label className="text-xs">Default Deposit ($)</Label><Input type="number" {...register('securityDeposit')} /></div>
-                    </div>
-                 </div>
+                 </form>
               </AccordionContent>
             </AccordionItem>
           </Accordion>
           
 
           <div className="pt-4 border-t">
-            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
+            <Button onClick={handleSubmit(onSubmit)} className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
               {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
             </Button>
           </div>
-        </form>
+        </div>
       </SheetContent>
     </Sheet>
   );
