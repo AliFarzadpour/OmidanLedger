@@ -47,6 +47,7 @@ import { Building2, Upload } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
@@ -303,25 +304,26 @@ export function BusinessProfileForm() {
                 control={form.control}
                 name="businessType"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="space-y-3">
                     <FormLabel>Business Type</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value || ""}
-                    >
-                      <FormControl>
-                        <SelectTrigger key={isLoadingUser ? 'loading' : 'loaded'}>
-                          <SelectValue placeholder="Select a business type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-col space-y-1"
+                      >
                         {BUSINESS_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
+                           <FormItem key={option.value} className="flex items-center space-x-3 space-y-0">
+                           <FormControl>
+                             <RadioGroupItem value={option.value} />
+                           </FormControl>
+                           <FormLabel className="font-normal">
+                             {option.label}
+                           </FormLabel>
+                         </FormItem>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </RadioGroup>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -421,5 +423,3 @@ export function BusinessProfileForm() {
     </Form>
   );
 }
-
-    
