@@ -19,6 +19,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const [loading, setLoading] = useState(false);
 
   // State for controlled components
+  const [unitNumber, setUnitNumber] = useState('');
   const [tenantName, setTenantName] = useState('');
   const [bedrooms, setBedrooms] = useState('');
   const [bathrooms, setBathrooms] = useState('');
@@ -30,6 +31,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   // When a new unit is passed in, reset the form state
   useEffect(() => {
     if (unit) {
+      setUnitNumber(unit.unitNumber || '');
       setTenantName(unit.tenantName || '');
       setBedrooms(unit.bedrooms || '');
       setBathrooms(unit.bathrooms || '');
@@ -49,6 +51,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
     try {
       await updateDoc(unitRef, {
+        unitNumber: unitNumber,
         tenantName: tenantName,
         status: tenantName ? 'occupied' : 'vacant',
         bedrooms: Number(bedrooms) || 0,
@@ -80,6 +83,11 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         <div className="h-[calc(100vh-150px)] overflow-y-auto pr-4">
             <form onSubmit={handleUpdate} className="space-y-6 mt-6">
                 
+                <div className="space-y-2">
+                    <Label>Unit Number / Name</Label>
+                    <Input value={unitNumber} onChange={e => setUnitNumber(e.target.value)} placeholder="e.g., 101, Apt A, or Suite 200" />
+                </div>
+
                 <div className="space-y-2">
                     <Label>Tenant Name</Label>
                     <Input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="John Doe" />
