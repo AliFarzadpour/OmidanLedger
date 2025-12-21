@@ -9,7 +9,6 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { defineFlow, runFlow } from 'genkit';
 import { getFirestore } from 'firebase-admin/firestore';
 
 // --- SCHEMAS ---
@@ -70,7 +69,7 @@ const getLegalClausesTool = ai.defineTool(
 
 // --- MAIN FLOW ---
 
-export const leaseAgentFlow = defineFlow(
+export const leaseAgentFlow = ai.defineFlow(
   {
     name: 'leaseAgentFlow',
     inputSchema: LeaseAgentInputSchema,
@@ -79,12 +78,12 @@ export const leaseAgentFlow = defineFlow(
   async (input) => {
     
     // 1. Fetch Data using Tools
-    const propertyData = await runFlow(getPropertyDataTool, {
+    const propertyData = await ai.runFlow(getPropertyDataTool, {
       propertyId: input.propertyId,
       tenantId: input.tenantId,
     });
     
-    const legalClauses = await runFlow(getLegalClausesTool, {
+    const legalClauses = await ai.runFlow(getLegalClausesTool, {
       state: input.state,
     });
 
