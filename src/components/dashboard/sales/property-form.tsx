@@ -282,8 +282,8 @@ export function PropertyForm({
       batch.set(ruleRef, {
         userId,
         transactionDescription: lenderName,
-        primaryCategory: "Other Expenses",
-        secondaryCategory: "Mortgage",
+        primaryCategory: "Mortgage",
+        secondaryCategory: "Interest & Principal",
         subcategory: `${propertyData.name} Mortgage Payment`,
         propertyId: propertyId,
         source: "System - Lender",
