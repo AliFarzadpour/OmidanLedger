@@ -66,7 +66,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       <SheetContent key={unit?.id} className="sm:max-w-[550px] overflow-y-auto">
         <SheetHeader className="border-b pb-4">
           <SheetTitle className="text-2xl font-black flex items-center gap-2 text-slate-900">
-            <Hash className="h-6 w-6 text-blue-600" /> Unit #{unit?.unitNumber}
+            <Hash className="h-6 w-6 text-blue-600" /> Unit Management
           </SheetTitle>
           <SheetDescription>
             Modify the physical, financial, and tenant details for this specific unit.
@@ -76,10 +76,9 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pt-6">
           
           <div className="space-y-2">
-            <Label htmlFor="unitNumber">Display Number / Label</Label>
             <Input 
               id="unitNumber"
-              placeholder="e.g., 101, Penthouse, or Suite A"
+              placeholder="Unit Number, e.g., 101, Penthouse..."
               {...register('unitNumber')}
             />
           </div>
