@@ -65,6 +65,11 @@ service cloud.firestore {
       
       match /units/{unitId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+      
+        // NEW: Rule for unit-level documents
+        match /documents/{documentId} {
+            allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        }
       }
     }
 

@@ -27,10 +27,11 @@ interface UploaderProps {
     onOpenChange: (open: boolean) => void;
     propertyId: string;
     landlordId: string;
+    unitId?: string; // Optional: for unit-level documents
     onSuccess?: () => void;
 }
 
-export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landlordId, onSuccess }: UploaderProps) {
+export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landlordId, unitId, onSuccess }: UploaderProps) {
     const firestore = useFirestore();
     const storage = useStorage();
     const { toast } = useToast();
@@ -56,7 +57,11 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
         setIsUploading(true);
 
         const documentId = uuidv4();
-        const storagePath = `property_documents/${propertyId}/${documentId}-${file.name}`;
+        // Determine storage path based on whether it's a building or unit doc
+        const storagePath = unitId 
+            ? `property_documents/${propertyId}/units/${unitId}/${documentId}-${file.name}`
+            : `property_documents/${propertyId}/${documentId}-${file.name}`;
+        
         const storageRef = ref(storage, storagePath);
         const uploadTask = uploadBytesResumable(storageRef, file);
 
@@ -72,12 +77,19 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
             },
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                const docRef = doc(firestore, `properties/${propertyId}/documents`, documentId);
+
+                // Determine Firestore path
+                const docPath = unitId
+                    ? `properties/${propertyId}/units/${unitId}/documents`
+                    : `properties/${propertyId}/documents`;
+                
+                const docRef = doc(firestore, docPath, documentId);
 
                 await setDoc(docRef, {
                     id: documentId,
                     propertyId: propertyId,
                     userId: landlordId,
+                    ...(unitId && { unitId: unitId }), // Conditionally add unitId
                     fileName: file.name,
                     fileType: fileType,
                     description: description,
