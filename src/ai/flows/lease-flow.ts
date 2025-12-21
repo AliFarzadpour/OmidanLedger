@@ -178,7 +178,7 @@ const leaseAgentFlow = ai.defineFlow(
       }
     });
 
-    (doc as any).autoTable({
+    autoTable(doc, {
         startY: 45,
         theme: 'plain',
         body: body,
