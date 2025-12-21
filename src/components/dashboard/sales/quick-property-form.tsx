@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection } from 'firebase/firestore';
+import { doc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Home, DollarSign } from 'lucide-react';
 
@@ -58,15 +58,14 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       const timestamp = new Date().toISOString();
       const propertyRef = doc(collection(firestore, 'properties'));
       
+      // --- 1. CORE ACCOUNTING GENERATOR ---
+      // This remains identical to your previous code to ensure no breakage.
       const accountingMap: any = { utilities: {} };
-
       const createAccount = (name: string, type: string, subtype: string) => {
         const ref = doc(collection(firestore, 'accounts'));
         batch.set(ref, {
           userId: user.uid,
-          name: name,
-          type: type,
-          subtype: subtype,
+          name, type, subtype,
           balance: 0,
           isSystemAccount: true,
           propertyId: propertyRef.id,
@@ -75,37 +74,31 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         return ref.id;
       };
 
-      // --- 1. ASSETS ---
+      // Assets, Liabilities, Income, Expenses (Preserved from your code)
       accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
       accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
-
-      // --- 2. LIABILITIES ---
       accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
-      
-      // [NEW] Accounts Payable: The bucket for unpaid vendor bills
       accountingMap.accountsPayableAccount = createAccount(`Accounts Payable - ${data.name}`, 'Liability', 'Accounts Payable');
-
-      // --- 3. INCOME ---
       accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
       accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
-
-      // --- 4. EXPENSES (Core) ---
       accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
       accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
       accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
       accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
-
-      // --- 5. EXPENSES (Utilities Suite) ---
       accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
 
-      // Save Property
+      // --- 2. BRANCHING LOGIC ---
+      const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial';
+
+      // Save the Main Property (The Hub)
       batch.set(propertyRef, {
         userId: user.uid,
         ...data,
+        isMultiUnit,
         financials: { targetRent: data.targetRent, securityDeposit: data.securityDeposit },
         mortgage: { hasMortgage: 'no' }, 
         management: { isManaged: 'self' },
@@ -114,8 +107,26 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         accounting: accountingMap
       });
 
+      // --- 3. AUTO-PILOT: SUBCOLLECTION GENERATION ---
+      // This only triggers if the property is multi-unit.
+      if (isMultiUnit) {
+        for (let i = 1; i <= 10; i++) {
+          const unitRef = doc(collection(propertyRef, 'units'));
+          batch.set(unitRef, {
+            userId: user.uid,
+            unitNumber: `${100 + i}`, // e.g., 101, 102
+            status: 'vacant',
+            targetRent: data.type === 'commercial' ? 0 : data.targetRent / 10,
+            createdAt: timestamp
+          });
+        }
+      }
+
       await batch.commit();
-      toast({ title: "Property Added", description: "Property and 16 ledger accounts created." });
+      toast({ 
+        title: isMultiUnit ? "Central Hub Created" : "Property Added", 
+        description: isMultiUnit ? "Building and 10 units are ready." : "Property and 16 ledgers created." 
+      });
       onSuccess();
 
     } catch (error: any) {
