@@ -42,7 +42,7 @@ service cloud.firestore {
 
     match /properties/{propertyId} {
       allow read, create, update: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow delete: if isOwner(resource.data.userId);
 
       match /monthlyStats/{monthId} {
@@ -51,7 +51,9 @@ service cloud.firestore {
     }
 
     match /accounts/{accountId} {
-        allow read, create, update, delete: if request.auth.uid == request.resource.data.userId;
+        // Correctly handle create/update vs read/delete contexts
+        allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     match /{path=**}/monthlyStats/{monthId} {
