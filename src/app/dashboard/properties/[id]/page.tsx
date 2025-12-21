@@ -8,11 +8,12 @@ import { Loader2 } from 'lucide-react';
 
 export default function PropertyDetailPage({ params }: { params: { id: string } }) {
   const firestore = useFirestore();
-  
+  const { id } = params; // Extract id from params first
+
   const propertyDocRef = useMemoFirebase(() => {
-    if (!firestore) return null;
-    return doc(firestore, 'properties', params.id);
-  }, [firestore, params.id]);
+    if (!firestore || !id) return null; // Use the extracted id
+    return doc(firestore, 'properties', id);
+  }, [firestore, id]); // Use id in the dependency array
 
   const { data: property, isLoading } = useDoc(propertyDocRef);
 
@@ -37,7 +38,7 @@ export default function PropertyDetailPage({ params }: { params: { id: string } 
           {/* Add a button for building-wide bulk operations here */}
         </header>
         
-        <UnitMatrix propertyId={params.id} />
+        <UnitMatrix propertyId={id} />
       </div>
     );
   }
