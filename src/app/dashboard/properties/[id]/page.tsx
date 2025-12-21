@@ -34,7 +34,7 @@ import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploa
 import { useToast } from '@/hooks/use-toast';
 import { deleteObject, ref } from 'firebase/storage';
 import { useStorage } from '@/firebase';
-import { leaseAgentFlow } from '@/ai/flows/lease-flow';
+import { generateLease } from '@/ai/flows/lease-flow';
 
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
@@ -46,7 +46,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
     try {
       // Assuming property state is available in the parent scope or fetched here.
       // For now, hardcoding 'TX' as per the user story.
-      const flowResult = await leaseAgentFlow({
+      const flowResult = await generateLease({
         propertyId: propertyId,
         tenantId: tenant.id, // Assuming tenant object has an ID
         state: 'TX',
