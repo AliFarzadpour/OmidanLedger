@@ -5,12 +5,12 @@ import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc, collection, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Hash, Users, Plus, Trash2, FileText, UploadCloud, Eye, View } from 'lucide-react';
+import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, View, Key, Wrench, FolderArchive } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useStorage } from '@/firebase';
@@ -189,14 +189,15 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
               Unit Management
             </SheetTitle>
           </div>
+           <SheetDescription>Update tenant leases, unit specs, and documents.</SheetDescription>
         </SheetHeader>
         
-        <div className="space-y-6 pt-6">
+        <div className="space-y-1 pt-6">
           <form onSubmit={handleSubmit(onSubmit)}>
-            <Accordion type="multiple" defaultValue={['tenants', 'specs']}>
+            <Accordion type="multiple">
               
               <AccordionItem value="tenants">
-                <AccordionTrigger className="text-lg font-semibold"><Users className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold"><Key className="mr-2 h-5 w-5 text-slate-500" /> Tenants & Lease</AccordionTrigger>
                 <AccordionContent className="pt-2">
                       <div className="space-y-4">
                           {fields.map((field, index) => (
@@ -242,7 +243,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
               </AccordionItem>
               
               <AccordionItem value="specs">
-                <AccordionTrigger className="text-lg font-semibold"><Hash className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold"><Wrench className="mr-2 h-5 w-5 text-slate-500" /> Unit Specifications</AccordionTrigger>
                 <AccordionContent className="pt-4">
                     <div className="space-y-4">
                         <div className="grid grid-cols-3 gap-2">
@@ -284,16 +285,16 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
               </AccordionItem>
             </Accordion>
             
-            <div className="pt-4">
+            <div className="pt-6">
               <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-lg font-bold shadow-lg" disabled={isSaving}>
                 {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : "Update Unit"}
               </Button>
             </div>
           </form>
 
-          <Accordion type="single" collapsible>
+          <Accordion type="multiple" className="pt-4">
             <AccordionItem value="documents">
-                <AccordionTrigger className="text-lg font-semibold"><FileText className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
+                <AccordionTrigger className="text-lg font-semibold"><FolderArchive className="mr-2 h-5 w-5 text-slate-500" /> Unit Documents</AccordionTrigger>
                 <AccordionContent className="pt-2">
                   {unit && user && (
                       <UnitDocuments propertyId={propertyId} unitId={unit.id} landlordId={user.uid} />
