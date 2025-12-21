@@ -199,5 +199,3 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     </div>
   );
 }
-
-    
