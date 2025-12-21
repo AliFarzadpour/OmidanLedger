@@ -319,7 +319,7 @@ export function PropertyForm({
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Type</Label>
-                    <Select onValueChange={(v:any)=>form.setValue('type',v)} defaultValue="single-family">
+                    <Select onValueChange={(v:any)=>form.setValue('type',v)} value={form.watch('type')}>
                     <SelectTrigger><SelectValue/></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="single-family">Single Family</SelectItem>
