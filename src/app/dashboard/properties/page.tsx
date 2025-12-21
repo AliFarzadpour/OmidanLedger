@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore'; 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import { useRouter } from 'next/navigation';
 
 import { QuickPropertyForm } from '@/components/dashboard/sales/quick-property-form'; 
 import { ImportPropertiesDialog } from '@/components/dashboard/properties/import-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function PropertiesListPage() {
   const { user } = useUser();
@@ -29,6 +30,12 @@ export default function PropertiesListPage() {
   const { data: properties, isLoading, refetch } = useCollection(propertiesQuery);
   
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   const getCompleteness = (p: any) => {
     let score = 20; 
@@ -38,6 +45,32 @@ export default function PropertiesListPage() {
     if (p.preferredVendors?.length > 0) score += 20;
     return score;
   };
+
+  if (!isClient) {
+    return (
+        <div className="space-y-8 p-4 md:p-8">
+            <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                    <Skeleton className="h-8 w-64" />
+                    <Skeleton className="h-4 w-80" />
+                </div>
+                <div className="flex gap-2">
+                    <Skeleton className="h-10 w-36" />
+                    <Skeleton className="h-10 w-44" />
+                </div>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(3)].map((_, i) => (
+                    <Card key={i} className="flex flex-col justify-between">
+                       <CardHeader><Skeleton className="h-6 w-3/4" /><Skeleton className="h-4 w-1/2 mt-2" /></CardHeader>
+                       <CardContent><Skeleton className="h-10 w-full" /></CardContent>
+                       <CardFooter><Skeleton className="h-10 w-full" /></CardFooter>
+                    </Card>
+                ))}
+            </div>
+        </div>
+    );
+  }
 
   return (
     <div className="space-y-8 p-4 md:p-8">
