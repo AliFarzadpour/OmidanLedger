@@ -16,60 +16,47 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const firestore = useFirestore();
   const { user } = useUser();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-
-  // State for controlled components
-  const [unitNumber, setUnitNumber] = useState('');
-  const [tenantName, setTenantName] = useState('');
-  const [bedrooms, setBedrooms] = useState('');
-  const [bathrooms, setBathrooms] = useState('');
-  const [sqft, setSqft] = useState('');
-  const [amenities, setAmenities] = useState('');
-  const [rent, setRent] = useState('');
-  const [deposit, setDeposit] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // When a new unit is passed in, reset the form state
   useEffect(() => {
     if (unit) {
-      setUnitNumber(unit.unitNumber || '');
-      setTenantName(unit.tenantName || '');
-      setBedrooms(unit.bedrooms || '');
-      setBathrooms(unit.bathrooms || '');
-      setSqft(unit.sqft || '');
-      setAmenities(Array.isArray(unit.amenities) ? unit.amenities.join(', ') : '');
-      setRent(unit.financials?.rent || '');
-      setDeposit(unit.financials?.deposit || '');
+      // No need for separate states if using uncontrolled form with defaultValue
     }
   }, [unit]);
 
-  const handleUpdate = async (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!firestore || !unit) return;
-    setLoading(true);
+    setIsSaving(true);
 
+    const formData = new FormData(e.currentTarget);
     const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
 
     try {
       await updateDoc(unitRef, {
-        unitNumber: unitNumber,
-        tenantName: tenantName,
-        status: tenantName ? 'occupied' : 'vacant',
-        bedrooms: Number(bedrooms) || 0,
-        bathrooms: Number(bathrooms) || 0,
-        sqft: Number(sqft) || 0,
-        amenities: amenities.split(',').map(a => a.trim()).filter(a => a),
-        'financials.rent': Number(rent) || 0,
-        'financials.deposit': Number(deposit) || 0,
+        // THIS SAVES THE NEW NUMBER/NAME TO FIRESTORE
+        unitNumber: formData.get('unitNumber'), 
+        bedrooms: Number(formData.get('bedrooms')),
+        bathrooms: Number(formData.get('bathrooms')),
+        sqft: Number(formData.get('sqft')),
+        'financials.rent': Number(formData.get('rent')),
+        'financials.deposit': Number(formData.get('deposit')),
+        amenities: formData.get('amenities')?.toString().split(',').map(s => s.trim()) || [],
+        tenantName: formData.get('tenantName'),
+        status: formData.get('tenantName') ? 'occupied' : 'vacant',
       });
-      toast({ title: "Unit Updated", description: `Unit ${unit.unitNumber} has been saved.` });
-      if (onUpdate) onUpdate();
+      
+      toast({ title: "Unit Updated", description: "Identity and details saved successfully." });
+      if(onUpdate) onUpdate();
       onOpenChange(false);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Update Failed", description: error.message });
     } finally {
-      setLoading(false);
+      setIsSaving(false);
     }
   };
+
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -87,9 +74,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                     <Input 
                         id="unitNumber"
                         name="unitNumber"
-                        value={unitNumber} 
-                        onChange={e => setUnitNumber(e.target.value)} 
                         placeholder="e.g., 101, Apt A, or Suite 200" 
+                        defaultValue={unit?.unitNumber} 
                         className="bg-white font-bold text-lg focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-[10px] text-blue-600">Changing this will update the card on the main hub.</p>
@@ -97,7 +83,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
                 <div className="space-y-2">
                     <Label>Tenant Name</Label>
-                    <Input value={tenantName} onChange={e => setTenantName(e.target.value)} placeholder="John Doe" />
+                    <Input name="tenantName" defaultValue={unit?.tenantName} placeholder="John Doe" />
                 </div>
                 
                 <Separator />
@@ -105,22 +91,22 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Bedrooms</Label>
-                    <Input name="bedrooms" type="number" value={bedrooms} onChange={e => setBedrooms(e.target.value)} />
+                    <Input name="bedrooms" type="number" defaultValue={unit?.bedrooms || ''} />
                   </div>
                   <div className="space-y-2">
                     <Label>Bathrooms</Label>
-                    <Input name="bathrooms" type="number" value={bathrooms} onChange={e => setBathrooms(e.target.value)} />
+                    <Input name="bathrooms" type="number" defaultValue={unit?.bathrooms || ''} />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <Label>Square Footage</Label>
-                  <Input name="sqft" type="number" value={sqft} onChange={e => setSqft(e.target.value)} />
+                  <Input name="sqft" type="number" defaultValue={unit?.sqft || ''} />
                 </div>
 
                 <div className="space-y-2">
                   <Label>Amenities (comma separated)</Label>
-                  <Input name="amenities" placeholder="Balcony, AC, Hardwood floors" value={amenities} onChange={e => setAmenities(e.target.value)} />
+                  <Input name="amenities" placeholder="Balcony, AC, Hardwood floors" defaultValue={Array.isArray(unit?.amenities) ? unit?.amenities.join(', ') : ''} />
                 </div>
 
                 <Separator />
@@ -128,16 +114,16 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                 <div className="grid grid-cols-2 gap-4 border-t pt-4">
                   <div className="space-y-2">
                     <Label>Unit Rent ($)</Label>
-                    <Input name="rent" type="number" value={rent} onChange={e => setRent(e.target.value)} />
+                    <Input name="rent" type="number" defaultValue={unit?.financials?.rent || ''} />
                   </div>
                   <div className="space-y-2">
                     <Label>Unit Deposit ($)</Label>
-                    <Input name="deposit" type="number" value={deposit} onChange={e => setDeposit(e.target.value)} />
+                    <Input name="deposit" type="number" defaultValue={unit?.financials?.deposit || ''} />
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full bg-blue-600" disabled={loading}>
-                    {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
+                <Button type="submit" className="w-full bg-blue-600" disabled={isSaving}>
+                    {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : "Save Changes"}
                 </Button>
             </form>
             
@@ -145,9 +131,9 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
             <div className="space-y-2">
                 <h4 className="font-semibold">Actions</h4>
-                {tenantName && user && (
+                {unit?.tenantName && user && (
                     <RecordPaymentModal
-                        tenant={{ id: unit.id, rentAmount: rent, firstName: tenantName }} 
+                        tenant={{ id: unit.id, rentAmount: unit?.financials?.rent, firstName: unit?.tenantName }} 
                         propertyId={propertyId}
                         unitId={unit.id}
                         landlordId={user.uid}
