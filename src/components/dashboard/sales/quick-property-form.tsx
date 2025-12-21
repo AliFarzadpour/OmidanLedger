@@ -167,11 +167,23 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         </div>
 
         {!isMultiUnitType ? (
-          <div className="grid grid-cols-3 gap-2">
-              <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
-              <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
-              <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
-          </div>
+          <>
+            <div className="grid grid-cols-3 gap-2">
+                <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
+                <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
+                <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
+            </div>
+             <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Target Rent</Label>
+                <Input type="number" placeholder="2000" {...form.register('targetRent')} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Security Deposit</Label>
+                <Input type="number" placeholder="2000" {...form.register('securityDeposit')} />
+              </div>
+            </div>
+          </>
         ) : (
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
