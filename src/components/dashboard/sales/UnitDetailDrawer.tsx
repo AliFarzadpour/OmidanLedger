@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useFirestore } from '@/firebase';
 import { useFieldArray, useForm } from 'react-hook-form';
@@ -16,6 +16,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
+  const addTenantButtonRef = useRef<HTMLButtonElement>(null);
 
   const { register, control, handleSubmit, getValues } = useForm({
     defaultValues: {
@@ -33,6 +34,16 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     control,
     name: "tenants"
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      // Use a short timeout to ensure the button is in the DOM and focusable
+      const timer = setTimeout(() => {
+        addTenantButtonRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
 
   const onSubmit = async (data: any) => {
     if (!firestore || !unit) return;
@@ -139,6 +150,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                       </div>
                   ))}
                   <Button 
+                    ref={addTenantButtonRef}
                     type="button" 
                     variant="outline" 
                     className="w-full border-dashed"
