@@ -6,7 +6,7 @@ import { doc, onSnapshot, collection, query, deleteDoc } from 'firebase/firestor
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
@@ -32,7 +32,7 @@ import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentMo
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useToast } from '@/hooks/use-toast';
 import { deleteObject, ref } from 'firebase/storage';
-import { useStorage } from '@/firebase/storage/use-storage';
+import { useStorage } from '@/firebase';
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -285,6 +285,9 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
                   </div>
                   <div className="flex items-center gap-2">
                     <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm" className="gap-1"><Eye className="h-3 w-3"/> View</Button>
+                    </a>
+                    <a href={doc.downloadUrl} download>
                       <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
                     </a>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
@@ -308,4 +311,3 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     </>
   )
 }
-    
