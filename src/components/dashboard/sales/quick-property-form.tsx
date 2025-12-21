@@ -185,14 +185,18 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
             </div>
           </>
         ) : (
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                    <Label>Number of Units</Label>
-                    <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
-                </div>
-                <div className="bg-slate-50 p-3 rounded-lg flex gap-3 items-center border border-slate-200">
-                    <Building className="h-5 w-5 text-slate-500"/>
-                    <p className="text-xs text-slate-600">You've selected a multi-unit property. We will auto-generate {form.watch('numberOfUnits') || 0} unit placeholders for you to manage.</p>
+            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div className="grid grid-cols-2 gap-4 items-center">
+                    <div className="grid gap-2">
+                        <Label className="flex items-center gap-2 font-semibold">
+                            <Building className="h-4 w-4 text-slate-500"/>
+                            Number of Units
+                        </Label>
+                        <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
+                    </div>
+                    <p className="text-xs text-slate-600 mt-3">
+                        Enter the number of units in this building. We will auto-generate these placeholders for you to manage individually.
+                    </p>
                 </div>
             </div>
         )}
