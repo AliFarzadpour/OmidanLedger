@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 import { deleteObject, ref } from 'firebase/storage';
 import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
+import { formatCurrency } from '@/lib/format';
 
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
@@ -142,6 +143,13 @@ export default function PropertyDetailsPage() {
     setSelectedTenantForLease({...tenant });
     setLeaseAgentOpen(true);
   };
+  
+  const estimatedInterest = useMemo(() => {
+    if (!property?.mortgage?.loanBalance || !property?.mortgage?.interestRate) return 0;
+    // Simple interest calculation for the month
+    const monthlyRate = (property.mortgage.interestRate / 100) / 12;
+    return property.mortgage.loanBalance * monthlyRate;
+  }, [property]);
 
 
   if (isLoading || !user) return <div className="p-8 text-muted-foreground">Loading property details...</div>;
@@ -198,14 +206,18 @@ export default function PropertyDetailsPage() {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardDescription>Mortgage Principal</CardDescription>
-                  <CardTitle className="text-2xl font-bold">$1,050.96</CardTitle>
+                  <CardDescription>Principal & Interest</CardDescription>
+                  <CardTitle className="text-2xl font-bold">
+                    {formatCurrency(property.mortgage?.principalAndInterest || 0)}
+                  </CardTitle>
                 </CardHeader>
               </Card>
               <Card>
                  <CardHeader className="pb-2">
-                  <CardDescription>Mortgage Interest</CardDescription>
-                  <CardTitle className="text-2xl font-bold">$1,032.70</CardTitle>
+                  <CardDescription>Est. Monthly Interest</CardDescription>
+                  <CardTitle className="text-2xl font-bold">
+                    {formatCurrency(estimatedInterest)}
+                  </CardTitle>
                 </CardHeader>
               </Card>
               <Card>
