@@ -77,6 +77,7 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
               </div>
               <div className="flex items-center gap-1">
                 <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4"/></Button></a>
+                <a href={doc.downloadUrl} download><Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-4 w-4"/></Button></a>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-500" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4"/></Button>
               </div>
             </div>

@@ -203,11 +203,11 @@ const leaseAgentFlow = ai.defineFlow(
         },
     });
 
-    const [downloadURL] = await file.getSignedUrl({
-        action: 'read',
-        expires: '03-09-2491' // Far-future expiration date
-    });
+    // Make the file publicly readable to get a permanent URL
+    await file.makePublic();
 
+    // Get the public URL. This is now a permanent link.
+    const downloadURL = file.publicUrl();
 
     // 5. Save Metadata to Firestore
     const docRef = db.collection('properties').doc(input.propertyId).collection('documents').doc(documentId);
