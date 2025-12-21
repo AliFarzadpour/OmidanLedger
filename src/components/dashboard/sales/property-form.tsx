@@ -61,7 +61,8 @@ const propertySchema = z.object({
     accountNumber: z.string().optional(),
     lenderPhone: z.string().optional(),
     lenderEmail: z.string().optional(),
-    monthlyPayment: z.coerce.number().optional(),
+    principalAndInterest: z.coerce.number().optional(),
+    escrowAmount: z.coerce.number().optional(),
     interestRate: z.coerce.number().optional(),
     loanBalance: z.coerce.number().optional(),
     escrow: z.object({
@@ -679,13 +680,23 @@ export function PropertyForm({
                     <div className="grid gap-2"><Label>Lender Name</Label><Input {...form.register('mortgage.lenderName')} /></div>
                     <div className="grid gap-2"><Label>Account Number</Label><Input {...form.register('mortgage.accountNumber')} /></div>
                   </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="grid gap-2"><Label>Monthly Payment</Label><Input type="number" {...form.register('mortgage.monthlyPayment')} /></div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                        <Label>Principal & Interest</Label>
+                        <Input type="number" {...form.register('mortgage.principalAndInterest')} placeholder="e.g. 1500" />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Monthly Escrow Amount</Label>
+                        <Input type="number" {...form.register('mortgage.escrowAmount')} placeholder="e.g. 450" />
+                    </div>
+                  </div>
+                   <p className="text-xs text-muted-foreground -mt-4">Your total payment to the lender is the sum of Principal/Interest and Escrow.</p>
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" {...form.register('mortgage.interestRate')} /></div>
                     <div className="grid gap-2"><Label>Loan Balance</Label><Input type="number" {...form.register('mortgage.loanBalance')} /></div>
                   </div>
                   <div className="p-4 border rounded-md bg-slate-50">
-                    <Label className="mb-2 block font-semibold text-slate-700">Escrow Configuration</Label>
+                    <Label className="mb-2 block font-semibold text-slate-700">This escrow amount is for:</Label>
                     <div className="flex gap-6">
                       <div className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesTax')} /><span className="text-sm">Property Tax</span></div>
                       <div className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesInsurance')} /><span className="text-sm">Insurance</span></div>
