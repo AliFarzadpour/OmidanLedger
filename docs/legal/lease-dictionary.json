@@ -1,0 +1,63 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2024-07-29T10:00:00Z",
+  "states": {
+    "CA": {
+      "security_deposit": {
+        "max_amount": "two_months_rent_unfurnished",
+        "return_deadline_days": 21,
+        "interest_required": false,
+        "notes": "Landlord must provide an itemized list of deductions if any part of the deposit is withheld."
+      },
+      "late_fees": {
+        "is_regulated": true,
+        "grace_period_days": 5,
+        "max_fee": "reasonable_estimate_of_cost",
+        "notes": "Late fees must be a 'reasonable estimate' of the cost incurred by the landlord due to the late payment. They cannot be a penalty."
+      },
+      "notice_to_enter": {
+        "standard_notice_hours": 24,
+        "emergency_entry_allowed": true,
+        "notes": "Notice must be in writing unless tenant agrees otherwise. Emergency entry is allowed for situations like fire or flood."
+      }
+    },
+    "TX": {
+      "security_deposit": {
+        "max_amount": null,
+        "return_deadline_days": 30,
+        "interest_required": false,
+        "notes": "Landlord must provide an itemized list of deductions only if the tenant requests it or disputes deductions."
+      },
+      "late_fees": {
+        "is_regulated": true,
+        "grace_period_days": 2,
+        "max_fee": "not_to_exceed_12_percent_for_small_properties_or_10_percent_for_large_properties",
+        "notes": "The fee is capped based on the number of units in the property (4 or fewer vs. more than 4)."
+      },
+      "notice_to_enter": {
+        "standard_notice_hours": "advance_notice_required",
+        "emergency_entry_allowed": true,
+        "notes": "Texas law requires 'advance notice,' but does not specify a minimum number of hours. It is commonly interpreted as 24 hours."
+      }
+    },
+    "NY": {
+        "security_deposit": {
+          "max_amount": "one_month_rent",
+          "return_deadline_days": 14,
+          "interest_required": false,
+          "notes": "The landlord must provide the tenant with the name and address of the banking institution where the deposit is being held."
+        },
+        "late_fees": {
+          "is_regulated": true,
+          "grace_period_days": 5,
+          "max_fee": "lesser_of_50_dollars_or_5_percent_of_rent",
+          "notes": "Late fees are strictly capped statewide."
+        },
+        "notice_to_enter": {
+          "standard_notice_hours": "reasonable_notice_required",
+          "emergency_entry_allowed": true,
+          "notes": "New York law requires 'reasonable' notice, which is typically interpreted as at least 24 hours in most situations."
+        }
+    }
+  }
+}

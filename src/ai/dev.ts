@@ -14,3 +14,4 @@ import '@/ai/flows/analyze-transaction-entity.ts';
 import '@/ai/flows/deep-categorize-transaction.ts';
 import '@/ai/flows/publish-user-rules.ts';
 import '@/ai/flows/repair-transactions.ts';
+import '@/ai/flows/lease-flow.ts';
