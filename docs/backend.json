@@ -1,5 +1,56 @@
 {
   "entities": {
+    "Unit": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Unit",
+      "type": "object",
+      "description": "Represents a single rentable unit within a property.",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "unitNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["occupied", "vacant", "maintenance"] },
+        "bedrooms": { "type": "number" },
+        "bathrooms": { "type": "number" },
+        "squareFootage": { "type": "number" },
+        "amenities": { "type": "array", "items": { "type": "string" } },
+        "financials": {
+          "type": "object",
+          "properties": {
+            "rent": { "type": "number" },
+            "deposit": { "type": "number" }
+          }
+        },
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "firstName": { "type": "string" },
+              "lastName": { "type": "string" },
+              "email": { "type": "string", "format": "email" },
+              "phone": { "type": "string" },
+              "leaseStart": { "type": "string", "format": "date" },
+              "leaseEnd": { "type": "string", "format": "date" },
+              "rentAmount": { "type": "number" },
+              "rentDueDate": { "type": "number" },
+              "lateFeeAmount": { "type": "number" }
+            },
+            "required": ["firstName", "lastName", "email", "rentAmount", "rentDueDate"]
+          }
+        },
+        "access": {
+          "type": "object",
+          "properties": {
+            "gateCode": { "type": "string" },
+            "lockboxCode": { "type": "string" },
+            "notes": { "type": "string" }
+          }
+        }
+      },
+      "required": ["id", "userId", "propertyId", "unitNumber"]
+    },
     "User": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
@@ -198,17 +249,13 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Property",
       "type": "object",
-      "description": "Represents a rental property owned by a user.",
+      "description": "Represents a rental property owned by a user. This is the building-level entity.",
       "properties": {
         "id": { "type": "string" },
         "userId": { "type": "string" },
         "name": { "type": "string" },
-        "status": { "type": "string", "enum": ["occupied", "vacant", "maintenance"] },
         "createdAt": { "type": "string", "format": "date-time" },
         "type": { "type": "string", "enum": ["single-family", "multi-family", "condo", "commercial"] },
-        "bedrooms": { "type": "number", "description": "Number of bedrooms." },
-        "bathrooms": { "type": "number", "description": "Number of bathrooms." },
-        "squareFootage": { "type": "number", "description": "Total square footage of the property." },
         "address": {
           "type": "object",
           "properties": {
@@ -247,13 +294,6 @@
                     }
                 }
             }
-        },
-        "financials": {
-          "type": "object",
-          "properties": {
-            "targetRent": { "type": "number" },
-            "securityDeposit": { "type": "number" }
-          }
         },
         "management": {
           "type": "object",
@@ -326,32 +366,6 @@
               "providerName": { "type": "string" },
               "providerContact": { "type": "string" }
             }
-          }
-        },
-        "access": {
-          "type": "object",
-          "properties": {
-            "gateCode": { "type": "string" },
-            "lockboxCode": { "type": "string" },
-            "notes": { "type": "string" }
-          }
-        },
-        "tenants": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "firstName": { "type": "string" },
-              "lastName": { "type": "string" },
-              "email": { "type": "string", "format": "email" },
-              "phone": { "type": "string" },
-              "leaseStart": { "type": "string", "format": "date" },
-              "leaseEnd": { "type": "string", "format": "date" },
-              "rentAmount": { "type": "number" },
-              "rentDueDate": { "type": "number" },
-              "lateFeeAmount": { "type": "number" }
-            },
-             "required": ["firstName", "lastName", "email", "rentAmount", "rentDueDate"]
           }
         },
         "preferredVendors": {
@@ -570,6 +584,26 @@
           ]
         }
       },
+      {
+        "path": "/properties/{propertyId}/units/{unitId}",
+        "definition": {
+          "entityName": "Unit",
+          "schema": {
+            "$ref": "#/backend/entities/Unit"
+          },
+          "description": "Stores individual units within a property. Access is inherited from the parent property.",
+          "params": [
+            {
+              "name": "propertyId",
+              "description": "The unique ID of the parent property."
+            },
+            {
+              "name": "unitId",
+              "description": "The unique ID of the unit."
+            }
+          ]
+        }
+      },
        {
         "path": "/properties/{propertyId}/documents/{documentId}",
         "definition": {
@@ -657,5 +691,3 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
-
-    

@@ -27,13 +27,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PropertyFinancials } from './property-financials';
 
-// --- SCHEMA DEFINITION ---
+// --- SCHEMA DEFINITION (BUILDING-LEVEL) ---
 const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
   type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
-  bedrooms: z.coerce.number().optional(),
-  bathrooms: z.coerce.number().optional(),
-  squareFootage: z.coerce.number().optional(),
   address: z.object({
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "City is required"),
@@ -52,10 +49,6 @@ const propertySchema = z.object({
     feeValue: z.coerce.number().optional(),
     leasingFee: z.coerce.number().optional(),
     renewalFee: z.coerce.number().optional(),
-  }),
-  financials: z.object({
-    targetRent: z.coerce.number().min(0),
-    securityDeposit: z.coerce.number().min(0),
   }),
   mortgage: z.object({
     purchasePrice: z.coerce.number().optional(),
@@ -97,23 +90,6 @@ const propertySchema = z.object({
     responsibility: z.enum(['tenant', 'landlord']),
     providerName: z.string().optional(),
     providerContact: z.string().optional(),
-  })).optional(), // Made optional to prevent crashes, but we default it below
-  access: z.object({
-    gateCode: z.string().optional(),
-    lockboxCode: z.string().optional(),
-    notes: z.string().optional(),
-  }).optional(),
-  tenants: z.array(z.object({
-    id: z.string().optional(), 
-    firstName: z.string().min(1, "First Name is required"),
-    lastName: z.string().min(1, "Last Name is required"),
-    email: z.string().email("Valid email is required"),
-    phone: z.string().optional(),
-    leaseStart: z.string().optional(),
-    leaseEnd: z.string().optional(),
-    rentAmount: z.coerce.number(),
-    rentDueDate: z.coerce.number().min(1).max(31).default(1),
-    lateFeeAmount: z.coerce.number().optional(),
   })).optional(),
   preferredVendors: z.array(z.object({
     id: z.string().optional(),
@@ -149,11 +125,7 @@ type PropertyFormValues = z.infer<typeof propertySchema>;
 const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   name: '',
   type: 'single-family',
-  bedrooms: 0,
-  bathrooms: 0,
-  squareFootage: 0,
   address: { street: '', city: '', state: '', zip: '' },
-  financials: { targetRent: 0, securityDeposit: 0 },
   management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
   mortgage: { 
     purchasePrice: 0,
@@ -171,8 +143,6 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
     { type: 'Trash', responsibility: 'tenant', providerName: '', providerContact: '' },
     { type: 'Internet', responsibility: 'tenant', providerName: '', providerContact: '' },
   ],
-  access: { gateCode: '', lockboxCode: '', notes: '' },
-  tenants: [],
   preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }]
 };
 
@@ -198,8 +168,6 @@ export function PropertyForm({
       ...DEFAULT_VALUES,
       ...initialData,
       utilities: initialData.utilities || DEFAULT_VALUES.utilities,
-      access: initialData.access || DEFAULT_VALUES.access,
-      tenants: initialData.tenants || [],
       preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
       mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
       management: { ...DEFAULT_VALUES.management, ...initialData.management },
@@ -217,8 +185,6 @@ export function PropertyForm({
           ...DEFAULT_VALUES,
           ...initialData,
           utilities: initialData.utilities || DEFAULT_VALUES.utilities,
-          access: initialData.access || DEFAULT_VALUES.access,
-          tenants: initialData.tenants || [],
           preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
           mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
           management: { ...DEFAULT_VALUES.management, ...initialData.management },
@@ -230,129 +196,7 @@ export function PropertyForm({
   }, [initialData, form, currentPropertyId]);
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
-  const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
-
-  const syncPropertySmartRules = (
-    batch: WriteBatch,
-    propertyData: PropertyFormValues,
-    userId: string,
-    propertyId: string
-  ) => {
-    if (!firestore) return;
-  
-    // 1. RULE: Tenant Name Mapping
-    propertyData.tenants?.forEach(tenant => {
-      if (tenant.firstName && tenant.lastName) {
-        const fullName = `${tenant.firstName} ${tenant.lastName}`.toUpperCase();
-        const ruleId = `RULE_TENANT_${propertyId}_${fullName.replace(/\s+/g, '_')}`;
-  
-        const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-        batch.set(ruleRef, {
-          userId,
-          transactionDescription: fullName,
-          primaryCategory: "Income",
-          secondaryCategory: "Rental Income",
-          subcategory: `${propertyData.name} Rent Income`,
-          propertyId: propertyId,
-          source: "System - Tenant Lease",
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
-    });
-  
-    // 2. RULE: Management Company
-    if (propertyData.management.isManaged === 'professional' && propertyData.management.companyName) {
-      const mgmtName = propertyData.management.companyName.toUpperCase();
-      const ruleId = `RULE_MGMT_${propertyId}_${mgmtName.replace(/\s+/g, '_')}`;
-      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-  
-      batch.set(ruleRef, {
-        userId,
-        transactionDescription: mgmtName,
-        primaryCategory: "Operating Expenses",
-        secondaryCategory: "Property Management",
-        subcategory: `${propertyData.name} Management Fee`,
-        propertyId: propertyId,
-        source: "System - Mgmt Company",
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-
-    // 3. RULE: Mortgage Lender
-    if (propertyData.mortgage.hasMortgage === 'yes' && propertyData.mortgage.lenderName) {
-      const lenderName = propertyData.mortgage.lenderName.toUpperCase();
-      const ruleId = `RULE_MORTGAGE_${propertyId}_${lenderName.replace(/\s+/g, '_')}`;
-      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-  
-      batch.set(ruleRef, {
-        userId,
-        transactionDescription: lenderName,
-        primaryCategory: "Mortgage",
-        secondaryCategory: "Interest & Principal",
-        subcategory: `${propertyData.name} Mortgage Payment`,
-        propertyId: propertyId,
-        source: "System - Lender",
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-
-     // 4. RULE: Insurance Provider
-    if (propertyData.taxAndInsurance.insuranceProvider) {
-      const providerName = propertyData.taxAndInsurance.insuranceProvider.toUpperCase();
-      const ruleId = `RULE_INSURANCE_${propertyId}_${providerName.replace(/\s+/g, '_')}`;
-      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-  
-      batch.set(ruleRef, {
-        userId,
-        transactionDescription: providerName,
-        primaryCategory: "Operating Expenses",
-        secondaryCategory: "Insurance",
-        subcategory: `${propertyData.name} Insurance`,
-        propertyId: propertyId,
-        source: "System - Insurance Provider",
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-
-    // 5. RULE: General Property Expense (Catch-all)
-    if (propertyData.address.street) {
-        const streetName = propertyData.address.street.toUpperCase();
-        const ruleId = `RULE_GENERAL_${propertyId}_${streetName.replace(/\s+/g, '_')}`;
-        const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-
-        batch.set(ruleRef, {
-            userId,
-            transactionDescription: streetName,
-            primaryCategory: "Operating Expenses",
-            secondaryCategory: "Expenses",
-            subcategory: `${propertyData.name} Expenses`,
-            propertyId: propertyId,
-            source: "System - General Property",
-            updatedAt: new Date().toISOString()
-        }, { merge: true });
-    }
-    
-    // 6. RULE: Utilities
-    propertyData.utilities?.forEach(utility => {
-      if (utility.responsibility === 'landlord' && utility.providerName) {
-        const providerName = utility.providerName.toUpperCase();
-        const ruleId = `RULE_UTILITY_${propertyId}_${providerName.replace(/\s+/g, '_')}`;
-        const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-
-        batch.set(ruleRef, {
-          userId,
-          transactionDescription: providerName,
-          primaryCategory: "Operating Expenses",
-          secondaryCategory: "Utilities",
-          subcategory: `${utility.type} - ${propertyData.name}`,
-          propertyId: propertyId,
-          source: "System - Utility Provider",
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
-    });
-  };
 
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user || !firestore) return;
@@ -364,67 +208,11 @@ export function PropertyForm({
         if (isEditMode && currentPropertyId) {
             const propertyRef = doc(firestore, 'properties', currentPropertyId);
             batch.update(propertyRef, data);
-            syncPropertySmartRules(batch, data, user.uid, currentPropertyId);
             await batch.commit();
-            toast({ title: "Property Updated", description: "Changes and smart rules saved." });
+            toast({ title: "Property Updated", description: "Building-level details have been saved." });
         } else {
-            const timestamp = new Date().toISOString();
-            const propertyRef = doc(collection(firestore, 'properties'));
-            
-            const accountingMap: any = { utilities: {} };
-
-            const createAccount = (name: string, type: string, subtype: string, balance: number = 0) => {
-                const ref = doc(collection(firestore, 'accounts'));
-                batch.set(ref, { userId: user.uid, name, type, subtype, balance, isSystemAccount: true, propertyId: propertyRef.id, createdAt: timestamp });
-                return ref.id;
-            };
-
-            accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset', data.mortgage?.purchasePrice || 0);
-            accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
-
-            if (data.financials.securityDeposit > 0) {
-                accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability', 0);
-            }
-            if (data.mortgage.hasMortgage === 'yes') {
-                accountingMap.liabilityAccount = createAccount(`Mortgage - ${data.name}`, 'Liability', 'Long Term Liability', data.mortgage?.loanBalance || 0);
-            }
-
-            accountingMap.incomeAccount = createAccount(`Rent - ${data.name}`, 'Income', 'Rental Income');
-            accountingMap.lateFeeAccount = createAccount(`Late Fees - ${data.name}`, 'Income', 'Other Income');
-
-            accountingMap.expenseAccount = createAccount(`Maint/Ops - ${data.name}`, 'Expense', 'Repairs & Maintenance');
-            accountingMap.taxAccount = createAccount(`Prop Taxes - ${data.name}`, 'Expense', 'Taxes');
-            accountingMap.insuranceAccount = createAccount(`Insurance - ${data.name}`, 'Expense', 'Insurance');
-            
-            if (data.management.isManaged === 'professional') {
-                accountingMap.managementFeeAccount = createAccount(`Mgmt Fees - ${data.name}`, 'Expense', 'Property Management');
-            }
-
-            if (data.mortgage.hasMortgage === 'yes') {
-                accountingMap.interestAccount = createAccount(`Mtg Interest - ${data.name}`, 'Expense', 'Interest Expense');
-            }
-            if (data.hoa.hasHoa === 'yes') {
-                accountingMap.hoaAccount = createAccount(`HOA Fees - ${data.name}`, 'Expense', 'Dues & Subscriptions');
-            }
-
-            accountingMap.utilities.water = createAccount(`Water - ${data.name}`, 'Expense', 'Utilities');
-            accountingMap.utilities.electric = createAccount(`Electric - ${data.name}`, 'Expense', 'Utilities');
-            accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
-            accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
-            accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
-
-            batch.set(propertyRef, {
-                userId: user.uid,
-                ...data, 
-                createdAt: timestamp,
-                accounting: accountingMap
-            });
-
-            syncPropertySmartRules(batch, data, user.uid, propertyRef.id);
-
-            await batch.commit();
-            setCurrentPropertyId(propertyRef.id);
-            toast({ title: "Property Suite Created", description: `Generated property, ledgers, and smart rules for ${data.name}.` });
+           // Create logic is handled in QuickPropertyForm
+           throw new Error("Creation via this detailed form is not supported. Use Quick Add.");
         }
         
         if (onSuccess) onSuccess();
@@ -442,7 +230,6 @@ export function PropertyForm({
     const missingFields = [];
     if (errors.utilities) missingFields.push("Utilities configuration");
     if (errors.address) missingFields.push("Address details");
-    if (errors.tenants) missingFields.push("Tenant details (Email/Name)");
 
     const desc = missingFields.length > 0 
         ? `Missing required info in: ${missingFields.join(", ")}.` 
@@ -452,16 +239,13 @@ export function PropertyForm({
   };
 
   const navItems = [
-    { id: 'tenants', label: 'Tenants', icon: UserCheck },
-    { id: 'vendors', label: 'Vendors', icon: Users },
     { id: 'general', label: 'General Info', icon: Building2 },
-    { id: 'financials', label: 'Rent Targets', icon: DollarSign },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
     { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
-    { id: 'access', label: 'Access & Keys', icon: Key },
+    { id: 'vendors', label: 'Vendors', icon: Wrench },
     { id: 'accounting', label: 'Automated Accounting', icon: Bot },
   ];
 
@@ -520,75 +304,6 @@ export function PropertyForm({
       {/* CONTENT AREA */}
       <div className="flex-1 w-full h-auto lg:h-full lg:overflow-y-auto pr-1 pb-20 lg:pb-10">
         
-        {activeSection === 'tenants' && (
-          <Card>
-            <CardHeader>
-              <div className="flex justify-between items-center">
-                 <div>
-                    <CardTitle>Tenants</CardTitle>
-                    <CardDescription>Current residents and lease details. Add multiple for co-signers.</CardDescription>
-                 </div>
-                 <Button size="sm" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, rentDueDate: 1, lateFeeAmount: 0 })}>
-                    <Plus className="h-4 w-4 mr-2" /> Add Tenant
-                 </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-6">
-               {tenantFields.fields.map((field, index) => (
-                  <div key={field.id} className="p-4 border rounded-lg bg-slate-50 relative">
-                      <Button size="icon" variant="ghost" className="absolute top-2 right-2 text-destructive hover:bg-destructive/10" onClick={() => tenantFields.remove(index)}>
-                         <Trash2 className="h-4 w-4" />
-                      </Button>
-                      
-                      <div className="grid grid-cols-2 gap-4 mb-4 pr-8">
-                         <div className="grid gap-2">
-                            <Label className="text-xs">First Name</Label>
-                            <Input className="bg-white" {...form.register(`tenants.${index}.firstName`)} />
-                            {form.formState.errors.tenants?.[index]?.firstName && <span className="text-red-500 text-[10px]">Required</span>}
-                         </div>
-                         <div className="grid gap-2">
-                            <Label className="text-xs">Last Name</Label>
-                            <Input className="bg-white" {...form.register(`tenants.${index}.lastName`)} />
-                            {form.formState.errors.tenants?.[index]?.lastName && <span className="text-red-500 text-[10px]">Required</span>}
-                         </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                         <div className="grid gap-2">
-                            <Label className="text-xs flex items-center gap-1"><Mail className="h-3 w-3"/> Email (Invoice)</Label>
-                            <Input className="bg-white" {...form.register(`tenants.${index}.email`)} />
-                            {form.formState.errors.tenants?.[index]?.email && <span className="text-red-500 text-[10px]">Valid Email Required</span>}
-                         </div>
-                         <div className="grid gap-2"><Label className="text-xs flex items-center gap-1"><Phone className="h-3 w-3"/> Phone</Label><Input className="bg-white" {...form.register(`tenants.${index}.phone`)} /></div>
-                      </div>
-                      
-                      <Separator className="mb-4" />
-
-                      <div className="grid grid-cols-3 gap-4 mb-4">
-                         <div className="grid gap-2">
-                            <Label className="text-xs font-semibold text-blue-700">Rent Portion ($)</Label>
-                            <Input type="number" className="bg-white border-blue-200" placeholder="Their share" {...form.register(`tenants.${index}.rentAmount`)} />
-                         </div>
-                         <div className="grid gap-2">
-                            <Label className="text-xs font-semibold text-blue-700">Due Day</Label>
-                            <Input type="number" max={31} min={1} className="bg-white border-blue-200" {...form.register(`tenants.${index}.rentDueDate`)} />
-                         </div>
-                         <div className="grid gap-2">
-                            <Label className="text-xs text-red-700">Late Fee ($)</Label>
-                            <Input type="number" className="bg-white border-red-200" {...form.register(`tenants.${index}.lateFeeAmount`)} />
-                         </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                         <div className="grid gap-2"><Label className="text-xs">Lease Start</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseStart`)} /></div>
-                         <div className="grid gap-2"><Label className="text-xs">Lease End</Label><Input type="date" className="bg-white" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
-                      </div>
-                  </div>
-               ))}
-               {tenantFields.fields.length === 0 && <p className="text-center text-muted-foreground py-8">No tenants added yet.</p>}
-            </CardContent>
-          </Card>
-        )}
-
         {activeSection === 'vendors' && (
             <p className="text-center text-muted-foreground py-10">The central vendor management page is under development.</p>
         )}
@@ -614,11 +329,6 @@ export function PropertyForm({
                     </SelectContent>
                     </Select>
                 </div>
-                 <div className="grid grid-cols-3 gap-2">
-                    <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
-                    <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
-                    <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
-                 </div>
               </div>
               <div className="grid gap-2">
                   <Label>Address</Label>
@@ -639,16 +349,6 @@ export function PropertyForm({
                     {form.formState.errors.address?.zip && <span className="text-red-500 text-xs">Required</span>}
                  </div>
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {activeSection === 'financials' && (
-          <Card>
-            <CardHeader><CardTitle>Market Targets</CardTitle></CardHeader>
-            <CardContent className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2"><Label>Target Monthly Rent</Label><Input type="number" {...form.register('financials.targetRent')} /></div>
-              <div className="grid gap-2"><Label>Security Deposit Req.</Label><Input type="number" {...form.register('financials.securityDeposit')} /></div>
             </CardContent>
           </Card>
         )}
@@ -834,19 +534,6 @@ export function PropertyForm({
           </Card>
         )}
 
-        {activeSection === 'access' && (
-          <Card>
-            <CardHeader><CardTitle>Access</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-               <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2"><Label>Gate Code</Label><Input {...form.register('access.gateCode')} /></div>
-                  <div className="grid gap-2"><Label>Lockbox</Label><Input {...form.register('access.lockboxCode')} /></div>
-               </div>
-               <div className="grid gap-2"><Label>Notes</Label><Textarea {...form.register('access.notes')} /></div>
-            </CardContent>
-          </Card>
-        )}
-
         {activeSection === 'accounting' && (
           <Card className="border-blue-200 bg-blue-50/30">
             <CardHeader>
@@ -875,5 +562,3 @@ export function PropertyForm({
     </div>
   );
 }
-
-    

@@ -25,7 +25,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
     try {
       await updateDoc(unitRef, {
-        unitNumber: formData.get('unitNumber'), // The critical editable field
+        unitNumber: formData.get('unitNumber'),
         bedrooms: Number(formData.get('bedrooms')),
         bathrooms: Number(formData.get('bathrooms')),
         sqft: Number(formData.get('sqft')),
@@ -35,7 +35,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       });
       
       toast({ title: "Success", description: "Unit identity and details updated." });
-      if (onUpdate) onUpdate(); // Call the refetch function from parent
+      if (onUpdate) onUpdate();
       onOpenChange(false);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -46,7 +46,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      {/* The key={unit?.id} forces the drawer to refresh its inputs when you switch units */}
       <SheetContent key={unit?.id} className="sm:max-w-[440px] overflow-y-auto">
         <SheetHeader className="border-b pb-4">
           <SheetTitle className="text-2xl font-black flex items-center gap-2 text-slate-900">
@@ -59,9 +58,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         
         <form onSubmit={handleUpdate} className="space-y-8 pt-6">
           
-          {/* SECTION 1: IDENTITY */}
           <div className="space-y-4">
-             <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-1 h-4 bg-blue-500 rounded-full" /> Unit Identity</h3>
+            <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-1 h-4 bg-blue-500 rounded-full" /> Unit Identity</h3>
             <div className="space-y-2">
               <Label htmlFor="unitNumber">Display Number / Label</Label>
               <Input 
@@ -73,7 +71,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
             </div>
           </div>
 
-          {/* SECTION 2: PHYSICAL SPECS */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-1 h-4 bg-blue-500 rounded-full" /> Physical Stats</h3>
             <div className="grid grid-cols-2 gap-4">
@@ -84,7 +81,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
             <div className="space-y-2"><Label className="text-xs">Amenities</Label><Input name="amenities" placeholder="e.g., Balcony, AC, Parking" defaultValue={unit?.amenities?.join(', ') || ''} /></div>
           </div>
           
-          {/* SECTION 3: FINANCIALS */}
           <div className="space-y-4">
             <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-1 h-4 bg-green-500 rounded-full" /> Financial Targets</h3>
             <div className="grid grid-cols-2 gap-4">
