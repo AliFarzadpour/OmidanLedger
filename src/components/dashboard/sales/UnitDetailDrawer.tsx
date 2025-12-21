@@ -58,10 +58,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         bathrooms: Number(bathrooms) || 0,
         sqft: Number(sqft) || 0,
         amenities: amenities.split(',').map(a => a.trim()).filter(a => a),
-        financials: {
-          rent: Number(rent) || 0,
-          deposit: Number(deposit) || 0,
-        },
+        'financials.rent': Number(rent) || 0,
+        'financials.deposit': Number(deposit) || 0,
       });
       toast({ title: "Unit Updated", description: `Unit ${unit.unitNumber} has been saved.` });
       if (onUpdate) onUpdate();
