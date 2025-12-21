@@ -58,7 +58,7 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   return (
     <>
       <div className="space-y-3">
-        <Button size="sm" variant="outline" onClick={() => setUploaderOpen(true)} className="w-full gap-2 border-dashed">
+        <Button type="button" size="sm" variant="outline" onClick={() => setUploaderOpen(true)} className="w-full gap-2 border-dashed">
           <UploadCloud className="h-4 w-4" /> Upload Document to Unit
         </Button>
         {isLoading && <p className="text-xs text-center text-muted-foreground">Loading documents...</p>}
