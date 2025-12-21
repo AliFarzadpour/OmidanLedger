@@ -5,7 +5,7 @@ import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Home, Users, DollarSign, Loader2 } from 'lucide-react';
-import { UnitDetailDrawer } from './UnitDetailDrawer';
+import { UnitDetailDrawer } from '@/components/dashboard/properties/UnitDetailDrawer';
 
 export function UnitMatrix({ propertyId, units }: { propertyId: string, units: any[] }) {
   const { user } = useUser();
@@ -70,7 +70,6 @@ export function UnitMatrix({ propertyId, units }: { propertyId: string, units: a
           unit={selectedUnit}
           isOpen={isDrawerOpen}
           onOpenChange={handleDrawerClose}
-          onUpdate={handleUpdateSuccess}
         />
       )}
     </>
