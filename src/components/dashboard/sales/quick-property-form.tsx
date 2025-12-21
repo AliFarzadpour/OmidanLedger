@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch, collection, serverTimestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Home, DollarSign } from 'lucide-react';
+import { Loader2, Home, DollarSign, Building } from 'lucide-react';
 
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
@@ -49,17 +49,19 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     }
   });
 
+  const propertyType = form.watch('type');
+  const isMultiUnitType = propertyType === 'multi-family' || propertyType === 'commercial';
+
   const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
     setIsSaving(true);
-
+  
     try {
       const batch = writeBatch(firestore);
       const timestamp = new Date().toISOString();
       const propertyRef = doc(collection(firestore, 'properties'));
       
       // --- 1. CORE ACCOUNTING GENERATOR ---
-      // This remains identical to your previous code to ensure no breakage.
       const accountingMap: any = { utilities: {} };
       const createAccount = (name: string, type: string, subtype: string) => {
         const ref = doc(collection(firestore, 'accounts'));
@@ -73,7 +75,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         });
         return ref.id;
       };
-
+  
       // Assets, Liabilities, Income, Expenses (Preserved from your code)
       accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
       accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
@@ -90,10 +92,10 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       accountingMap.utilities.gas = createAccount(`Gas - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
-
+  
       // --- 2. BRANCHING LOGIC ---
       const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial';
-
+  
       // Save the Main Property (The Hub)
       batch.set(propertyRef, {
         userId: user.uid,
@@ -106,29 +108,28 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         createdAt: timestamp,
         accounting: accountingMap
       });
-
+  
       // --- 3. AUTO-PILOT: SUBCOLLECTION GENERATION ---
-      // This only triggers if the property is multi-unit.
       if (isMultiUnit) {
         for (let i = 1; i <= 10; i++) {
           const unitRef = doc(collection(propertyRef, 'units'));
           batch.set(unitRef, {
             userId: user.uid,
-            unitNumber: `${100 + i}`, // e.g., 101, 102
+            unitNumber: `${100 + i}`,
             status: 'vacant',
             targetRent: data.type === 'commercial' ? 0 : data.targetRent / 10,
             createdAt: timestamp
           });
         }
       }
-
+  
       await batch.commit();
       toast({ 
         title: isMultiUnit ? "Central Hub Created" : "Property Added", 
         description: isMultiUnit ? "Building and 10 units are ready." : "Property and 16 ledgers created." 
       });
       onSuccess();
-
+  
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
@@ -167,11 +168,18 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
             </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-            <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
-            <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
-            <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
-        </div>
+        {!isMultiUnitType ? (
+          <div className="grid grid-cols-3 gap-2">
+              <div className="grid gap-1"><Label className="text-xs">Bedrooms</Label><Input type="number" {...form.register('bedrooms')} /></div>
+              <div className="grid gap-1"><Label className="text-xs">Bathrooms</Label><Input type="number" {...form.register('bathrooms')} /></div>
+              <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
+          </div>
+        ) : (
+          <div className="bg-slate-50 p-3 rounded-lg flex gap-3 items-center border border-slate-200">
+             <Building className="h-5 w-5 text-slate-500"/>
+             <p className="text-xs text-slate-600">You've selected a multi-unit property. We will auto-generate 10 unit placeholders for you to manage.</p>
+          </div>
+        )}
 
         <div className="grid gap-2">
           <Label>Street Address</Label>
@@ -186,7 +194,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
 
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-2">
-            <Label>Target Rent ($)</Label>
+            <Label>{isMultiUnitType ? 'Total Building Rent ($)' : 'Target Rent ($)'}</Label>
             <div className="relative">
                <DollarSign className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                <Input className="pl-8" type="number" {...form.register('targetRent')} />
