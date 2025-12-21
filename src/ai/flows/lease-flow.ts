@@ -96,26 +96,33 @@ const leaseAgentFlow = ai.defineFlow(
     // 2. "Stitch" the Lease with Gemini
     const { text: leaseText } = await ai.generate({
       prompt: `
-        You are a paralegal AI specializing in real estate law. Your task is to assemble a simple but valid lease agreement using the provided data.
+        You are a paralegal AI specializing in real estate law. Your task is to assemble a professional, well-formatted, and complete residential lease agreement using the provided data.
 
-        **Property & Tenant Information:**
-        - Property: ${propertyData.propertyName}
-        - Address: ${propertyData.propertyAddress}
-        - Tenant: ${propertyData.tenantName} (${propertyData.tenantEmail})
-        - Rent: $${propertyData.rentAmount}/month
-        - Security Deposit: $${propertyData.securityDeposit}
-        - Term: ${propertyData.leaseStartDate} to ${propertyData.leaseEndDate}
+        **Data Provided:**
+        - **Property:** ${propertyData.propertyName} at ${propertyData.propertyAddress}
+        - **Tenant:** ${propertyData.tenantName} (${propertyData.tenantEmail})
+        - **Landlord:** [Your Company Name Here] (You will act as the landlord)
+        - **Rent:** $${propertyData.rentAmount}/month, due on the 1st.
+        - **Security Deposit:** $${propertyData.securityDeposit}
+        - **Lease Term:** From ${propertyData.leaseStartDate} to ${propertyData.leaseEndDate}
+        - **Governing State:** ${input.state.toUpperCase()}
+        - **State-Specific Rules:**
+          - **Security Deposit:** ${legalClauses.security_deposit.notes} (Return Deadline: ${legalClauses.security_deposit.return_deadline_days} days)
+          - **Late Fees:** ${legalClauses.late_fees.notes} (Max Fee: ${legalClauses.late_fees.max_fee})
+          - **Landlord Entry:** ${legalClauses.notice_to_enter.notes} (Standard Notice: ${legalClauses.notice_to_enter.standard_notice_hours} hours)
 
-        **State-Specific Legal Requirements for ${input.state.toUpperCase()}:**
-        - Security Deposit Rules: ${legalClauses.security_deposit.notes} (Return Deadline: ${legalClauses.security_deposit.return_deadline_days} days)
-        - Late Fee Rules: ${legalClauses.late_fees.notes} (Max Fee: ${legalClauses.late_fees.max_fee})
-        - Landlord Entry Rules: ${legalClauses.notice_to_enter.notes} (Standard Notice: ${legalClauses.notice_to_enter.standard_notice_hours} hours)
-
-        **Instructions:**
-        Generate the full text of a residential lease agreement incorporating all the data above.
-        Structure it with clear headings (e.g., "1. Parties", "2. Property", "3. Term", "4. Rent", "5. Security Deposit", etc.).
-        Ensure the clauses for security deposit, late fees, and landlord's notice to enter are worded to be compliant with the state-specific rules provided.
-        The output should be only the text of the lease agreement.
+        **Formatting and Content Instructions:**
+        1.  **Title:** Start with a clear title: "Residential Lease Agreement".
+        2.  **Structure:** Use clear, numbered headings for each section (e.g., "1. PARTIES", "2. PREMISES", "3. TERM", etc.).
+        3.  **Completeness:** Generate a complete lease agreement. After the "Security Deposit" section, you MUST include the following standard clauses:
+            - **USE OF PREMISES:** The premises shall be used and occupied by Tenant exclusively as a private single-family residence.
+            - **UTILITIES:** Tenant shall be responsible for arranging and paying for all utility services required on the premises.
+            - **MAINTENANCE AND REPAIR:** Tenant will, at their sole expense, keep and maintain the premises in good, clean, and sanitary condition.
+            - **DEFAULT:** If Tenant fails to pay rent or defaults on any other term, Landlord may give written notice of the default and intent to terminate the Lease.
+            - **GOVERNING LAW:** This Lease shall be governed by the laws of the State of ${input.state.toUpperCase()}.
+            - **ENTIRE AGREEMENT:** This document constitutes the entire agreement between the parties.
+        4.  **Signature Block:** Conclude with a proper signature section for both Landlord and Tenant, including lines for name, signature, and date.
+        5.  **Professional Tone:** The output must be only the full, final text of the lease agreement. Do not include any conversational text, introductions, or summaries.
       `,
     });
 
@@ -132,7 +139,7 @@ const leaseAgentFlow = ai.defineFlow(
 
     // 4. Upload to Firebase Storage
     const storage = getStorage();
-    const bucket = storage.bucket(); // Use the default bucket
+    const bucket = storage.bucket(); 
     const documentId = uuidv4();
     const fileName = `lease-agreement-${input.tenantId.replace(/[^a-zA-Z0-9]/g, '_')}-${documentId}.pdf`;
     const storagePath = `property_documents/${input.propertyId}/${fileName}`;
