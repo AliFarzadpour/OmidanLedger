@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch, getDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch, getDocs, Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -38,6 +38,22 @@ const propertySchema = z.object({
     state: z.string().min(2, "State is required"),
     zip: z.string().min(5, "Zip is required"),
   }),
+  tenants: z.array(z.object({
+      id: z.string().optional(),
+      firstName: z.string().min(1, "Required"),
+      lastName: z.string().min(1, "Required"),
+      email: z.string().email(),
+      phone: z.string().optional(),
+      leaseStart: z.string().optional(),
+      leaseEnd: z.string().optional(),
+      rentAmount: z.coerce.number().optional(),
+      deposit: z.coerce.number().optional(),
+  })).optional(),
+  access: z.object({
+    gateCode: z.string().optional(),
+    lockboxCode: z.string().optional(),
+    notes: z.string().optional(),
+  }).optional(),
   management: z.object({
     isManaged: z.enum(['self', 'professional']),
     companyName: z.string().optional(),
@@ -127,6 +143,8 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   name: '',
   type: 'single-family',
   address: { street: '', city: '', state: '', zip: '' },
+  tenants: [],
+  access: { gateCode: '', lockboxCode: '', notes: '' },
   management: { isManaged: 'self', companyName: '', managerName: '', email: '', phone: '', website: '', address: '', feeType: 'percent', feeValue: 0, leasingFee: 0, renewalFee: 0 },
   mortgage: { 
     purchasePrice: 0,
@@ -170,6 +188,8 @@ export function PropertyForm({
       ...initialData,
       utilities: initialData.utilities || DEFAULT_VALUES.utilities,
       preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
+      tenants: initialData.tenants || DEFAULT_VALUES.tenants,
+      access: initialData.access || DEFAULT_VALUES.access,
       mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
       management: { ...DEFAULT_VALUES.management, ...initialData.management },
       taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
@@ -187,6 +207,8 @@ export function PropertyForm({
           ...initialData,
           utilities: initialData.utilities || DEFAULT_VALUES.utilities,
           preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
+          tenants: initialData.tenants || DEFAULT_VALUES.tenants,
+          access: initialData.access || DEFAULT_VALUES.access,
           mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
           management: { ...DEFAULT_VALUES.management, ...initialData.management },
           taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
@@ -198,6 +220,7 @@ export function PropertyForm({
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
+  const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
 
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user || !firestore || !currentPropertyId) return;
@@ -260,6 +283,8 @@ export function PropertyForm({
 
   const navItems = [
     { id: 'general', label: 'General Info', icon: Building2 },
+    { id: 'tenants', label: 'Tenants & Lease', icon: Users },
+    { id: 'access', label: 'Access Codes', icon: Fingerprint },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
@@ -369,6 +394,49 @@ export function PropertyForm({
                     {form.formState.errors.address?.zip && <span className="text-red-500 text-xs">Required</span>}
                  </div>
               </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {activeSection === 'tenants' && (
+            <Card>
+                <CardHeader><CardTitle>Tenants & Lease</CardTitle><CardDescription>Manage residents for this property.</CardDescription></CardHeader>
+                <CardContent className="space-y-4">
+                    {tenantFields.fields.map((field, index) => (
+                        <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => tenantFields.remove(index)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1"><Label className="text-xs">First Name *</Label><Input {...form.register(`tenants.${index}.firstName`)} /></div>
+                                <div className="space-y-1"><Label className="text-xs">Last Name *</Label><Input {...form.register(`tenants.${index}.lastName`)} /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...form.register(`tenants.${index}.email`)} /></div>
+                                <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...form.register(`tenants.${index}.phone`)} /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...form.register(`tenants.${index}.leaseStart`)} /></div>
+                                <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...form.register(`tenants.${index}.rentAmount`)} /></div>
+                                <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...form.register(`tenants.${index}.deposit`)} /></div>
+                            </div>
+                        </div>
+                    ))}
+                    <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', rentAmount: 0, deposit: 0 })}><Plus className="mr-2 h-4 w-4" /> Add Tenant</Button>
+                </CardContent>
+            </Card>
+        )}
+
+        {activeSection === 'access' && (
+          <Card>
+            <CardHeader><CardTitle>Access Information</CardTitle><CardDescription>Gate codes, lockbox details, and access notes.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2"><Label>Front Gate Code</Label><Input {...form.register('access.gateCode')} /></div>
+                <div className="grid gap-2"><Label>Lockbox Code</Label><Input {...form.register('access.lockboxCode')} /></div>
+              </div>
+              <div className="grid gap-2"><Label>Access Notes</Label><Textarea placeholder="e.g., 'Key is under the mat', 'Call before arriving'" {...form.register('access.notes')} /></div>
             </CardContent>
           </Card>
         )}

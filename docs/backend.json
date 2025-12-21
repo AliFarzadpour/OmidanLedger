@@ -266,6 +266,31 @@
           },
           "required": ["street", "city", "state", "zip"]
         },
+        "tenants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "firstName": { "type": "string" },
+              "lastName": { "type": "string" },
+              "email": { "type": "string", "format": "email" },
+              "phone": { "type": "string" },
+              "leaseStart": { "type": "string", "format": "date" },
+              "leaseEnd": { "type": "string", "format": "date" },
+              "rentAmount": { "type": "number" },
+              "deposit": { "type": "number" }
+            },
+            "required": ["firstName", "lastName", "email"]
+          }
+        },
+        "access": {
+          "type": "object",
+          "properties": {
+            "gateCode": { "type": "string" },
+            "lockboxCode": { "type": "string" },
+            "notes": { "type": "string" }
+          }
+        },
         "accounting": {
             "type": "object",
             "description": "Links the property to its dedicated suite of GL accounts.",
