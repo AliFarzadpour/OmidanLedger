@@ -48,7 +48,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
       // For now, hardcoding 'TX' as per the user story.
       const flowResult = await generateLease({
         propertyId: propertyId,
-        tenantId: tenant.id, // tenant.id is now being passed correctly
+        tenantId: tenant.email, 
         state: 'TX',
       });
       setResult(flowResult);
@@ -139,8 +139,7 @@ export default function PropertyDetailsPage() {
   }
 
   const handleOpenLeaseAgent = (tenant: any) => {
-    // FIX: Assign the email as a temporary unique ID
-    setSelectedTenantForLease({...tenant, id: tenant.email });
+    setSelectedTenantForLease({...tenant });
     setLeaseAgentOpen(true);
   };
 
@@ -345,6 +344,21 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     }
   };
 
+  const getSafeDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    }
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString();
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+
   return (
     <>
       <Card>
@@ -371,7 +385,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
                 <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
                   <div>
                     <p className="font-medium">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {new Date(doc.uploadedAt?.seconds * 1000).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
                     {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
