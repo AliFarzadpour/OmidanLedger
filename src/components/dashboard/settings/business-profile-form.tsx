@@ -16,13 +16,6 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -310,7 +303,7 @@ export function BusinessProfileForm() {
                       <RadioGroup
                         onValueChange={field.onChange}
                         value={field.value}
-                        className="flex flex-col space-y-1"
+                        className="grid grid-cols-2 gap-x-4 gap-y-2"
                       >
                         {BUSINESS_OPTIONS.map((option) => (
                            <FormItem key={option.value} className="flex items-center space-x-3 space-y-0">
