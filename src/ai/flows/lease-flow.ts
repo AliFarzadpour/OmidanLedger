@@ -11,7 +11,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { defineFlow, runFlow } from 'genkit';
 import { getFirestore } from 'firebase-admin/firestore';
-import { onFlow } from '@genkit-ai/firebase/run';
 
 // --- SCHEMAS ---
 
@@ -119,8 +118,3 @@ export const leaseAgentFlow = defineFlow(
     };
   }
 );
-
-// --- FIREBASE CLOUD FUNCTION (Trigger) ---
-export const leaseAgent = onFlow(leaseAgentFlow, {
-    // Add any Firebase-specific options here, e.g., memory, region
-});
