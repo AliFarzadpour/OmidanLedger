@@ -2,13 +2,16 @@
 'use client';
 
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, writeBatch } from 'firebase/firestore';
+import { doc, collection, query, writeBatch, deleteDoc } from 'firebase/firestore';
 import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
-import { Loader2, ArrowLeft, Bot, Building, Plus, Edit } from 'lucide-react';
+import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { useUser, useStorage } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
+import { deleteObject, ref } from 'firebase/storage';
 import {
   Dialog,
   DialogContent,
@@ -18,11 +21,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
 import { AddUnitDialog } from '@/components/dashboard/properties/AddUnitDialog';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 
 
 function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units: any[] }) {
@@ -94,12 +105,136 @@ function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units
     );
 }
 
+function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
+  const firestore = useFirestore();
+  const storage = useStorage();
+  const { toast } = useToast();
+  const [isUploaderOpen, setUploaderOpen] = useState(false);
+
+  const docsQuery = useMemoFirebase(() => {
+    if (!firestore || !propertyId) return null;
+    return query(collection(firestore, `properties/${propertyId}/documents`));
+  }, [firestore, propertyId]);
+
+  const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
+
+  const handleDelete = async (docData: any) => {
+    if (!firestore || !storage) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+        return;
+    }
+    if (!docData?.storagePath) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
+        return;
+    }
+    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
+
+    try {
+        // Delete from Storage
+        const fileRef = ref(storage, docData.storagePath);
+        await deleteObject(fileRef);
+
+        // Delete from Firestore
+        const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
+        await deleteDoc(docRef);
+
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+    } catch (error: any) {
+        console.error("Deletion Error:", error);
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+    }
+  };
+
+  const getSafeDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    if (typeof timestamp === 'string') {
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString();
+        }
+    }
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    }
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString();
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+  const onUploadSuccess = () => {
+    refetchDocs();
+    setUploaderOpen(false);
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Document Storage</CardTitle>
+            <CardDescription>Lease agreements, inspection reports, and other files for this property.</CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setUploaderOpen(true)} className="gap-2">
+            <UploadCloud className="h-4 w-4" /> Upload File
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <p>Loading documents...</p>}
+          {!isLoading && (!documents || documents.length === 0) && (
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
+                <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
+            </div>
+          )}
+          {!isLoading && documents && documents.length > 0 && (
+            <div className="space-y-3">
+              {documents.map((doc: any) => (
+                <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
+                  <div>
+                    <p className="font-medium">{doc.fileName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
+                    {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm" className="gap-1"><Eye className="h-3 w-3"/> View</Button>
+                    </a>
+                    <a href={doc.downloadUrl} download>
+                      <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
+                    </a>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
+                        <Trash2 className="h-4 w-4"/>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      {isUploaderOpen && (
+        <TenantDocumentUploader
+          isOpen={isUploaderOpen}
+          onOpenChange={setUploaderOpen}
+          propertyId={propertyId}
+          landlordId={landlordId}
+          onSuccess={onUploadSuccess}
+        />
+      )}
+    </>
+  )
+}
 
 export default function PropertyDetailPage() {
   const firestore = useFirestore();
   const params = useParams();
   const router = useRouter();
   const id = params.id as string;
+  const { user } = useUser();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [formTab, setFormTab] = useState('general');
@@ -134,6 +269,10 @@ export default function PropertyDetailPage() {
       </div>
     );
   }
+  
+  if (!user) {
+    return <div className="p-8">Please log in to view this page.</div>
+  }
 
   // --- THE INTERFACE ROUTER ---
   // If it's a multi-unit or commercial property, show the Central Hub (Unit Matrix)
@@ -158,7 +297,19 @@ export default function PropertyDetailPage() {
             </div>
         </header>
         
-        <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
+        <Tabs defaultValue="units" className="w-full">
+            <TabsList>
+                <TabsTrigger value="units">Unit Matrix</TabsTrigger>
+                <TabsTrigger value="documents">Building Documents</TabsTrigger>
+            </TabsList>
+            <TabsContent value="units" className="mt-6">
+                <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
+            </TabsContent>
+            <TabsContent value="documents" className="mt-6">
+                 <PropertyDocuments propertyId={id} landlordId={user.uid} />
+            </TabsContent>
+        </Tabs>
+
       </div>
 
        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
