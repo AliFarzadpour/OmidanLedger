@@ -398,7 +398,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
                     <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="gap-1"><Eye className="h-3 w-3"/> View</Button>
                     </a>
-                    <a href={doc.downloadUrl} download={doc.fileName}>
+                    <a href={doc.downloadUrl} download>
                       <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
                     </a>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
