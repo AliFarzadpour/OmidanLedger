@@ -1,28 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useCollection, useUser, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Home, Users, DollarSign, Loader2 } from 'lucide-react';
 import { UnitDetailDrawer } from './UnitDetailDrawer';
 
-export function UnitMatrix({ propertyId }: { propertyId: string }) {
+export function UnitMatrix({ propertyId, units }: { propertyId: string, units: any[] }) {
   const { user } = useUser();
   const firestore = useFirestore();
 
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
-  // Query the subcollection we just built in the QuickSetup
-  const unitsQuery = useMemoFirebase(() => {
-    if (!firestore || !propertyId) return null;
-    return query(collection(firestore, 'properties', propertyId, 'units'));
-  }, [firestore, propertyId]);
-  
-
-  const { data: units, isLoading, refetch } = useCollection(unitsQuery);
+  // The collection hook is now in the parent, so we just handle UI state here.
+  // This makes the component more reusable and controllable.
 
   const handleUnitClick = (unit: any) => {
     setSelectedUnit(unit);
@@ -33,14 +26,21 @@ export function UnitMatrix({ propertyId }: { propertyId: string }) {
     setIsDrawerOpen(false);
     setSelectedUnit(null);
   };
-
-  if (isLoading) return <div className="flex justify-center p-10"><Loader2 className="animate-spin" /></div>;
+  
+  const handleUpdateSuccess = () => {
+      // Future logic to refresh data can be triggered here if needed,
+      // but real-time listeners in the parent handle it automatically.
+  }
 
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {units?.map((unit: any) => (
-          <Card key={unit.id} className="hover:border-blue-500 transition-colors cursor-pointer" onClick={() => handleUnitClick(unit)}>
+          <Card 
+            key={unit.id} 
+            className="hover:border-blue-500 transition-colors cursor-pointer" 
+            onClick={() => handleUnitClick(unit)}
+          >
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start">
                 <Badge variant={unit.status === 'vacant' ? 'destructive' : 'default'}>
@@ -70,7 +70,7 @@ export function UnitMatrix({ propertyId }: { propertyId: string }) {
           unit={selectedUnit}
           isOpen={isDrawerOpen}
           onOpenChange={handleDrawerClose}
-          onUpdate={refetch}
+          onUpdate={handleUpdateSuccess}
         />
       )}
     </>
