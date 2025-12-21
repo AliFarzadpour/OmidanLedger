@@ -279,7 +279,7 @@ export function PropertyForm({
         transactionDescription: lenderName,
         primaryCategory: "Other Expenses",
         secondaryCategory: "Mortgage",
-        subcategory: `${propertyData.name} Mortgage`,
+        subcategory: `${propertyData.name} Mortgage Payment`,
         propertyId: propertyId,
         source: "System - Lender",
         updatedAt: new Date().toISOString()
@@ -302,6 +302,24 @@ export function PropertyForm({
         source: "System - Insurance Provider",
         updatedAt: new Date().toISOString()
       }, { merge: true });
+    }
+
+    // 5. RULE: General Property Expense (Catch-all)
+    if (propertyData.address.street) {
+        const streetName = propertyData.address.street.toUpperCase();
+        const ruleId = `RULE_GENERAL_${propertyId}_${streetName.replace(/\s+/g, '_')}`;
+        const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+
+        batch.set(ruleRef, {
+            userId,
+            transactionDescription: streetName,
+            primaryCategory: "Operating Expenses",
+            secondaryCategory: "Expenses",
+            subcategory: `${propertyData.name} Expenses`,
+            propertyId: propertyId,
+            source: "System - General Property",
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
     }
   };
 
