@@ -310,7 +310,7 @@ export function BusinessProfileForm() {
                       value={field.value || ""}
                     >
                       <FormControl>
-                        <SelectTrigger key={field.value || "loading"}>
+                        <SelectTrigger key={isLoadingUser ? 'loading' : 'loaded'}>
                           <SelectValue placeholder="Select a business type" />
                         </SelectTrigger>
                       </FormControl>
@@ -421,3 +421,5 @@ export function BusinessProfileForm() {
     </Form>
   );
 }
+
+    
