@@ -25,6 +25,7 @@ const quickSchema = z.object({
   bedrooms: z.coerce.number().optional(),
   bathrooms: z.coerce.number().optional(),
   squareFootage: z.coerce.number().optional(),
+  numberOfUnits: z.coerce.number().optional(),
   targetRent: z.coerce.number().min(0),
   securityDeposit: z.coerce.number().min(0),
 });
@@ -44,6 +45,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       bedrooms: 0,
       bathrooms: 0,
       squareFootage: 0,
+      numberOfUnits: 10,
       targetRent: 0,
       securityDeposit: 0,
     }
@@ -61,7 +63,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       const timestamp = new Date().toISOString();
       const propertyRef = doc(collection(firestore, 'properties'));
       
-      // --- 1. CORE ACCOUNTING GENERATOR ---
       const accountingMap: any = { utilities: {} };
       const createAccount = (name: string, type: string, subtype: string) => {
         const ref = doc(collection(firestore, 'accounts'));
@@ -76,7 +77,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         return ref.id;
       };
   
-      // Assets, Liabilities, Income, Expenses (Preserved from your code)
       accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
       accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
       accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
@@ -93,10 +93,8 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
       accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
   
-      // --- 2. BRANCHING LOGIC ---
       const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial';
   
-      // Save the Main Property (The Hub)
       batch.set(propertyRef, {
         userId: user.uid,
         ...data,
@@ -109,15 +107,15 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
         accounting: accountingMap
       });
   
-      // --- 3. AUTO-PILOT: SUBCOLLECTION GENERATION ---
       if (isMultiUnit) {
-        for (let i = 1; i <= 10; i++) {
+        const numUnits = data.numberOfUnits || 1;
+        for (let i = 1; i <= numUnits; i++) {
           const unitRef = doc(collection(propertyRef, 'units'));
           batch.set(unitRef, {
             userId: user.uid,
             unitNumber: `${100 + i}`,
             status: 'vacant',
-            targetRent: data.type === 'commercial' ? 0 : data.targetRent / 10,
+            targetRent: data.type === 'commercial' ? 0 : data.targetRent / numUnits,
             createdAt: timestamp
           });
         }
@@ -126,7 +124,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       await batch.commit();
       toast({ 
         title: isMultiUnit ? "Central Hub Created" : "Property Added", 
-        description: isMultiUnit ? "Building and 10 units are ready." : "Property and 16 ledgers created." 
+        description: isMultiUnit ? `Building and ${data.numberOfUnits} units are ready.` : "Property and 16 ledgers created." 
       });
       onSuccess();
   
@@ -175,10 +173,16 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
               <div className="grid gap-1"><Label className="text-xs">Sq. Ft.</Label><Input type="number" {...form.register('squareFootage')} /></div>
           </div>
         ) : (
-          <div className="bg-slate-50 p-3 rounded-lg flex gap-3 items-center border border-slate-200">
-             <Building className="h-5 w-5 text-slate-500"/>
-             <p className="text-xs text-slate-600">You've selected a multi-unit property. We will auto-generate 10 unit placeholders for you to manage.</p>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label>Number of Units</Label>
+                    <Input type="number" placeholder="e.g., 4" {...form.register('numberOfUnits')} />
+                </div>
+                <div className="bg-slate-50 p-3 rounded-lg flex gap-3 items-center border border-slate-200">
+                    <Building className="h-5 w-5 text-slate-500"/>
+                    <p className="text-xs text-slate-600">We will auto-generate placeholders for each unit to manage individually.</p>
+                </div>
+            </div>
         )}
 
         <div className="grid gap-2">
