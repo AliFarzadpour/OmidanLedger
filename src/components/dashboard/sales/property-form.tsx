@@ -326,6 +326,26 @@ export function PropertyForm({
             updatedAt: new Date().toISOString()
         }, { merge: true });
     }
+    
+    // 6. RULE: Utilities
+    propertyData.utilities?.forEach(utility => {
+      if (utility.responsibility === 'landlord' && utility.providerName) {
+        const providerName = utility.providerName.toUpperCase();
+        const ruleId = `RULE_UTILITY_${propertyId}_${providerName.replace(/\s+/g, '_')}`;
+        const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+
+        batch.set(ruleRef, {
+          userId,
+          transactionDescription: providerName,
+          primaryCategory: "Operating Expenses",
+          secondaryCategory: "Utilities",
+          subcategory: `${utility.type} - ${propertyData.name}`,
+          propertyId: propertyId,
+          source: "System - Utility Provider",
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    });
   };
 
   const onSubmit = async (data: PropertyFormValues) => {
@@ -842,3 +862,4 @@ export function PropertyForm({
     </div>
   );
 }
+
