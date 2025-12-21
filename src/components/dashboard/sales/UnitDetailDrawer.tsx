@@ -66,11 +66,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       <SheetContent key={unit?.id} className="sm:max-w-[550px] overflow-y-auto">
         <SheetHeader className="border-b pb-4">
           <SheetTitle className="text-2xl font-black flex items-center gap-2 text-slate-900">
-            <Hash className="h-6 w-6 text-blue-600" /> Unit Management
+            Unit Management
           </SheetTitle>
-          <SheetDescription>
-            Modify the physical, financial, and tenant details for this specific unit.
-          </SheetDescription>
         </SheetHeader>
         
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 pt-6">
@@ -83,8 +80,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
             />
           </div>
           
-          <Separator />
-
           {/* TENANTS SECTION */}
           <div>
               <h3 className="text-lg font-semibold flex items-center gap-2 mb-4">
@@ -155,7 +150,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
               </div>
           </div>
           
-          <Separator />
 
           <div className="space-y-4">
             <h3 className="text-sm font-bold flex items-center gap-2"><span className="w-1 h-4 bg-blue-500 rounded-full" /> Unit Specs</h3>
