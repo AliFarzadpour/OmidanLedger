@@ -1,21 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Home, Users, DollarSign, Loader2 } from 'lucide-react';
+import { Bed, Bath, Square, Users, DollarSign } from 'lucide-react';
 import { UnitDetailDrawer } from '@/components/dashboard/properties/UnitDetailDrawer';
 
-export function UnitMatrix({ propertyId, units }: { propertyId: string, units: any[] }) {
-  const { user } = useUser();
-  const firestore = useFirestore();
-
+export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string, units: any[], onUpdate: () => void }) {
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  // The collection hook is now in the parent, so we just handle UI state here.
-  // This makes the component more reusable and controllable.
 
   const handleUnitClick = (unit: any) => {
     setSelectedUnit(unit);
@@ -27,37 +20,43 @@ export function UnitMatrix({ propertyId, units }: { propertyId: string, units: a
     setSelectedUnit(null);
   };
   
-  const handleUpdateSuccess = () => {
-      // Future logic to refresh data can be triggered here if needed,
-      // but real-time listeners in the parent handle it automatically.
-  }
-
   return (
     <>
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {units?.map((unit: any) => (
           <Card 
             key={unit.id} 
-            className="hover:border-blue-500 transition-colors cursor-pointer" 
             onClick={() => handleUnitClick(unit)}
+            className="hover:shadow-md transition-all cursor-pointer border-l-4 border-l-slate-200 hover:border-l-blue-500"
           >
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <Badge variant={unit.status === 'vacant' ? 'destructive' : 'default'}>
-                  {unit.status}
-                </Badge>
-                <span className="text-xs font-bold text-muted-foreground">#{unit.unitNumber}</span>
-              </div>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <Badge variant={unit.status === 'vacant' ? 'destructive' : 'default'}>
+                {unit.status}
+              </Badge>
+              <span className="text-sm font-mono font-bold text-slate-500">#{unit.unitNumber}</span>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 text-sm">
-                  <Users className="h-3 w-3" />
-                  <span>{unit.tenantName || 'No Tenant'}</span>
+            
+            <CardContent className="space-y-3">
+              {/* 1. Primary Stats: Bed/Bath/SqFt */}
+              <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
+                <div className="flex items-center gap-1">
+                  <Bed className="h-3 w-3" /> {unit.bedrooms || 0}
                 </div>
-                <div className="flex items-center gap-2 text-sm font-semibold">
-                  <DollarSign className="h-3 w-3" />
-                  <span>{(unit.targetRent || 0).toLocaleString()}</span>
+                <div className="flex items-center gap-1">
+                  <Bath className="h-3 w-3" /> {unit.bathrooms || 0}
+                </div>
+                <div className="flex items-center gap-1 border-l pl-3">
+                  <Square className="h-3 w-3" /> {unit.sqft?.toLocaleString() || 0} <span className="text-[10px]">sqft</span>
+                </div>
+              </div>
+
+              {/* 2. Tenant & Rent Info */}
+              <div className="pt-2 border-t">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Monthly Rent</span>
+                  <span className="text-sm font-bold text-blue-600">
+                    ${unit.financials?.rent?.toLocaleString() || '0'}
+                  </span>
                 </div>
               </div>
             </CardContent>
@@ -70,6 +69,7 @@ export function UnitMatrix({ propertyId, units }: { propertyId: string, units: a
           unit={selectedUnit}
           isOpen={isDrawerOpen}
           onOpenChange={handleDrawerClose}
+          onUpdate={onUpdate}
         />
       )}
     </>

@@ -98,7 +98,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
 }
 
 
-export function PropertyDashboardSFH({ property }: { property: any }) {
+export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
   const searchParams = useSearchParams();
   const firestore = useFirestore();
   const { user } = useUser();
@@ -148,7 +148,11 @@ export function PropertyDashboardSFH({ property }: { property: any }) {
               Update tenants, mortgage details, and configuration for {property.name}.
             </DialogDescription>
           </DialogHeader>
-          <PropertyForm initialData={{ id: property.id, ...property }} onSuccess={() => setIsEditOpen(false)} defaultTab={formTab} />
+          <PropertyForm 
+            initialData={{ id: property.id, ...property }} 
+            onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
+            defaultTab={formTab} 
+          />
         </DialogContent>
       </Dialog>
     </div>
@@ -234,9 +238,10 @@ export function PropertyDashboardSFH({ property }: { property: any }) {
                         </div>
                         <div className="flex items-center gap-2">
                             <RecordPaymentModal
-                                tenant={t}
+                                tenant={{...t, id: t.email}} // Assuming tenant object has an id or email can be temp id
                                 propertyId={property.id}
                                 landlordId={user.uid}
+                                onSuccess={onUpdate}
                             />
                             <Button variant="outline" size="sm" onClick={() => handleOpenLeaseAgent(t)} className="gap-1">
                                 <Bot className="h-4 w-4"/> Auto-Draft Lease
@@ -305,7 +310,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     return query(collection(firestore, `properties/${propertyId}/documents`));
   }, [firestore, propertyId]);
 
-  const { data: documents, isLoading } = useCollection(docsQuery);
+  const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
     if (!firestore || !storage) {
@@ -354,6 +359,10 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     }
   };
 
+  const onUploadSuccess = () => {
+    refetchDocs();
+    setUploaderOpen(false);
+  }
 
   return (
     <>
@@ -407,6 +416,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
           onOpenChange={setUploaderOpen}
           propertyId={propertyId}
           landlordId={landlordId}
+          onSuccess={onUploadSuccess}
         />
       )}
     </>

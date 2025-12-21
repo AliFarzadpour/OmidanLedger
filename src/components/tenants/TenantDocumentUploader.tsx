@@ -27,9 +27,10 @@ interface UploaderProps {
     onOpenChange: (open: boolean) => void;
     propertyId: string;
     landlordId: string;
+    onSuccess?: () => void;
 }
 
-export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landlordId }: UploaderProps) {
+export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landlordId, onSuccess }: UploaderProps) {
     const firestore = useFirestore();
     const storage = useStorage();
     const { toast } = useToast();
@@ -90,6 +91,7 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
                 setFile(null);
                 setDescription('');
                 onOpenChange(false);
+                if (onSuccess) onSuccess();
             }
         );
     };
@@ -155,4 +157,3 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
         </Dialog>
     );
 }
-    

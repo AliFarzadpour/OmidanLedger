@@ -38,7 +38,7 @@ function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units
         
         units.forEach((unit: any) => {
             const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
-            batch.update(unitRef, { rent: rentValue });
+            batch.update(unitRef, { 'financials.rent': rentValue });
         });
 
         try {
@@ -103,14 +103,18 @@ export default function PropertyDetailPage() {
     return doc(firestore, 'properties', id);
   }, [firestore, id]);
 
-  const { data: property, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
+  const { data: property, isLoading: isLoadingProperty, refetch: refetchProperty } = useDoc(propertyDocRef);
 
   const unitsQuery = useMemoFirebase(() => {
     if (!firestore || !id) return null;
     return query(collection(firestore, 'properties', id, 'units'));
   }, [firestore, id]);
 
-  const { data: units, isLoading: isLoadingUnits } = useCollection(unitsQuery);
+  const { data: units, isLoading: isLoadingUnits, refetch: refetchUnits } = useCollection(unitsQuery);
+
+  const handleUnitUpdate = () => {
+    refetchUnits();
+  }
 
   if (isLoadingProperty || isLoadingUnits) {
     return (
@@ -138,11 +142,11 @@ export default function PropertyDetailPage() {
             {units && <BulkOperationsDialog propertyId={id} units={units} />}
         </header>
         
-        <UnitMatrix propertyId={id} units={units || []} />
+        <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
       </div>
     );
   }
 
   // Otherwise, return your original Single Family interface
-  return <PropertyDashboardSFH property={property} />;
+  return <PropertyDashboardSFH property={property} onUpdate={refetchProperty}/>;
 }

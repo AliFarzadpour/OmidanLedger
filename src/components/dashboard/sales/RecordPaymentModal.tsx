@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -28,13 +27,13 @@ import { Loader2, Wallet } from 'lucide-react';
 export function RecordPaymentModal({
   tenant,
   propertyId,
-  unitId, // <-- ADDED
+  unitId,
   landlordId,
   onSuccess,
 }: {
   tenant: any;
   propertyId: string;
-  unitId?: string; // <-- ADDED
+  unitId?: string;
   landlordId: string;
   onSuccess?: () => void;
 }) {
@@ -50,7 +49,7 @@ export function RecordPaymentModal({
       await recordManualPayment({
         tenantId: tenant.id,
         propertyId,
-        unitId, // <-- PASS TO ACTION
+        unitId,
         landlordId,
         amount: Number(amount),
         method,
@@ -76,7 +75,7 @@ export function RecordPaymentModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 text-green-600 hover:text-green-700 hover:bg-green-50">
+        <Button variant="default" size="sm" className="h-7 bg-green-600 hover:bg-green-700 text-white">
           Record Payment
         </Button>
       </DialogTrigger>
