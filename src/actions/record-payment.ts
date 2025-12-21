@@ -8,6 +8,7 @@ import { incrementPropertyStats } from './update-property-stats';
 export async function recordManualPayment({
   tenantId,
   propertyId,
+  unitId, // <-- ADDED
   landlordId,
   amount,
   method, // 'Zelle', 'Cash', 'Check', etc.
@@ -15,6 +16,7 @@ export async function recordManualPayment({
 }: {
   tenantId: string;
   propertyId: string;
+  unitId?: string; // <-- ADDED
   landlordId: string;
   amount: number;
   method: string;
@@ -46,6 +48,7 @@ export async function recordManualPayment({
       subcategory: "Residential Rent",
       status: 'posted',
       propertyId: propertyId,
+      unitId: unitId, // <-- ADDED
       tenantId: tenantId, // Crucial for the Tenant History view
       userId: landlordId,
       bankAccountId: destinationAccountId,

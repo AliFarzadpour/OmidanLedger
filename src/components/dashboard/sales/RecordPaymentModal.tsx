@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -27,16 +28,18 @@ import { Loader2, Wallet } from 'lucide-react';
 export function RecordPaymentModal({
   tenant,
   propertyId,
+  unitId, // <-- ADDED
   landlordId,
   onSuccess,
 }: {
   tenant: any;
   propertyId: string;
+  unitId?: string; // <-- ADDED
   landlordId: string;
   onSuccess?: () => void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [amount, setAmount] = useState(tenant.billing?.rentAmount || '');
+  const [amount, setAmount] = useState(tenant.rentAmount || '');
   const [method, setMethod] = useState('Zelle');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -47,6 +50,7 @@ export function RecordPaymentModal({
       await recordManualPayment({
         tenantId: tenant.id,
         propertyId,
+        unitId, // <-- PASS TO ACTION
         landlordId,
         amount: Number(amount),
         method,
@@ -78,7 +82,7 @@ export function RecordPaymentModal({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Record Payment for {tenant.email}</DialogTitle>
+          <DialogTitle>Record Payment for {tenant.firstName}</DialogTitle>
           <DialogDescription>
             Log a manual payment received via cash, check, or other methods.
           </DialogDescription>
