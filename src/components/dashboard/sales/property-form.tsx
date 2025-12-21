@@ -230,26 +230,7 @@ export function PropertyForm({
   ) => {
     if (!firestore) return;
   
-    // 1. RULE: Property Address Mapping
-    if (propertyData.address.street) {
-      const streetParts = propertyData.address.street.toUpperCase().split(' ');
-      const shortAddress = streetParts.slice(0, 2).join(' ');
-      const ruleId = `RULE_PROP_${propertyId}_${shortAddress.replace(/\s+/g, '_')}`;
-  
-      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
-      batch.set(ruleRef, {
-        userId,
-        originalKeyword: shortAddress,
-        primaryCategory: "Operating Expenses",
-        secondaryCategory: "Uncategorized",
-        subcategory: "General",
-        propertyId: propertyId,
-        source: "System - Property Address",
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-  
-    // 2. RULE: Tenant Name Mapping
+    // 1. RULE: Tenant Name Mapping
     propertyData.tenants?.forEach(tenant => {
       if (tenant.firstName && tenant.lastName) {
         const fullName = `${tenant.firstName} ${tenant.lastName}`.toUpperCase();
@@ -258,10 +239,10 @@ export function PropertyForm({
         const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
         batch.set(ruleRef, {
           userId,
-          originalKeyword: fullName,
+          transactionDescription: fullName,
           primaryCategory: "Income",
           secondaryCategory: "Rental Income",
-          subcategory: "Residential Rent",
+          subcategory: `${propertyData.name} Rent Income`,
           propertyId: propertyId,
           source: "System - Tenant Lease",
           updatedAt: new Date().toISOString()
@@ -269,7 +250,7 @@ export function PropertyForm({
       }
     });
   
-    // 3. RULE: Management Company
+    // 2. RULE: Management Company
     if (propertyData.management.isManaged === 'professional' && propertyData.management.companyName) {
       const mgmtName = propertyData.management.companyName.toUpperCase();
       const ruleId = `RULE_MGMT_${propertyId}_${mgmtName.replace(/\s+/g, '_')}`;
@@ -277,12 +258,48 @@ export function PropertyForm({
   
       batch.set(ruleRef, {
         userId,
-        originalKeyword: mgmtName,
+        transactionDescription: mgmtName,
         primaryCategory: "Operating Expenses",
         secondaryCategory: "Property Management",
-        subcategory: "Management Fees",
+        subcategory: `${propertyData.name} Management Fee`,
         propertyId: propertyId,
         source: "System - Mgmt Company",
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+
+    // 3. RULE: Mortgage Lender
+    if (propertyData.mortgage.hasMortgage === 'yes' && propertyData.mortgage.lenderName) {
+      const lenderName = propertyData.mortgage.lenderName.toUpperCase();
+      const ruleId = `RULE_MORTGAGE_${propertyId}_${lenderName.replace(/\s+/g, '_')}`;
+      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+  
+      batch.set(ruleRef, {
+        userId,
+        transactionDescription: lenderName,
+        primaryCategory: "Other Expenses",
+        secondaryCategory: "Mortgage",
+        subcategory: `${propertyData.name} Mortgage`,
+        propertyId: propertyId,
+        source: "System - Lender",
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    }
+
+     // 4. RULE: Insurance Provider
+    if (propertyData.taxAndInsurance.insuranceProvider) {
+      const providerName = propertyData.taxAndInsurance.insuranceProvider.toUpperCase();
+      const ruleId = `RULE_INSURANCE_${propertyId}_${providerName.replace(/\s+/g, '_')}`;
+      const ruleRef = doc(firestore, `users/${userId}/categoryMappings`, ruleId);
+  
+      batch.set(ruleRef, {
+        userId,
+        transactionDescription: providerName,
+        primaryCategory: "Operating Expenses",
+        secondaryCategory: "Insurance",
+        subcategory: `${propertyData.name} Insurance`,
+        propertyId: propertyId,
+        source: "System - Insurance Provider",
         updatedAt: new Date().toISOString()
       }, { merge: true });
     }
