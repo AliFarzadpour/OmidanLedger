@@ -301,7 +301,7 @@ export function BusinessProfileForm() {
                       value={field.value || ""}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger key={field.value}>
                           <SelectValue placeholder="Select a business type" />
                         </SelectTrigger>
                       </FormControl>
