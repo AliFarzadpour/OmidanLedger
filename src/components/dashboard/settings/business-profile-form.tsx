@@ -63,14 +63,13 @@ const businessProfileSchema = z.object({
 
 type BusinessProfileFormValues = z.infer<typeof businessProfileSchema>;
 
-// Define this outside your component or in a constants file
-const BUSINESS_TYPES = [
-  { id: 'sole-proprietorship', label: 'Sole Proprietorship' },
-  { id: 'llc', label: 'LLC' },
-  { id: 's-corp', label: 'S-Corporation' },
-  { id: 'c-corp', label: 'C-Corporation' },
-  { id: 'non-profit', label: 'Non-Profit' },
-  { id: 'other', label: 'Other' },
+const BUSINESS_OPTIONS = [
+  { value: "sole-proprietorship", label: "Sole Proprietorship" },
+  { value: "llc", label: "LLC" },
+  { value: "s-corp", label: "S-Corporation" },
+  { value: "c-corp", label: "C-Corporation" },
+  { value: "non-profit", label: "Non-Profit" },
+  { value: "other", label: "Other" },
 ];
 
 export function BusinessProfileForm() {
@@ -308,17 +307,18 @@ export function BusinessProfileForm() {
                     <FormLabel>Business Type</FormLabel>
                     <Select 
                       onValueChange={field.onChange} 
-                      value={field.value || ""} // Explicitly bind the value
+                      defaultValue={field.value}
+                      value={field.value || ""} // Forces Select to watch the form state
                     >
                       <FormControl>
-                        <SelectTrigger key={field.value}> {/* Key forces label update */}
+                        <SelectTrigger key={field.value}> {/* Key forces a re-render when data arrives */}
                           <SelectValue placeholder="Select a business type" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {BUSINESS_TYPES.map((type) => (
-                          <SelectItem key={type.id} value={type.id}>
-                            {type.label}
+                        {BUSINESS_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>
