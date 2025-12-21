@@ -48,15 +48,12 @@ const getPropertyDataTool = ai.defineTool(
         throw new Error(`Tenant with email ${tenantId} not found in property ${propertyId}.`);
     }
 
-    // NEW: Fetch Landlord's Business Profile
-    let landlordName = 'Landlord'; // Default
+    let landlordName = 'Landlord';
     if (propertyData.userId) {
         const userDoc = await db.collection('users').doc(propertyData.userId).get();
         if (userDoc.exists) {
             const userData = userDoc.data();
-            if (userData?.businessProfile?.businessName) {
-                landlordName = userData.businessProfile.businessName;
-            }
+            landlordName = userData?.businessProfile?.businessName || userData?.name || 'Landlord';
         }
     }
 
@@ -128,16 +125,17 @@ const leaseAgentFlow = ai.defineFlow(
 
         **Formatting and Content Instructions:**
         1.  **Title:** Start with a clear title: "Residential Lease Agreement".
-        2.  **Structure:** Use clear, numbered headings for each section (e.g., "1. PARTIES", "2. PREMISES", "3. TERM", etc.). In the Parties section, list the Landlord as "${propertyData.landlordName}".
-        3.  **Completeness:** Generate a complete lease agreement. After the "Security Deposit" section, you MUST include the following standard clauses:
+        2.  **Structure:** Use a clear, hierarchical numbering system for each section (e.g., "1. PARTIES", "1.1 Landlord", "1.2 Tenant", "2. PREMISES", etc.).
+        3.  **Parties Section:** In the Parties section, list the Landlord as "${propertyData.landlordName}".
+        4.  **Completeness:** Generate a complete lease agreement. After the "Security Deposit" section, you MUST include the following standard clauses, each with its own hierarchical number:
             - **USE OF PREMISES:** The premises shall be used and occupied by Tenant exclusively as a private single-family residence.
             - **UTILITIES:** Tenant shall be responsible for arranging and paying for all utility services required on the premises.
             - **MAINTENANCE AND REPAIR:** Tenant will, at their sole expense, keep and maintain the premises in good, clean, and sanitary condition.
             - **DEFAULT:** If Tenant fails to pay rent or defaults on any other term, Landlord may give written notice of the default and intent to terminate the Lease.
             - **GOVERNING LAW:** This Lease shall be governed by the laws of the State of ${input.state.toUpperCase()}.
             - **ENTIRE AGREEMENT:** This document constitutes the entire agreement between the parties.
-        4.  **Signature Block:** Conclude with a proper signature section for both Landlord and Tenant, including lines for name, signature, and date.
-        5.  **Professional Tone:** The output must be only the full, final text of the lease agreement. Do not include any conversational text, introductions, or summaries.
+        5.  **Signature Block:** Conclude with a proper signature section for both Landlord and Tenant, including lines for name, signature, and date.
+        6.  **Professional Tone:** The output must be only the full, final text of the lease agreement. Do not include any conversational text, introductions, or summaries.
       `,
     });
 
@@ -146,9 +144,62 @@ const leaseAgentFlow = ai.defineFlow(
     }
     
     // 3. Generate PDF
-    const doc = new jsPDF();
-    const splitText = doc.splitTextToSize(leaseText, 180); // A4 width approx 210mm, margins 15mm
-    doc.text(splitText, 15, 20);
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margin = 25.4; // 1 inch margin
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const maxLineWidth = pageWidth - (margin * 2);
+    let currentY = margin;
+
+    // Set Font Styles
+    const FONT_BODY = 11;
+    const FONT_H1 = 16;
+    const FONT_H2 = 12;
+
+    const addHeaderFooter = () => {
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        // Header
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(150);
+        doc.text(`Lease Agreement | ${propertyData.propertyAddress}`, margin, margin - 15);
+        // Footer
+        doc.text(`Page ${i} of ${pageCount}`, pageWidth / 2, pageHeight - margin + 15, { align: 'center' });
+      }
+    };
+
+    // Process each line of the generated text
+    const lines = leaseText.split('\n');
+    for (const line of lines) {
+        if (currentY > pageHeight - margin) { // Check for page break
+            doc.addPage();
+            currentY = margin;
+        }
+
+        let isHeader = false;
+        if (line.match(/^\d+\.\s/)) { // Main section like "1. PARTIES"
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(FONT_H2);
+            isHeader = true;
+            currentY += 4; // Add space before main headers
+        } else if (line.match(/^\d+\.\d+\s/)) { // Subsection like "1.1 Landlord"
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(FONT_BODY);
+            isHeader = true;
+        } else {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(FONT_BODY);
+        }
+
+        const splitText = doc.splitTextToSize(line, maxLineWidth);
+        doc.text(splitText, margin, currentY);
+        currentY += (splitText.length * (isHeader ? 6 : 5)); // Adjust line height based on type
+    }
+    
+    addHeaderFooter(); // Add headers and footers to all pages
+
     const pdfOutput = doc.output('arraybuffer');
     const pdfBuffer = Buffer.from(pdfOutput);
 
