@@ -475,6 +475,7 @@
         "propertyId": { "type": "string", "description": "The ID of the property this document belongs to." },
         "userId": { "type": "string", "description": "The UID of the user who owns the property." },
         "fileName": { "type": "string", "description": "The original name of the uploaded file." },
+        "description": { "type": "string", "description": "A user-provided description for the document." },
         "fileType": { "type": "string", "enum": ["lease", "credit_report", "id", "inspection", "deed", "other"], "description": "The type of document." },
         "downloadUrl": { "type": "string", "format": "uri", "description": "The public URL to download the file from Firebase Storage." },
         "storagePath": { "type": "string", "description": "The full path to the file in Firebase Storage." },

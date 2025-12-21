@@ -20,6 +20,7 @@ import { doc, collection, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, FileUp, CheckCircle } from 'lucide-react';
+import { Textarea } from '../ui/textarea';
 
 interface UploaderProps {
     isOpen: boolean;
@@ -36,6 +37,7 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
 
     const [file, setFile] = useState<File | null>(null);
     const [fileType, setFileType] = useState('lease');
+    const [description, setDescription] = useState('');
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -77,6 +79,7 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
                     userId: landlordId,
                     fileName: file.name,
                     fileType: fileType,
+                    description: description,
                     downloadUrl: downloadURL,
                     storagePath: storagePath,
                     uploadedAt: serverTimestamp()
@@ -85,6 +88,7 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
                 toast({ title: 'Upload Complete', description: `${file.name} has been saved.` });
                 setIsUploading(false);
                 setFile(null);
+                setDescription('');
                 onOpenChange(false);
             }
         );
@@ -129,6 +133,15 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
                                 <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="grid gap-2">
+                        <Label htmlFor="description">Description (Optional)</Label>
+                        <Textarea
+                            id="description"
+                            placeholder="e.g., 'Signed lease for Unit B, 2024-2025 term'"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                        />
                     </div>
                 </div>
                 <DialogFooter>

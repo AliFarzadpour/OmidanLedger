@@ -2,7 +2,7 @@
 
 import { useParams, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
-import { doc, onSnapshot, collection, query } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,9 @@ import { FinancialPerformance } from '@/components/dashboard/financial-performan
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
+import { useToast } from '@/hooks/use-toast';
+import { deleteObject, ref } from 'firebase/storage';
+import { useStorage } from '@/firebase/storage/use-storage';
 
 export default function PropertyDetailsPage() {
   const { id } = useParams();
@@ -217,6 +220,8 @@ export default function PropertyDetailsPage() {
 
 function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
   const firestore = useFirestore();
+  const storage = useStorage();
+  const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
 
   const docsQuery = useMemoFirebase(() => {
@@ -225,6 +230,29 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   }, [firestore, propertyId]);
 
   const { data: documents, isLoading } = useCollection(docsQuery);
+
+  const handleDelete = async (docData: any) => {
+    if (!docData?.storagePath) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
+        return;
+    }
+    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
+
+    try {
+        // Delete from Storage
+        const fileRef = ref(storage, docData.storagePath);
+        await deleteObject(fileRef);
+
+        // Delete from Firestore
+        const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
+        await deleteDoc(docRef);
+
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+    } catch (error: any) {
+        console.error("Deletion Error:", error);
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+    }
+  };
 
   return (
     <>
@@ -247,18 +275,21 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
             </div>
           )}
           {!isLoading && documents && documents.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {documents.map((doc: any) => (
-                <div key={doc.id} className="flex items-center justify-between p-3 bg-slate-50 border rounded-md">
+                <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
                   <div>
                     <p className="font-medium">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground">Type: {doc.fileType} | Uploaded: {new Date(doc.uploadedAt?.seconds * 1000).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {new Date(doc.uploadedAt?.seconds * 1000).toLocaleDateString()}</p>
+                    {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
                     <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
                     </a>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4"/></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
+                        <Trash2 className="h-4 w-4"/>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -277,5 +308,4 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     </>
   )
 }
-
     
