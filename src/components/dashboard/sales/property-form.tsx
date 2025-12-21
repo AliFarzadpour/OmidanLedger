@@ -78,7 +78,8 @@ const propertySchema = z.object({
     insuranceProvider: z.string().optional(),
     policyNumber: z.string().optional(),
     annualPremium: z.coerce.number().optional(),
-    renewalDate: z.string().optional(),
+    policyStartDate: z.string().optional(),
+    policyEndDate: z.string().optional(),
   }),
   hoa: z.object({
     hasHoa: z.enum(['yes', 'no']),
@@ -155,7 +156,7 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
     lenderName: '', 
     escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
   },
-  taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, renewalDate: '' },
+  taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, policyStartDate: '', policyEndDate: '' },
   hoa: { hasHoa: 'no', fee: 0, frequency: 'monthly', contactName: '', contactPhone: '', contactEmail: '' },
   utilities: [
     { type: 'Water', responsibility: 'tenant', providerName: '', providerContact: '' },
@@ -196,6 +197,7 @@ export function PropertyForm({
       preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
       mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
       management: { ...DEFAULT_VALUES.management, ...initialData.management },
+      taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
   } : DEFAULT_VALUES;
 
   const form = useForm<PropertyFormValues>({
@@ -214,6 +216,7 @@ export function PropertyForm({
           preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
           mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
           management: { ...DEFAULT_VALUES.management, ...initialData.management },
+          taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
       };
       form.reset(merged);
       setCurrentPropertyId(initialData.id);
@@ -730,9 +733,13 @@ export function PropertyForm({
                   <div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div>
                   <div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div>
                 </div>
+                <div className="grid gap-2">
+                  <Label>Annual Premium ($)</Label>
+                  <Input type="number" {...form.register('taxAndInsurance.annualPremium')} />
+                </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2"><Label>Annual Premium ($)</Label><Input type="number" {...form.register('taxAndInsurance.annualPremium')} /></div>
-                  <div className="grid gap-2"><Label>Renewal Date</Label><Input type="date" {...form.register('taxAndInsurance.renewalDate')} /></div>
+                  <div className="grid gap-2"><Label>Policy Start Date</Label><Input type="date" {...form.register('taxAndInsurance.policyStartDate')} /></div>
+                  <div className="grid gap-2"><Label>Policy End Date</Label><Input type="date" {...form.register('taxAndInsurance.policyEndDate')} /></div>
                 </div>
               </CardContent>
             </Card>
