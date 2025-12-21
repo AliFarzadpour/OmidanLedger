@@ -401,5 +401,3 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     </>
   )
 }
-
-    
