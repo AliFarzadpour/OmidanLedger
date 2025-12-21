@@ -11,7 +11,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { defineFlow, runFlow } from 'genkit';
 import { getFirestore } from 'firebase-admin/firestore';
-import { onFlow } from '@genkit-ai/firebase/functions';
+import { onFlow } from '@genkit-ai/firebase/run';
 
 // --- SCHEMAS ---
 
