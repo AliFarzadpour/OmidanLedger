@@ -5,15 +5,17 @@ import { doc } from 'firebase/firestore';
 import { UnitMatrix } from '@/components/dashboard/properties/UnitMatrix';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
 import { Loader2 } from 'lucide-react';
+import { useParams } from 'next/navigation'; // Import useParams
 
-export default function PropertyDetailPage({ params }: { params: { id: string } }) {
+export default function PropertyDetailPage() {
   const firestore = useFirestore();
-  const { id } = params; // Extract id from params first
+  const params = useParams(); // Use the hook to get params
+  const id = params.id as string; // Extract id from the hook's result
 
   const propertyDocRef = useMemoFirebase(() => {
-    if (!firestore || !id) return null; // Use the extracted id
+    if (!firestore || !id) return null;
     return doc(firestore, 'properties', id);
-  }, [firestore, id]); // Use id in the dependency array
+  }, [firestore, id]);
 
   const { data: property, isLoading } = useDoc(propertyDocRef);
 
