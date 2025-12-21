@@ -81,16 +81,18 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
         <div className="h-[calc(100vh-150px)] overflow-y-auto pr-4">
             <form onSubmit={handleUpdate} className="space-y-6 mt-6">
                 
-                <div className="space-y-2">
-                    <Label htmlFor="unitNumber" className="text-blue-600 font-bold">Unit Number / Name</Label>
+                {/* EDITABLE UNIT NUMBER FIELD */}
+                <div className="space-y-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <Label htmlFor="unitNumber" className="text-blue-700 font-bold">Unit Number / Name</Label>
                     <Input 
-                      id="unitNumber"
-                      name="unitNumber"
-                      value={unitNumber} 
-                      onChange={e => setUnitNumber(e.target.value)} 
-                      placeholder="e.g., 101, Apt A, or Suite 200" 
-                      className="border-blue-200 focus:border-blue-500 font-bold text-lg"
+                        id="unitNumber"
+                        name="unitNumber"
+                        value={unitNumber} 
+                        onChange={e => setUnitNumber(e.target.value)} 
+                        placeholder="e.g., 101, Apt A, or Suite 200" 
+                        className="bg-white font-bold text-lg focus:ring-2 focus:ring-blue-500"
                     />
+                    <p className="text-[10px] text-blue-600">Changing this will update the card on the main hub.</p>
                 </div>
 
                 <div className="space-y-2">
