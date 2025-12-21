@@ -2,17 +2,15 @@
 import admin from 'firebase-admin';
 import { getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-
-// A server-only utility to securely initialize the Firebase Admin SDK.
-// This version uses Application Default Credentials and does not require
-// a manual service account key in environment variables.
+import { firebaseConfig } from '@/firebase/config'; // Import client config to get bucket URL
 
 // Singleton Pattern: Initialize the app only if it hasn't been already.
-// This is crucial for Next.js hot-reloading environments to avoid crashes.
 if (!getApps().length) {
-  // By initializing without arguments, the Admin SDK will automatically
-  // use the Application Default Credentials available in the App Hosting environment.
-  admin.initializeApp();
+  // Explicitly initialize with the storageBucket from your config.
+  // This is the correct way to ensure the Admin SDK knows where to upload files.
+  admin.initializeApp({
+    storageBucket: firebaseConfig.storageBucket
+  });
 }
 
 // Export the initialized Firestore database instance for use in server-side code.
