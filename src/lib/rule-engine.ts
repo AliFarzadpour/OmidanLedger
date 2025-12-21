@@ -65,7 +65,7 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
     }
 
     // 3. HOA Rule
-    if (propertyData.hoa?.contactName) {
+    if (propertyData.hoa?.hasHoa === 'yes' && propertyData.hoa.contactName) {
       await setRule(userId, propertyData.hoa.contactName, {
         primary: 'Operating Expenses',
         secondary: 'Fees',
@@ -86,7 +86,7 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
     const allTenants = [
       ...(propertyData.tenants || []),
       ...(propertyData.units || []).flatMap((u: any) => u.tenants || [])
-    ];
+    ].filter(t => t); // Filter out any null/undefined tenants
     
     for (const tenant of allTenants) {
       if (tenant.firstName && tenant.lastName) {

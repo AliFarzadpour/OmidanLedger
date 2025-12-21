@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, updateDoc, WriteBatch, getDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -205,12 +205,21 @@ export function PropertyForm({
     
     try {
         const propertyRef = doc(firestore, 'properties', currentPropertyId);
-        await updateDoc(propertyRef, data);
         
+        // Fetch existing units to merge with the update
+        const unitsCollection = collection(firestore, `properties/${currentPropertyId}/units`);
+        const unitsSnap = await getDocs(unitsCollection);
+        const units = unitsSnap.docs.map(d => d.data());
+
+        const fullPropertyData = {
+          ...data,
+          units: units,
+        };
+
+        await updateDoc(propertyRef, data);
         toast({ title: "Property Updated", description: "Building-level details have been saved." });
 
-        // Generate rules after successful save
-        await generateRulesForProperty(currentPropertyId, data, user.uid);
+        await generateRulesForProperty(currentPropertyId, fullPropertyData, user.uid);
         toast({ title: "Smart Rules Updated", description: "AI categorization rules have been synced with property details." });
         
         if (onSuccess) onSuccess();
