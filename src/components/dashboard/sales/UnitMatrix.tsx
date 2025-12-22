@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bed, Bath, Square, Users, DollarSign, Search, ArrowDownUp, ArrowUp, ArrowDown } from 'lucide-react';
+import { Bed, Bath, Square, Users, DollarSign, Search, ArrowUp, ArrowDown, Bot, Edit } from 'lucide-react';
 import { UnitDetailDrawer } from '@/components/dashboard/sales/UnitDetailDrawer';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BulkActionsDialog } from './BulkActionsDialog';
+
 
 type SortKey = 'unitNumber' | 'status' | 'rentAmount';
 type SortDirection = 'asc' | 'desc';
@@ -21,6 +24,11 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
   const [sortBy, setSortBy] = useState<SortKey>('unitNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
+  // New state for selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkActionsOpen, setIsBulkActionsOpen] = useState(false);
+
+
   const handleUnitClick = (unit: any) => {
     setSelectedUnit(unit);
     setIsDrawerOpen(true);
@@ -30,6 +38,17 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     setIsDrawerOpen(false);
     setSelectedUnit(null);
   };
+
+  const handleCheckboxChange = (unitId: string, checked: boolean) => {
+    const newSelectedIds = new Set(selectedIds);
+    if (checked) {
+      newSelectedIds.add(unitId);
+    } else {
+      newSelectedIds.delete(unitId);
+    }
+    setSelectedIds(newSelectedIds);
+  };
+
 
   const filteredAndSortedUnits = useMemo(() => {
     if (!units) return [];
@@ -80,6 +99,18 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     return filtered;
   }, [units, searchTerm, sortBy, sortDirection]);
   
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allFilteredIds = new Set(filteredAndSortedUnits.map(u => u.id));
+      setSelectedIds(allFilteredIds);
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const isAllFilteredSelected = filteredAndSortedUnits.length > 0 && selectedIds.size === filteredAndSortedUnits.length;
+
+
   return (
     <>
       <div className="flex flex-col sm:flex-row gap-4 mb-6 p-4 bg-slate-50 border rounded-lg">
@@ -113,6 +144,27 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
         </div>
       </div>
 
+        {selectedIds.size > 0 && (
+            <div className="flex items-center gap-4 mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-50">
+                <div className="flex-grow">
+                    <span className="font-semibold text-blue-800">{selectedIds.size}</span> units selected.
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>Clear Selection</Button>
+                <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={() => setIsBulkActionsOpen(true)}>
+                    <Edit className="mr-2 h-4 w-4" /> Bulk Actions
+                </Button>
+            </div>
+        )}
+
+        <div className="flex items-center gap-3 mb-4">
+             <Checkbox 
+                id="select-all" 
+                checked={isAllFilteredSelected} 
+                onCheckedChange={handleSelectAll} 
+             />
+             <label htmlFor="select-all" className="text-sm font-medium">Select all {filteredAndSortedUnits.length} filtered units</label>
+        </div>
+
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {filteredAndSortedUnits.map((unit: any) => {
           const isOccupied = unit.tenants && unit.tenants.length > 0;
@@ -120,47 +172,59 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
           const rentAmount = isOccupied ? unit.tenants[0].rentAmount : (unit.financials?.rent || 0);
 
           return (
-            <Card 
-              key={unit.id} 
-              onClick={() => handleUnitClick(unit)}
-              className="hover:shadow-md transition-all cursor-pointer border-l-4 border-l-slate-200 hover:border-l-blue-500"
-            >
-              <CardHeader className="pb-2 flex flex-row items-center justify-between">
-                <Badge variant={isOccupied ? 'default' : 'destructive'}>
-                  {isOccupied ? 'Occupied' : 'Vacant'}
-                </Badge>
-                <span className="text-sm font-mono font-bold text-slate-500">#{unit.unitNumber}</span>
-              </CardHeader>
-              
-              <CardContent className="space-y-3">
-                {/* 1. Primary Stats: Bed/Bath/SqFt */}
-                <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
-                  <div className="flex items-center gap-1">
-                    <Bed className="h-3 w-3" /> {unit.bedrooms || 0}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Bath className="h-3 w-3" /> {unit.bathrooms || 0}
-                  </div>
-                  <div className="flex items-center gap-1 border-l pl-3">
-                    <Square className="h-3 w-3" /> {unit.sqft?.toLocaleString() || 0} <span className="text-[10px]">sqft</span>
-                  </div>
+             <div key={unit.id} className="relative">
+                <div 
+                    onClick={() => handleUnitClick(unit)}
+                    className="h-full"
+                >
+                    <Card 
+                        className="hover:shadow-md transition-all border-l-4 h-full flex flex-col justify-between"
+                    >
+                        <CardHeader className="pb-2 flex flex-row items-start justify-between">
+                            <Badge variant={isOccupied ? 'default' : 'destructive'}>
+                            {isOccupied ? 'Occupied' : 'Vacant'}
+                            </Badge>
+                            <span className="text-sm font-mono font-bold text-slate-500">#{unit.unitNumber}</span>
+                        </CardHeader>
+                        
+                        <CardContent className="space-y-3">
+                            <div className="flex items-center gap-3 text-xs text-slate-600 font-medium">
+                                <div className="flex items-center gap-1">
+                                    <Bed className="h-3 w-3" /> {unit.bedrooms || 0}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <Bath className="h-3 w-3" /> {unit.bathrooms || 0}
+                                </div>
+                                <div className="flex items-center gap-1 border-l pl-3">
+                                    <Square className="h-3 w-3" /> {unit.sqft?.toLocaleString() || 0} <span className="text-[10px]">sqft</span>
+                                </div>
+                            </div>
+                            <div className="pt-2 border-t space-y-1">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-muted-foreground font-medium flex items-center gap-1"><Users className="h-3 w-3"/> Tenant</span>
+                                    <span className="font-medium truncate">{tenantName}</span>
+                                </div>
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-muted-foreground font-medium flex items-center gap-1"><DollarSign className="h-3 w-3"/> Monthly Rent</span>
+                                    <span className="font-bold text-blue-600">
+                                    ${rentAmount.toLocaleString()}
+                                    </span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
-
-                {/* 2. Tenant & Rent Info */}
-                <div className="pt-2 border-t space-y-1">
-                  <div className="flex justify-between items-center text-xs">
-                     <span className="text-muted-foreground font-medium flex items-center gap-1"><Users className="h-3 w-3"/> Tenant</span>
-                     <span className="font-medium truncate">{tenantName}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-muted-foreground font-medium flex items-center gap-1"><DollarSign className="h-3 w-3"/> Monthly Rent</span>
-                    <span className="font-bold text-blue-600">
-                      ${rentAmount.toLocaleString()}
-                    </span>
-                  </div>
+                 <div
+                    className="absolute top-2 left-2 z-10"
+                    onClick={(e) => e.stopPropagation()} // Prevents drawer from opening
+                >
+                    <Checkbox
+                        checked={selectedIds.has(unit.id)}
+                        onCheckedChange={(checked) => handleCheckboxChange(unit.id, !!checked)}
+                        className="bg-white"
+                    />
                 </div>
-              </CardContent>
-            </Card>
+            </div>
           );
         })}
       </div>
@@ -172,6 +236,18 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
           onOpenChange={handleDrawerClose}
           onUpdate={onUpdate}
         />
+      )}
+      {selectedIds.size > 0 && (
+          <BulkActionsDialog
+            isOpen={isBulkActionsOpen}
+            onOpenChange={setIsBulkActionsOpen}
+            propertyId={propertyId}
+            selectedUnitIds={Array.from(selectedIds)}
+            onSuccess={() => {
+                onUpdate();
+                setSelectedIds(new Set());
+            }}
+          />
       )}
     </>
   );
