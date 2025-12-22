@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Home, DollarSign, Building } from 'lucide-react';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { generateRulesForProperty } from '@/lib/rule-engine';
 
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
@@ -81,7 +82,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
   });
 
   const propertyType = form.watch('type');
-  const isMultiUnitType = propertyType === 'multi-family' || propertyType === 'commercial';
+  const isMultiUnitType = propertyType === 'multi-family' || propertyType === 'commercial' || propertyType === 'office';
 
   const onSubmit = async (data: any) => {
     if (!user || !firestore) return;
@@ -91,7 +92,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     const timestamp = new Date().toISOString();
     const propertyRef = doc(collection(firestore, 'properties'));
     
-    // --- 1. CORE ACCOUNTING GENERATOR ---
     const accountingMap: any = { utilities: {} };
     const createAccount = (name: string, type: string, subtype: string) => {
       const ref = doc(collection(firestore, 'accounts'));
@@ -106,7 +106,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       return ref.id;
     };
   
-    // Assets, Liabilities, Income, Expenses (Preserved from your code)
     accountingMap.assetAccount = createAccount(`Property - ${data.name}`, 'Asset', 'Fixed Asset');
     accountingMap.utilities.deposits = createAccount(`Util Deposits - ${data.name}`, 'Asset', 'Other Current Asset');
     accountingMap.securityDepositAccount = createAccount(`Tenant Deposits - ${data.name}`, 'Liability', 'Other Current Liability');
@@ -123,7 +122,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     accountingMap.utilities.trash = createAccount(`Trash - ${data.name}`, 'Expense', 'Utilities');
     accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
   
-    // --- 2. BRANCHING LOGIC ---
     const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial' || data.type === 'office';
     const propertyData = {
       userId: user.uid,
@@ -137,10 +135,8 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       accounting: accountingMap
     };
 
-    // Save the Main Property (The Hub)
     batch.set(propertyRef, propertyData);
   
-    // --- 3. AUTO-PILOT: SUBCOLLECTION GENERATION ---
     if (isMultiUnit) {
       const numUnits = data.numberOfUnits || 1;
       const unitsToCreate = generateUnitBatch(firestore, propertyRef, numUnits, user.uid, data);
@@ -149,27 +145,27 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       });
     }
   
-    // Use a non-blocking commit with detailed error handling
     batch.commit()
-      .then(() => {
+      .then(async () => {
+        // --- FIX: Call rule generation after successful commit ---
+        await generateRulesForProperty(propertyRef.id, propertyData, user.uid);
+        
         toast({ 
           title: isMultiUnit ? "Central Hub Created" : "Property Added", 
-          description: isMultiUnit ? `Building and ${data.numberOfUnits || 1} units are ready.` : "Property and 16 ledgers created." 
+          description: isMultiUnit ? `Building, units, and smart rules created.` : "Property, ledgers, and smart rules created."
         });
         onSuccess();
       })
       .catch((error) => {
         console.error("Firestore batch commit failed:", error);
         
-        // Create and emit the detailed error
         const permissionError = new FirestorePermissionError({
-          path: propertyRef.path, // We report the error on the main property doc
+          path: propertyRef.path,
           operation: 'create',
           requestResourceData: propertyData,
         });
         errorEmitter.emit('permission-error', permissionError);
 
-        // Also show a generic toast to the user
         toast({ variant: "destructive", title: "Error", description: "Failed to save property due to a permission issue." });
       })
       .finally(() => {
@@ -270,5 +266,3 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     </div>
   );
 }
-
-    
