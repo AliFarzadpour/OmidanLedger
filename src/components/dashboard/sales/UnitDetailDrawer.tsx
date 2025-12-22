@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -35,49 +36,40 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
-    // 1. Ensure services are available
     if (!firestore || !storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
         return;
     }
 
-    // 2. Fallback check: If storagePath is missing, try using downloadUrl to extract the ref
-    if (!docData?.storagePath && !docData?.downloadUrl) {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing path information.' });
+    let fileRef;
+    if (docData?.storagePath) {
+        fileRef = ref(storage, docData.storagePath);
+    } else if (docData?.downloadUrl) {
+        fileRef = ref(storage, docData.downloadUrl);
+    } else {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'No file path found in document.' });
         return;
     }
-    
-    // REMOVED: if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
 
     try {
-        // 3. Delete from Storage first
-        // If storagePath is missing, we use refFromURL as a fallback
-        const fileRef = docData.storagePath 
-            ? ref(storage, docData.storagePath) 
-            : ref(storage, docData.downloadUrl); // Fallback logic
-        
         await deleteObject(fileRef);
-
-        // 4. Delete from Firestore
+        
         const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
         await deleteDoc(docRef);
 
-        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+        toast({ title: 'Document Deleted', description: `${docData.fileName} removed successfully.` });
         refetchDocs();
     } catch (error: any) {
-        // 5. Check for common errors
         console.error("Deletion Error:", error);
         if (error.code === 'storage/object-not-found') {
              const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
              await deleteDoc(docRef);
              toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
              refetchDocs();
+        } else if (error.code === 'storage/unauthorized') {
+            toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to delete this file.' });
         } else {
-             const errorMsg = error.code === 'storage/unauthorized' 
-                ? "You don't have permission to delete this file from storage." 
-                : error.message;
-            
-             toast({ variant: 'destructive', title: 'Deletion Failed', description: errorMsg });
+            toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
         }
     }
   };
@@ -250,7 +242,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                           type="button" 
                                           variant="ghost" 
                                           size="icon" 
-                                          onClick={() => handleRemoveTenant(index)}
+                                          onClick={() => remove(index)}
                                           className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
                                       >
                                           <Trash2 className="h-4 w-4" />

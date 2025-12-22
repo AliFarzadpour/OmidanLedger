@@ -308,46 +308,40 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
-    // 1. Ensure services are available
     if (!firestore || !storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
         return;
     }
 
-    // 2. Fallback check: If storagePath is missing, try using downloadUrl to extract the ref
-    if (!docData?.storagePath && !docData?.downloadUrl) {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing path information.' });
+    let fileRef;
+    if (docData?.storagePath) {
+        fileRef = ref(storage, docData.storagePath);
+    } else if (docData?.downloadUrl) {
+        fileRef = ref(storage, docData.downloadUrl);
+    } else {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'No file path found in document.' });
         return;
     }
 
     try {
-        // 3. Delete from Storage first
-        // If storagePath is missing, we use refFromURL as a fallback
-        const fileRef = docData.storagePath 
-            ? ref(storage, docData.storagePath) 
-            : ref(storage, docData.downloadUrl); // Fallback logic
-        
         await deleteObject(fileRef);
-
-        // 4. Delete from Firestore
+        
         const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
         await deleteDoc(docRef);
 
-        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+        toast({ title: 'Document Deleted', description: `${docData.fileName} removed successfully.` });
+        refetchDocs();
     } catch (error: any) {
-        // 5. Check for Permission Denied (common silent failure)
         console.error("Deletion Error:", error);
-        // Handle specific "Not Found" error if file was already moved or deleted
         if (error.code === 'storage/object-not-found') {
              const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
              await deleteDoc(docRef);
              toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
+             refetchDocs();
+        } else if (error.code === 'storage/unauthorized') {
+            toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to delete this file.' });
         } else {
-             const errorMsg = error.code === 'storage/unauthorized' 
-                ? "You don't have permission to delete this file from storage." 
-                : error.message;
-            
-             toast({ variant: 'destructive', title: 'Deletion Failed', description: errorMsg });
+            toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
         }
     }
   };
