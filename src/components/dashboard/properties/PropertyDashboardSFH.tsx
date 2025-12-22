@@ -323,8 +323,6 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
         return;
     }
 
-    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
-
     try {
         // 1. Delete from Storage
         await deleteObject(fileRef);
