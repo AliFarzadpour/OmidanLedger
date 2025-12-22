@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { doc, updateDoc, collection, query, deleteDoc, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, deleteDoc, getDocs, Timestamp } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser, useStorage } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -194,9 +194,22 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       // 2. Fetch all units again to get the complete, updated list.
       const unitsCollectionRef = collection(firestore, `properties/${propertyId}/units`);
       const unitsSnapshot = await getDocs(unitsCollectionRef);
-      const allUnitsData = unitsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      
+      // 3. IMPORTANT: Sanitize the data to remove non-plain objects like Timestamps
+      const allUnitsData = unitsSnapshot.docs.map(doc => {
+          const unitData = doc.data();
+          const sanitizedUnit: { [key: string]: any } = {};
+          for (const key in unitData) {
+              if (unitData[key] instanceof Timestamp) {
+                  sanitizedUnit[key] = unitData[key].toDate().toISOString();
+              } else {
+                  sanitizedUnit[key] = unitData[key];
+              }
+          }
+          return { id: doc.id, ...sanitizedUnit };
+      });
   
-      // 3. Update the 'units' array in the main property document.
+      // 4. Update the 'units' array in the main property document with the clean data
       await updateDoc(propertyRef, {
         units: allUnitsData
       });
@@ -413,3 +426,5 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     </>
   );
 }
+
+    
