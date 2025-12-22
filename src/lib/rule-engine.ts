@@ -52,7 +52,7 @@ async function setRule(
 }
 
 /**
- * Generates categorization rules from property data.
+ * Generates categorization rules from property data, aligned with IRS Schedule E.
  * Differentiates between single-family and multi-family properties.
  * @param propertyId - The ID of the property.
  * @param propertyData - The full property data object.
@@ -67,66 +67,88 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
     const isMultiUnit = propertyData.isMultiUnit === true;
     const propertyNickname = propertyData.name;
 
-    // --- Building-Wide Expense Rules (Apply to ALL property types) ---
+    // --- SCHEDULE E: EXPENSE RULES (Apply to ALL property types) ---
 
-    // 1. Mortgage Lender Rule
+    // Line 12: Mortgage Interest
     if (propertyData.mortgage?.lenderName) {
       await setRule(userId, propertyData.mortgage.lenderName, {
-        primary: 'Operating Expenses',
-        secondary: 'Financing',
-        sub: 'Mortgage Interest'
+        primary: 'Expenses',
+        secondary: 'Mortgage Interest',
+        sub: 'Mortgage Interest Paid to Banks'
       }, propertyId);
     }
 
-    // 2. Insurance Provider Rule
+    // Line 9: Insurance
     if (propertyData.taxAndInsurance?.insuranceProvider) {
       await setRule(userId, propertyData.taxAndInsurance.insuranceProvider, {
-        primary: 'Operating Expenses',
+        primary: 'Expenses',
         secondary: 'Insurance',
-        sub: 'Property Insurance'
-      }, propertyId);
-    }
-
-    // 3. HOA Rule
-    if (propertyData.hoa?.hasHoa === 'yes' && propertyData.hoa.contactName) {
-      await setRule(userId, propertyData.hoa.contactName, {
-        primary: 'Operating Expenses',
-        secondary: 'Fees',
-        sub: 'HOA Fees'
+        sub: 'Property Insurance Premiums'
       }, propertyId);
     }
     
-    // 4. Property Management Fee Rule
+    // Line 10: Management Fees
     if (propertyData.management?.isManaged === 'professional' && propertyData.management.companyName) {
       await setRule(userId, propertyData.management.companyName, {
-          primary: 'Operating Expenses',
-          secondary: 'Professional Services',
-          sub: 'Property Management'
+          primary: 'Expenses',
+          secondary: 'Management Fees',
+          sub: 'Property Management Fees'
       }, propertyId);
     }
 
-    // --- Tenant Income Rules (Logic branches here) ---
+    // Line 18: Utilities
+    if (propertyData.utilities && Array.isArray(propertyData.utilities)) {
+        for (const util of propertyData.utilities) {
+            if (util.providerName) {
+                await setRule(userId, util.providerName, {
+                    primary: 'Expenses',
+                    secondary: 'Utilities',
+                    sub: util.type // e.g., Water, Gas, Electric
+                }, propertyId);
+            }
+        }
+    }
+    
+    // Line 14 & 7: Repairs, Maintenance, and Vendors
+    if (propertyData.preferredVendors && Array.isArray(propertyData.preferredVendors)) {
+        for (const vendor of propertyData.preferredVendors) {
+            let subCat = 'General Repairs';
+            if (vendor.role?.toLowerCase().includes('clean') || vendor.role?.toLowerCase().includes('maint')) {
+                subCat = 'Cleaning & Maintenance';
+            } else if (vendor.role?.toLowerCase().includes('plumber') || vendor.role?.toLowerCase().includes('electric')) {
+                subCat = 'Plumbing & Electrical';
+            }
+
+            if (vendor.name) {
+                await setRule(userId, vendor.name, {
+                    primary: 'Expenses',
+                    secondary: 'Repairs',
+                    sub: subCat
+                }, propertyId);
+            }
+        }
+    }
+
+    // --- SCHEDULE E: INCOME RULES ---
+    // Line 3: Rents Received
     if (isMultiUnit) {
-      // MULTI-FAMILY LOGIC
       if (propertyData.units && Array.isArray(propertyData.units)) {
         for (const unit of propertyData.units) {
           if (unit.tenants && Array.isArray(unit.tenants)) {
             for (const tenant of unit.tenants) {
-              // Rule 1: Composite Key for Rent (e.g., "Irvine-101")
               const mappingKey = `${propertyNickname}-${unit.unitNumber}`;
               await setRule(userId, mappingKey, {
                 primary: 'Income',
-                secondary: 'Operating Income',
-                sub: 'Rental Income'
+                secondary: 'Rental Income',
+                sub: 'Rents Received'
               }, propertyId, unit.id, mappingKey);
 
-              // Rule 2: Tenant Full Name (as a fallback)
               if (tenant.firstName && tenant.lastName) {
                 const fullName = `${tenant.firstName} ${tenant.lastName}`;
                 await setRule(userId, fullName, {
                   primary: 'Income',
-                  secondary: 'Operating Income',
-                  sub: 'Rental Income'
+                  secondary: 'Rental Income',
+                  sub: 'Rents Received'
                 }, propertyId, unit.id);
               }
             }
@@ -134,22 +156,22 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
         }
       }
     } else {
-      // SINGLE-FAMILY LOGIC (Unchanged)
+      // Single-Family Logic
       if (propertyData.tenants && Array.isArray(propertyData.tenants)) {
         for (const tenant of propertyData.tenants) {
           if (tenant.firstName && tenant.lastName) {
             const fullName = `${tenant.firstName} ${tenant.lastName}`;
             await setRule(userId, fullName, {
               primary: 'Income',
-              secondary: 'Operating Income',
-              sub: 'Rental Income'
+              secondary: 'Rental Income',
+              sub: 'Rents Received'
             }, propertyId);
           }
         }
       }
     }
 
-    return { success: true, message: 'Rules generated successfully.' };
+    return { success: true, message: 'Schedule E rules generated successfully.' };
 
   } catch (error: any) {
     console.error("Failed to generate rules:", error);
