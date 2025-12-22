@@ -1,3 +1,4 @@
+
 {
   "entities": {
     "Unit": {
@@ -11,6 +12,7 @@
         "propertyId": { "type": "string" },
         "unitNumber": { "type": "string" },
         "status": { "type": "string", "enum": ["occupied", "vacant", "maintenance"] },
+        "tagColor": { "type": "string", "format": "hex-color", "description": "A hex color code for visually tagging the unit." },
         "bedrooms": { "type": "number" },
         "bathrooms": { "type": "number" },
         "squareFootage": { "type": "number" },

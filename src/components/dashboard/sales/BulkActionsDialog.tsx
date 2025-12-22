@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -16,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
+import { cn } from '@/lib/utils';
 
 interface BulkActionsDialogProps {
   isOpen: boolean;
@@ -28,6 +30,17 @@ interface BulkActionsDialogProps {
 const ALL_AMENITIES = [
   "Stove", "Fridge", "Washer", "Dryer", "Dishwasher", "Microwave",
   "Balcony/Patio", "A/C", "Heating", "Parking", "Hardwood Floors", "Carpet"
+];
+
+const COLOR_PALETTE = [
+    { name: 'Red', value: '#ef4444' },
+    { name: 'Orange', value: '#f97316' },
+    { name: 'Amber', value: '#f59e0b' },
+    { name: 'Green', value: '#22c55e' },
+    { name: 'Blue', value: '#3b82f6' },
+    { name: 'Indigo', value: '#6366f1' },
+    { name: 'Purple', value: '#8b5cf6' },
+    { name: 'Pink', value: '#ec4899' },
 ];
 
 export function BulkActionsDialog({
@@ -45,6 +58,8 @@ export function BulkActionsDialog({
   const [bathrooms, setBathrooms] = useState('');
   const [sqft, setSqft] = useState('');
   const [amenities, setAmenities] = useState<string[]>([]);
+  const [selectedColor, setSelectedColor] = useState<string | null>(null);
+
 
   const handleAmenityChange = (amenity: string, checked: boolean) => {
     setAmenities(prev => 
@@ -61,6 +76,8 @@ export function BulkActionsDialog({
     if (bathrooms) updates['bathrooms'] = Number(bathrooms);
     if (sqft) updates['sqft'] = Number(sqft);
     if (amenities.length > 0) updates['amenities'] = amenities;
+    if (selectedColor) updates['tagColor'] = selectedColor;
+
 
     if (Object.keys(updates).length === 0) {
         toast({ variant: 'destructive', title: 'No Changes', description: 'Please fill out at least one field to update.' });
@@ -85,14 +102,35 @@ export function BulkActionsDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Bulk Edit {selectedUnitIds.length} Units</DialogTitle>
           <DialogDescription>
             Apply changes to all selected units. Only fill out the fields you want to change.
           </DialogDescription>
         </DialogHeader>
-        <div className="py-4 space-y-4">
+        <div className="py-4 space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          
+          <div className="p-4 border rounded-lg bg-slate-50/50">
+            <Label className="mb-3 block font-semibold">Unit Tag Color</Label>
+            <div className="flex flex-wrap gap-3">
+              {COLOR_PALETTE.map(color => (
+                <button
+                  key={color.name}
+                  type="button"
+                  onClick={() => setSelectedColor(color.value)}
+                  className={cn(
+                    "h-8 w-8 rounded-full border-2 transition-transform transform hover:scale-110",
+                    selectedColor === color.value ? 'ring-2 ring-offset-2 ring-slate-900' : 'border-transparent'
+                  )}
+                  style={{ backgroundColor: color.value }}
+                  aria-label={`Select ${color.name}`}
+                />
+              ))}
+               <Button variant="ghost" size="sm" onClick={() => setSelectedColor(null)}>Clear Color</Button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label>Bedrooms</Label>
