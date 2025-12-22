@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -297,6 +298,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const storage = useStorage();
   const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
   const docsQuery = useMemoFirebase(() => {
     if (!firestore || !propertyId) return null;
@@ -306,33 +308,34 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
+    // 1. Ensure services are available
     if (!firestore || !storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
         return;
     }
 
-    // Determine the reference: use storagePath if it exists, otherwise extract from URL
-    let fileRef;
-    if (docData?.storagePath) {
-        fileRef = ref(storage, docData.storagePath);
-    } else if (docData?.downloadUrl) {
-        // Fallback: create reference directly from the HTTPS URL
-        fileRef = ref(storage, docData.downloadUrl);
-    } else {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'No file path found in document.' });
+    // 2. Fallback check: If storagePath is missing, try using downloadUrl to extract the ref
+    if (!docData?.storagePath && !docData?.downloadUrl) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing path information.' });
         return;
     }
 
     try {
-        // 1. Delete from Storage
+        // 3. Delete from Storage first
+        // If storagePath is missing, we use refFromURL as a fallback
+        const fileRef = docData.storagePath 
+            ? ref(storage, docData.storagePath) 
+            : ref(storage, docData.downloadUrl); // Fallback logic
+        
         await deleteObject(fileRef);
 
-        // 2. Delete from Firestore
+        // 4. Delete from Firestore
         const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
         await deleteDoc(docRef);
 
-        toast({ title: 'Document Deleted', description: `${docData.fileName} removed successfully.` });
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
     } catch (error: any) {
+        // 5. Check for Permission Denied (common silent failure)
         console.error("Deletion Error:", error);
         // Handle specific "Not Found" error if file was already moved or deleted
         if (error.code === 'storage/object-not-found') {
@@ -340,7 +343,11 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
              await deleteDoc(docRef);
              toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
         } else {
-             toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+             const errorMsg = error.code === 'storage/unauthorized' 
+                ? "You don't have permission to delete this file from storage." 
+                : error.message;
+            
+             toast({ variant: 'destructive', title: 'Deletion Failed', description: errorMsg });
         }
     }
   };
@@ -399,16 +406,30 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
                     <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
                     {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1">
                     <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
                       <Button variant="outline" size="sm" className="gap-1"><Eye className="h-3 w-3"/> View</Button>
                     </a>
                     <a href={doc.downloadUrl} download>
                       <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
                     </a>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
-                        <Trash2 className="h-4 w-4"/>
-                    </Button>
+                    
+                    {isDeleting === doc.id ? (
+                        <Button 
+                            variant="destructive" 
+                            size="sm" 
+                            onClick={() => {
+                                handleDelete(doc);
+                                setIsDeleting(null);
+                            }}
+                        >
+                            Confirm Delete?
+                        </Button>
+                    ) : (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => setIsDeleting(doc.id)}>
+                            <Trash2 className="h-4 w-4"/>
+                        </Button>
+                    )}
                   </div>
                 </div>
               ))}
