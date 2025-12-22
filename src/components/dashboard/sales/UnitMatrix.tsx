@@ -4,17 +4,30 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bed, Bath, Square, Users, DollarSign, Search, ArrowUp, ArrowDown, Bot, Edit } from 'lucide-react';
+import { Bed, Bath, Square, Users, DollarSign, Search, ArrowUp, ArrowDown, Bot, Edit, Palette } from 'lucide-react';
 import { UnitDetailDrawer } from '@/components/dashboard/sales/UnitDetailDrawer';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BulkActionsDialog } from './BulkActionsDialog';
+import { cn } from '@/lib/utils';
 
 
 type SortKey = 'unitNumber' | 'status' | 'rentAmount';
 type SortDirection = 'asc' | 'desc';
+
+const COLOR_PALETTE = [
+    { name: 'Red', value: '#ef4444' },
+    { name: 'Orange', value: '#f97316' },
+    { name: 'Amber', value: '#f59e0b' },
+    { name: 'Green', value: '#22c55e' },
+    { name: 'Blue', value: '#3b82f6' },
+    { name: 'Indigo', value: '#6366f1' },
+    { name: 'Purple', value: '#8b5cf6' },
+    { name: 'Pink', value: '#ec4899' },
+];
+
 
 export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string, units: any[], onUpdate: () => void }) {
   const [selectedUnit, setSelectedUnit] = useState<any>(null);
@@ -22,6 +35,7 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
   
   // State for filtering and sorting
   const [searchTerm, setSearchTerm] = useState('');
+  const [colorFilter, setColorFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortKey>('unitNumber');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
@@ -55,6 +69,11 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     if (!units) return [];
 
     let filtered = [...units];
+
+    // Filter by color
+    if (colorFilter !== 'all') {
+      filtered = filtered.filter(unit => unit.tagColor === colorFilter);
+    }
 
     // Filter by search term
     if (searchTerm) {
@@ -98,7 +117,7 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     });
 
     return filtered;
-  }, [units, searchTerm, sortBy, sortDirection]);
+  }, [units, searchTerm, colorFilter, sortBy, sortDirection]);
   
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -125,6 +144,25 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
           />
         </div>
         <div className="flex items-center gap-2">
+           <Select value={colorFilter} onValueChange={setColorFilter}>
+            <SelectTrigger className="w-[180px]">
+                <div className="flex items-center gap-2">
+                    <Palette className="h-4 w-4" />
+                    <SelectValue placeholder="Filter by color..." />
+                </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Colors</SelectItem>
+              {COLOR_PALETTE.map(color => (
+                <SelectItem key={color.value} value={color.value}>
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4 rounded-full" style={{ backgroundColor: color.value }} />
+                    {color.name}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Sort by..." />
