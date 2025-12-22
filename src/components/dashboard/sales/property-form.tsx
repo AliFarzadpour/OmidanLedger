@@ -233,7 +233,6 @@ export function PropertyForm({
         const unitsCollection = collection(firestore, `properties/${currentPropertyId}/units`);
         const unitsSnap = await getDocs(unitsCollection);
         
-        // Convert Timestamps to ISO strings for serialization
         const units = unitsSnap.docs.map(d => {
             const unitData = d.data();
             const sanitizedUnit: { [key: string]: any } = {};
@@ -244,19 +243,22 @@ export function PropertyForm({
                     sanitizedUnit[key] = unitData[key];
                 }
             }
-            return sanitizedUnit;
+            return { id: d.id, ...sanitizedUnit };
         });
 
         const fullPropertyData = {
           ...data,
+          id: currentPropertyId,
+          isMultiUnit: data.type === 'multi-family' || data.type === 'commercial',
           units: units,
         };
 
         await updateDoc(propertyRef, data);
         toast({ title: "Property Updated", description: "Building-level details have been saved." });
-
+        
+        // Regenerate rules after saving
         await generateRulesForProperty(currentPropertyId, fullPropertyData, user.uid);
-        toast({ title: "Smart Rules Updated", description: "AI categorization rules have been synced with property details." });
+        toast({ title: "Smart Rules Synced", description: "Categorization rules have been updated with the new property info." });
         
         if (onSuccess) onSuccess();
 
