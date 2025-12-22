@@ -30,6 +30,7 @@ export default function SmartRulesPage() {
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
+  const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
 
 
   const fetchRules = async () => {
@@ -135,14 +136,14 @@ export default function SmartRulesPage() {
   const handleDelete = async (id: string) => {
     if (!user || !firestore) return;
     const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
-    if (window.confirm("Are you sure you want to delete this rule? This cannot be undone.")) {
-      try {
-        await deleteDoc(doc(firestore, collectionPath, id));
-        toast({ title: "Rule Deleted" });
-        setRules(rules.filter(r => r.id !== id));
-      } catch (error: any) {
-        toast({ variant: 'destructive', title: "Error", description: error.message });
-      }
+    try {
+      await deleteDoc(doc(firestore, collectionPath, id));
+      toast({ title: "Rule Deleted" });
+      fetchRules();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: "Error", description: error.message });
+    } finally {
+        setDeletingRuleId(null);
     }
   };
 
@@ -211,9 +212,13 @@ export default function SmartRulesPage() {
                        <Button variant="ghost" size="icon" onClick={() => handleOpenDialog(rule)}>
                           <Edit2 className="h-4 w-4 text-slate-500 hover:text-blue-600"/>
                        </Button>
-                       <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)}>
-                        <Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600" />
-                      </Button>
+                       {deletingRuleId === rule.id ? (
+                           <Button variant="destructive" size="sm" onClick={() => handleDelete(rule.id)}>Confirm</Button>
+                       ) : (
+                           <Button variant="ghost" size="icon" onClick={() => setDeletingRuleId(rule.id)}>
+                            <Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600" />
+                          </Button>
+                       )}
                     </TableCell>
                   </TableRow>
                 ))
