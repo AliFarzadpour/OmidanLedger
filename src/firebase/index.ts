@@ -48,3 +48,4 @@ export * from './storage/use-storage';
 export * from './errors';
 export * from './error-emitter';
 export * from './non-blocking-login';
+export * from './non-blocking-updates';
