@@ -27,6 +27,7 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   const storage = useStorage();
   const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const docsQuery = useMemoFirebase(() => {
     if (!firestore || !propertyId || !unitId) return null;
@@ -36,6 +37,7 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
+    setDeletingId(null); // Reset confirmation state
     if (!firestore || !storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
         return;
@@ -104,7 +106,11 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
             </div>
             <div className="flex items-center gap-1">
               <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer"><Button type="button" variant="ghost" size="icon" className="h-7 w-7"><Eye className="h-4 w-4"/></Button></a>
-              <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-500" onClick={() => handleDelete(doc)}><Trash2 className="h-4 w-4"/></Button>
+              {deletingId === doc.id ? (
+                  <Button variant="destructive" size="sm" onClick={() => handleDelete(doc)}>Confirm?</Button>
+              ) : (
+                  <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-500 hover:text-red-500" onClick={() => setDeletingId(doc.id)}><Trash2 className="h-4 w-4"/></Button>
+              )}
             </div>
           </div>
         ))}
@@ -174,23 +180,6 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     name: "utilities",
   });
 
-  const handleRemoveTenant = async (index: number) => {
-    if (!firestore || !unit) return;
-    
-    const currentTenants = getValues('tenants');
-    const updatedTenants = currentTenants.filter((_:any, i:number) => i !== index);
-
-    const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
-    
-    try {
-      await updateDoc(unitRef, { tenants: updatedTenants });
-      toast({ title: "Tenant Removed", description: "The tenant has been deleted from this unit." });
-      if (onUpdate) onUpdate();
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: "Error", description: `Could not remove tenant: ${error.message}`});
-    }
-  };
-
   const onSubmit = async (data: any) => {
     if (!firestore || !unit) return;
     setIsSaving(true);
@@ -201,7 +190,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       await updateDoc(unitRef, data);
       
       toast({ title: "Success", description: "Unit identity and details updated." });
-      if (onUpdate) onUpdate();
+      if (onUpdate) onUpdate(); // Trigger refetch on parent
       onOpenChange(false);
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -209,6 +198,13 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       setIsSaving(false);
     }
   };
+  
+  const handleTenantAdd = () => {
+    append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 });
+    // After appending, we can immediately save to trigger the rule generation via onUpdate.
+    // Or we can rely on the user to hit the main "Update Unit" button.
+    // For now, let's rely on the main save button to avoid too many writes.
+  }
 
   return (
     <>
@@ -270,7 +266,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                       type="button"
                                       variant="outline"
                                       className="w-full border-dashed"
-                                      onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 })}
+                                      onClick={handleTenantAdd}
                                   >
                                       <Plus className="mr-2 h-4 w-4" /> Add Tenant
                                   </Button>

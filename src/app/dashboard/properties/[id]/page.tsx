@@ -8,7 +8,7 @@ import { PropertyDashboardSFH } from '@/components/dashboard/properties/Property
 import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUser, useStorage } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { deleteObject, ref } from 'firebase/storage';
@@ -35,6 +35,7 @@ import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
+import { generateRulesForProperty } from '@/lib/rule-engine';
 
 
 function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units: any[] }) {
@@ -233,6 +234,7 @@ export default function PropertyDetailPage() {
   const router = useRouter();
   const id = params.id as string;
   const { user } = useUser();
+  const { toast } = useToast();
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [formTab, setFormTab] = useState('general');
@@ -247,10 +249,9 @@ export default function PropertyDetailPage() {
     return doc(firestore, 'properties', id);
   }, [firestore, id]);
 
-  const { data: property, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
+  const { data: property, isLoading: isLoadingProperty, refetch: refetchProperty } = useDoc(propertyDocRef);
 
   const unitsQuery = useMemoFirebase(() => {
-    // FIX: Wait for user and firestore before creating the query
     if (!firestore || !id || !user) return null;
     return query(collection(firestore, 'properties', id, 'units'));
   }, [firestore, id, user]);
@@ -259,7 +260,28 @@ export default function PropertyDetailPage() {
 
   const handleUnitUpdate = () => {
     refetchUnits();
+    refetchProperty(); // Re-fetch property to get latest tenant data for rule generation
   }
+  
+  // --- EFFECT FOR AUTOMATIC RULE GENERATION ---
+  useEffect(() => {
+    // Run only when a property is fully loaded and a user exists.
+    if (property && user && !isLoadingProperty) {
+      generateRulesForProperty(id, property, user.uid)
+        .then(() => {
+            // Silently succeed. A toast here would be too noisy.
+        })
+        .catch((error) => {
+            console.error("Auto rule-gen failed:", error);
+            toast({
+                variant: 'destructive',
+                title: 'Rule Sync Failed',
+                description: 'Could not automatically update categorization rules.'
+            });
+        });
+    }
+  }, [property, user, isLoadingProperty, id, toast]);
+
 
   if (isLoadingProperty || isLoadingUnits) {
     return (
@@ -292,7 +314,7 @@ export default function PropertyDetailPage() {
             <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
               {units && <BulkOperationsDialog propertyId={id} units={units} />}
-              <AddUnitDialog propertyId={id} onUnitAdded={refetchUnits} />
+              <AddUnitDialog propertyId={id} onUnitAdded={handleUnitUpdate} />
             </div>
         </header>
         
@@ -321,7 +343,7 @@ export default function PropertyDetailPage() {
           </DialogHeader>
           <PropertyForm 
             initialData={{ id: property.id, ...property }} 
-            onSuccess={() => { setIsEditOpen(false); }} 
+            onSuccess={() => { refetchProperty(); setIsEditOpen(false); }} 
             defaultTab={formTab} 
           />
         </DialogContent>
@@ -331,5 +353,5 @@ export default function PropertyDetailPage() {
   }
 
   // Otherwise, return your original Single Family interface
-  return <PropertyDashboardSFH property={property} onUpdate={() => { /* Realtime updates handle this */ }} />;
+  return <PropertyDashboardSFH property={property} onUpdate={() => { refetchProperty() }} />;
 }
