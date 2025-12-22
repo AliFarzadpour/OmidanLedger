@@ -64,7 +64,6 @@ service cloud.firestore {
       }
       
       match /units/{unitId} {
-        // CORRECTED RULE: Split write into create and update/delete
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
         allow read, update, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       
@@ -75,10 +74,10 @@ service cloud.firestore {
     }
 
     match /accounts/{accountId} {
-        allow read, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow list: if isSignedIn();
+        // CORRECTED RULE: Use resource.data for read/delete
+        allow get, list, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+        // Use request.resource.data for create/update
+        allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     match /{path=**}/monthlyStats/{monthId} {
@@ -86,20 +85,24 @@ service cloud.firestore {
     }
 
     match /vendors/{vendorId} {
+      // CORRECTED RULE: Use resource.data for read/update/delete
+      allow get, list, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Use request.resource.data for create
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn();
     }
     
     match /bills/{billId} {
+      // CORRECTED RULE: Use resource.data for read/update/delete
+      allow get, list, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Use request.resource.data for create
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn();
     }
 
     match /invoices/{invoiceId} {
-      allow read, write, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn();
+      // CORRECTED RULE: Use resource.data for read/delete
+      allow get, list, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Use request.resource.data for write
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     match /settings/{settingId} {
