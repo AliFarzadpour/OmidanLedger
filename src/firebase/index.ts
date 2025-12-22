@@ -10,15 +10,8 @@ import { getStorage } from 'firebase/storage';
 export function initializeFirebase() {
   let app;
   if (!getApps().length) {
-    // This is the primary initialization path.
-    // In a deployed Firebase App Hosting environment, this will succeed automatically.
-    // In a local environment, it will fail, and we'll fall back to the config object.
-    try {
-      app = initializeApp();
-    } catch (e) {
-      // Fallback for local development or other environments
-      app = initializeApp(firebaseConfig);
-    }
+    // Always initialize with the explicit config for consistent behavior.
+    app = initializeApp(firebaseConfig);
   } else {
     // If apps are already initialized, get the default app.
     app = getApp();
