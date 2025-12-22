@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'; 
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore'; 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,7 @@ const VENDOR_ROLES = [
   
   // Professional Services
   "Accountant/CPA", "Attorney/Legal", "Consultant", "Designer", 
-  "Engineer", "HR/Staffing Agency", "Insurance Agent", "Marketing/Advertising", _
+  "Engineer", "HR/Staffing Agency", "Insurance Agent", "Marketing/Advertising", 
   "Notary", "Real Estate Agent", "Translator",
   
   // Business Ops & Tech
@@ -62,6 +62,7 @@ export default function VendorManager() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({ name: '', role: '', phone: '', email: '', company: '', defaultCategory: '' });
 
@@ -108,17 +109,16 @@ export default function VendorManager() {
 
   const handleDelete = async (id: string) => {
     if (!firestore) return;
-    if (!confirm("Remove this vendor?")) return;
-    
     try {
       const docRef = doc(firestore, 'vendors', id);
       await deleteDoc(docRef);
       toast({ title: "Deleted", description: "Vendor removed." });
-      // Manually refetch the data to update the UI
       fetchVendors();
     } catch (error: any) {
         console.error("Error deleting vendor: ", error);
         toast({ variant: "destructive", title: "Deletion Failed", description: error.message });
+    } finally {
+        setDeletingId(null);
     }
   };
 
@@ -205,7 +205,11 @@ export default function VendorManager() {
                     </TableCell>
                     <TableCell className="text-right">
                        <Button variant="ghost" size="icon" onClick={() => openEdit(vendor)}><Edit2 className="h-4 w-4 text-slate-500 hover:text-blue-600"/></Button>
-                       <Button variant="ghost" size="icon" onClick={() => handleDelete(vendor.id)}><Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600"/></Button>
+                       {deletingId === vendor.id ? (
+                         <Button variant="destructive" size="sm" onClick={() => handleDelete(vendor.id)}>Confirm</Button>
+                       ) : (
+                         <Button variant="ghost" size="icon" onClick={() => setDeletingId(vendor.id)}><Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600"/></Button>
+                       )}
                     </TableCell>
                   </TableRow>
                  ))

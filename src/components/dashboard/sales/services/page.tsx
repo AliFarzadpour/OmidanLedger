@@ -34,6 +34,7 @@ export default function ServiceInvoicesPage() {
   const firestore = useFirestore();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const invoicesQuery = useMemo(() => {
     if (!user || !firestore) return null;
@@ -64,12 +65,11 @@ export default function ServiceInvoicesPage() {
   const collectedThisMonth = 0; 
   
   const handleDelete = async (invoiceId: string) => {
-      if (!firestore) return;
-      if (window.confirm('Are you sure you want to delete this invoice?')) {
-          const docRef = doc(firestore, 'invoices', invoiceId);
-          await deleteDoc(docRef);
-          refetch(); // Trigger a refetch to update the UI
-      }
+    if (!firestore) return;
+    const docRef = doc(firestore, 'invoices', invoiceId);
+    await deleteDoc(docRef);
+    refetch(); // Trigger a refetch to update the UI
+    setDeletingId(null);
   }
 
   return (
@@ -201,9 +201,13 @@ export default function ServiceInvoicesPage() {
                           <Pencil className="h-4 w-4" />
                         </Link>
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(inv.id)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {deletingId === inv.id ? (
+                        <Button variant="destructive" size="sm" onClick={() => handleDelete(inv.id)}>Confirm</Button>
+                      ) : (
+                        <Button variant="ghost" size="icon" onClick={() => setDeletingId(inv.id)} className="h-8 w-8 text-slate-400 hover:text-red-600 hover:bg-red-50">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </td>
                 </tr>
