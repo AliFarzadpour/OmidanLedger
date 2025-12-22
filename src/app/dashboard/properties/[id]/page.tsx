@@ -268,18 +268,21 @@ export default function PropertyDetailPage() {
   useEffect(() => {
     // Run only when a property is fully loaded and a user exists.
     if (property && user && !isLoadingProperty) {
-      generateRulesForProperty(id, property, user.uid)
-        .then(() => {
-            // Silently succeed. A toast here would be too noisy.
-        })
-        .catch((error) => {
-            console.error("Auto rule-gen failed:", error);
-            toast({
-                variant: 'destructive',
-                title: 'Rule Sync Failed',
-                description: 'Could not automatically update categorization rules.'
+        // Sanitize the property object to remove any non-serializable fields
+        const cleanPropertyData = JSON.parse(JSON.stringify(property));
+
+        generateRulesForProperty(id, cleanPropertyData, user.uid)
+            .then(() => {
+                // Silently succeed. A toast here would be too noisy.
+            })
+            .catch((error) => {
+                console.error("Auto rule-gen failed:", error);
+                toast({
+                    variant: 'destructive',
+                    title: 'Rule Sync Failed',
+                    description: 'Could not automatically update categorization rules.'
+                });
             });
-        });
     }
   }, [property, user, isLoadingProperty, id, toast]);
 
