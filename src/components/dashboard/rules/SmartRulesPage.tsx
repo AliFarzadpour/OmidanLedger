@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, query } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Trash2, BrainCircuit, Edit2, Plus } from 'lucide-react';
+import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+
+type SortKey = 'originalKeyword' | 'category' | 'source';
+type SortDirection = 'ascending' | 'descending';
 
 export default function SmartRulesPage() {
   const { user } = useUser();
@@ -20,10 +25,6 @@ export default function SmartRulesPage() {
   const { toast } = useToast();
 
   const [rules, setRules] = useState<any[]>([]);
-  const [merchant, setMerchant] = useState('');
-  const [primaryCategory, setPrimaryCategory] = useState('Operating Expenses');
-  const [secondaryCategory, setSecondaryCategory] = useState('');
-  const [subcategory, setSubcategory] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -31,6 +32,17 @@ export default function SmartRulesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null);
+
+  // Form state
+  const [merchant, setMerchant] = useState('');
+  const [primaryCategory, setPrimaryCategory] = useState('Operating Expenses');
+  const [secondaryCategory, setSecondaryCategory] = useState('');
+  const [subcategory, setSubcategory] = useState('');
+
+  // Filtering and Sorting State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'originalKeyword', direction: 'ascending' });
 
 
   const fetchRules = async () => {
@@ -147,9 +159,65 @@ export default function SmartRulesPage() {
     }
   };
 
+  const filteredAndSortedRules = useMemo(() => {
+    let filtered = [...rules];
+    
+    // Filter by search term
+    if (searchTerm) {
+        filtered = filtered.filter(rule => 
+            rule.originalKeyword.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }
+
+    // Filter by source
+    if (sourceFilter !== 'all') {
+        filtered = filtered.filter(rule => rule.source === sourceFilter);
+    }
+    
+    // Sort
+    filtered.sort((a, b) => {
+        let aValue, bValue;
+        
+        switch (sortConfig.key) {
+            case 'category':
+                aValue = `${a.primaryCategory} > ${a.secondaryCategory} > ${a.subcategory}`;
+                bValue = `${b.primaryCategory} > ${b.secondaryCategory} > ${b.subcategory}`;
+                break;
+            case 'source':
+                aValue = a.source || '';
+                bValue = b.source || '';
+                break;
+            case 'originalKeyword':
+            default:
+                aValue = a.originalKeyword || '';
+                bValue = b.originalKeyword || '';
+        }
+        
+        if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+    });
+
+    return filtered;
+  }, [rules, searchTerm, sourceFilter, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: SortDirection = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+        direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIcon = (key: SortKey) => (
+    sortConfig.key === key ? <ArrowUpDown className="h-4 w-4 inline" /> : <ArrowUpDown className="h-4 w-4 inline opacity-30" />
+  );
+
+  const allSources = useMemo(() => [...new Set(rules.map(r => r.source || 'Unknown'))], [rules]);
+
   return (
     <>
-    <div className="p-8 max-w-5xl mx-auto space-y-8">
+    <div className="p-8 max-w-6xl mx-auto space-y-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
@@ -177,24 +245,48 @@ export default function SmartRulesPage() {
         </div>
       </div>
       
+      {/* Filter and Search Toolbar */}
+      <div className="flex flex-col md:flex-row gap-4 p-4 bg-slate-50 border rounded-lg">
+        <div className="relative flex-grow">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+                placeholder="Filter by keyword..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+            />
+        </div>
+        <Select value={sourceFilter} onValueChange={setSourceFilter}>
+            <SelectTrigger className="w-full md:w-[200px]">
+                <SelectValue placeholder="Filter by source..." />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All Sources</SelectItem>
+                {allSources.map(source => (
+                    <SelectItem key={source} value={source}>{source}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+      </div>
+
       <Card>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Keyword</TableHead>
-                <TableHead>Assigned Category</TableHead>
-                <TableHead>Source</TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('originalKeyword')}>Keyword {getSortIcon('originalKeyword')}</Button></TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('category')}>Assigned Category {getSortIcon('category')}</Button></TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('source')}>Source {getSortIcon('source')}</Button></TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/></TableCell></TableRow>
-              ) : rules.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No rules found. Add one to teach the system!</TableCell></TableRow>
+              ) : filteredAndSortedRules.length === 0 ? (
+                <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No rules match your filters.</TableCell></TableRow>
               ) : (
-                rules.map((rule) => (
+                filteredAndSortedRules.map((rule) => (
                   <TableRow key={rule.id}>
                     <TableCell className="font-medium">{rule.originalKeyword}</TableCell>
                     <TableCell>
