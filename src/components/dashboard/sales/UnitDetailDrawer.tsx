@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { doc, updateDoc, collection, query } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase, useUser, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
@@ -12,8 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, Key, Wrench, FolderArchive, Fingerprint, UserPlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
-import { useStorage } from '@/firebase';
-import { ref } from 'firebase/storage';
+import { deleteDocumentNonBlocking } from '@/firebase';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
@@ -107,39 +106,40 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const { user } = useUser();
 
-  const { register, control, handleSubmit, getValues, reset, formState } = useForm({
-    values: { // Use `values` instead of `defaultValues`
-      unitNumber: unit?.unitNumber || '',
-      bedrooms: unit?.bedrooms || 0,
-      bathrooms: unit?.bathrooms || 0,
-      sqft: unit?.sqft || 0,
-      amenities: unit?.amenities || [],
-      tenants: unit?.tenants || [],
-      access: unit?.access || { gateCode: '', lockboxCode: '', notes: '' }
-    }
+  const formValues = useMemo(() => ({
+    unitNumber: unit?.unitNumber || '',
+    bedrooms: unit?.bedrooms || 0,
+    bathrooms: unit?.bathrooms || 0,
+    sqft: unit?.sqft || 0,
+    amenities: unit?.amenities || [],
+    tenants: unit?.tenants || [],
+    access: unit?.access || { gateCode: '', lockboxCode: '', notes: '' }
+  }), [unit]);
+
+  const { register, control, handleSubmit, getValues, reset } = useForm({
+    values: formValues
   });
+  
+  useEffect(() => {
+    reset(formValues);
+  }, [formValues, reset]);
 
   const { fields, append, remove } = useFieldArray({
     control,
     name: "tenants"
   });
 
-  // This function instantly deletes the tenant from Firestore and refetches.
   const handleRemoveTenant = async (index: number) => {
     if (!firestore || !unit) return;
     
-    // Get the current list of tenants from the form state.
     const currentTenants = getValues('tenants');
-    // Create a new list *without* the tenant at the specified index.
     const updatedTenants = currentTenants.filter((_:any, i:number) => i !== index);
 
     const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
     
     try {
-      // Update the document in Firestore with the new tenant list.
       await updateDoc(unitRef, { tenants: updatedTenants });
       toast({ title: "Tenant Removed", description: "The tenant has been deleted from this unit." });
-      // Trigger the parent component to refetch data, which will update the drawer.
       if (onUpdate) onUpdate();
     } catch (error: any) {
       toast({ variant: 'destructive', title: "Error", description: `Could not remove tenant: ${error.message}`});
@@ -203,11 +203,11 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                           <Trash2 className="h-4 w-4" />
                                       </Button>
                                       <div className="grid grid-cols-2 gap-4">
-                                          <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
-                                          <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">First Name *</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">Last Name *</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
                                       </div>
                                       <div className="grid grid-cols-2 gap-4">
-                                          <div className="space-y-1"><Label className="text-xs">Email</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
+                                          <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
                                           <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
                                       </div>
                                       <div className="grid grid-cols-2 gap-4 pt-2 border-t">
@@ -220,14 +220,24 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                       </div>
                                   </div>
                               ))}
-                              <Button
-                                  type="button"
-                                  variant="default"
-                                  className="w-full"
-                                  onClick={() => setIsInviteOpen(true)}
-                              >
-                                  <UserPlus className="mr-2 h-4 w-4" /> Invite New Tenant
-                              </Button>
+                              <div className="flex gap-2">
+                                  <Button
+                                      type="button"
+                                      variant="outline"
+                                      className="w-full border-dashed"
+                                      onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 })}
+                                  >
+                                      <Plus className="mr-2 h-4 w-4" /> Add Tenant
+                                  </Button>
+                                  <Button
+                                      type="button"
+                                      variant="secondary"
+                                      className="w-full"
+                                      onClick={() => setIsInviteOpen(true)}
+                                  >
+                                      <UserPlus className="mr-2 h-4 w-4" /> Invite Tenant
+                                  </Button>
+                              </div>
                           </div>
                       </AccordionContent>
                   </AccordionItem>
