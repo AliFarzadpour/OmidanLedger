@@ -17,7 +17,7 @@ import { FirestorePermissionError } from '@/firebase/errors';
 
 const quickSchema = z.object({
   name: z.string().min(1, "Nickname is required"),
-  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
+  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial', 'office']),
   address: z.object({
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "City is required"),
@@ -124,7 +124,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     accountingMap.utilities.internet = createAccount(`Internet - ${data.name}`, 'Expense', 'Utilities');
   
     // --- 2. BRANCHING LOGIC ---
-    const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial';
+    const isMultiUnit = data.type === 'multi-family' || data.type === 'commercial' || data.type === 'office';
     const propertyData = {
       userId: user.uid,
       ...data,
@@ -203,6 +203,7 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
                     <SelectItem value="multi-family">Multi-Family</SelectItem>
                     <SelectItem value="condo">Condo</SelectItem>
                     <SelectItem value="commercial">Commercial</SelectItem>
+                    <SelectItem value="office">Office</SelectItem>
                  </SelectContent>
               </Select>
             </div>
@@ -269,3 +270,5 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
     </div>
   );
 }
+
+    

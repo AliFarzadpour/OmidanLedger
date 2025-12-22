@@ -31,7 +31,7 @@ import { generateRulesForProperty } from '@/lib/rule-engine';
 // --- SCHEMA DEFINITION (BUILDING-LEVEL) ---
 const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
-  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial']),
+  type: z.enum(['single-family', 'multi-family', 'condo', 'commercial', 'office']),
   address: z.object({
     street: z.string().min(1, "Street is required"),
     city: z.string().min(1, "City is required"),
@@ -249,7 +249,7 @@ export function PropertyForm({
         const fullPropertyData = {
           ...data,
           id: currentPropertyId,
-          isMultiUnit: data.type === 'multi-family' || data.type === 'commercial',
+          isMultiUnit: data.type === 'multi-family' || data.type === 'commercial' || data.type === 'office',
           units: units,
         };
 
@@ -373,6 +373,7 @@ export function PropertyForm({
                         <SelectItem value="multi-family">Multi-Family</SelectItem>
                         <SelectItem value="condo">Condo</SelectItem>
                         <SelectItem value="commercial">Commercial</SelectItem>
+                        <SelectItem value="office">Office</SelectItem>
                     </SelectContent>
                     </Select>
                 </div>
@@ -652,3 +653,5 @@ export function PropertyForm({
     </div>
   );
 }
+
+    
