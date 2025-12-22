@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -30,7 +31,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     setLoading(true);
     try {
       await inviteTenant({ email, propertyId, unitId, landlordId });
-      toast({ title: "Invite Sent", description: `Tenant ${email} has been added.` });
+      toast({ title: "Portal Account Created", description: `Tenant ${email} can now be invited to log in.` });
       setEmail('');
       onOpenChange(false);
     } catch (e: any) {
@@ -51,9 +52,9 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><UserPlus /> Invite New Tenant</DialogTitle>
+          <DialogTitle className="flex items-center gap-2"><UserPlus /> Create Tenant Portal</DialogTitle>
           <DialogDescription>
-            Create a tenant account and link them to this property. They will be invited to set up their portal.
+            Create a user account and link them to this property. They will be able to log in and see their payment history once you share the login details.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -65,7 +66,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleInvite} disabled={loading} className="min-w-[120px]">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Invite"}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Account"}
           </Button>
         </DialogFooter>
       </DialogContent>

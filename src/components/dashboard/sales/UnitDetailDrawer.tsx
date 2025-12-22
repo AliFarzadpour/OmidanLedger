@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -235,7 +236,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                       className="w-full"
                                       onClick={() => setIsInviteOpen(true)}
                                   >
-                                      <UserPlus className="mr-2 h-4 w-4" /> Invite Tenant
+                                      <UserPlus className="mr-2 h-4 w-4" /> Create Portal
                                   </Button>
                               </div>
                           </div>

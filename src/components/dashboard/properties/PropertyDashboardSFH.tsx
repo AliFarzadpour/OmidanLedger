@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -210,7 +211,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
                   <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
-                    <UserPlus className="h-4 w-4" /> Invite
+                    <UserPlus className="h-4 w-4" /> Create Portal
                   </Button>
                 </div>
               </CardHeader>
@@ -242,7 +243,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     ))}
                   </div>
                 ) : (
-                  <p className="text-muted-foreground text-sm">No tenants recorded. Click "Invite" to add one.</p>
+                  <p className="text-muted-foreground text-sm">No tenants recorded. Click "Create Portal" to add one.</p>
                 )}
               </CardContent>
             </Card>
