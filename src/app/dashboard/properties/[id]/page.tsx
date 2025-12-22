@@ -238,6 +238,7 @@ export default function PropertyDetailPage() {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [formTab, setFormTab] = useState('general');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
@@ -247,20 +248,20 @@ export default function PropertyDetailPage() {
   const propertyDocRef = useMemoFirebase(() => {
     if (!firestore || !id) return null;
     return doc(firestore, 'properties', id);
-  }, [firestore, id]);
+  }, [firestore, id, refreshKey]);
 
-  const { data: property, isLoading: isLoadingProperty, refetch: refetchProperty } = useDoc(propertyDocRef);
+  const { data: property, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
 
   const unitsQuery = useMemoFirebase(() => {
     if (!firestore || !id || !user) return null;
     return query(collection(firestore, 'properties', id, 'units'));
-  }, [firestore, id, user]);
+  }, [firestore, id, user, refreshKey]);
 
   const { data: units, isLoading: isLoadingUnits, refetch: refetchUnits } = useCollection(unitsQuery);
 
   const handleUnitUpdate = () => {
     refetchUnits();
-    refetchProperty(); // Re-fetch property to get latest tenant data for rule generation
+    setRefreshKey(k => k + 1); // This will trigger propertyDocRef to be re-evaluated
   }
   
   // --- EFFECT FOR AUTOMATIC RULE GENERATION ---
@@ -343,7 +344,7 @@ export default function PropertyDetailPage() {
           </DialogHeader>
           <PropertyForm 
             initialData={{ id: property.id, ...property }} 
-            onSuccess={() => { refetchProperty(); setIsEditOpen(false); }} 
+            onSuccess={() => { handleUnitUpdate(); setIsEditOpen(false); }} 
             defaultTab={formTab} 
           />
         </DialogContent>
@@ -353,5 +354,5 @@ export default function PropertyDetailPage() {
   }
 
   // Otherwise, return your original Single Family interface
-  return <PropertyDashboardSFH property={property} onUpdate={() => { refetchProperty() }} />;
+  return <PropertyDashboardSFH property={property} onUpdate={() => setRefreshKey(k => k + 1)} />;
 }
