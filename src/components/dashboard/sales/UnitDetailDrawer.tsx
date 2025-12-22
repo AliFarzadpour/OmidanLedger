@@ -10,13 +10,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, Key, Wrench, FolderArchive, Fingerprint, UserPlus } from 'lucide-react';
+import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, Key, Wrench, FolderArchive, Fingerprint, UserPlus, Zap } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { deleteDocumentNonBlocking } from '@/firebase';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 
 function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string; unitId: string; landlordId: string }) {
@@ -99,6 +101,7 @@ const ALL_AMENITIES = [
   "Balcony/Patio", "A/C", "Heating", "Parking", "Hardwood Floors", "Carpet"
 ];
 
+const UTILITY_TYPES = ["Water", "Gas", "Electric", "Trash", "Internet"];
 
 export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpdate }: any) {
   const firestore = useFirestore();
@@ -107,6 +110,14 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const { user } = useUser();
 
+  const defaultUtilities = useMemo(() => UTILITY_TYPES.map(type => ({
+      type,
+      responsibility: 'tenant',
+      providerName: '',
+      meterNumber: '',
+      isSubmetered: false,
+  })), []);
+
   const formValues = useMemo(() => ({
     unitNumber: unit?.unitNumber || '',
     bedrooms: unit?.bedrooms || 0,
@@ -114,8 +125,9 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     sqft: unit?.sqft || 0,
     amenities: unit?.amenities || [],
     tenants: unit?.tenants || [],
-    access: unit?.access || { gateCode: '', lockboxCode: '', notes: '' }
-  }), [unit]);
+    access: unit?.access || { gateCode: '', lockboxCode: '', notes: '' },
+    utilities: unit?.utilities && unit.utilities.length > 0 ? unit.utilities : defaultUtilities,
+  }), [unit, defaultUtilities]);
 
   const { register, control, handleSubmit, getValues, reset } = useForm({
     values: formValues
@@ -128,6 +140,11 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const { fields, append, remove } = useFieldArray({
     control,
     name: "tenants"
+  });
+  
+  const utilityFields = useFieldArray({
+    control,
+    name: "utilities",
   });
 
   const handleRemoveTenant = async (index: number) => {
@@ -257,6 +274,35 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                               </div>
                           </div>
                       </AccordionContent>
+                  </AccordionItem>
+
+                  <AccordionItem value="utilities">
+                    <AccordionTrigger className="text-lg font-semibold"><Zap className="mr-2 h-5 w-5 text-slate-500" /> Unit Utilities</AccordionTrigger>
+                    <AccordionContent className="pt-4">
+                        <div className="space-y-3">
+                           {utilityFields.fields.map((field, index) => (
+                                <div key={field.id} className="grid grid-cols-3 items-center gap-2 p-2 bg-slate-50 border rounded-md">
+                                    <Label className="font-semibold col-span-1">{getValues(`utilities.${index}.type`)}</Label>
+                                    <div className="col-span-2">
+                                    <Controller
+                                        control={control}
+                                        name={`utilities.${index}.responsibility`}
+                                        render={({ field: radioField }) => (
+                                            <RadioGroup
+                                                onValueChange={radioField.onChange}
+                                                value={radioField.value}
+                                                className="flex gap-4"
+                                            >
+                                                <div className="flex items-center space-x-2"><RadioGroupItem value="tenant" id={`tenant-${index}`} /><Label htmlFor={`tenant-${index}`} className="text-xs font-normal">Tenant</Label></div>
+                                                <div className="flex items-center space-x-2"><RadioGroupItem value="landlord" id={`landlord-${index}`} /><Label htmlFor={`landlord-${index}`} className="text-xs font-normal">Landlord</Label></div>
+                                            </RadioGroup>
+                                        )}
+                                    />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </AccordionContent>
                   </AccordionItem>
                   
                   <AccordionItem value="specs">

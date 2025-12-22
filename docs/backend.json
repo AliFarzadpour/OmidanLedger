@@ -47,6 +47,21 @@
             "lockboxCode": { "type": "string" },
             "notes": { "type": "string" }
           }
+        },
+        "utilities": {
+          "type": "array",
+          "description": "Defines utility responsibility at the individual unit level, for submetered billing.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["Water", "Gas", "Electric", "Trash", "Internet"] },
+              "responsibility": { "type": "string", "enum": ["tenant", "landlord"] },
+              "providerName": { "type": "string" },
+              "meterNumber": { "type": "string" },
+              "isSubmetered": { "type": "boolean" }
+            },
+            "required": ["type", "responsibility"]
+          }
         }
       },
       "required": ["id", "userId", "propertyId", "unitNumber"]
