@@ -74,7 +74,7 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
       await setRule(userId, propertyData.mortgage.lenderName, {
         primary: 'Expenses',
         secondary: 'Mortgage Interest',
-        sub: 'Mortgage Interest Paid to Banks'
+        sub: 'Mortgage Interest Paid'
       }, propertyId);
     }
 
@@ -96,7 +96,7 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
       }, propertyId);
     }
 
-    // Line 18: Utilities
+    // Line 18 (mapped to 17 in user request): Utilities
     if (propertyData.utilities && Array.isArray(propertyData.utilities)) {
         for (const util of propertyData.utilities) {
             if (util.providerName) {
@@ -128,6 +128,16 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
             }
         }
     }
+    
+    // Line 19: Dues & Fees (from HOA)
+    if (propertyData.hoa?.hasHoa === 'yes' && propertyData.hoa.contactName) {
+        await setRule(userId, propertyData.hoa.contactName, {
+            primary: 'Expenses',
+            secondary: 'Dues & Fees',
+            sub: 'HOA Dues'
+        }, propertyId);
+    }
+
 
     // --- SCHEDULE E: INCOME RULES ---
     // Line 3: Rents Received
