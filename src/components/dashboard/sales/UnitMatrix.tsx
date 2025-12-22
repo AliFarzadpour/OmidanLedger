@@ -178,7 +178,7 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
                     className="h-full"
                 >
                     <Card 
-                        className="hover:shadow-md transition-all border-l-4 h-full flex flex-col justify-between"
+                        className="hover:shadow-md transition-all border-l-4 border-slate-200 hover:border-primary h-full flex flex-col justify-between"
                     >
                         <CardHeader className="pb-2 flex flex-row items-start justify-between">
                             <Badge variant={isOccupied ? 'default' : 'destructive'}>
