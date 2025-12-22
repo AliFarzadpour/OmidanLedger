@@ -7,13 +7,14 @@ import { createHash } from 'crypto';
 
 /**
  * Creates or updates a specific categorization rule in Firestore.
- * Now prepends the property nickname to the subcategory for clarity.
+ * Now prepends the property nickname and optional unit number to the subcategory.
  * @param userId - The user's ID.
  * @param keyword - The keyword to match in a transaction.
  * @param categories - The base category mapping.
  * @param propertyId - The associated property ID.
  * @param propertyNickname - The nickname of the property for descriptive categories.
  * @param unitId - The associated unit ID (optional).
+ * @param unitNumber - The specific unit number (optional).
  */
 async function setRule(
   userId: string,
@@ -21,7 +22,8 @@ async function setRule(
   categories: { primary: string; secondary: string; sub: string },
   propertyId: string,
   propertyNickname: string,
-  unitId?: string | null
+  unitId?: string | null,
+  unitNumber?: string | null
 ) {
   if (!keyword) return;
 
@@ -30,12 +32,17 @@ async function setRule(
   
   const ruleRef = db.collection('users').doc(userId).collection('categoryMappings').doc(mappingId);
 
+  // Construct the descriptive subcategory
+  const subcategoryPrefix = unitNumber 
+    ? `${propertyNickname} ${unitNumber}` 
+    : propertyNickname;
+  
   const ruleData: any = {
     userId,
     transactionDescription: keyword,
     primaryCategory: categories.primary,
     secondaryCategory: categories.secondary,
-    subcategory: `${propertyNickname} - ${categories.sub}`, // The new descriptive format
+    subcategory: `${subcategoryPrefix} - ${categories.sub}`, // New format
     propertyId: propertyId,
     source: 'Auto-Generated',
     updatedAt: new Date(),
@@ -158,7 +165,7 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
     }
 
     // --- SCHEDULE E: INCOME RULES (TENANTS) ---
-    const processTenants = (tenants: any[], unitId?: string) => {
+    const processTenants = (tenants: any[], propertyNickname: string, unitId?: string, unitNumber?: string) => {
         if (tenants && Array.isArray(tenants)) {
             for (const tenant of tenants) {
                 if (tenant.firstName && tenant.lastName) {
@@ -167,16 +174,16 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
                         primary: 'Income',
                         secondary: 'Rental Income',
                         sub: 'Rents Received'
-                    }, propertyId, propertyNickname, unitId);
+                    }, propertyId, propertyNickname, unitId, unitNumber);
                 }
             }
         }
     };
     
     if (isMultiUnit && propertyData.units) {
-      propertyData.units.forEach((unit: any) => processTenants(unit.tenants, unit.id));
+      propertyData.units.forEach((unit: any) => processTenants(unit.tenants, propertyNickname, unit.id, unit.unitNumber));
     } else {
-      processTenants(propertyData.tenants);
+      processTenants(propertyData.tenants, propertyNickname);
     }
 
 
