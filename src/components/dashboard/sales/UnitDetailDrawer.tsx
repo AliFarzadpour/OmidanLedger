@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { doc, updateDoc, collection, query, deleteDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, deleteDoc, getDocs } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser, useStorage } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -183,13 +183,25 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const onSubmit = async (data: any) => {
     if (!firestore || !unit) return;
     setIsSaving(true);
-
+  
     const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
-
+    const propertyRef = doc(firestore, 'properties', propertyId);
+  
     try {
+      // 1. Update the specific unit document.
       await updateDoc(unitRef, data);
       
-      toast({ title: "Success", description: "Unit identity and details updated." });
+      // 2. Fetch all units again to get the complete, updated list.
+      const unitsCollectionRef = collection(firestore, `properties/${propertyId}/units`);
+      const unitsSnapshot = await getDocs(unitsCollectionRef);
+      const allUnitsData = unitsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  
+      // 3. Update the 'units' array in the main property document.
+      await updateDoc(propertyRef, {
+        units: allUnitsData
+      });
+  
+      toast({ title: "Success", description: "Unit and property hub updated." });
       if (onUpdate) onUpdate(); // Trigger refetch on parent
       onOpenChange(false);
     } catch (error: any) {
@@ -401,5 +413,3 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     </>
   );
 }
-
-    
