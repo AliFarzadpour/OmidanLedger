@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { db } from '@/lib/admin-db';
@@ -35,7 +36,8 @@ async function setRule(
     transactionDescription: keyword,
     primaryCategory: categories.primary,
     secondaryCategory: categories.secondary,
-    subcategory: categories.sub,
+    // Prepend the keyword to the subcategory for more descriptive rule naming
+    subcategory: `${keyword} ${categories.sub}`,
     propertyId: propertyId,
     source: 'Auto-Generated',
     updatedAt: new Date(),
