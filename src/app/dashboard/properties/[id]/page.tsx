@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 import { generateRulesForProperty } from '@/lib/rule-engine';
+import { updateUnitsInBulk } from '@/actions/unit-actions';
 
 
 function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units: any[] }) {
@@ -50,15 +51,10 @@ function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units
         setIsLoading(true);
 
         const rentValue = Number(newRent);
-        const batch = writeBatch(firestore);
-        
-        units.forEach((unit: any) => {
-            const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
-            batch.update(unitRef, { 'financials.rent': rentValue });
-        });
+        const unitIds = units.map(u => u.id);
 
         try {
-            await batch.commit();
+            await updateUnitsInBulk(propertyId, unitIds, { 'financials.rent': rentValue });
             toast({ title: "Bulk Update Success", description: `All ${units.length} units set to $${rentValue}` });
             setIsOpen(false);
         } catch (error: any) {
@@ -246,9 +242,9 @@ export default function PropertyDetailPage() {
   }
 
   const propertyDocRef = useMemoFirebase(() => {
-    if (!firestore || !id) return null;
+    if (!firestore || !id || !user) return null;
     return doc(firestore, 'properties', id);
-  }, [firestore, id, refreshKey]);
+  }, [firestore, id, user, refreshKey]);
 
   const { data: property, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
 
