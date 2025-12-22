@@ -66,6 +66,26 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
   try {
     const isMultiUnit = propertyData.isMultiUnit === true;
     const propertyNickname = propertyData.name;
+    const propertyAddress = propertyData.address?.street;
+
+    // --- NEW: PROPERTY IDENTIFIER RULES ---
+    // Rule for the property nickname itself, often used in manual Zelle/Venmo notes.
+    if (propertyNickname) {
+        await setRule(userId, propertyNickname, {
+            primary: 'Income',
+            secondary: 'Rental Income',
+            sub: 'Rents Received'
+        }, propertyId);
+    }
+    // Rule for the property address, often found in mortgage or utility payments.
+    if (propertyAddress) {
+        await setRule(userId, propertyAddress, {
+            primary: 'Expenses',
+            secondary: 'Property Operations', // A general bucket for address matches
+            sub: 'Unassigned Property Expense'
+        }, propertyId);
+    }
+
 
     // --- SCHEDULE E: EXPENSE RULES (Apply to ALL property types) ---
 
