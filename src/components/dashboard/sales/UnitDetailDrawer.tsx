@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { doc, updateDoc, collection, query, deleteDoc } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { useFirestore, useCollection, useMemoFirebase, useUser, useStorage } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
@@ -18,10 +18,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ref, deleteObject } from 'firebase/storage';
 
 
 function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string; unitId: string; landlordId: string }) {
   const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
 
@@ -33,19 +35,50 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
-    if (!firestore || !docData?.storagePath) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Cannot delete document due to missing information.' });
-      return;
+    // 1. Ensure services are available
+    if (!firestore || !storage) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+        return;
     }
-    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
+
+    // 2. Fallback check: If storagePath is missing, try using downloadUrl to extract the ref
+    if (!docData?.storagePath && !docData?.downloadUrl) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing path information.' });
+        return;
+    }
+    
+    // REMOVED: if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
 
     try {
+        // 3. Delete from Storage first
+        // If storagePath is missing, we use refFromURL as a fallback
+        const fileRef = docData.storagePath 
+            ? ref(storage, docData.storagePath) 
+            : ref(storage, docData.downloadUrl); // Fallback logic
+        
+        await deleteObject(fileRef);
+
+        // 4. Delete from Firestore
         const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
         await deleteDoc(docRef);
-        toast({ title: 'Document Deleted' });
+
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
         refetchDocs();
-    } catch(error: any) {
-        toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } catch (error: any) {
+        // 5. Check for common errors
+        console.error("Deletion Error:", error);
+        if (error.code === 'storage/object-not-found') {
+             const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
+             await deleteDoc(docRef);
+             toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
+             refetchDocs();
+        } else {
+             const errorMsg = error.code === 'storage/unauthorized' 
+                ? "You don't have permission to delete this file from storage." 
+                : error.message;
+            
+             toast({ variant: 'destructive', title: 'Deletion Failed', description: errorMsg });
+        }
     }
   };
   
@@ -380,3 +413,5 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     </>
   );
 }
+
+    
