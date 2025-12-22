@@ -306,29 +306,41 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
+    // 1. Ensure services are available
     if (!firestore || !storage) {
         toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
         return;
     }
-    if (!docData?.storagePath) {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
+
+    // 2. Fallback check for path information
+    if (!docData?.storagePath && !docData?.downloadUrl) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing path information.' });
         return;
     }
+
     if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
 
     try {
-        // Delete from Storage
-        const fileRef = ref(storage, docData.storagePath);
+        // 3. Delete from Storage first
+        const fileRef = docData.storagePath 
+            ? ref(storage, docData.storagePath) 
+            : ref(storage, docData.downloadUrl); // Fallback logic
+        
         await deleteObject(fileRef);
 
-        // Delete from Firestore
+        // 4. Delete from Firestore
         const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
         await deleteDoc(docRef);
 
         toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
     } catch (error: any) {
+        // 5. Check for Permission Denied
         console.error("Deletion Error:", error);
-        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+        const errorMsg = error.code === 'storage/unauthorized' 
+            ? "You don't have permission to delete this file from storage." 
+            : error.message;
+            
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: errorMsg });
     }
   };
 
@@ -415,3 +427,5 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     </>
   )
 }
+
+    
