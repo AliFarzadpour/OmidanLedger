@@ -35,6 +35,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
+import { ref, deleteObject } from 'firebase/storage';
 
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
@@ -293,6 +294,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
 function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
   const firestore = useFirestore();
+  const storage = useStorage();
   const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
 
@@ -304,16 +306,29 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
   const handleDelete = async (docData: any) => {
-    if (!firestore) return;
+    if (!firestore || !storage) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+        return;
+    }
+    if (!docData?.storagePath) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
+        return;
+    }
     if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
-    
+
     try {
+        // Delete from Storage
+        const fileRef = ref(storage, docData.storagePath);
+        await deleteObject(fileRef);
+
+        // Delete from Firestore
         const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
         await deleteDoc(docRef);
+
         toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
-        refetchDocs();
-    } catch(error: any) {
-        toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } catch (error: any) {
+        console.error("Deletion Error:", error);
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
     }
   };
 
