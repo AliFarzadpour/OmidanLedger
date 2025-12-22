@@ -12,6 +12,8 @@ import { Banknote, CreditCard, Wallet, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 interface DataSource {
   id: string;
@@ -42,6 +44,17 @@ const typeIcons = {
 };
 
 export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, onDelete, selectedDataSourceId }: DataSourceListProps) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+
+  const handleDeleteClick = (e: React.MouseEvent, source: DataSource) => {
+    e.stopPropagation();
+    if (!user || !firestore) return;
+    if (window.confirm(`Are you sure you want to delete ${source.accountName}? This will also delete all associated transactions.`)) {
+        onDelete(source);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -121,7 +134,7 @@ export function DataSourceList({ dataSources, isLoading, onEdit, onSelect, onDel
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                onClick={(e) => { e.stopPropagation(); onDelete(source); }}
+                onClick={(e) => handleDeleteClick(e, source)}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>

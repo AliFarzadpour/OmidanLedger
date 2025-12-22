@@ -1,28 +1,26 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { doc, updateDoc, collection, query, deleteDoc, getDoc } from 'firebase/firestore';
-import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
+import { useState, useEffect } from 'react';
+import { doc, updateDoc, collection, query } from 'firebase/firestore';
+import { useFirestore, useCollection, useMemoFirebase, useUser, deleteDocumentNonBlocking } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, View, Key, Wrench, FolderArchive, Fingerprint, UserPlus } from 'lucide-react';
+import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, Key, Wrench, FolderArchive, Fingerprint, UserPlus } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useStorage } from '@/firebase';
-import { ref, deleteObject } from 'firebase/storage';
+import { ref } from 'firebase/storage';
 import { Checkbox } from '@/components/ui/checkbox';
-import { generateRulesForProperty } from '@/lib/rule-engine';
 import { Textarea } from '@/components/ui/textarea';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
 
 
 function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string; unitId: string; landlordId: string }) {
   const firestore = useFirestore();
-  const storage = useStorage();
   const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
 
@@ -33,21 +31,18 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
 
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
-  const handleDelete = async (docData: any) => {
-    if (!firestore || !storage || !docData?.storagePath) {
+  const handleDelete = (docData: any) => {
+    if (!firestore || !docData?.storagePath) {
       toast({ variant: 'destructive', title: 'Error', description: 'Cannot delete document due to missing information.' });
       return;
     }
     if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
 
-    try {
-      await deleteObject(ref(storage, docData.storagePath));
-      await deleteDoc(doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id));
-      toast({ title: 'Document Deleted' });
-    } catch (error: any) {
-      console.error("Deletion Error:", error);
-      toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
-    }
+    const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
+    deleteDocumentNonBlocking(docRef);
+    // Optimistically update UI
+    refetchDocs();
+    toast({ title: 'Document Deleted' });
   };
   
   const getSafeDate = (timestamp: any) => {
@@ -71,7 +66,7 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
       <div className="space-y-2">
         {documents?.map((doc: any) => (
           <div key={doc.id} className="flex items-center justify-between p-2 bg-slate-100 border rounded-md">
-            <div className="flex items-center gap-2">
+             <div className="flex items-center gap-2">
                <FileText className="h-4 w-4 text-slate-500"/>
                <div>
                   <p className="text-sm font-medium">{doc.fileName}</p>
@@ -112,8 +107,8 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const { user } = useUser();
 
-  const { register, control, handleSubmit, getValues, reset } = useForm({
-    defaultValues: {
+  const { register, control, handleSubmit, getValues, reset, formState } = useForm({
+    values: { // Use `values` instead of `defaultValues`
       unitNumber: unit?.unitNumber || '',
       bedrooms: unit?.bedrooms || 0,
       bathrooms: unit?.bathrooms || 0,
@@ -123,55 +118,44 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
       access: unit?.access || { gateCode: '', lockboxCode: '', notes: '' }
     }
   });
-  
-  useEffect(() => {
-    if (unit) {
-      reset({
-        unitNumber: unit.unitNumber || '',
-        bedrooms: unit.bedrooms || 0,
-        bathrooms: unit.bathrooms || 0,
-        sqft: unit.sqft || 0,
-        amenities: unit.amenities || [],
-        tenants: unit.tenants || [],
-        access: unit.access || { gateCode: '', lockboxCode: '', notes: '' }
-      });
-    }
-  }, [unit, reset]);
-
 
   const { fields, append, remove } = useFieldArray({
     control,
     name: "tenants"
   });
 
+  // This function instantly deletes the tenant from Firestore and refetches.
+  const handleRemoveTenant = async (index: number) => {
+    if (!firestore || !unit) return;
+    
+    // Get the current list of tenants from the form state.
+    const currentTenants = getValues('tenants');
+    // Create a new list *without* the tenant at the specified index.
+    const updatedTenants = currentTenants.filter((_:any, i:number) => i !== index);
+
+    const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
+    
+    try {
+      // Update the document in Firestore with the new tenant list.
+      await updateDoc(unitRef, { tenants: updatedTenants });
+      toast({ title: "Tenant Removed", description: "The tenant has been deleted from this unit." });
+      // Trigger the parent component to refetch data, which will update the drawer.
+      if (onUpdate) onUpdate();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: "Error", description: `Could not remove tenant: ${error.message}`});
+    }
+  };
+
   const onSubmit = async (data: any) => {
-    if (!firestore || !unit || !user) return;
+    if (!firestore || !unit) return;
     setIsSaving(true);
 
     const unitRef = doc(firestore, 'properties', propertyId, 'units', unit.id);
 
     try {
-      await updateDoc(unitRef, {
-        unitNumber: data.unitNumber,
-        bedrooms: Number(data.bedrooms),
-        bathrooms: Number(data.bathrooms),
-        sqft: Number(data.sqft),
-        amenities: data.amenities,
-        tenants: data.tenants,
-        access: data.access,
-      });
+      await updateDoc(unitRef, data);
       
       toast({ title: "Success", description: "Unit identity and details updated." });
-      
-      // Fetch the full parent property data to pass to the rule engine
-      const propertyRef = doc(firestore, 'properties', propertyId);
-      const propertySnap = await getDoc(propertyRef);
-      if (propertySnap.exists()) {
-        const fullPropertyData = propertySnap.data();
-        await generateRulesForProperty(propertyId, fullPropertyData, user.uid);
-        toast({ title: "Smart Rules Synced", description: "Categorization rules have been updated based on tenant changes." });
-      }
-
       if (onUpdate) onUpdate();
       onOpenChange(false);
     } catch (error: any) {
@@ -213,7 +197,7 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                           type="button" 
                                           variant="ghost" 
                                           size="icon" 
-                                          onClick={() => remove(index)}
+                                          onClick={() => handleRemoveTenant(index)}
                                           className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"
                                       >
                                           <Trash2 className="h-4 w-4" />
@@ -236,24 +220,14 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                       </div>
                                   </div>
                               ))}
-                              <div className="flex gap-2">
-                                <Button 
-                                    type="button" 
-                                    variant="outline" 
-                                    className="w-full border-dashed"
-                                    onClick={() => append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 })}
-                                >
-                                    <Plus className="mr-2 h-4 w-4" /> Add Manually
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="default"
-                                    className="w-full"
-                                    onClick={() => setIsInviteOpen(true)}
-                                >
-                                    <UserPlus className="mr-2 h-4 w-4" /> Invite Tenant
-                                </Button>
-                              </div>
+                              <Button
+                                  type="button"
+                                  variant="default"
+                                  className="w-full"
+                                  onClick={() => setIsInviteOpen(true)}
+                              >
+                                  <UserPlus className="mr-2 h-4 w-4" /> Invite New Tenant
+                              </Button>
                           </div>
                       </AccordionContent>
                   </AccordionItem>

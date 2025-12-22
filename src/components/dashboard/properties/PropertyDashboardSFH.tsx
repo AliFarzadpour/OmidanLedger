@@ -1,10 +1,8 @@
-
 'use client';
 
-import { useParams, useSearchParams } from 'next/navigation';
-import { useEffect, useState, useMemo } from 'react';
-import { doc, onSnapshot, collection, query, deleteDoc } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { useState, useMemo } from 'react';
+import { doc, collection, query, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2 } from 'lucide-react';
@@ -33,7 +31,6 @@ import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useToast } from '@/hooks/use-toast';
-import { deleteObject, ref } from 'firebase/storage';
 import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
@@ -46,8 +43,6 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      // Assuming property state is available in the parent scope or fetched here.
-      // For now, hardcoding 'TX' as per the user story.
       const flowResult = await generateLease({
         propertyId: propertyId,
         tenantId: tenant.email, 
@@ -100,16 +95,11 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
 
 
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
-  const searchParams = useSearchParams();
-  const firestore = useFirestore();
-  const { user } = useUser();
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isLeaseAgentOpen, setLeaseAgentOpen] = useState(false);
   const [selectedTenantForLease, setSelectedTenantForLease] = useState<any>(null);
 
-
-  const defaultTab = searchParams.get('tab') || 'overview';
   const [formTab, setFormTab] = useState('general');
 
   const handleOpenDialog = (tab: string) => {
@@ -122,10 +112,10 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     setLeaseAgentOpen(true);
   };
   
+  const { user } = useUser();
   if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
   if (!property) return <div className="p-8">Property not found.</div>;
   
-  // --- COMMON HEADER ---
   const header = (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -172,7 +162,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           onOpenSettings={handleOpenDialog}
         />
 
-        <Tabs defaultValue={defaultTab} className="w-full">
+        <Tabs defaultValue="overview" className="w-full">
           <TabsList className="grid w-full grid-cols-5 lg:w-[750px]">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="tenants">Tenants</TabsTrigger>
@@ -302,7 +292,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
 function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
   const firestore = useFirestore();
-  const storage = useStorage();
   const { toast } = useToast();
   const [isUploaderOpen, setUploaderOpen] = useState(false);
 
@@ -313,31 +302,14 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
 
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
-  const handleDelete = async (docData: any) => {
-    if (!firestore || !storage) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
-        return;
-    }
-    if (!docData?.storagePath) {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
-        return;
-    }
+  const handleDelete = (docData: any) => {
+    if (!firestore) return;
     if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
-
-    try {
-        // Delete from Storage
-        const fileRef = ref(storage, docData.storagePath);
-        await deleteObject(fileRef);
-
-        // Delete from Firestore
-        const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
-        await deleteDoc(docRef);
-
-        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
-    } catch (error: any) {
-        console.error("Deletion Error:", error);
-        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
-    }
+    
+    const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
+    deleteDocumentNonBlocking(docRef);
+    refetchDocs();
+    toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
   };
 
   const getSafeDate = (timestamp: any) => {

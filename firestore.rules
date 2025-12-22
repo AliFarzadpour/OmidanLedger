@@ -25,17 +25,21 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isOwner(userId);
-      allow list, delete: if false;
+      // Deleting user docs is a sensitive operation, best handled by admin processes.
+      allow delete: if false;
 
         match /bankAccounts/{bankAccountId} {
-          allow read, write: if isOwner(userId);
+          // Allow read/write/delete if the user owns the parent user document.
+          allow read, write, delete: if isOwner(userId);
+
             match /transactions/{transactionId} {
-                allow read, write: if isOwner(userId);
+                // Inherit permissions from parent bank account.
+                allow read, write, delete: if isOwner(userId);
             }
         }
         
         match /categoryMappings/{mappingId} {
-            allow read, write: if isOwner(userId);
+            allow read, write, delete: if isOwner(userId);
         }
     }
     
@@ -44,13 +48,10 @@ service cloud.firestore {
     }
 
     match /properties/{propertyId} {
-      // Use 'request.resource' for creation to check the incoming data
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      
-      // Use 'resource' for existing documents to ensure only the owner can read/update/delete
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-
-      // This allows the list view to work if the frontend uses a proper filter
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Ensure only the owner can delete the property.
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn();
 
       match /monthlyStats/{monthId} {
@@ -59,16 +60,14 @@ service cloud.firestore {
       
       match /documents/{documentId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
-        // Allow list so the UI can fetch the documents for the property
-        allow list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow list, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
       
       match /units/{unitId} {
-        allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       
-        // NEW: Rule for unit-level documents
         match /documents/{documentId} {
-            allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+            allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
         }
       }
     }
@@ -85,18 +84,24 @@ service cloud.firestore {
 
     match /vendors/{vendorId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Ensure only the owner can delete the vendor document.
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn();
     }
     
     match /bills/{billId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Ensure only the owner can delete the bill document.
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn();
     }
 
     match /invoices/{invoiceId} {
       allow read, write: if resource.data.userId == request.auth.uid;
+      // Ensure only the owner can delete the invoice document.
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn();
     }
   }
