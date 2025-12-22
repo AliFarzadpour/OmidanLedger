@@ -6,41 +6,59 @@ import { FieldValue } from 'firebase-admin/firestore';
 export async function inviteTenant({
   email,
   propertyId,
-  unitId, // <-- ADDED
+  unitId,
   landlordId,
 }: {
   email: string;
   propertyId: string;
-  unitId?: string; // <-- ADDED
+  unitId?: string;
   landlordId: string;
 }) {
 
   try {
     // 1. Create the Tenant User document (Pre-auth)
-    // In a real app, you'd trigger a Firebase Auth invite email here
     const tenantRef = db.collection('users').doc(); 
+    const tenantId = tenantRef.id;
     
     await tenantRef.set({
+      id: tenantId, // Self-reference the ID
       email: email.toLowerCase(),
-      role: 'tenant', // Sets the restricted role
+      role: 'tenant',
       landlordId: landlordId,
       associatedPropertyId: propertyId,
-      ...(unitId && { associatedUnitId: unitId }), // <-- ADDED: Link to unit
+      ...(unitId && { associatedUnitId: unitId }),
       status: 'invited',
       billing: {
-        balance: 0
+        balance: 0,
+        rentAmount: 0 // Will be set later
       },
       metadata: {
         createdAt: FieldValue.serverTimestamp()
       }
     });
 
-    // 2. Link the tenant to the property or unit
-    // THIS LOGIC HAS BEEN REMOVED. The tenant is now managed manually in the drawer.
-    // This action's only job is to create the user account for the portal.
+    // 2. Link the tenant to the specific unit
+    if (unitId) {
+        const unitRef = db.collection('properties').doc(propertyId).collection('units').doc(unitId);
+        
+        // Atomically add the new tenant to the 'tenants' array in the unit document.
+        await unitRef.update({
+            tenants: FieldValue.arrayUnion({
+                id: tenantId,
+                email: email.toLowerCase(),
+                firstName: email.split('@')[0], // Default first name
+                lastName: '',
+                leaseStart: '',
+                leaseEnd: '',
+                rentAmount: 0,
+                deposit: 0
+            })
+        });
+    }
 
-    return { success: true, tenantId: tenantRef.id };
+    return { success: true, tenantId: tenantId };
   } catch (error: any) {
+    console.error("Error inviting tenant:", error);
     throw new Error(error.message);
   }
 }
