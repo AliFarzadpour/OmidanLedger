@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -162,11 +163,15 @@ export default function SmartRulesPage() {
   const filteredAndSortedRules = useMemo(() => {
     let filtered = [...rules];
     
-    // Filter by search term
+    // Filter by search term in keyword OR category
     if (searchTerm) {
-        filtered = filtered.filter(rule => 
-            rule.originalKeyword.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        const lowercasedFilter = searchTerm.toLowerCase();
+        filtered = filtered.filter(rule => {
+            const categoryString = `${rule.primaryCategory} ${rule.secondaryCategory} ${rule.subcategory}`.toLowerCase();
+            const keywordMatch = rule.originalKeyword.toLowerCase().includes(lowercasedFilter);
+            const categoryMatch = categoryString.includes(lowercasedFilter);
+            return keywordMatch || categoryMatch;
+        });
     }
 
     // Filter by source
@@ -250,7 +255,7 @@ export default function SmartRulesPage() {
         <div className="relative flex-grow">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
-                placeholder="Filter by keyword..."
+                placeholder="Filter by keyword or category..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
