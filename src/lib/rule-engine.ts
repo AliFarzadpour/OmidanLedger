@@ -35,7 +35,7 @@ async function setRule(
     transactionDescription: keyword,
     primaryCategory: categories.primary,
     secondaryCategory: categories.secondary,
-    subcategory: `${propertyNickname} - ${categories.sub}`, // The new descriptive format without brackets
+    subcategory: `${propertyNickname} - ${categories.sub}`, // The new descriptive format
     propertyId: propertyId,
     source: 'Auto-Generated',
     updatedAt: new Date(),
