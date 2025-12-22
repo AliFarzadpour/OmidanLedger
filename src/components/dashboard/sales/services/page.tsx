@@ -3,8 +3,8 @@
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useCollection, deleteDocumentNonBlocking } from '@/firebase'; // Use your hooks
-import { collection, query, where, orderBy, doc } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection } from '@/firebase'; // Use your hooks
+import { collection, query, where, orderBy, deleteDoc, doc } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
@@ -63,11 +63,11 @@ export default function ServiceInvoicesPage() {
   // Placeholder for "Collected this month" (requires payment logic later)
   const collectedThisMonth = 0; 
   
-  const handleDelete = (invoiceId: string) => {
+  const handleDelete = async (invoiceId: string) => {
       if (!firestore) return;
       if (window.confirm('Are you sure you want to delete this invoice?')) {
           const docRef = doc(firestore, 'invoices', invoiceId);
-          deleteDocumentNonBlocking(docRef);
+          await deleteDoc(docRef);
           refetch(); // Trigger a refetch to update the UI
       }
   }

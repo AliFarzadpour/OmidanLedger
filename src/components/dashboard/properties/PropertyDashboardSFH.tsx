@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { doc, collection, query, deleteDoc } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase, deleteDocumentNonBlocking } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2 } from 'lucide-react';
@@ -303,14 +303,18 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
 
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
-  const handleDelete = (docData: any) => {
+  const handleDelete = async (docData: any) => {
     if (!firestore) return;
     if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
     
-    const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
-    deleteDocumentNonBlocking(docRef);
-    refetchDocs();
-    toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+    try {
+        const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
+        await deleteDoc(docRef);
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+        refetchDocs();
+    } catch(error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
   };
 
   const getSafeDate = (timestamp: any) => {

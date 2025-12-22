@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUser, useFirestore, deleteDocumentNonBlocking } from '@/firebase';
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, writeBatch } from 'firebase/firestore'; 
+import { useUser, useFirestore } from '@/firebase';
+import { collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore'; 
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,7 +25,7 @@ const VENDOR_ROLES = [
   
   // Professional Services
   "Accountant/CPA", "Attorney/Legal", "Consultant", "Designer", 
-  "Engineer", "HR/Staffing Agency", "Insurance Agent", "Marketing/Advertising", 
+  "Engineer", "HR/Staffing Agency", "Insurance Agent", "Marketing/Advertising", _
   "Notary", "Real Estate Agent", "Translator",
   
   // Business Ops & Tech
@@ -106,15 +106,20 @@ export default function VendorManager() {
     }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!firestore) return;
     if (!confirm("Remove this vendor?")) return;
     
-    const docRef = doc(firestore, 'vendors', id);
-    deleteDocumentNonBlocking(docRef);
-    toast({ title: "Deleted", description: "Vendor removed." });
-    // Optimistically update UI
-    setVendors(vendors.filter(v => v.id !== id));
+    try {
+      const docRef = doc(firestore, 'vendors', id);
+      await deleteDoc(docRef);
+      toast({ title: "Deleted", description: "Vendor removed." });
+      // Manually refetch the data to update the UI
+      fetchVendors();
+    } catch (error: any) {
+        console.error("Error deleting vendor: ", error);
+        toast({ variant: "destructive", title: "Deletion Failed", description: error.message });
+    }
   };
 
   const openEdit = (vendor: any) => {

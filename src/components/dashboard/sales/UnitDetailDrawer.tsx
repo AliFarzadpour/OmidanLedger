@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { doc, updateDoc, collection, query } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useCollection, useMemoFirebase, useUser } from '@/firebase';
 import { useFieldArray, useForm, Controller } from 'react-hook-form';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
@@ -13,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Users, Plus, Trash2, FileText, UploadCloud, Eye, Key, Wrench, FolderArchive, Fingerprint, UserPlus, Zap } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
-import { deleteDocumentNonBlocking } from '@/firebase';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
@@ -33,18 +32,21 @@ function UnitDocuments({ propertyId, unitId, landlordId }: { propertyId: string;
 
   const { data: documents, isLoading, refetch: refetchDocs } = useCollection(docsQuery);
 
-  const handleDelete = (docData: any) => {
+  const handleDelete = async (docData: any) => {
     if (!firestore || !docData?.storagePath) {
       toast({ variant: 'destructive', title: 'Error', description: 'Cannot delete document due to missing information.' });
       return;
     }
     if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
 
-    const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
-    deleteDocumentNonBlocking(docRef);
-    // Optimistically update UI
-    refetchDocs();
-    toast({ title: 'Document Deleted' });
+    try {
+        const docRef = doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, docData.id);
+        await deleteDoc(docRef);
+        toast({ title: 'Document Deleted' });
+        refetchDocs();
+    } catch(error: any) {
+        toast({ variant: 'destructive', title: 'Error', description: error.message });
+    }
   };
   
   const getSafeDate = (timestamp: any) => {
