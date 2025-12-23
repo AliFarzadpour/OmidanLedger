@@ -37,30 +37,36 @@ const learnCategoryMappingFlow = ai.defineFlow(
     outputSchema: z.void(),
   },
   async (input) => {
-    // 1. Initialize Server-Side Admin Firestore
-    const { firestore } = initializeServerFirebase();
-    const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
-    
-    // FIX: Use the user-provided description directly, without generalization.
-    const keywordForMatching = transactionDescription;
+    try {
+      // 1. Initialize Server-Side Admin Firestore
+      const { firestore } = initializeServerFirebase();
+      const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
+      
+      // FIX: Use the user-provided description directly, without generalization.
+      const keywordForMatching = transactionDescription;
 
-    // Create a consistent ID based on the *exact* keyword to prevent duplicates.
-    const mappingId = createHash('md5').update(userId + keywordForMatching.toUpperCase()).digest('hex');
+      // Create a consistent ID based on the *exact* keyword to prevent duplicates.
+      const mappingId = createHash('md5').update(userId + keywordForMatching.toUpperCase()).digest('hex');
 
-    // 2. USE ADMIN SDK SYNTAX
-    await firestore
-      .collection('users')
-      .doc(userId)
-      .collection('categoryMappings')
-      .doc(mappingId)
-      .set({
-        userId,
-        transactionDescription: keywordForMatching, // The keyword for matching
-        primaryCategory,
-        secondaryCategory,
-        subcategory,
-        source: 'User Manual',
-        updatedAt: new Date(), 
-    }, { merge: true });
+      // 2. USE ADMIN SDK SYNTAX
+      await firestore
+        .collection('users')
+        .doc(userId)
+        .collection('categoryMappings')
+        .doc(mappingId)
+        .set({
+          userId,
+          transactionDescription: keywordForMatching, // The keyword for matching
+          primaryCategory,
+          secondaryCategory,
+          subcategory,
+          source: 'User Manual',
+          updatedAt: new Date(), 
+      }, { merge: true });
+    } catch (error: any) {
+        console.error('Error in learnCategoryMappingFlow:', error);
+        // Re-throw the error so the client that called the server action receives it.
+        throw new Error(`Failed to learn category mapping: ${error.message}`);
+    }
   }
 );
