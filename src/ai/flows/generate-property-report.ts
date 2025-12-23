@@ -129,6 +129,11 @@ export const generatePropertyReportFlow = ai.defineFlow(
         throw new Error("The AI returned an empty response. It might be having trouble with the request.");
     }
     
+    // Forcefully guide the AI if it fails the first time.
+    if (reportText.includes("couldn't find any")) {
+        return reportText + "\n\n**Developer Note:** Your query failed. As per instructions, you MUST now attempt a second, broader query by removing one of the filters (e.g., property type) to see if other relevant properties exist in that location.";
+    }
+    
     return reportText;
   }
 );
