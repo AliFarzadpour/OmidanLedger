@@ -12,8 +12,6 @@ import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag } from 'lucide-react
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { useFirestore, useUser, deleteDocumentNonBlocking } from '@/firebase';
-import { doc } from 'firebase/firestore';
 
 interface DataSource {
   id: string;
@@ -53,15 +51,10 @@ export function DataSourceList({
     selectedDataSourceId,
     flagCounts
 }: DataSourceListProps) {
-  const { user } = useUser();
-  const firestore = useFirestore();
 
   const handleDeleteClick = (e: React.MouseEvent, source: DataSource) => {
     e.stopPropagation();
-    if (!user || !firestore) return;
-    if (window.confirm(`Are you sure you want to delete ${source.accountName}? This will also delete all associated transactions.`)) {
-        onDelete(source);
-    }
+    onDelete(source);
   };
 
   if (isLoading) {
