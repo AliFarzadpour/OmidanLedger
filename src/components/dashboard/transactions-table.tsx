@@ -52,6 +52,7 @@ export interface Transaction {
   accountName?: string; 
   status?: 'posted' | 'review' | 'error' | 'ready';
   reviewStatus?: 'needs-review' | 'approved' | 'incorrect';
+  bankAccountId?: string;
 }
 
 type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus';
