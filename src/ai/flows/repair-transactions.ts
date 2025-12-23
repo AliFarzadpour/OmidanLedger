@@ -5,7 +5,7 @@
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { getAdminDB } from '@/lib/firebase-admin-utils';
+import { db } from '@/lib/admin-db';
 import { fetchUserContext, getCategoryFromDatabase, categorizeWithHeuristics } from '@/lib/plaid';
 
 const RepairTransactionsInputSchema = z.object({
@@ -24,7 +24,6 @@ export const repairUncategorizedTransactions = ai.defineFlow(
     outputSchema: RepairTransactionsOutputSchema,
   },
   async ({ userId }) => {
-    const db = getAdminDB();
     const userContext = await fetchUserContext(db, userId);
 
     // 1. Find all "Broken" transactions (General Expense / Uncategorized)
