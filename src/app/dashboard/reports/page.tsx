@@ -2,15 +2,21 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered } from 'lucide-react';
+import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building } from 'lucide-react';
 
 export default function ReportsPage() {
   const reports = [
     {
-      title: 'AI-Powered Report',
+      title: 'AI Financial Report',
       description: 'Use natural language to ask questions about your financial data.',
       href: '/dashboard/reports/ai-report',
       icon: BrainCircuit,
+    },
+    {
+      title: 'AI Property Report',
+      description: 'Ask questions and run analysis across your property portfolio.',
+      href: '/dashboard/reports/property-ai-report',
+      icon: Building,
     },
     // {
     //   title: 'Profit & Loss',
