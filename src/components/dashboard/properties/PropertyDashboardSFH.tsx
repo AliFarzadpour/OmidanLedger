@@ -37,6 +37,8 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
+import { isPast, parseISO } from 'date-fns';
+
 
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
@@ -118,9 +120,18 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const { user } = useUser();
   if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
   if (!property) return <div className="p-8">Property not found.</div>;
+  
+  const getPropertyStatus = () => {
+    const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
+    if (!activeTenant) return 'Vacant';
+    if (activeTenant.leaseEnd && isPast(parseISO(activeTenant.leaseEnd))) {
+      return 'Lease Expired';
+    }
+    return 'Occupied';
+  };
 
-  const isOccupied = property.tenants?.some((t: any) => t.status === 'active');
-  const activeTenant = isOccupied ? property.tenants.find((t: any) => t.status === 'active') : null;
+  const status = getPropertyStatus();
+  const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
   const rentAmount = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
 
   
@@ -201,7 +212,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 <CardHeader className="pb-2">
                   <CardDescription>Status</CardDescription>
                   <CardTitle className="text-2xl font-bold capitalize">
-                    {isOccupied ? 'Occupied' : 'Vacant'}
+                    {status}
                   </CardTitle>
                 </CardHeader>
               </Card>
@@ -448,5 +459,3 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     </>
   )
 }
-
-    

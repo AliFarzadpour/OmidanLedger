@@ -410,9 +410,21 @@ export function PropertyForm({
                             return (
                                 <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3">
                                   <div className="grid grid-cols-2 gap-4">
-                                      <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...form.register(`tenants.${originalIndex}.firstName`)} /></div>
-                                      <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...form.register(`tenants.${originalIndex}.lastName`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">First Name *</Label><Input {...form.register(`tenants.${originalIndex}.firstName`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">Last Name *</Label><Input {...form.register(`tenants.${originalIndex}.lastName`)} /></div>
                                   </div>
+                                   <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...form.register(`tenants.${originalIndex}.email`)} /></div>
+                                        <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...form.register(`tenants.${originalIndex}.phone`)} /></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                        <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...form.register(`tenants.${originalIndex}.leaseStart`)} /></div>
+                                        <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...form.register(`tenants.${originalIndex}.leaseEnd`)} /></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...form.register(`tenants.${originalIndex}.rentAmount`, { valueAsNumber: true })} /></div>
+                                        <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...form.register(`tenants.${originalIndex}.deposit`, { valueAsNumber: true })} /></div>
+                                    </div>
                                   <div className="space-y-1"><Label className="text-xs">Status</Label>
                                     <Select onValueChange={(val: any) => form.setValue(`tenants.${originalIndex}.status`, val)} value={form.watch(`tenants.${originalIndex}.status`)}>
                                         <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
@@ -683,5 +695,3 @@ export function PropertyForm({
     </div>
   );
 }
-
-    
