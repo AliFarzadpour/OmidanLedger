@@ -36,13 +36,26 @@ export default function PropertiesListPage() {
 
   const getCompleteness = (p: any) => {
     let score = 20; 
+    let missingItems = [];
+
+    const hasTenants = p.tenants?.length > 0;
     const hasLoanDetails = p.mortgage?.lenderName || p.mortgage?.hasMortgage === 'no';
-    
-    if (p.tenants?.length > 0) score += 20;
+    const hasTaxAndInsurance = p.taxAndInsurance?.policyNumber || (p.taxAndInsurance?.annualPremium || 0) > 0;
+    const hasVendors = p.preferredVendors?.length > 0;
+
+    if (hasTenants) score += 20;
+    else missingItems.push("Tenants");
+
     if (hasLoanDetails) score += 20;
-    if (p.taxAndInsurance?.policyNumber) score += 20;
-    if (p.preferredVendors?.length > 0) score += 20;
-    return score;
+    else missingItems.push("Loan Info");
+
+    if (hasTaxAndInsurance) score += 20;
+    else missingItems.push("Tax & Insurance");
+    
+    if (hasVendors) score += 20;
+    else missingItems.push("Vendors");
+
+    return { score, missingItems };
   };
 
   if (!isClient) {
@@ -103,8 +116,7 @@ export default function PropertiesListPage() {
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {properties && properties.map((property) => {
-          const progress = getCompleteness(property);
-          const hasLoanDetails = property.mortgage?.lenderName || property.mortgage?.hasMortgage === 'no';
+          const { score: progress, missingItems } = getCompleteness(property);
           return (
             <Card key={property.id} className="hover:shadow-lg transition-shadow border-l-4 border-l-blue-500 flex flex-col justify-between">
               <CardHeader className="pb-2">
@@ -130,7 +142,7 @@ export default function PropertiesListPage() {
                     {progress < 100 && (
                        <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-50 p-2 rounded">
                           <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                          <span>Missing: {!property.tenants?.length && "Tenants, "}{!hasLoanDetails && "Loan Info"}</span>
+                          <span>Missing: {missingItems.join(', ')}</span>
                        </div>
                     )}
                  </div>
