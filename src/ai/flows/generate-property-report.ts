@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -96,6 +97,7 @@ export const generatePropertyReportFlow = ai.defineFlow(
             - To answer questions about which vendors or rules are associated with properties, use the 'fetchCategorizationRules' tool.
         3.  When using 'fetchProperties', ALWAYS add a 'where' clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
             - Map natural language queries (e.g., "vacant", "in texas", "multi-family") to the correct data fields (e.g., 'status', 'address.state', 'type').
+            - **IMPORTANT Occupancy Logic**: A property is "occupied" if it has a tenant with status: 'active'. A property is "vacant" if it has no tenants or only has tenants with status: 'past'.
         4.  After receiving the data from the tool(s), analyze it to formulate a clear, concise answer.
         5.  Format your final answer in readable Markdown. Use tables for lists of properties or rules.
       `,
@@ -122,3 +124,4 @@ export async function generatePropertyReport(input: z.infer<typeof GeneratePrope
     throw new Error(error.message || 'An unexpected error occurred while generating the report.');
   }
 }
+
