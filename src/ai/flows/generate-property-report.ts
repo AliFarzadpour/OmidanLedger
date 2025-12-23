@@ -105,10 +105,10 @@ export const generatePropertyReportFlow = ai.defineFlow(
         4.  **Natural Language Mapping & Occupancy Logic:**
             - Map terms like "vacant", "in texas", "multi-family" to the correct data fields (e.g., 'status', 'address.state', 'type').
             - A property is "occupied" if it has at least one tenant with \`status: 'active'\`. A property is "vacant" if it has no tenants or only tenants with \`status: 'past'\`.
-        5.  **Helpful Alternative Answers:** If a query for a specific filter (e.g., 'single-family' homes in Dallas) returns no results, you MUST run a second, broader query (e.g., *any* property in 'Dallas'). If that second query finds results, you MUST inform the user you couldn't find their specific request but then offer the alternative results. For example: "I couldn't find any single-family homes in Dallas, but I did find these other properties for you there:".
+        5.  **Crucial Fallback Logic:** If the user's query contains multiple filters (e.g., \`type: 'single-family'\` AND \`location: 'Dallas'\`) and the \`fetchProperties\` tool returns an empty result, you **MUST** try a second time. In this second attempt, remove one of the filters (e.g., just search for \`location: 'Dallas'\`) and call the tool again. If this second attempt finds properties, you must present those results to the user.
         6.  **Format Output:** Present your final answer in clear, readable Markdown. Use tables for lists.
       `,
-      tools: [fetchPropertiesTool, fetchCategorizationRulesTool], // Provide BOTH tools to the AI.
+      tools: [fetchPropertiesTool, fetchCategorizationRulesTool],
       model: 'googleai/gemini-2.5-flash',
     });
 
