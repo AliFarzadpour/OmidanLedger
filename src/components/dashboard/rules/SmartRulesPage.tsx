@@ -165,10 +165,10 @@ export default function SmartRulesPage() {
   const handleRepair = async () => {
     if (!user) return;
     setIsRepairing(true);
-    toast({ title: 'Repairing...', description: 'AI is scanning for uncategorized items.' });
+    toast({ title: 'Repairing...', description: 'AI is scanning for incorrectly flagged items.' });
     try {
       const result = await repairTransactionsAction(user.uid);
-      toast({ title: 'Repair Complete', description: `${result.repairedCount} out of ${result.scannedCount} items were re-categorized.` });
+      toast({ title: 'Repair Complete', description: `${result.repairedCount} out of ${result.scannedCount} flagged items were re-categorized.` });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {

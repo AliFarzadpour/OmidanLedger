@@ -1,7 +1,7 @@
 
 'use server';
 /**
- * @fileOverview A flow to repair and re-categorize existing transactions that are marked as 'Uncategorized'.
+ * @fileOverview A flow to repair and re-categorize existing transactions that are marked for review.
  */
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
@@ -26,11 +26,11 @@ export const repairUncategorizedTransactions = ai.defineFlow(
   async ({ userId }) => {
     const userContext = await fetchUserContext(db, userId);
 
-    // 1. Find all "Broken" transactions (General Expense / Uncategorized)
+    // 1. Find all "Broken" transactions (items needing review)
     const snapshot = await db
       .collectionGroup('transactions')
       .where('userId', '==', userId)
-      .where('secondaryCategory', '==', 'Uncategorized')
+      .where('reviewStatus', '==', 'needs-review') // TARGET 'needs-review' status
       .get();
 
     console.log(`[Repair Flow] Found ${snapshot.size} items to repair...`);
@@ -69,7 +69,7 @@ export const repairUncategorizedTransactions = ai.defineFlow(
           secondaryCategory: ruleResult.secondary,
           subcategory: ruleResult.sub,
           aiExplanation: 'Repaired via Rules Engine',
-          status: 'posted',
+          reviewStatus: 'approved', // Mark as approved after repair
         });
         repairedCounter++;
       }
