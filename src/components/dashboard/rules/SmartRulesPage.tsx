@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -26,6 +27,7 @@ export default function SmartRulesPage() {
   const firestore = useFirestore();
   const { toast } = useToast();
 
+  const [isClient, setIsClient] = useState(false);
   const [rules, setRules] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -47,6 +49,10 @@ export default function SmartRulesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [sourceFilter, setSourceFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'originalKeyword', direction: 'ascending' });
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
 
   const fetchRules = async () => {
@@ -239,6 +245,10 @@ export default function SmartRulesPage() {
   );
 
   const allSources = useMemo(() => [...new Set(rules.map(r => r.source || 'Unknown'))], [rules]);
+
+  if (!isClient) {
+    return null;
+  }
 
   return (
     <>
