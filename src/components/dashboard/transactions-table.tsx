@@ -414,48 +414,120 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
 }
 
 
-function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: any }) {
+function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
     const [primary, setPrimary] = useState(transaction.primaryCategory);
     const [secondary, setSecondary] = useState(transaction.secondaryCategory);
     const [sub, setSub] = useState(transaction.subcategory);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave(transaction, { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub });
+    // Alert state
+    const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit', isOpen: boolean }>({ type: 'none', isOpen: false });
+
+    const finalizeSave = (cats: { primaryCategory: string, secondaryCategory: string, subcategory: string }) => {
+        onSave(transaction, cats);
         setIsOpen(false);
     };
-    
-    return (
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                    <div className="flex flex-col">
-                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
-                            {transaction.primaryCategory}
-                            <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
-                        </Badge>
-                        <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {transaction.secondaryCategory} {'>'} {transaction.subcategory}
-                        </span>
-                    </div>
 
-                </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-80">
-                <form onSubmit={handleSubmit} className="grid gap-4">
-                    <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Edit Category</h4>
-                        <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
+    const handleNegativeIncome = () => {
+        const expenseCat = { primaryCategory: 'Operating Expenses', secondaryCategory: 'General & Administrative', subcategory: 'General Expense' };
+        finalizeSave(expenseCat);
+        setAlertState({ type: 'none', isOpen: false });
+    };
+
+    const handleSecurityDeposit = () => {
+        const liabilityCat = { primaryCategory: 'Balance Sheet Categories', secondaryCategory: 'Liabilities', subcategory: 'Customer Deposits / Deferred Revenue' };
+        finalizeSave(liabilityCat);
+        setAlertState({ type: 'none', isOpen: false });
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const cats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub };
+
+        // --- GUARDRAIL CHECKS ---
+        if (cats.primaryCategory.toLowerCase().includes('income') && transaction.amount < 0) {
+            setAlertState({ type: 'negativeIncome', isOpen: true });
+            return;
+        }
+
+        if (transaction.description.toLowerCase().includes('deposit') && transaction.amount > 0 && cats.primaryCategory.toLowerCase().includes('income')) {
+            setAlertState({ type: 'securityDeposit', isOpen: true });
+            return;
+        }
+
+        finalizeSave(cats);
+    };
+
+    return (
+        <>
+            <Popover open={isOpen} onOpenChange={setIsOpen}>
+                <PopoverTrigger asChild>
+                    <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
+                        <div className="flex flex-col">
+                            <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
+                                {transaction.primaryCategory}
+                                <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                            </Badge>
+                            <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                                {transaction.secondaryCategory} {'>'} {transaction.subcategory}
+                            </span>
+                        </div>
                     </div>
-                    <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
-                    </div>
-                    <Button type="submit">Confirm & Save</Button>
-                </form>
-            </PopoverContent>
-        </Popover>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                    <form onSubmit={handleSubmit} className="grid gap-4">
+                        <div className="space-y-2">
+                            <h4 className="font-medium leading-none">Edit Category</h4>
+                            <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
+                        </div>
+                        <div className="grid gap-2">
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                        </div>
+                        <Button type="submit">Confirm & Save</Button>
+                    </form>
+                </PopoverContent>
+            </Popover>
+
+            <AlertDialog open={alertState.isOpen} onOpenChange={(open) => setAlertState({ type: 'none', isOpen: open })}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangleIcon className="text-destructive h-6 w-6"/>
+                            Double-Checking Your Books
+                        </AlertDialogTitle>
+                        {alertState.type === 'negativeIncome' && (
+                            <AlertDialogDescription>
+                                You've categorized a payment (money out) as Income. This will lower your reported gross rent instead of increasing your tax-deductible expenses. Should this be moved to Repairs & Maintenance?
+                            </AlertDialogDescription>
+                        )}
+                        {alertState.type === 'securityDeposit' && (
+                             <AlertDialogDescription>
+                                Is this a Security Deposit? Deposits are usually liabilities, not income. If you categorize this as Rental Income, you may overpay on your taxes. Would you like to move this to your Security Deposit Liability account?
+                            </AlertDialogDescription>
+                        )}
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        {alertState.type === 'negativeIncome' && (
+                            <>
+                                <AlertDialogCancel onClick={() => finalizeSave({ primaryCategory: primary, secondaryCategory: secondary, subcategory: sub })}>
+                                    Keep as Refund
+                                </AlertDialogCancel>
+                                <AlertDialogAction onClick={handleNegativeIncome}>Move to Expenses</AlertDialogAction>
+                            </>
+                        )}
+                         {alertState.type === 'securityDeposit' && (
+                            <>
+                                <AlertDialogCancel onClick={() => finalizeSave({ primaryCategory: primary, secondaryCategory: secondary, subcategory: sub })}>
+                                    Keep as Rent
+                                </AlertDialogCancel>
+                                <AlertDialogAction onClick={handleSecurityDeposit}>Move to Liability</AlertDialogAction>
+                            </>
+                        )}
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
     );
 }
