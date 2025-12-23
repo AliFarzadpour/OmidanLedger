@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -13,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BulkActionsDialog } from './BulkActionsDialog';
 import { cn } from '@/lib/utils';
+import { isPast, parseISO } from 'date-fns';
 
 
 type SortKey = 'unitNumber' | 'status' | 'rentAmount';
@@ -207,8 +207,16 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {filteredAndSortedUnits.map((unit: any) => {
-          const isOccupied = unit.tenants?.some((t: any) => t.status === 'active');
-          const activeTenant = isOccupied ? unit.tenants.find((t: any) => t.status === 'active') : null;
+          const activeTenant = unit.tenants?.find((t: any) => t.status === 'active');
+          const getStatus = () => {
+            if (!activeTenant) return 'Vacant';
+            if (activeTenant.leaseEnd && isPast(parseISO(activeTenant.leaseEnd))) {
+              return 'Lease Expired';
+            }
+            return 'Occupied';
+          };
+          const status = getStatus();
+
           const tenantName = activeTenant ? `${activeTenant.firstName} ${activeTenant.lastName}`.trim() : 'No Tenant';
           const rentAmount = activeTenant ? activeTenant.rentAmount : (unit.financials?.rent || 0);
           const borderColor = unit.tagColor || 'hsl(var(--border))';
@@ -224,8 +232,15 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
                         style={{ borderLeftColor: borderColor }}
                     >
                         <CardHeader className="pb-2 flex flex-row items-start justify-between">
-                            <Badge variant={isOccupied ? 'default' : 'destructive'}>
-                            {isOccupied ? 'Occupied' : 'Vacant'}
+                            <Badge 
+                                variant={
+                                    status === 'Occupied' ? 'default' : 
+                                    status === 'Lease Expired' ? 'outline' : 
+                                    'destructive'
+                                }
+                                className={cn(status === 'Lease Expired' && 'bg-amber-100 text-amber-800 border-amber-200')}
+                            >
+                                {status}
                             </Badge>
                             <span className="text-sm font-mono font-bold text-slate-500">#{unit.unitNumber}</span>
                         </CardHeader>
@@ -295,5 +310,3 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     </>
   );
 }
-
-    
