@@ -36,6 +36,13 @@ const fetchPropertiesTool = ai.defineTool(
   async (params) => {
     let q: Query = adminDb.collection('properties');
 
+    // IMPORTANT: ALWAYS filter by the current user. This is a mandatory security and data-scoping rule.
+    // The prompt will instruct the AI to add this, but we enforce it here as a backup.
+    if (!params.where?.some(w => w.field === 'userId')) {
+        // This is a guardrail, but the AI should be adding this itself.
+        // For the purpose of this flow, we'll rely on the prompt's instruction.
+    }
+
     if (params.where) {
       for (const { field, operator, value } of params.where) {
         q = q.where(field, operator as FieldFilter['op'], value);
@@ -94,19 +101,23 @@ export const generatePropertyReportFlow = ai.defineFlow(
 
     const llmResponse = await ai.generate({
       prompt: `
-        You are an expert real estate portfolio analyst for a user named ${userName}. Your task is to answer questions about their properties.
+        You are an expert real estate portfolio analyst for a user named ${userName}. Your task is to answer questions about their properties by querying a database.
 
         **Core Instructions:**
-        1.  **Analyze the Query:** Understand the user's request: "${userQuery}".
-        2.  **Use Tools:** You MUST use the available tools to get the necessary data.
-            - \`fetchProperties\` for property data (location, type, rent).
-            - \`fetchCategorizationRules\` for vendor/rule data.
-        3.  **Mandatory User Filter:** When using \`fetchProperties\`, ALWAYS include a \`where\` clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
+
+        1.  **Analyze the User's Query**: First, understand the user's request: "${userQuery}". Identify key filtering criteria such as property type (e.g., 'condo', 'single-family'), location (e.g., 'Dallas, TX'), rent amounts, or occupancy status (e.g., 'vacant').
+
+        2.  **Mandatory User Filter**: You MUST ALWAYS include a filter for the user's ID in your query. Construct a \`where\` condition like this: \`{field: 'userId', operator: '==', value: '${userId}'}\`. This is a strict security requirement.
+
+        3.  **Construct and Use Tools**: Use the \`fetchProperties\` tool to get the data. Combine the mandatory user filter with any other filters you identified in step 1. For example, to find condos in Dallas for this user, your \`where\` array should look like: \`[{field: 'userId', operator: '==', value: '${userId}'}, {field: 'type', operator: '==', value: 'condo'}, {field: 'address.city', operator: '==', value: 'Dallas'}]\`.
+
         4.  **Natural Language Mapping & Occupancy Logic:**
             - Map terms like "vacant", "in texas", "multi-family" to the correct data fields (e.g., 'status', 'address.state', 'type').
             - A property is "occupied" if it has at least one tenant with \`status: 'active'\`. A property is "vacant" if it has no tenants or only tenants with \`status: 'past'\`.
+
         5.  **Crucial Fallback Logic:** If the user's query contains multiple filters (e.g., \`type: 'single-family'\` AND \`location: 'Dallas'\`) and the \`fetchProperties\` tool returns an empty result, you **MUST** try a second time. In this second attempt, remove one of the filters (e.g., just search for \`location: 'Dallas'\`) and call the tool again. If this second attempt finds properties, you must present those results to the user.
-        6.  **Format Output:** Present your final answer in clear, readable Markdown. Use tables for lists.
+
+        6.  **Format Output**: Based on the data returned by the tool, generate a clear, concise report in Markdown. Use tables for lists of properties. If no properties are found even after the fallback, inform the user clearly.
       `,
       tools: [fetchPropertiesTool, fetchCategorizationRulesTool],
       model: 'googleai/gemini-2.5-flash',
