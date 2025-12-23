@@ -118,6 +118,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const { user } = useUser();
   if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
   if (!property) return <div className="p-8">Property not found.</div>;
+
+  const isOccupied = property.tenants?.some((t: any) => t.status === 'active');
+  const activeTenant = isOccupied ? property.tenants.find((t: any) => t.status === 'active') : null;
+  const rentAmount = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
+
   
   const header = (
     <div className="flex items-center justify-between">
@@ -186,9 +191,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               </Card>
               <Card>
                  <CardHeader className="pb-2">
-                  <CardDescription>Target Rent</CardDescription>
+                  <CardDescription>Current Rent</CardDescription>
                   <CardTitle className="text-2xl font-bold">
-                    {formatCurrency(property.financials?.targetRent || 0)}
+                    {formatCurrency(rentAmount)}
                   </CardTitle>
                 </CardHeader>
               </Card>
@@ -196,7 +201,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 <CardHeader className="pb-2">
                   <CardDescription>Status</CardDescription>
                   <CardTitle className="text-2xl font-bold capitalize">
-                    {property.tenants && property.tenants.length > 0 ? 'Occupied' : 'Vacant'}
+                    {isOccupied ? 'Occupied' : 'Vacant'}
                   </CardTitle>
                 </CardHeader>
               </Card>
@@ -443,3 +448,5 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
     </>
   )
 }
+
+    

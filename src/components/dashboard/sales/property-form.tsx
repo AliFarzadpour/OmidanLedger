@@ -2,14 +2,14 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,7 @@ const propertySchema = z.object({
       lastName: z.string().min(1, "Required"),
       email: z.string().email(),
       phone: z.string().optional(),
+      status: z.enum(['active', 'past']).default('active'),
       leaseStart: z.string().optional(),
       leaseEnd: z.string().optional(),
       rentAmount: z.coerce.number().optional(),
@@ -70,7 +71,7 @@ const propertySchema = z.object({
   mortgage: z.object({
     purchasePrice: z.coerce.number().optional(),
     purchaseDate: z.string().optional(),
-    hasMortgage: z.enum(['yes', 'no']).optional(), // Changed to optional
+    hasMortgage: z.enum(['yes', 'no']).optional(),
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
     lenderPhone: z.string().optional(),
@@ -84,7 +85,7 @@ const propertySchema = z.object({
       includesInsurance: z.boolean().default(false),
       includesHoa: z.boolean().default(false),
     }).optional(),
-  }).optional(), // Made the whole mortgage object optional
+  }).optional(),
   taxAndInsurance: z.object({
     propertyTaxAmount: z.coerce.number().optional(),
     taxParcelId: z.string().optional(),
@@ -149,7 +150,7 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   mortgage: { 
     purchasePrice: 0,
     purchaseDate: '',
-    // hasMortgage is now undefined by default
+    hasMortgage: undefined,
     escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
   },
   taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, policyStartDate: '', policyEndDate: '' },
@@ -178,6 +179,7 @@ export function PropertyForm({
   const { toast } = useToast();
   const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
+  const [showPastTenants, setShowPastTenants] = useState(false);
 
   const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
   const isEditMode = !!currentPropertyId;
@@ -187,7 +189,7 @@ export function PropertyForm({
       ...initialData,
       utilities: initialData.utilities || DEFAULT_VALUES.utilities,
       preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
-      tenants: initialData.tenants || DEFAULT_VALUES.tenants,
+      tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active' })) || DEFAULT_VALUES.tenants,
       access: initialData.access || DEFAULT_VALUES.access,
       mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
       management: { ...DEFAULT_VALUES.management, ...initialData.management },
@@ -206,7 +208,7 @@ export function PropertyForm({
           ...initialData,
           utilities: initialData.utilities || DEFAULT_VALUES.utilities,
           preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
-          tenants: initialData.tenants || DEFAULT_VALUES.tenants,
+          tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active' })) || DEFAULT_VALUES.tenants,
           access: initialData.access || DEFAULT_VALUES.access,
           mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
           management: { ...DEFAULT_VALUES.management, ...initialData.management },
@@ -221,6 +223,9 @@ export function PropertyForm({
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
   const tenantFields = useFieldArray({ control: form.control, name: "tenants" });
 
+  const activeTenants = useMemo(() => tenantFields.fields.filter((_, index) => form.watch(`tenants.${index}.status`) === 'active'), [tenantFields.fields, form.watch]);
+  const pastTenants = useMemo(() => tenantFields.fields.filter((_, index) => form.watch(`tenants.${index}.status`) === 'past'), [tenantFields.fields, form.watch]);
+
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user || !firestore || !currentPropertyId) return;
     setIsSaving(true);
@@ -228,7 +233,6 @@ export function PropertyForm({
     try {
         const propertyRef = doc(firestore, 'properties', currentPropertyId);
         
-        // Fetch existing units to merge with the update
         const unitsCollection = collection(firestore, `properties/${currentPropertyId}/units`);
         const unitsSnap = await getDocs(unitsCollection);
         
@@ -255,7 +259,6 @@ export function PropertyForm({
         await updateDoc(propertyRef, data);
         toast({ title: "Property Updated", description: "Building-level details have been saved." });
         
-        // Regenerate rules after saving
         await generateRulesForProperty(currentPropertyId, fullPropertyData, user.uid);
         toast({ title: "Smart Rules Synced", description: "Categorization rules have been updated with the new property info." });
         
@@ -298,7 +301,6 @@ export function PropertyForm({
   return (
     <div className="flex flex-col lg:flex-row gap-6 w-full lg:h-[calc(100vh-120px)]">
       
-      {/* SIDEBAR */}
       <div className="hidden lg:flex lg:w-64 flex-shrink-0 flex-col gap-2 h-full overflow-y-auto pb-4">
         {navItems.map((item) => (
           <button
@@ -327,7 +329,6 @@ export function PropertyForm({
         </div>
       </div>
 
-      {/* MOBILE NAV */}
       <div className="lg:hidden w-full space-y-4">
          <div className="p-4 bg-muted/50 rounded-lg border">
             <Label className="mb-2 block">Navigate Form</Label>
@@ -347,7 +348,6 @@ export function PropertyForm({
          </Button>
       </div>
 
-      {/* CONTENT AREA */}
       <div className="flex-1 w-full h-auto lg:h-full lg:overflow-y-auto pr-1 pb-20 lg:pb-10">
         
         {activeSection === 'vendors' && (
@@ -401,33 +401,64 @@ export function PropertyForm({
         )}
         
         {activeSection === 'tenants' && (
-            <Card>
-                <CardHeader><CardTitle>Tenants & Lease</CardTitle><CardDescription>Manage residents for this property.</CardDescription></CardHeader>
-                <CardContent className="space-y-4">
-                    {tenantFields.fields.map((field, index) => (
-                        <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3 relative">
-                            <Button type="button" variant="ghost" size="icon" onClick={() => tenantFields.remove(index)} className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-destructive"><Trash2 className="h-4 w-4" /></Button>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><Label className="text-xs">First Name *</Label><Input {...form.register(`tenants.${index}.firstName`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Last Name *</Label><Input {...form.register(`tenants.${index}.lastName`)} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...form.register(`tenants.${index}.email`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...form.register(`tenants.${index}.phone`)} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                                <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...form.register(`tenants.${index}.leaseStart`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...form.register(`tenants.${index}.leaseEnd`)} /></div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...form.register(`tenants.${index}.rentAmount`)} /></div>
-                                <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...form.register(`tenants.${index}.deposit`)} /></div>
-                            </div>
-                        </div>
-                    ))}
-                    <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', rentAmount: 0, deposit: 0 })}><Plus className="mr-2 h-4 w-4" /> Add Tenant</Button>
-                </CardContent>
-            </Card>
+            <div className="space-y-6">
+                <Card>
+                    <CardHeader><CardTitle>Active Tenants</CardTitle><CardDescription>Manage current residents for this property.</CardDescription></CardHeader>
+                    <CardContent className="space-y-4">
+                        {activeTenants.map((field, index) => {
+                            const originalIndex = tenantFields.fields.findIndex(f => f.id === field.id);
+                            return (
+                                <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3">
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-1"><Label className="text-xs">First Name</Label><Input {...form.register(`tenants.${originalIndex}.firstName`)} /></div>
+                                      <div className="space-y-1"><Label className="text-xs">Last Name</Label><Input {...form.register(`tenants.${originalIndex}.lastName`)} /></div>
+                                  </div>
+                                  <div className="space-y-1"><Label className="text-xs">Status</Label>
+                                    <Select onValueChange={(val: any) => form.setValue(`tenants.${originalIndex}.status`, val)} value={form.watch(`tenants.${originalIndex}.status`)}>
+                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Active</SelectItem>
+                                            <SelectItem value="past">Past</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                            );
+                        })}
+                        {activeTenants.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No active tenants.</p>}
+                        <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', status: 'active', rentAmount: 0, deposit: 0 })}><Plus className="mr-2 h-4 w-4" /> Add Tenant</Button>
+                    </CardContent>
+                </Card>
+
+                {pastTenants.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2"><History className="h-5 w-5 text-muted-foreground" /> Past Tenants</CardTitle>
+                            <CardDescription>Archived resident records for historical reference.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                           {pastTenants.map((field, index) => {
+                             const originalIndex = tenantFields.fields.findIndex(f => f.id === field.id);
+                             return (
+                                <div key={field.id} className="p-3 bg-slate-50 rounded-md border flex justify-between items-center">
+                                    <div>
+                                        <p className="font-medium">{form.watch(`tenants.${originalIndex}.firstName`)} {form.watch(`tenants.${originalIndex}.lastName`)}</p>
+                                        <p className="text-xs text-muted-foreground">{form.watch(`tenants.${originalIndex}.email`)}</p>
+                                    </div>
+                                    <Select onValueChange={(val: any) => form.setValue(`tenants.${originalIndex}.status`, val)} value={form.watch(`tenants.${originalIndex}.status`)}>
+                                        <SelectTrigger className="bg-white h-8 w-[100px]"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="active">Active</SelectItem>
+                                            <SelectItem value="past">Past</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                             )
+                           })}
+                        </CardContent>
+                    </Card>
+                )}
+            </div>
         )}
 
         {activeSection === 'access' && (
@@ -653,3 +684,4 @@ export function PropertyForm({
   );
 }
 
+    

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -78,7 +79,7 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(unit => {
-        const tenantName = unit.tenants?.[0]?.firstName ? `${unit.tenants[0].firstName} ${unit.tenants[0].lastName}` : '';
+        const tenantName = unit.tenants?.find((t: any) => t.status === 'active')?.firstName ? `${unit.tenants.find((t: any) => t.status === 'active').firstName} ${unit.tenants.find((t: any) => t.status === 'active').lastName}` : '';
         return (
           unit.unitNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
           tenantName.toLowerCase().includes(searchTerm.toLowerCase())
@@ -89,13 +90,13 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     // Sort the filtered units
     filtered.sort((a, b) => {
       let valA, valB;
-      const rentA = a.tenants?.[0]?.rentAmount || a.financials?.rent || 0;
-      const rentB = b.tenants?.[0]?.rentAmount || b.financials?.rent || 0;
+      const rentA = a.tenants?.find((t: any) => t.status === 'active')?.rentAmount || a.financials?.rent || 0;
+      const rentB = b.tenants?.find((t: any) => t.status === 'active')?.rentAmount || b.financials?.rent || 0;
 
       switch (sortBy) {
         case 'status':
-          valA = a.tenants?.length > 0 ? 1 : 0; // Occupied = 1, Vacant = 0
-          valB = b.tenants?.length > 0 ? 1 : 0;
+          valA = a.tenants?.some((t: any) => t.status === 'active') ? 1 : 0; // Occupied = 1, Vacant = 0
+          valB = b.tenants?.some((t: any) => t.status === 'active') ? 1 : 0;
           break;
         case 'rentAmount':
           valA = rentA;
@@ -206,9 +207,10 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
         {filteredAndSortedUnits.map((unit: any) => {
-          const isOccupied = unit.tenants && unit.tenants.length > 0;
-          const tenantName = isOccupied ? `${unit.tenants[0].firstName} ${unit.tenants[0].lastName}`.trim() : 'No Tenant';
-          const rentAmount = isOccupied ? unit.tenants[0].rentAmount : (unit.financials?.rent || 0);
+          const isOccupied = unit.tenants?.some((t: any) => t.status === 'active');
+          const activeTenant = isOccupied ? unit.tenants.find((t: any) => t.status === 'active') : null;
+          const tenantName = activeTenant ? `${activeTenant.firstName} ${activeTenant.lastName}`.trim() : 'No Tenant';
+          const rentAmount = activeTenant ? activeTenant.rentAmount : (unit.financials?.rent || 0);
           const borderColor = unit.tagColor || 'hsl(var(--border))';
 
           return (
@@ -293,3 +295,5 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     </>
   );
 }
+
+    
