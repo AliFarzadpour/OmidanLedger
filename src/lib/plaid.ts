@@ -453,7 +453,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         userId: userId,
                         createdAt: FieldValue.serverTimestamp(),
                         ...enforcedCategory,
-                        propertyId: enforcedCategory.propertyId || null
+                        propertyId: enforcedCategory.propertyId || null,
+                        reviewStatus: 'needs-review', // Add default review status
                     };
 
                     batch.set(docRef, txData, { merge: true });

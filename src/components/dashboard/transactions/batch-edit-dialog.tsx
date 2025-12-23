@@ -61,6 +61,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
           subcategory,
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
+          reviewStatus: 'approved' // Set status to approved on batch update
         });
       });
       await batch.commit();

@@ -7,13 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Circle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
@@ -49,6 +50,7 @@ export interface Transaction {
   accountId?: string;
   accountName?: string; 
   status?: 'posted' | 'review' | 'error' | 'ready';
+  reviewStatus?: 'needs-review' | 'approved' | 'incorrect';
 }
 
 type SortKey = 'date' | 'description' | 'category' | 'amount';
@@ -122,11 +124,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!firestore || !user) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
     
-    await setDoc(transactionRef, { 
+    await updateDoc(transactionRef, { 
         ...newCategories,
         confidence: 1.0, 
-        status: 'posted' 
-    }, { merge: true });
+        status: 'posted',
+        reviewStatus: 'approved' // Automatically approve on manual category change
+    });
 
     await learnCategoryMapping({
         transactionDescription: transaction.description,
@@ -135,7 +138,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         subcategory: newCategories.subcategory,
         userId: user.uid,
     });
-    toast({ title: "Updated", description: "Category saved." });
+    toast({ title: "Updated", description: "Category saved and rule learned." });
   };
   
   const handleSelectionChange = (id: string, checked: boolean) => {
@@ -238,6 +241,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     onCheckedChange={(checked) => handleSelectAll(!!checked)}
                   />
                 </TableHead>
+                <TableHead className="w-[20px] p-0"></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
@@ -248,7 +252,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
@@ -259,6 +263,9 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                             checked={selectedIds.includes(transaction.id)}
                             onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
                         />
+                    </TableCell>
+                    <TableCell className="p-0">
+                      <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
                     </TableCell>
                     <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
@@ -273,7 +280,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={5} className="h-24 text-center">No transactions found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="h-24 text-center">No transactions found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -304,6 +311,50 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     </>
   );
 }
+
+function StatusFlagEditor({ transaction, dataSource }: { transaction: Transaction; dataSource: DataSource; }) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
+  const handleStatusChange = async (newStatus: 'needs-review' | 'approved' | 'incorrect') => {
+    if (!user || !firestore) return;
+    const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
+    try {
+      await updateDoc(transactionRef, { reviewStatus: newStatus });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not update status.' });
+    }
+  };
+
+  const statusColor = {
+    'approved': 'bg-green-500',
+    'needs-review': 'bg-yellow-500',
+    'incorrect': 'bg-red-500',
+  }[transaction.reviewStatus || 'needs-review'];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <div className="w-full h-full flex items-center justify-center cursor-pointer p-2">
+            <Circle className={`h-3 w-3 ${statusColor} rounded-full`} />
+        </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuItem onClick={() => handleStatusChange('approved')}>
+          <Circle className="mr-2 h-3 w-3 bg-green-500 rounded-full" /> Approved
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleStatusChange('needs-review')}>
+          <Circle className="mr-2 h-3 w-3 bg-yellow-500 rounded-full" /> Needs Review
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleStatusChange('incorrect')}>
+          <Circle className="mr-2 h-3 w-3 bg-red-500 rounded-full" /> Incorrect
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 
 function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: any }) {
     const [isOpen, setIsOpen] = useState(false);
