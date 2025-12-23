@@ -105,7 +105,7 @@ export const generatePropertyReportFlow = ai.defineFlow(
         4.  **Natural Language Mapping & Occupancy Logic:**
             - Map terms like "vacant", "in texas", "multi-family" to the correct data fields (e.g., 'status', 'address.state', 'type').
             - A property is "occupied" if it has at least one tenant with \`status: 'active'\`. A property is "vacant" if it has no tenants or only tenants with \`status: 'past'\`.
-        5.  **Helpful Alternative Answers:** If a specific query (e.g., 'single-family homes in Dallas') returns no results, but a broader query (e.g., *any* property in 'Dallas') does, you **MUST** inform the user you couldn't find the specific type but then offer the alternative results you did find. For example: "I couldn't find any single-family homes in Dallas, but I did find these other properties for you there:".
+        5.  **Helpful Alternative Answers:** If a query for a specific filter (e.g., 'single-family' homes in Dallas) returns no results, you MUST run a second, broader query (e.g., *any* property in 'Dallas'). If that second query finds results, you MUST inform the user you couldn't find their specific request but then offer the alternative results. For example: "I couldn't find any single-family homes in Dallas, but I did find these other properties for you there:".
         6.  **Format Output:** Present your final answer in clear, readable Markdown. Use tables for lists.
       `,
       tools: [fetchPropertiesTool, fetchCategorizationRulesTool], // Provide BOTH tools to the AI.
