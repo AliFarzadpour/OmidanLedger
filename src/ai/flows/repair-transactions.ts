@@ -45,13 +45,13 @@ export const repairUncategorizedTransactions = ai.defineFlow(
       let ruleResult: any;
 
       // First, try the database (user & global rules)
-      const dbResult = await getCategoryFromDatabase(data.description, userId, db);
+      const dbResult = await getCategoryFromDatabase(data.description, userContext, db);
       
       if (dbResult) {
         ruleResult = {
-          primary: dbResult.primary,
-          secondary: dbResult.secondary,
-          sub: dbResult.sub,
+          primary: dbResult.primaryCategory,
+          secondary: dbResult.secondaryCategory,
+          sub: dbResult.subcategory,
         };
       } else {
         // If DB fails, use the fallback heuristics

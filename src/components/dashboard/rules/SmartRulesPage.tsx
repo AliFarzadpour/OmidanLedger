@@ -11,10 +11,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search } from 'lucide-react';
+import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { repairTransactionsAction } from '@/ai/flows/repair-transactions';
 
 
 type SortKey = 'originalKeyword' | 'category' | 'source';
@@ -29,6 +30,7 @@ export default function SmartRulesPage() {
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
+  const [isRepairing, setIsRepairing] = useState(false);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
@@ -159,6 +161,21 @@ export default function SmartRulesPage() {
         setDeletingRuleId(null);
     }
   };
+  
+  const handleRepair = async () => {
+    if (!user) return;
+    setIsRepairing(true);
+    toast({ title: 'Repairing...', description: 'AI is scanning for uncategorized items.' });
+    try {
+      const result = await repairTransactionsAction(user.uid);
+      toast({ title: 'Repair Complete', description: `${result.repairedCount} out of ${result.scannedCount} items were re-categorized.` });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
 
   const filteredAndSortedRules = useMemo(() => {
     let filtered = [...rules];
@@ -272,6 +289,10 @@ export default function SmartRulesPage() {
                 ))}
             </SelectContent>
         </Select>
+         <Button onClick={handleRepair} disabled={isRepairing} variant="outline" className="gap-2">
+          {isRepairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+          Repair Categories
+        </Button>
       </div>
 
       <Card>
