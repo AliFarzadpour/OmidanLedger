@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -11,11 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search, Wand2 } from 'lucide-react';
+import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search, Wand2, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { repairTransactionsAction } from '@/ai/flows/repair-transactions';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 
 
 type SortKey = 'originalKeyword' | 'category' | 'source';
@@ -31,6 +31,7 @@ export default function SmartRulesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isRepairing, setIsRepairing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<any>(null);
@@ -51,6 +52,7 @@ export default function SmartRulesPage() {
   const fetchRules = async () => {
     if (!user || !firestore) return;
     setLoading(true);
+    setFetchError(null);
     try {
       const collectionPath = isAdminMode 
         ? 'globalVendorMap' 
@@ -68,8 +70,9 @@ export default function SmartRulesPage() {
           ...d.data() 
       }));
       setRules(fetchedRules);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching rules:", error);
+      setFetchError(error.message);
       toast({ variant: 'destructive', title: "Error", description: "Could not fetch rules." });
     } finally {
       setLoading(false);
@@ -267,6 +270,16 @@ export default function SmartRulesPage() {
         </div>
       </div>
       
+      {fetchError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Fetching Data</AlertTitle>
+          <AlertDescription className="font-mono text-xs break-all">
+            {fetchError}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Filter and Search Toolbar */}
       <div className="flex flex-col md:flex-row gap-4 p-4 bg-slate-50 border rounded-lg">
         <div className="relative flex-grow">
