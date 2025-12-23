@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -189,7 +190,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     });
 
     // Custom sort map for reviewStatus
-    const statusSortOrder = { 'incorrect': 1, 'needs-review': 2, 'approved': 3 };
+    const statusSortOrder: { [key: string]: number } = { 'incorrect': 1, 'needs-review': 2, 'approved': 3 };
 
     filtered.sort((a, b) => {
       if (sortConfig.key === 'reviewStatus') {
@@ -355,6 +356,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
           dataSource={dataSource}
+          onSuccess={() => setSelectedIds([])}
         />
       )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>

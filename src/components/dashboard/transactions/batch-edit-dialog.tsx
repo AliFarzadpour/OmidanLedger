@@ -18,9 +18,10 @@ interface BatchEditDialogProps {
   onOpenChange: (open: boolean) => void;
   transactions: Transaction[];
   dataSource: { id: string; accountName: string };
+  onSuccess: () => void;
 }
 
-export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource }: BatchEditDialogProps) {
+export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource, onSuccess }: BatchEditDialogProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -87,6 +88,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       }
       
       onOpenChange(false);
+      onSuccess(); // Call the success handler to clear selection
       
     } catch (error: any) {
       console.error(error);
@@ -128,7 +130,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
                 placeholder="Confirm by re-typing the vendor name" 
             />
              <p className="text-xs text-muted-foreground">
-                If provided, a new Smart Rule will be created based on the transactions' content.
+                If a vendor name is provided, a new Smart Rule will be created for it.
              </p>
           </div>
         </div>
