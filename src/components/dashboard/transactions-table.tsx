@@ -53,7 +53,7 @@ export interface Transaction {
   reviewStatus?: 'needs-review' | 'approved' | 'incorrect';
 }
 
-type SortKey = 'date' | 'description' | 'category' | 'amount';
+type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus';
 type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
@@ -186,7 +186,18 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
        return matchesSearch && matchesCategory && matchesDate;
     });
 
+    // Custom sort map for reviewStatus
+    const statusSortOrder = { 'incorrect': 1, 'needs-review': 2, 'approved': 3 };
+
     filtered.sort((a, b) => {
+      if (sortConfig.key === 'reviewStatus') {
+        const aStatus = a.reviewStatus || 'needs-review';
+        const bStatus = b.reviewStatus || 'needs-review';
+        const aOrder = statusSortOrder[aStatus];
+        const bOrder = statusSortOrder[bStatus];
+        return sortConfig.direction === 'ascending' ? aOrder - bOrder : bOrder - aOrder;
+      }
+      
       let aValue: any = a[sortConfig.key as keyof Transaction] || '';
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
       
@@ -286,8 +297,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
-                <TableHead className="text-right p-2 w-[120px]">Status</TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
+                <TableHead className="text-right p-2 w-[120px]"><Button variant="ghost" onClick={() => requestSort('reviewStatus')}>Status {getSortIcon('reviewStatus')}</Button></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -313,11 +324,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                           <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                       </div>
                     </TableCell>
-                    <TableCell className="align-top py-4 text-right">
-                       <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
-                    </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
+                    </TableCell>
+                    <TableCell className="align-top py-4 text-right">
+                       <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
                     </TableCell>
                   </TableRow>
                 ))
