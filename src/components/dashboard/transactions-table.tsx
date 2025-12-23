@@ -420,7 +420,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                             <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
                         </Badge>
                         <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {transaction.secondaryCategory} > {transaction.subcategory}
+                            {transaction.secondaryCategory} {'>'} {transaction.subcategory}
                         </span>
                     </div>
 
