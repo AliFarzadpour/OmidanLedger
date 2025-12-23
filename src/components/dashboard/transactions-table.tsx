@@ -77,6 +77,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [filterTerm, setFilterTerm] = useState('');
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [filterCategory, setFilterCategory] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -183,7 +184,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
        const matchesCategory = filterCategory && filterCategory !== 'all' ? t.primaryCategory === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
-       return matchesSearch && matchesCategory && matchesDate;
+       const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
+       return matchesSearch && matchesCategory && matchesDate && matchesStatus;
     });
 
     // Custom sort map for reviewStatus
@@ -212,7 +214,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
+  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory, statusFilter]);
   
   const selectedTransactions = useMemo(() => {
     return sortedTransactions.filter(tx => selectedIds.includes(tx.id));
@@ -250,7 +252,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 onSearch={setFilterTerm}
                 onDateChange={setFilterDate}
                 onCategoryFilter={setFilterCategory}
-                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
+                onStatusFilterChange={setStatusFilter}
+                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); setStatusFilter([]); }}
             />
             {selectedIds.length > 0 && (
               <div className="flex items-center gap-2">
