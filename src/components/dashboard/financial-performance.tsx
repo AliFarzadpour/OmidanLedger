@@ -103,13 +103,13 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   return (
     <>
       {errorMessage && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Firestore Query Error</AlertTitle>
-          <AlertDescription className="break-all font-mono text-xs">
+        <div className="mb-4 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
+          <h3 className="font-bold text-destructive">Firestore Query Error</h3>
+          <p className="text-sm text-destructive/80 mb-2">Please copy the full error message below to create the required index.</p>
+          <pre className="bg-white p-3 rounded-md text-xs font-mono whitespace-pre-wrap break-all">
             {errorMessage}
-          </AlertDescription>
-        </Alert>
+          </pre>
+        </div>
       )}
       <Card className="col-span-4 shadow-sm border-blue-100 mb-6">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
