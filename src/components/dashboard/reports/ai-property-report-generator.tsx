@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Sparkles, Loader2, Building } from 'lucide-react';
 import { generatePropertyReport } from '@/ai/flows/generate-property-report';
 import { marked } from 'marked';
+import { SimpleBarChart } from '@/components/dashboard/reports/simple-bar-chart';
 
 // Simple component to render markdown
 function MarkdownReport({ content }: { content: string }) {
@@ -21,12 +22,19 @@ function MarkdownReport({ content }: { content: string }) {
   );
 }
 
+// Define the shape of the report object
+interface PropertyReport {
+    reportText: string;
+    chartData?: { name: string; value: number }[];
+}
+
+
 export function AIPropertyReportGenerator() {
   const { user } = useUser();
   const { toast } = useToast();
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [report, setReport] = useState<string | null>(null);
+  const [report, setReport] = useState<PropertyReport | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +51,7 @@ export function AIPropertyReportGenerator() {
     setReport(null);
 
     try {
-      // Call the new server action for property reports
+      // The server action now returns an object with text and optional chart data
       const result = await generatePropertyReport({
         userQuery: query,
         userId: user.uid,
@@ -64,7 +72,7 @@ export function AIPropertyReportGenerator() {
 
   const exampleQueries = [
     'Which properties are vacant?',
-    'Show my single-family homes in Dallas, TX',
+    'Show a breakdown of properties by city',
     'List properties with rent over $2000/month',
   ];
 
@@ -74,7 +82,7 @@ export function AIPropertyReportGenerator() {
         <CardContent className="pt-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <Textarea
-              placeholder="Ask about your properties... e.g., 'Which of my units are vacant?'"
+              placeholder="Ask about your properties... e.g., 'Show a breakdown of properties by type'"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="min-h-[100px] text-base"
@@ -132,7 +140,14 @@ export function AIPropertyReportGenerator() {
             <CardDescription>Based on your question: "{query}"</CardDescription>
           </CardHeader>
           <CardContent>
-            <MarkdownReport content={report} />
+            {/* Render chart if data exists */}
+            {report.chartData && report.chartData.length > 0 && (
+                <div className="mb-8">
+                    <SimpleBarChart data={report.chartData} />
+                </div>
+            )}
+            {/* Render text report */}
+            <MarkdownReport content={report.reportText} />
           </CardContent>
         </Card>
       )}

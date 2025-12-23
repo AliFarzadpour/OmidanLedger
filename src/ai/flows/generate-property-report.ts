@@ -1,4 +1,3 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -8,7 +7,6 @@ import type { Query, FieldFilter, OrderByDirection } from 'firebase-admin/firest
 
 // --- TOOLS ---
 
-// Defines the structure for the AI-generated query for properties.
 const propertyQueryToolSchema = z.object({
   where: z
     .array(
@@ -25,23 +23,15 @@ const propertyQueryToolSchema = z.object({
   limit: z.number().optional().describe("The maximum number of properties to return.")
 });
 
-// Tool for the AI to fetch property data from Firestore.
 const fetchPropertiesTool = ai.defineTool(
   {
     name: 'fetchProperties',
     description: 'Fetches property data from the database based on specified filters and sorting.',
     inputSchema: propertyQueryToolSchema,
-    outputSchema: z.array(z.any()), // We expect an array of property objects.
+    outputSchema: z.array(z.any()), 
   },
   async (params) => {
     let q: Query = adminDb.collection('properties');
-
-    // IMPORTANT: ALWAYS filter by the current user. This is a mandatory security and data-scoping rule.
-    // The prompt will instruct the AI to add this, but we enforce it here as a backup.
-    if (!params.where?.some(w => w.field === 'userId')) {
-        // This is a guardrail, but the AI should be adding this itself.
-        // For the purpose of this flow, we'll rely on the prompt's instruction.
-    }
 
     if (params.where) {
       for (const { field, operator, value } of params.where) {
@@ -61,7 +51,6 @@ const fetchPropertiesTool = ai.defineTool(
   }
 );
 
-// NEW TOOL: Fetches categorization rules for a user.
 const fetchCategorizationRulesTool = ai.defineTool(
   {
     name: 'fetchCategorizationRules',
@@ -86,55 +75,69 @@ const GeneratePropertyReportInputSchema = z.object({
   userId: z.string().describe("The ID of the user to fetch data for."),
 });
 
+// NEW: Define a schema for chart data
+const ChartDataSchema = z.array(z.object({
+    name: z.string().describe("The label for the data point (e.g., a city name, property type)."),
+    value: z.number().describe("The numerical value for the data point (e.g., count of properties).")
+})).optional();
+
+
+// NEW: Define the flow's output schema
+const PropertyReportOutputSchema = z.object({
+    reportText: z.string().describe("The natural language text report in Markdown format."),
+    chartData: ChartDataSchema.describe("Optional data formatted for a bar chart visualization.")
+});
+
+
 export const generatePropertyReportFlow = ai.defineFlow(
   {
     name: 'generatePropertyReportFlow',
     inputSchema: GeneratePropertyReportInputSchema,
-    outputSchema: z.string(), // The final output is a markdown string.
+    outputSchema: PropertyReportOutputSchema, // Use the new output schema
   },
   async ({ userQuery, userId }) => {
     
-    // Fetch the user's profile to get their name
     const userDoc = await adminDb.collection('users').doc(userId).get();
     const userName = userDoc.exists ? userDoc.data()?.name || userDoc.data()?.email : `user ${userId}`;
 
-
     const llmResponse = await ai.generate({
       prompt: `
-        You are an expert real estate portfolio analyst for a user named ${userName}. Your task is to answer questions about their properties by querying a database.
+        You are an expert real estate portfolio analyst for a user named ${userName}. Your task is to answer questions about their properties by querying a database and generating reports, including data for charts.
 
         **Core Instructions:**
 
-        1.  **Analyze the User's Query**: First, understand the user's request: "${userQuery}". Identify key filtering criteria such as property type (e.g., 'condo', 'single-family'), location (e.g., 'Dallas, TX'), rent amounts, or occupancy status (e.g., 'vacant').
+        1.  **Analyze the Query & Chart Potential**: First, understand the user's request: "${userQuery}".
+            - If the query asks for a breakdown, count, or summary (e.g., "by type", "by city"), you MUST generate data for a chart. Format this data as an array of objects: \`[{name: "Label", value: 123}, ...]\`.
+            - If the query asks for a list or table, generate a text-based report in Markdown. You can skip the chart data in this case.
 
-        2.  **Mandatory User Filter**: You MUST ALWAYS include a filter for the user's ID in your query. Construct a \`where\` condition like this: \`{field: 'userId', operator: '==', value: '${userId}'}\`. This is a strict security requirement.
+        2.  **Construct and Use Tools**: Use the \`fetchProperties\` tool to get the data. Combine the mandatory user filter with any other filters you identified.
+            - **Mandatory User Filter**: You MUST ALWAYS include a filter for the user's ID in your query. Construct a \`where\` condition like this: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
+            - `fetchCategorizationRules` can be used to get vendor/rule data if needed.
 
-        3.  **Construct and Use Tools**: Use the \`fetchProperties\` tool to get the data. Combine the mandatory user filter with any other filters you identified in step 1. For example, to find condos in Dallas for this user, your \`where\` array should look like: \`[{field: 'userId', operator: '==', value: '${userId}'}, {field: 'type', operator: '==', value: 'condo'}, {field: 'address.city', operator: '==', value: 'Dallas'}]\`.
-
-        4.  **Natural Language Mapping & Occupancy Logic:**
-            - Map terms like "vacant", "in texas", "multi-family" to the correct data fields (e.g., 'status', 'address.state', 'type').
+        3.  **Natural Language Mapping & Occupancy Logic:**
             - A property is "occupied" if it has at least one tenant with \`status: 'active'\`. A property is "vacant" if it has no tenants or only tenants with \`status: 'past'\`.
 
-        5.  **Crucial Fallback Logic:** If the user's query contains multiple filters (e.g., \`type: 'single-family'\` AND \`location: 'Dallas'\`) and the \`fetchProperties\` tool returns an empty result, you **MUST** try a second time. In this second attempt, remove one of the filters (e.g., just search for \`location: 'Dallas'\`) and call the tool again. If this second attempt finds properties, you must present those results to the user.
+        4.  **Crucial Fallback Logic:** If the user's query contains multiple filters (e.g., \`type: 'single-family'\` AND \`location: 'Dallas'\`) and the \`fetchProperties\` tool returns an empty result, you **MUST** try a second time. In this second attempt, remove one of the filters (e.g., just search for \`location: 'Dallas'\`) and call the tool again. If this second attempt finds properties, you must present those results to the user.
 
-        6.  **Format Output**: Based on the data returned by the tool, generate a clear, concise report in Markdown. Use tables for lists of properties. If no properties are found even after the fallback, inform the user clearly.
+        5.  **Format Output**: Based on the data returned by the tool, generate a clear text report in \`reportText\`. If you generated chart data, include it in the \`chartData\` field.
       `,
       tools: [fetchPropertiesTool, fetchCategorizationRulesTool],
       model: 'googleai/gemini-2.5-flash',
+      output: { schema: PropertyReportOutputSchema },
     });
 
-    const reportText = llmResponse.text;
+    const output = llmResponse.output;
 
-    if (!reportText) {
-        throw new Error("The AI returned an empty response. It might be having trouble with the request.");
+    if (!output) {
+        throw new Error("The AI returned an empty response.");
     }
     
-    // Forcefully guide the AI if it fails the first time.
-    if (reportText.includes("couldn't find any")) {
-        return reportText + "\n\n**Developer Note:** Your query failed. As per instructions, you MUST now attempt a second, broader query by removing one of the filters (e.g., property type) to see if other relevant properties exist in that location.";
+    // Developer Note feedback logic
+    if (output.reportText.includes("couldn't find any")) {
+        output.reportText += "\n\n**Developer Note:** Your query failed. As per instructions, you MUST now attempt a second, broader query by removing one of the filters (e.g., property type) to see if other relevant properties exist in that location.";
     }
     
-    return reportText;
+    return output;
   }
 );
 
