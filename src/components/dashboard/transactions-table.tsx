@@ -298,7 +298,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
-                <TableHead className="text-right p-2 w-[120px]"><Button variant="ghost" onClick={() => requestSort('reviewStatus')}>Status {getSortIcon('reviewStatus')}</Button></TableHead>
+                <TableHead className="text-right p-2 w-[80px]">
+                    <Button variant="ghost" size="icon" onClick={() => requestSort('reviewStatus')}>
+                        <Flag className="h-4 w-4" />
+                        {getSortIcon('reviewStatus')}
+                    </Button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -327,7 +332,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
                     </TableCell>
-                    <TableCell className="align-top py-4 text-right">
+                     <TableCell className="align-top py-4 text-right">
                        <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
                     </TableCell>
                   </TableRow>
