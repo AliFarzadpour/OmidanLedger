@@ -7,20 +7,23 @@ import type { Query, FieldFilter, OrderByDirection } from 'firebase-admin/firest
 
 // --- TOOLS ---
 
-// Defines the structure for a Firestore 'where' clause that the AI can generate.
-const whereClauseSchema = z.tuple([
-  z.string().describe("The field path to filter on (e.g., 'address.state', 'type')."),
-  z.enum(['==', '!=', '>', '<', '>=', '<=', 'in', 'not-in', 'array-contains', 'array-contains-any']).describe("The comparison operator."),
-  z.any().describe("The value to compare against.")
-]);
-
 // Defines the structure for the AI-generated query.
 const propertyQueryToolSchema = z.object({
-  where: z.array(whereClauseSchema).optional().describe("An array of 'where' conditions to filter properties."),
+  where: z
+    .array(
+      z.object({
+        field: z.string().describe("The field path to filter on (e.g., 'address.state', 'type')."),
+        operator: z.enum(['==', '!=', '>', '<', '>=', '<=', 'in', 'not-in', 'array-contains', 'array-contains-any']).describe("The comparison operator."),
+        value: z.any().describe("The value to compare against.")
+      })
+    )
+    .optional()
+    .describe("An array of 'where' conditions to filter properties."),
   orderBy: z.string().optional().describe("The field to sort the results by."),
   orderDirection: z.enum(['asc', 'desc']).optional().describe("The direction to sort in."),
   limit: z.number().optional().describe("The maximum number of properties to return.")
 });
+
 
 // Tool for the AI to fetch property data from Firestore.
 const fetchPropertiesTool = ai.defineTool(
@@ -36,8 +39,8 @@ const fetchPropertiesTool = ai.defineTool(
 
     // Dynamically build the query from the AI's generated parameters.
     if (params.where) {
-      for (const [field, op, value] of params.where) {
-        q = q.where(field, op as FieldFilter['op'], value);
+      for (const { field, operator, value } of params.where) {
+        q = q.where(field, operator as FieldFilter['op'], value);
       }
     }
     if (params.orderBy) {
@@ -78,7 +81,7 @@ export const generatePropertyReportFlow = ai.defineFlow(
         
         1.  First, analyze the user's query: "${userQuery}".
         2.  You MUST use the 'fetchProperties' tool to get the necessary data. Generate the correct 'where', 'orderBy', and 'limit' parameters for the tool.
-            - ALWAYS add a 'where' clause to filter by the current user: \`['userId', '==', '${userId}']\`
+            - ALWAYS add a 'where' clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`
             - Map natural language queries (e.g., "vacant", "in texas", "multi-family") to the correct data fields (e.g., 'status', 'address.state', 'type').
         3.  After receiving the data from the tool, analyze it to formulate a clear, concise answer.
         4.  Format your final answer in readable Markdown. Use tables for lists of properties.
