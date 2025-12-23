@@ -128,11 +128,11 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       ...data,
       isMultiUnit,
       financials: { targetRent: data.targetRent, securityDeposit: data.securityDeposit },
-      mortgage: { hasMortgage: 'no' }, 
       management: { isManaged: 'self' },
       tenants: [], 
       createdAt: timestamp,
       accounting: accountingMap
+      // No default mortgage object
     };
 
     batch.set(propertyRef, propertyData);

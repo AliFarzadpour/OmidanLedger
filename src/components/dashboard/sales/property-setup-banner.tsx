@@ -17,7 +17,8 @@ export function PropertySetupBanner({ propertyId, propertyData, onOpenSettings }
 
   // Logic to determine what's missing
   const hasTenants = propertyData?.tenants && propertyData.tenants.length > 0;
-  const hasMortgage = propertyData?.mortgage?.hasMortgage === 'yes' && propertyData?.mortgage?.lenderName;
+  // Updated Logic: Setup is complete if 'hasMortgage' is explicitly 'yes' or 'no'. It is incomplete if undefined.
+  const hasMortgage = propertyData?.mortgage?.hasMortgage === 'yes' || propertyData?.mortgage?.hasMortgage === 'no';
   const hasTax = propertyData?.taxAndInsurance?.taxParcelId || (propertyData?.taxAndInsurance?.annualPremium || 0) > 0;
 
   // Calculate percentage

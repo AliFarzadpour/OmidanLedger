@@ -70,7 +70,7 @@ const propertySchema = z.object({
   mortgage: z.object({
     purchasePrice: z.coerce.number().optional(),
     purchaseDate: z.string().optional(),
-    hasMortgage: z.enum(['yes', 'no']),
+    hasMortgage: z.enum(['yes', 'no']).optional(), // Changed to optional
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
     lenderPhone: z.string().optional(),
@@ -84,7 +84,7 @@ const propertySchema = z.object({
       includesInsurance: z.boolean().default(false),
       includesHoa: z.boolean().default(false),
     }).optional(),
-  }),
+  }).optional(), // Made the whole mortgage object optional
   taxAndInsurance: z.object({
     propertyTaxAmount: z.coerce.number().optional(),
     taxParcelId: z.string().optional(),
@@ -149,8 +149,7 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   mortgage: { 
     purchasePrice: 0,
     purchaseDate: '',
-    hasMortgage: 'no', 
-    lenderName: '', 
+    // hasMortgage is now undefined by default
     escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
   },
   taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, policyStartDate: '', policyEndDate: '' },
@@ -654,4 +653,3 @@ export function PropertyForm({
   );
 }
 
-    
