@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle, Edit } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -18,8 +18,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
@@ -58,35 +58,6 @@ interface TransactionsTableProps {
   dataSource: DataSource;
 }
 
-function StatusIndicator({ transaction }: { transaction: Transaction }) {
-  if (transaction.status === 'posted') return null;
-
-  if (transaction.accountId) {
-    return (
-       <div className="flex items-center gap-1 w-fit text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-emerald-100 mt-1 cursor-default">
-          <CheckCircle2 className="h-3 w-3" />
-          <span>Auto-Matched</span>
-       </div>
-    );
-  }
-
-  return (
-       <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-             <div className="flex items-center gap-1 w-fit text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-medium border border-slate-200 mt-1 cursor-pointer hover:bg-slate-200">
-                <AlertTriangle className="h-3 w-3" />
-                <span>Unassigned</span>
-             </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>AI categorized this as <b>{transaction.subcategory}</b>.</p>
-            <p className="text-xs text-muted-foreground">We couldn't link it to a specific property ledger.<br/>Click to assign manually.</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-  );
-}
 
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
@@ -98,6 +69,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [isClearing, setIsClearing] = useState(false);
   const [isClearAlertOpen, setClearAlertOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'descending' });
   const [filterTerm, setFilterTerm] = useState('');
@@ -165,6 +137,20 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     });
     toast({ title: "Updated", description: "Category saved." });
   };
+  
+  const handleSelectionChange = (id: string, checked: boolean) => {
+    setSelectedIds(prev => 
+        checked ? [...prev, id] : prev.filter(i => i !== id)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+        setSelectedIds(sortedTransactions.map(t => t.id));
+    } else {
+        setSelectedIds([]);
+    }
+  };
 
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
@@ -191,6 +177,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     });
     return filtered;
   }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
+  
+  const selectedTransactions = useMemo(() => {
+    return sortedTransactions.filter(tx => selectedIds.includes(tx.id));
+  }, [sortedTransactions, selectedIds]);
 
   const requestSort = (key: SortKey) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending' });
@@ -199,8 +189,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
   const isPlaidAccount = !!dataSource.plaidAccessToken;
-
-  const isFilterActive = filterTerm || filterDate || (filterCategory && filterCategory !== 'all');
 
   return (
     <>
@@ -228,15 +216,14 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 onCategoryFilter={setFilterCategory}
                 onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
             />
-            {isFilterActive && (
+            {selectedIds.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setBatchEditDialogOpen(true)}
-                disabled={sortedTransactions.length === 0}
               >
                 <Edit className="mr-2 h-4 w-4" />
-                Batch Edit ({sortedTransactions.length})
+                Batch Edit ({selectedIds.length})
               </Button>
             )}
           </div>
@@ -245,6 +232,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px] p-2">
+                  <Checkbox 
+                    checked={selectedIds.length === sortedTransactions.length && sortedTransactions.length > 0}
+                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                  />
+                </TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
@@ -255,33 +248,23 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-40 rounded-full" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+                    <TableCell colSpan={5}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
                 sortedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
+                     <TableCell className="p-2">
+                        <Checkbox 
+                            checked={selectedIds.includes(transaction.id)}
+                            onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
+                        />
+                    </TableCell>
                     <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
-                          {transaction.accountName ? (
-                            <div className="flex flex-col">
-                                <span className="font-semibold text-sm text-slate-900">
-                                  {transaction.accountName}
-                                </span>
-                                <span className="text-xs text-muted-foreground">
-                                  AI Suggestion: {transaction.subcategory}
-                                </span>
-                            </div>
-                          ) : (
-                            <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
-                          )}
-                          
-                          <StatusIndicator transaction={transaction} />
+                          <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                       </div>
                     </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
@@ -290,7 +273,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">No transactions found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-24 text-center">No transactions found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -302,7 +285,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         <BatchEditDialog
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
-          transactions={sortedTransactions}
+          transactions={selectedTransactions}
           dataSource={dataSource}
         />
       )}
@@ -322,7 +305,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   );
 }
 
-function CategoryEditor({ transaction, onSave, displayName }: { transaction: Transaction, onSave: any, displayName?: string }) {
+function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: any }) {
     const [isOpen, setIsOpen] = useState(false);
     const [primary, setPrimary] = useState(transaction.primaryCategory);
     const [secondary, setSecondary] = useState(transaction.secondaryCategory);
@@ -338,13 +321,6 @@ function CategoryEditor({ transaction, onSave, displayName }: { transaction: Tra
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
                 <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                    
-                    {displayName && (
-                         <span className="font-bold text-sm text-slate-900 mb-1">
-                            {displayName}
-                         </span>
-                    )}
-
                     <div className="flex flex-col">
                         <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
                             {transaction.primaryCategory}
