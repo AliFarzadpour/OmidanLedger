@@ -225,10 +225,17 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
   };
   
   const handleTenantAdd = () => {
-    append({ firstName: '', lastName: '', email: '', phone: '', leaseStart: '', leaseEnd: '', rentAmount: 0, deposit: 0 });
-    // After appending, we can immediately save to trigger the rule generation via onUpdate.
-    // Or we can rely on the user to hit the main "Update Unit" button.
-    // For now, let's rely on the main save button to avoid too many writes.
+    append({ 
+        firstName: '', 
+        lastName: '', 
+        email: '', 
+        phone: '', 
+        leaseStart: '', 
+        leaseEnd: '', 
+        rentAmount: 0, 
+        deposit: 0,
+        status: 'active' // Set default status to active
+    });
   }
 
   return (
@@ -284,6 +291,22 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                           <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
                                           <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
                                       </div>
+                                       <div className="space-y-1"><Label className="text-xs">Status</Label>
+                                            <Controller
+                                                control={control}
+                                                name={`tenants.${index}.status`}
+                                                defaultValue="active"
+                                                render={({ field: statusField }) => (
+                                                    <Select onValueChange={statusField.onChange} value={statusField.value}>
+                                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="active">Active</SelectItem>
+                                                            <SelectItem value="past">Past</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                            />
+                                        </div>
                                   </div>
                               ))}
                               <div className="flex gap-2">
@@ -426,5 +449,3 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
     </>
   );
 }
-
-    
