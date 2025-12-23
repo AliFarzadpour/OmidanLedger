@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -223,6 +222,11 @@ export async function categorizeWithHeuristics(
   const isIncome = amount > 0;
   const { defaultIncomeCategory } = context.business || {};
 
+  // Rule for Credit Card Payments (Priority 1)
+  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK')) {
+      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan/Card Payment', confidence: 1.0 };
+  }
+  
   if (desc.includes('ONLINE BANKING TRANSFER') || 
       desc.includes('TRANSFER TO CHK') || 
       desc.includes('TRANSFER FROM CHK') || 

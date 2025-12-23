@@ -426,7 +426,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     const [sub, setSub] = useState(transaction.subcategory);
 
     // Alert state
-    const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit', isOpen: boolean }>({ type: 'none', isOpen: false });
+    const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit' | 'thankYouPayment', isOpen: boolean }>({ type: 'none', isOpen: false });
 
     const finalizeSave = (cats: { primaryCategory: string, secondaryCategory: string, subcategory: string }) => {
         onSave(transaction, cats);
@@ -444,17 +444,26 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         finalizeSave(liabilityCat);
         setAlertState({ type: 'none', isOpen: false });
     };
+    
+    const handleThankYouPayment = () => {
+        const transferCat = { primaryCategory: 'Balance Sheet', secondaryCategory: 'Liabilities', subcategory: 'Loan/Card Payment' };
+        finalizeSave(transferCat);
+        setAlertState({ type: 'none', isOpen: false });
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const cats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub };
 
         // --- GUARDRAIL CHECKS ---
+        if (transaction.description.toUpperCase().includes('PAYMENT - THANK YOU') && cats.primaryCategory.toLowerCase().includes('income')) {
+            setAlertState({ type: 'thankYouPayment', isOpen: true });
+            return;
+        }
         if (cats.primaryCategory.toLowerCase().includes('income') && transaction.amount < 0) {
             setAlertState({ type: 'negativeIncome', isOpen: true });
             return;
         }
-
         if (transaction.description.toLowerCase().includes('deposit') && transaction.amount > 0 && cats.primaryCategory.toLowerCase().includes('income')) {
             setAlertState({ type: 'securityDeposit', isOpen: true });
             return;
@@ -512,6 +521,11 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                                 Is this a Security Deposit? Deposits are usually liabilities, not income. If you categorize this as Rental Income, you may overpay on your taxes. Would you like to move this to your Security Deposit Liability account?
                             </AlertDialogDescription>
                         )}
+                         {alertState.type === 'thankYouPayment' && (
+                             <AlertDialogDescription>
+                                We noticed you labeled 'Payment - Thank You' as Rental Income. This phrase usually identifies a credit card bill payment. If you keep this as income, you may overpay on your taxes. Would you like to change this to a Transfer?
+                            </AlertDialogDescription>
+                        )}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         {alertState.type === 'negativeIncome' && (
@@ -528,6 +542,14 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                                     Keep as Rent
                                 </AlertDialogCancel>
                                 <AlertDialogAction onClick={handleSecurityDeposit}>Move to Liability</AlertDialogAction>
+                            </>
+                        )}
+                        {alertState.type === 'thankYouPayment' && (
+                            <>
+                                <AlertDialogCancel onClick={() => finalizeSave({ primaryCategory: primary, secondaryCategory: secondary, subcategory: sub })}>
+                                    Keep as Income
+                                </AlertDialogCancel>
+                                <AlertDialogAction onClick={handleThankYouPayment}>Change to Transfer</AlertDialogAction>
                             </>
                         )}
                     </AlertDialogFooter>
