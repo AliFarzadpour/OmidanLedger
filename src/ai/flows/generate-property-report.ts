@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -112,7 +113,7 @@ export const generatePropertyReportFlow = ai.defineFlow(
 
         2.  **Construct and Use Tools**: Use the \`fetchProperties\` tool to get the data. Combine the mandatory user filter with any other filters you identified.
             - **Mandatory User Filter**: You MUST ALWAYS include a filter for the user's ID in your query. Construct a \`where\` condition like this: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
-            - `fetchCategorizationRules` can be used to get vendor/rule data if needed.
+            - \`fetchCategorizationRules\` can be used to get vendor/rule data if needed.
 
         3.  **Natural Language Mapping & Occupancy Logic:**
             - A property is "occupied" if it has at least one tenant with \`status: 'active'\`. A property is "vacant" if it has no tenants or only tenants with \`status: 'past'\`.
