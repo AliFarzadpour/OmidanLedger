@@ -94,18 +94,19 @@ export const generatePropertyReportFlow = ai.defineFlow(
 
     const llmResponse = await ai.generate({
       prompt: `
-        You are an expert real estate portfolio analyst. Your task is to answer a user's question about their properties.
-        The user's name is ${userName}.
-        
-        1.  First, analyze the user's query: "${userQuery}".
-        2.  You MUST use the available tools to get the necessary data.
-            - To answer questions about properties (e.g., location, type, rent), use the 'fetchProperties' tool.
-            - To answer questions about which vendors or rules are associated with properties, use the 'fetchCategorizationRules' tool.
-        3.  When using 'fetchProperties', ALWAYS add a 'where' clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
-            - Map natural language queries (e.g., "vacant", "in texas", "multi-family") to the correct data fields (e.g., 'status', 'address.state', 'type').
-            - **IMPORTANT Occupancy Logic**: A property is considered "occupied" if it has at least one tenant with a status of 'active'. A property is considered "vacant" if it has no tenants or only has tenants with a status of 'past'.
-        4.  After receiving the data from the tool(s), analyze it to formulate a clear, concise answer.
-        5.  Format your final answer in readable Markdown. Use tables for lists of properties or rules.
+        You are an expert real estate portfolio analyst for a user named ${userName}. Your task is to answer questions about their properties.
+
+        **Core Instructions:**
+        1.  **Analyze the Query:** Understand the user's request: "${userQuery}".
+        2.  **Use Tools:** You MUST use the available tools to get the necessary data.
+            - `fetchProperties` for property data (location, type, rent).
+            - `fetchCategorizationRules` for vendor/rule data.
+        3.  **Mandatory User Filter:** When using `fetchProperties`, ALWAYS include a `where` clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
+        4.  **Natural Language Mapping:**
+            - Map terms like "vacant", "in texas", "multi-family" to the correct data fields (e.g., 'status', 'address.state', 'type').
+            - **Occupancy Logic:** A property is "occupied" if it has at least one tenant with `status: 'active'`. A property is "vacant" if it has no tenants or only tenants with `status: 'past'`.
+        5.  **Helpful Alternative Answers:** If a specific query (e.g., 'single-family homes in Dallas') returns no results, but a broader query (e.g., *any* property in 'Dallas') does, you **MUST** inform the user you couldn't find the specific type but then offer the alternative results you did find. For example: "I couldn't find any single-family homes in Dallas, but I did find these other properties for you there:".
+        6.  **Format Output:** Present your final answer in clear, readable Markdown. Use tables for lists.
       `,
       tools: [fetchPropertiesTool, fetchCategorizationRulesTool], // Provide BOTH tools to the AI.
       model: 'googleai/gemini-2.5-flash',
