@@ -462,7 +462,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         incrementPropertyStats({
                             propertyId: txData.propertyId,
                             date: txData.date,
-                            amount: txData.amount
+                            amount: txData.amount,
+                            userId: userId,
                         }).catch(console.error);
                     }
                 }
