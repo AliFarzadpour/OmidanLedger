@@ -3,13 +3,14 @@
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { X, Calendar as CalendarIcon, Flag } from 'lucide-react';
+import { X, Calendar as CalendarIcon, Flag, BookUser } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { ChartOfAccountsDialog } from './ChartOfAccountsDialog';
 
 interface TransactionToolbarProps {
   onSearch: (term: string) => void;
@@ -30,6 +31,7 @@ export function TransactionToolbar({
   const [searchTerm, setSearchTerm] = React.useState('');
   const [category, setCategory] = React.useState('all');
   const [statusFilters, setStatusFilters] = React.useState<string[]>([]);
+  const [isChartOfAccountsOpen, setIsChartOfAccountsOpen] = React.useState(false);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -66,6 +68,7 @@ export function TransactionToolbar({
   const hasFilters = searchTerm || date || category !== 'all' || statusFilters.length > 0;
 
   return (
+    <>
     <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-4">
       
       {/* Search & Filters */}
@@ -147,6 +150,16 @@ export function TransactionToolbar({
             </DropdownMenuContent>
         </DropdownMenu>
 
+        <Button 
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => setIsChartOfAccountsOpen(true)}
+        >
+            <BookUser className="mr-2 h-4 w-4" />
+            Chart of Accounts
+        </Button>
+
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearAll} className="h-9 px-2 lg:px-3">
             Reset
@@ -155,5 +168,7 @@ export function TransactionToolbar({
         )}
       </div>
     </div>
+    <ChartOfAccountsDialog isOpen={isChartOfAccountsOpen} onOpenChange={setIsChartOfAccountsOpen} />
+    </>
   );
 }
