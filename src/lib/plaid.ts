@@ -288,40 +288,37 @@ export async function categorizeWithHeuristics(
   return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
 }
 
+/**
+ * A final, non-negotiable check to enforce core accounting principles.
+ * @param category - The category object determined by prior logic.
+ * @param amount - The transaction amount.
+ * @returns A potentially corrected category object.
+ */
 export async function enforceAccountingRules(
   category: any, 
   amount: number
-) {
-  if (category.source === 'User Rule' || (category.aiExplanation && category.aiExplanation.includes('User Rule'))) {
-      return category;
-  }
-    
-  const isIncome = amount > 0;
-  
-  let final = { ...category };
+): Promise<any> {
+  const isNegative = amount < 0;
+  const isIncomeCategory = category.primaryCategory?.toLowerCase().includes('income');
 
-  if (isIncome && (final.primaryCategory.includes('Expense') || final.primaryCategory === 'Property Expenses' || final.primaryCategory === 'Real Estate')) {
-      if (final.subcategory?.includes('Rent') || final.subcategory?.includes('Lease')) {
-          final.primaryCategory = 'Income';
-          final.secondaryCategory = 'Rental Income';
-          final.subcategory = 'Residential Rent';
-          final.aiExplanation = 'Forced to Income by Accounting Enforcer (Positive Amount)';
-      } 
-      else {
-          final.primaryCategory = 'Income';
-          final.secondaryCategory = 'Uncategorized Income';
-      }
+  // **Guardrail 1: Negative Income**
+  // If an expense is categorized as income, force it to a generic expense category.
+  if (isNegative && isIncomeCategory) {
+    return {
+      ...category,
+      primaryCategory: 'Operating Expenses',
+      secondaryCategory: 'Uncategorized',
+      subcategory: 'General Expense',
+      aiExplanation: `Rule Violation: Negative amount cannot be Income. Original: ${category.subcategory}`,
+      reviewStatus: 'needs-review',
+    };
   }
 
-  if (final.subcategory === 'Credit Card Payment' || final.subcategory === 'Internal Transfer') {
-      final.primaryCategory = 'Balance Sheet';
-      if (amount > 0 && final.subcategory === 'Credit Card Payment') {
-          final.secondaryCategory = 'Liabilities';
-      }
-  }
+  // Other rules can be added here...
 
-  return final;
+  return category; // Return the original category if no rules are violated.
 }
+
 
 const SyncTransactionsInputSchema = z.object({ userId: z.string(), bankAccountId: z.string() });
 
