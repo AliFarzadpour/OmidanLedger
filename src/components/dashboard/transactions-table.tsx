@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Circle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -155,6 +155,28 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     }
   };
 
+  const handleBatchStatusUpdate = async (newStatus: 'approved' | 'needs-review' | 'incorrect') => {
+    if (!user || !firestore || selectedIds.length === 0) return;
+    
+    const batch = writeBatch(firestore);
+    selectedIds.forEach(id => {
+      const docRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, id);
+      batch.update(docRef, { reviewStatus: newStatus });
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Batch Update Successful",
+        description: `${selectedIds.length} transactions have been marked as ${newStatus.replace('-', ' ')}.`,
+      });
+      setSelectedIds([]); // Clear selection after update
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Batch Update Failed", description: error.message });
+    }
+  };
+
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
@@ -220,14 +242,34 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
             />
             {selectedIds.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setBatchEditDialogOpen(true)}
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Batch Edit ({selectedIds.length})
-              </Button>
+              <div className="flex items-center gap-2">
+                 <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBatchEditDialogOpen(true)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Batch Edit ({selectedIds.length})
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Change Status
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleBatchStatusUpdate('approved')}>
+                         <Flag className="mr-2 h-4 w-4 text-green-500" /> Mark as Approved
+                      </DropdownMenuItem>
+                       <DropdownMenuItem onClick={() => handleBatchStatusUpdate('needs-review')}>
+                         <Flag className="mr-2 h-4 w-4 text-yellow-500" /> Mark as Needs Review
+                      </DropdownMenuItem>
+                       <DropdownMenuItem onClick={() => handleBatchStatusUpdate('incorrect')}>
+                         <Flag className="mr-2 h-4 w-4 text-red-500" /> Mark as Incorrect
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+              </div>
             )}
           </div>
 
@@ -241,10 +283,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     onCheckedChange={(checked) => handleSelectAll(!!checked)}
                   />
                 </TableHead>
-                <TableHead className="w-[20px] p-0"></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
+                <TableHead className="text-right p-2 w-[120px]">Status</TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
               </TableRow>
             </TableHeader>
@@ -264,15 +306,15 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                             onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
                         />
                     </TableCell>
-                    <TableCell className="p-0">
-                      <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
-                    </TableCell>
                     <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
                           <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                       </div>
+                    </TableCell>
+                    <TableCell className="align-top py-4 text-right">
+                       <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
                     </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
@@ -328,27 +370,27 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
   };
 
   const statusColor = {
-    'approved': 'bg-green-500',
-    'needs-review': 'bg-yellow-500',
-    'incorrect': 'bg-red-500',
+    'approved': 'text-green-500',
+    'needs-review': 'text-yellow-500',
+    'incorrect': 'text-red-500',
   }[transaction.reviewStatus || 'needs-review'];
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <div className="w-full h-full flex items-center justify-center cursor-pointer p-2">
-            <Circle className={`h-3 w-3 ${statusColor} rounded-full`} />
-        </div>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Flag className={`h-4 w-4 ${statusColor}`} />
+        </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
+      <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => handleStatusChange('approved')}>
-          <Circle className="mr-2 h-3 w-3 bg-green-500 rounded-full" /> Approved
+          <Flag className="mr-2 h-4 w-4 text-green-500" /> Approved
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleStatusChange('needs-review')}>
-          <Circle className="mr-2 h-3 w-3 bg-yellow-500 rounded-full" /> Needs Review
+          <Flag className="mr-2 h-4 w-4 text-yellow-500" /> Needs Review
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleStatusChange('incorrect')}>
-          <Circle className="mr-2 h-3 w-3 bg-red-500 rounded-full" /> Incorrect
+          <Flag className="mr-2 h-4 w-4 text-red-500" /> Incorrect
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -378,7 +420,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                             <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
                         </Badge>
                         <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {transaction.secondaryCategory} &gt; {transaction.subcategory}
+                            {transaction.secondaryCategory} > {transaction.subcategory}
                         </span>
                     </div>
 
