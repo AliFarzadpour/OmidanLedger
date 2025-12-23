@@ -7,7 +7,7 @@ import type { Query, FieldFilter, OrderByDirection } from 'firebase-admin/firest
 
 // --- TOOLS ---
 
-// Defines the structure for the AI-generated query.
+// Defines the structure for the AI-generated query for properties.
 const propertyQueryToolSchema = z.object({
   where: z
     .array(
@@ -24,7 +24,6 @@ const propertyQueryToolSchema = z.object({
   limit: z.number().optional().describe("The maximum number of properties to return.")
 });
 
-
 // Tool for the AI to fetch property data from Firestore.
 const fetchPropertiesTool = ai.defineTool(
   {
@@ -34,10 +33,8 @@ const fetchPropertiesTool = ai.defineTool(
     outputSchema: z.array(z.any()), // We expect an array of property objects.
   },
   async (params) => {
-    // This is a privileged server-side function, so we use the admin SDK.
     let q: Query = adminDb.collection('properties');
 
-    // Dynamically build the query from the AI's generated parameters.
     if (params.where) {
       for (const { field, operator, value } of params.where) {
         q = q.where(field, operator as FieldFilter['op'], value);
@@ -52,9 +49,24 @@ const fetchPropertiesTool = ai.defineTool(
 
     const snapshot = await q.get();
     if (snapshot.empty) return [];
-
-    // Return the data in a clean array format for the AI to analyze.
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+);
+
+// NEW TOOL: Fetches categorization rules for a user.
+const fetchCategorizationRulesTool = ai.defineTool(
+  {
+    name: 'fetchCategorizationRules',
+    description: 'Fetches all personal categorization (Smart Rules) for a user.',
+    inputSchema: z.object({
+      userId: z.string().describe("The ID of the user whose rules to fetch."),
+    }),
+    outputSchema: z.array(z.any()),
+  },
+  async ({ userId }) => {
+    const rulesSnap = await adminDb.collection('users').doc(userId).collection('categoryMappings').get();
+    if (rulesSnap.empty) return [];
+    return rulesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 );
 
@@ -66,7 +78,6 @@ const GeneratePropertyReportInputSchema = z.object({
   userId: z.string().describe("The ID of the user to fetch data for."),
 });
 
-// This is the main flow that orchestrates the AI's work.
 export const generatePropertyReportFlow = ai.defineFlow(
   {
     name: 'generatePropertyReportFlow',
@@ -80,17 +91,18 @@ export const generatePropertyReportFlow = ai.defineFlow(
         You are an expert real estate portfolio analyst. Your task is to answer a user's question about their properties.
         
         1.  First, analyze the user's query: "${userQuery}".
-        2.  You MUST use the 'fetchProperties' tool to get the necessary data. Generate the correct 'where', 'orderBy', and 'limit' parameters for the tool.
-            - ALWAYS add a 'where' clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`
+        2.  You MUST use the available tools to get the necessary data.
+            - To answer questions about properties (e.g., location, type, rent), use the 'fetchProperties' tool.
+            - To answer questions about which vendors or rules are associated with properties, use the 'fetchCategorizationRules' tool.
+        3.  When using 'fetchProperties', ALWAYS add a 'where' clause to filter by the current user: \`{field: 'userId', operator: '==', value: '${userId}'}\`.
             - Map natural language queries (e.g., "vacant", "in texas", "multi-family") to the correct data fields (e.g., 'status', 'address.state', 'type').
-        3.  After receiving the data from the tool, analyze it to formulate a clear, concise answer.
-        4.  Format your final answer in readable Markdown. Use tables for lists of properties.
+        4.  After receiving the data from the tool(s), analyze it to formulate a clear, concise answer.
+        5.  Format your final answer in readable Markdown. Use tables for lists of properties or rules.
       `,
-      tools: [fetchPropertiesTool], // Provide the tool to the AI.
+      tools: [fetchPropertiesTool, fetchCategorizationRulesTool], // Provide BOTH tools to the AI.
       model: 'googleai/gemini-2.5-flash',
     });
 
-    // The AI's final message after using the tool is the report we want.
     const reportText = llmResponse.text;
 
     if (!reportText) {
@@ -102,7 +114,6 @@ export const generatePropertyReportFlow = ai.defineFlow(
 );
 
 // --- SERVER ACTION WRAPPER ---
-// This is the function the frontend will call.
 export async function generatePropertyReport(input: z.infer<typeof GeneratePropertyReportInputSchema>) {
   try {
     return await generatePropertyReportFlow(input);
