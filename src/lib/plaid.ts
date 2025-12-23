@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -368,7 +369,8 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
         
         const relevantTransactions = allTransactions.filter(tx => {
-            return tx.account_id === bankAccountId;
+            // Filter for the specific account AND ensure transaction is not pending.
+            return tx.account_id === bankAccountId && !tx.pending;
         });
 
         if (relevantTransactions.length === 0) {
