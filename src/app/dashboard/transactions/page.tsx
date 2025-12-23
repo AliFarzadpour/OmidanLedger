@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, query } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, query, collectionGroup, where } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { PlusCircle, Upload, ArrowLeft, Trash2 } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import type { Transaction } from '@/components/dashboard/transactions-table';
 
 
 // Define the shape of a data source for type safety
@@ -44,6 +45,30 @@ export default function TransactionsPage() {
   }, [firestore, user]);
 
   const { data: dataSources, isLoading: isLoadingDataSources } = useCollection<DataSource>(bankAccountsQuery);
+  
+  const allTransactionsQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
+  }, [firestore, user]);
+
+  const { data: allTransactions, isLoading: isLoadingTransactions } = useCollection<Transaction>(allTransactionsQuery);
+
+  const flagCounts = useMemo(() => {
+    if (!allTransactions) return {};
+    return allTransactions.reduce((acc, tx) => {
+        const accountId = tx.bankAccountId;
+        if (!accountId) return acc;
+        if (!acc[accountId]) {
+            acc[accountId] = { needsReview: 0, incorrect: 0 };
+        }
+        if (tx.reviewStatus === 'needs-review') {
+            acc[accountId].needsReview++;
+        } else if (tx.reviewStatus === 'incorrect') {
+            acc[accountId].incorrect++;
+        }
+        return acc;
+    }, {} as Record<string, { needsReview: number, incorrect: number }>);
+  }, [allTransactions]);
 
   const handleAdd = () => {
     setEditingDataSource(null);
@@ -71,18 +96,15 @@ export default function TransactionsPage() {
     try {
         const batch = writeBatch(firestore);
         const accountRef = doc(firestore, `users/${user.uid}/bankAccounts`, deletingDataSource.id);
-        const transactionsQuery = query(collection(accountRef, 'transactions'));
         
-        // 1. Find all transactions to delete
-        const transactionsSnapshot = await getDocs(transactionsQuery);
-        transactionsSnapshot.forEach(doc => {
-            batch.delete(doc.ref);
+        // Use the already-fetched transactions to find the ones to delete
+        const transactionsToDelete = allTransactions?.filter(tx => tx.bankAccountId === deletingDataSource.id) || [];
+        transactionsToDelete.forEach(tx => {
+            const txRef = doc(accountRef, 'transactions', tx.id);
+            batch.delete(txRef);
         });
 
-        // 2. Delete the parent bank account
         batch.delete(accountRef);
-
-        // 3. Commit the batch
         await batch.commit();
         
         toast({
@@ -90,7 +112,6 @@ export default function TransactionsPage() {
             description: `${deletingDataSource.accountName} and all its transactions have been removed.`,
         });
 
-        // Reset UI
         setDeletingDataSource(null);
         setDeleteAlertOpen(false);
         if (selectedDataSource?.id === deletingDataSource.id) {
@@ -137,7 +158,8 @@ export default function TransactionsPage() {
 
       <DataSourceList 
         dataSources={dataSources || []} 
-        isLoading={isLoadingDataSources}
+        isLoading={isLoadingDataSources || isLoadingTransactions}
+        flagCounts={flagCounts}
         onEdit={handleEdit}
         onSelect={handleSelectDataSource}
         onDelete={handleDeleteRequest}
