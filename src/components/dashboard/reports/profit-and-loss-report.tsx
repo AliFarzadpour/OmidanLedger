@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
-import { format } from 'date-fns';
+import { format, startOfMonth } from 'date-fns';
 import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
@@ -41,12 +41,19 @@ export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>({
-    from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-    to: new Date(),
-  });
+  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>();
   
   const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+    // Set initial date range only on the client to avoid hydration mismatch
+    setPendingDateRange({
+      from: startOfMonth(new Date()),
+      to: new Date(),
+    });
+  }, []);
 
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
@@ -87,7 +94,7 @@ export function ProfitAndLossReport() {
       if (l0 === 'Income') {
         totalIncome += txn.amount;
         incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
-      } else if (l0 === 'Expense') {
+      } else if (l0 === 'Expense' || l0 === 'Expenses') {
         totalExpenses += txn.amount;
         expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
       }
@@ -107,6 +114,9 @@ export function ProfitAndLossReport() {
   const totalExpenses = expenses.reduce((acc, item) => acc + item.total, 0);
 
   const renderContent = () => {
+    if (!isClient) {
+      return <Skeleton className="h-64 w-full" />;
+    }
     if (isLoading) {
       return <Skeleton className="h-64 w-full" />;
     }
@@ -149,6 +159,18 @@ export function ProfitAndLossReport() {
   };
   
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
+
+  if (!isClient) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-1/3" />
+        <Card>
+          <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
+          <CardContent><Skeleton className="h-40 w-full" /></CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
