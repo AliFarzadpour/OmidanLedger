@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -188,7 +189,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                       <Checkbox id={cat.id} onCheckedChange={() => handleFromToggle(cat.id)} />
                       <label htmlFor={cat.id} className="text-sm font-medium leading-none cursor-pointer">
                         {cat.primary}
-                        <span className="text-muted-foreground"> > {cat.secondary} > {cat.sub}</span>
+                        <span className="text-muted-foreground"> {' > '} {cat.secondary} {' > '} {cat.sub}</span>
                       </label>
                     </div>
                   ))}
@@ -216,7 +217,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                         <RadioGroupItem value={cat.id} id={`to-${cat.id}`} />
                         <Label htmlFor={`to-${cat.id}`} className="cursor-pointer">
                           {cat.primary}
-                          <span className="text-muted-foreground"> > {cat.secondary} > {cat.sub}</span>
+                          <span className="text-muted-foreground"> {' > '} {cat.secondary} {' > '} {cat.sub}</span>
                         </Label>
                       </div>
                     ))}
