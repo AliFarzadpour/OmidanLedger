@@ -19,30 +19,30 @@ export default function ReportsPage() {
       href: '/dashboard/reports/property-ai-report',
       icon: Building,
     },
-    // {
-    //   title: 'Profit & Loss',
-    //   description: 'Review your income, expenses, and profitability over a period.',
-    //   href: '/dashboard/reports/profit-and-loss',
-    //   icon: FileText,
-    // },
-    // {
-    //   title: 'General Ledger',
-    //   description: 'A detailed history of all transactions, grouped by account.',
-    //   href: '/dashboard/reports/general-ledger',
-    //   icon: BookUser,
-    // },
+    {
+      title: 'Profit & Loss',
+      description: 'Review your income, expenses, and profitability over a period.',
+      href: '/dashboard/reports/profit-and-loss',
+      icon: FileText,
+    },
+    {
+      title: 'General Ledger',
+      description: 'A detailed history of all transactions, grouped by account.',
+      href: '/dashboard/reports/general-ledger',
+      icon: BookUser,
+    },
     {
       title: 'Detailed Ledger',
       description: 'An interactive report of all transactions, grouped by category.',
       href: '/dashboard/reports/detailed-ledger',
       icon: ListOrdered,
     },
-    // {
-    //   title: 'Chart of Accounts',
-    //   description: 'Summary of total income and expenses by category.',
-    //   href: '/dashboard/reports/chart-of-accounts',
-    //   icon: BookUser,
-    // },
+    {
+      title: 'Chart of Accounts',
+      description: 'Summary of total income and expenses by category.',
+      href: '/dashboard/reports/chart-of-accounts',
+      icon: BookUser,
+    },
   ]
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
