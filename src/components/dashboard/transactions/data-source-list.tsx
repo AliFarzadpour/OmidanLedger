@@ -18,7 +18,7 @@ interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
-  accountType: 'checking' | 'savings' | 'credit-card' | 'cash' | 'other';
+  accountType: 'checking' | 'savings' | 'credit-card' | 'credit' | 'cash' | 'other';
   accountNumber?: string;
   plaidAccessToken?: string;
   historicalDataPending?: boolean;
@@ -103,12 +103,15 @@ export function DataSourceList({
                 {typeIcons[source.accountType as keyof typeof typeIcons] || typeIcons.other}
                 </CardHeader>
                 <CardContent className="flex-grow p-3 pt-0">
-                <p className="text-sm text-muted-foreground">{source.bankName}</p>
-                {source.accountNumber && (
-                    <p className="text-xs text-muted-foreground">
-                    •••• {source.accountNumber.slice(-4)}
-                    </p>
-                )}
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-muted-foreground">{source.bankName}</p>
+                    <Badge variant="outline" className="text-xs capitalize">{source.accountType.replace('-', ' ')}</Badge>
+                  </div>
+                  {source.accountNumber && (
+                      <p className="text-xs text-muted-foreground">
+                      •••• {source.accountNumber.slice(-4)}
+                      </p>
+                  )}
                 </CardContent>
                 <CardFooter className="p-3 pt-2 flex items-center justify-between">
                     <div>
