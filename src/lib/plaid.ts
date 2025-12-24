@@ -68,6 +68,7 @@ interface UserContext {
 
 // --- NORMALIZATION ---
 function sanitizeVendorId(description: string) {
+  if (!description) return '';
   return description.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
@@ -194,7 +195,7 @@ export async function categorizeWithHeuristics(
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
   
   // LAW #0: ABSOLUTE FIRST - CATCH CREDIT CARD PAYMENTS
-  if (desc.includes('PAYMENT RECEIVED') || desc.includes('PAYMENT THANK YOU') || desc.includes('PAYMENT - THANK YOU') || desc.includes('ONLINE PAYMENT') || desc.includes('BANK OF AMERICA BUSINESS CARD') || desc.includes('BARCLAYCARD US') || desc.includes('CITI AUTOPAY')) {
+  if (amount > 0 && (desc.includes('PAYMENT RECEIVED') || desc.includes('PAYMENT THANK YOU') || desc.includes('PAYMENT - THANK YOU') || desc.includes('ONLINE PAYMENT'))) {
     return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
 
@@ -355,6 +356,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 const batch = db.batch();
                 
                 for (const originalTx of chunk) {
+                  try {
                     const docRef = db.collection('users').doc(userId)
                         .collection('bankAccounts').doc(bankAccountId)
                         .collection('transactions').doc(originalTx.transaction_id);
@@ -447,6 +449,13 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             userId: userId,
                         }).catch(console.error);
                     }
+                   } catch (txError: any) {
+                        console.error(`Failed to process transaction ${originalTx.transaction_id}. Reason: ${txError.message}`, {
+                          description: originalTx.name,
+                          amount: originalTx.amount
+                        });
+                        // Continue to next transaction in the chunk
+                   }
                 }
                 
                 return batch.commit();
@@ -565,3 +574,4 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
+
