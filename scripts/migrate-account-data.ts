@@ -1,0 +1,128 @@
+// scripts/migrate-account-data.ts
+import * as admin from 'firebase-admin';
+import * as path from 'path';
+
+// --- CONFIGURATION ---
+const TARGET_USER_ID = 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2';
+const TARGET_ACCOUNT_SUFFIX = '4748';
+
+// 1. Initialize Admin SDK
+const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+const serviceAccount = require(serviceAccountPath);
+
+if (!admin.apps.length) {
+    admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount)
+    });
+}
+const db = admin.firestore();
+
+
+// 2. The Master Mapping Table provided by the user
+const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: string }> = {
+  // --- INCOME (Major Type: Income, Schedule E Line 3) ---
+  "Income > Operating Income > Talia Rental Income": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Talia" },
+  "Income > Rental Income > Adelyn - Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Adelyn" },
+  "Income > Rental Income > Dallas Rental Income": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Dallas" },
+  "Income > Rental Income > Plano Office - Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Plano Office" },
+
+  // --- REPAIRS & MAINTENANCE (Major Type: Expense, Schedule E Line 14) ---
+  "Operating Expense > Repairs & Maintenance > Property Repair & Maintenance": { l0: "Expense", l1: "Repairs & Maintenance", l2: "Line 14: Repairs", l3: "General" },
+  "Repairs & Maintenance > Property Repairs > Handyman Services": { l0: "Expense", l1: "Repairs & Maintenance", l2: "Line 14: Repairs", l3: "Handyman" },
+  "Operating Expenses > Repairs & Maintenance > Talia - Pool Maintenance": { l0: "Expense", l1: "Repairs & Maintenance", l2: "Line 14: Repairs", l3: "Pool Maintenance" },
+  "Operating Expenses > Repairs & Maintenance > Lawn Mowing Services": { l0: "Expense", l1: "Repairs & Maintenance", l2: "Line 14: Repairs", l3: "Lawn Care" },
+
+  // --- UTILITIES (Major Type: Expense, Schedule E Line 17) ---
+  "Expenses > Utilities > Talia - Water": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Water" },
+  "Operating Expenses > Utilities > Electricity": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Electricity" },
+  "Rent & Utilities > Utilities > Telecommunications/Internet": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Internet" },
+
+  // --- MORTGAGE & LOANS (Major Type: Expense, Schedule E Line 12) ---
+  "Expenses > Mortgage Interest > Adelyn - Mortgage Interest Paid": { l0: "Expense", l1: "Financing", l2: "Line 12: Mortgage Interest", l3: "Mortgage" },
+  "Debt Service > Loan Payments > SBA EIDL Loan Payment": { l0: "Liability", l1: "Loan Paydown", l2: "Non-Deductible Principal", l3: "SBA EIDL" },
+
+  // --- PROFESSIONAL FEES (Major Type: Expense, Schedule E Line 10) ---
+  "Professional Fees > Financial Services > Accounting & Tax preparation": { l0: "Expense", l1: "Professional Fees", l2: "Line 10: Legal & Professional", l3: "Accounting" },
+  "Professional Services > Accounting & Tax Services > Tax Consulting": { l0: "Expense", l1: "Professional Fees", l2: "Line 10: Legal & Professional", l3: "Tax Prep" },
+
+  // --- OWNER'S EQUITY (Major Type: Equity) ---
+  "Owner's Draw > Personal Expense > Groceries": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Groceries" },
+  "Owner's Draw > Personal > Charity & Donation": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Donation" },
+
+  // --- TRANSFERS (Major Type: Asset - Movement Only) ---
+  "Balance Sheet > Transfers > Internal Transfer": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Bank Transfer" },
+  "Transfer Credit Card Payment > Credit card payment > Barclay Credit card payment": { l0: "Liability", l1: "Credit Card Payment", l2: "Debt Paydown", l3: "Barclay" },
+
+  // --- TAXES (Major Type: Expense, Schedule E Line 16) ---
+  "Operating Expenses > Taxes > Property Tax": { l0: "Expense", l1: "Taxes", l2: "Line 16: Taxes", l3: "Property Tax" },
+  "Taxes > Federal Taxes > Income Tax": { l0: "Equity", l1: "Personal Tax", l2: "Non-Deductible", l3: "Income Tax" }
+};
+
+// 3. The Migration Logic
+async function runMigration() {
+  console.log('Starting migration...');
+
+  // Find the bank account
+  const accountsCollection = db.collection(`users/${TARGET_USER_ID}/bankAccounts`);
+  const snapshot = await accountsCollection.get();
+  
+  const targetAccount = snapshot.docs.find(doc => {
+      const data = doc.data();
+      return data.accountNumber && data.accountNumber.endsWith(TARGET_ACCOUNT_SUFFIX);
+  });
+
+  if (!targetAccount) {
+    console.error(`Error: Could not find a bank account ending in '${TARGET_ACCOUNT_SUFFIX}' for user '${TARGET_USER_ID}'.`);
+    return;
+  }
+  console.log(`Found target account: ${targetAccount.id} (${targetAccount.data().accountName})`);
+
+  // Get all transactions for that account
+  const transactionsRef = targetAccount.ref.collection('transactions');
+  const transactionsSnap = await transactionsRef.get();
+  
+  if (transactionsSnap.empty) {
+    console.log('No transactions found in this account. Nothing to migrate.');
+    return;
+  }
+
+  // Create a batch write
+  const batch = db.batch();
+  let updatedCount = 0;
+
+  transactionsSnap.forEach(doc => {
+    const tx = doc.data();
+    
+    // Construct the "old" messy key from the existing data
+    const oldKey = `${tx.primaryCategory} > ${tx.secondaryCategory} > ${tx.subcategory}`;
+
+    // Look it up in the mapping table
+    const newCategories = mappingTable[oldKey];
+
+    if (newCategories) {
+      // If a match is found, update the transaction document
+      batch.update(doc.ref, {
+        primaryCategory: newCategories.l0,   // Level 0
+        secondaryCategory: newCategories.l1, // Level 1
+        subcategory: newCategories.l2,       // Level 2
+        details: newCategories.l3            // Level 3
+      });
+      updatedCount++;
+    } else {
+        console.warn(`- No mapping found for old key: "${oldKey}" (Transaction ID: ${doc.id})`);
+    }
+  });
+
+  if (updatedCount === 0) {
+      console.log('No transactions matched the mapping table. No updates were made.');
+      return;
+  }
+
+  console.log(`Preparing to update ${updatedCount} transactions...`);
+
+  // Commit the batch
+  await batch.commit();
+  console.log(`Migration complete! Successfully updated ${updatedCount} transactions.`);
+}
+
+runMigration().catch(console.error);

@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "db:seed": "tsc --project tsconfig.scripts.json && node dist/seedGlobalRules.js"
+    "db:seed": "tsc --project tsconfig.scripts.json && node dist/seedGlobalRules.js",
+    "db:migrate": "tsc --project tsconfig.scripts.json && node dist/migrate-account-data.js"
   },
   "dependencies": {
     "@genkit-ai/firebase": "^1.20.0",
@@ -39,6 +40,7 @@
     "@radix-ui/react-tooltip": "^1.1.2",
     "@radix-ui/react-visually-hidden": "latest",
     "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "firebase": "^12.7.0",
     "firebase-admin": "^12.2.0",
