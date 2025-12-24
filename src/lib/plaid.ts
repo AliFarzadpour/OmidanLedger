@@ -222,16 +222,17 @@ export async function categorizeWithHeuristics(
   
   const safeDesc = description || ''; 
   const desc = safeDesc.toUpperCase();
+  const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
   
-  const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
-  
-  const isIncome = amount > 0;
-
-  // Rule for Credit Card Payments (Priority 1)
+  // LAW #1: Positive payments to credit cards are liability payments.
+  if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && (plaidCategory?.detailed || '').includes('CREDIT_CARD_PAYMENT')) {
+      return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
+  }
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK')) {
       return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   
+  // Rule for Internal Bank Transfers
   if (desc.includes('ONLINE BANKING TRANSFER') || 
       desc.includes('TRANSFER TO CHK') || 
       desc.includes('TRANSFER FROM CHK') || 
@@ -239,7 +240,8 @@ export async function categorizeWithHeuristics(
       return { l0: 'Asset', l1: 'Cash Movement', l2: 'Internal Transfer', l3: 'Bank Transfer', confidence: 1.0 };
   }
 
-  if (isIncome) {
+  // Handle Income
+  if (amount > 0) {
       if (desc.includes('RENT') || desc.includes('LEASE')) {
           return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3: Rents Received', l3: 'Rent', confidence: 1.0 };
       }
@@ -255,14 +257,15 @@ export async function categorizeWithHeuristics(
       return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3: Rents Received', l3: 'Uncategorized Income', confidence: 0.7 };
   }
   
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
-      return { l0: 'Liability', l1: 'Debt Service', l2: 'Loan Paydown', l3: 'Loan/Card Payment', confidence: 0.95 };
+  // Handle Debt Payments (non-credit card)
+  if (desc.includes('LOAN') || desc.includes('MORTGAGE')) {
+      return { l0: 'Liability', l1: 'Debt Service', l2: 'Loan Paydown', l3: 'Loan/Mortgage Payment', confidence: 0.95 };
   }
   
-  const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
 
-  if (!isIncome) {
+  // Handle Expenses using Plaid hints
+  if (amount < 0) {
       if (plaidPrimary === 'FOOD_AND_DRINK') {
           return { l0: 'Expense', l1: 'Meals', l2: 'Line 19: Other (Meals)', l3: 'Business Meals', confidence: 0.8 };
       }
@@ -294,6 +297,7 @@ export async function categorizeWithHeuristics(
       return { l0: 'Expense', l1: 'Operations', l2: 'Line 19: Other Expenses', l3: 'Rent Expense', confidence: 0.9 };
   }
 
+  // Final fallback
   return { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'General Expense', confidence: 0.1 };
 }
 
