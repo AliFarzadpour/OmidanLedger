@@ -29,7 +29,7 @@ type UniqueCategory = {
   sub: string;
 };
 
-const PRIMARY_CATEGORY_OPTIONS = ["Income", "Expenses", "Balance Sheet", "Equity", "Cost of Goods Sold"];
+const PRIMARY_CATEGORY_OPTIONS = ["Asset", "Liability", "Equity", "Income", "Expense"];
 
 export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesDialogProps) {
   const { user } = useUser();
