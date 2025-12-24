@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -45,6 +44,12 @@ export function ProfitAndLossReport() {
   
   const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
   const [isClient, setIsClient] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
 
   useEffect(() => {
     setIsClient(true);
@@ -179,48 +184,50 @@ export function ProfitAndLossReport() {
                 <h1 className="text-3xl font-bold tracking-tight">Profit &amp; Loss Statement</h1>
                 <p className="text-muted-foreground">Review your income, expenses, and profitability.</p>
             </div>
-            <div className="flex items-center gap-2">
-                <Popover>
-                    <PopoverTrigger asChild>
-                    <Button
-                        id="date"
-                        variant={"outline"}
-                        className={cn(
-                        "w-[300px] justify-start text-left font-normal",
-                        !pendingDateRange && "text-muted-foreground"
-                        )}
-                    >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {pendingDateRange?.from ? (
-                        pendingDateRange.to ? (
-                            <>
-                            {format(pendingDateRange.from, "LLL dd, y")} -{" "}
-                            {format(pendingDateRange.to, "LLL dd, y")}
-                            </>
-                        ) : (
-                            format(pendingDateRange.from, "LLL dd, y")
-                        )
-                        ) : (
-                        <span>Pick a date</span>
-                        )}
-                    </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="end">
-                    <Calendar
-                        initialFocus
-                        mode="range"
-                        defaultMonth={pendingDateRange?.from}
-                        selected={pendingDateRange}
-                        onSelect={setPendingDateRange}
-                        numberOfMonths={2}
-                    />
-                    </PopoverContent>
-                </Popover>
-                <Button onClick={handleRunReport} disabled={isLoading}>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    {isLoading ? 'Loading...' : 'Run Report'}
-                </Button>
-            </div>
+            {mounted && (
+              <div className="flex items-center gap-2">
+                  <Popover>
+                      <PopoverTrigger asChild>
+                      <Button
+                          id="date"
+                          variant={"outline"}
+                          className={cn(
+                          "w-[300px] justify-start text-left font-normal",
+                          !pendingDateRange && "text-muted-foreground"
+                          )}
+                      >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {pendingDateRange?.from ? (
+                          pendingDateRange.to ? (
+                              <>
+                              {format(pendingDateRange.from, "LLL dd, y")} -{" "}
+                              {format(pendingDateRange.to, "LLL dd, y")}
+                              </>
+                          ) : (
+                              format(pendingDateRange.from, "LLL dd, y")
+                          )
+                          ) : (
+                          <span>Pick a date</span>
+                          )}
+                      </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="end">
+                      <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={pendingDateRange?.from}
+                          selected={pendingDateRange}
+                          onSelect={setPendingDateRange}
+                          numberOfMonths={2}
+                      />
+                      </PopoverContent>
+                  </Popover>
+                  <Button onClick={handleRunReport} disabled={isLoading}>
+                      <PlayCircle className="mr-2 h-4 w-4" />
+                      {isLoading ? 'Loading...' : 'Run Report'}
+                  </Button>
+              </div>
+            )}
        </div>
 
         <Card>
