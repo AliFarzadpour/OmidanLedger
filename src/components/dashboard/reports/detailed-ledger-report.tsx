@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -31,10 +32,15 @@ type GroupedData = {
     secondaryGroups: {
       [secondary: string]: {
         total: number;
-        transactions: Transaction[];
-      }
-    }
-  }
+        subCategoryGroups: {
+          [subcategory: string]: {
+            total: number;
+            transactions: Transaction[];
+          };
+        };
+      };
+    };
+  };
 };
 
 
@@ -59,21 +65,28 @@ export function DetailedLedgerReport() {
     return transactions.reduce((acc, tx) => {
       const primary = tx.primaryCategory || 'Uncategorized';
       const secondary = tx.secondaryCategory || 'Uncategorized';
+      const subcategory = tx.subcategory || 'Uncategorized';
 
       // Ensure primary group exists
       if (!acc[primary]) {
         acc[primary] = { total: 0, secondaryGroups: {} };
       }
 
-      // Ensure secondary group exists within primary
+      // Ensure secondary group exists
       if (!acc[primary].secondaryGroups[secondary]) {
-        acc[primary].secondaryGroups[secondary] = { total: 0, transactions: [] };
+        acc[primary].secondaryGroups[secondary] = { total: 0, subCategoryGroups: {} };
+      }
+      
+      // Ensure subcategory group exists
+      if (!acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory]) {
+        acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory] = { total: 0, transactions: [] };
       }
 
       // Add amount to totals and push transaction
       acc[primary].total += tx.amount;
       acc[primary].secondaryGroups[secondary].total += tx.amount;
-      acc[primary].secondaryGroups[secondary].transactions.push(tx);
+      acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].total += tx.amount;
+      acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].transactions.push(tx);
 
       return acc;
     }, {} as GroupedData);
@@ -150,31 +163,46 @@ export function DetailedLedgerReport() {
                                                     </span>
                                                 </div>
                                             </AccordionTrigger>
-                                            <AccordionContent className="p-0 border-t">
-                                                <Table>
-                                                    <TableHeader>
-                                                        <TableRow>
-                                                            <TableHead>Date</TableHead>
-                                                            <TableHead>Description</TableHead>
-                                                            <TableHead>Subcategory</TableHead>
-                                                            <TableHead className="text-right">Amount</TableHead>
-                                                        </TableRow>
-                                                    </TableHeader>
-                                                    <TableBody>
-                                                        {secondaryGroup.transactions.map(tx => (
-                                                            <TableRow key={tx.id}>
-                                                                <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                                                                <TableCell className="max-w-[200px] truncate">{tx.description}</TableCell>
-                                                                <TableCell>
-                                                                    <Badge variant="outline">{tx.subcategory}</Badge>
-                                                                </TableCell>
-                                                                <TableCell className={cn("text-right font-medium", tx.amount >= 0 ? 'text-green-600' : 'text-slate-800')}>
-                                                                    {formatCurrency(tx.amount)}
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        ))}
-                                                    </TableBody>
-                                                </Table>
+                                            <AccordionContent className="p-0 border-t bg-white">
+                                               <Accordion type="multiple" className="w-full">
+                                                  {Object.keys(secondaryGroup.subCategoryGroups).sort((a, b) => Math.abs(secondaryGroup.subCategoryGroups[b].total) - Math.abs(secondaryGroup.subCategoryGroups[a].total)).map(subcategory => {
+                                                      const subGroup = secondaryGroup.subCategoryGroups[subcategory];
+                                                      return (
+                                                          <AccordionItem key={subcategory} value={subcategory} className="border-b last:border-b-0">
+                                                              <AccordionTrigger className="px-4 py-2 text-sm hover:no-underline bg-slate-50 hover:bg-slate-100">
+                                                                  <div className="flex justify-between items-center w-full">
+                                                                    <Badge variant="outline">{subcategory}</Badge>
+                                                                    <span className={cn("font-medium", subGroup.total >= 0 ? "text-green-600" : "text-slate-700")}>
+                                                                        {formatCurrency(subGroup.total)}
+                                                                    </span>
+                                                                  </div>
+                                                              </AccordionTrigger>
+                                                              <AccordionContent className="p-0">
+                                                                  <Table>
+                                                                    <TableHeader>
+                                                                        <TableRow className="text-xs">
+                                                                            <TableHead>Date</TableHead>
+                                                                            <TableHead>Description</TableHead>
+                                                                            <TableHead className="text-right">Amount</TableHead>
+                                                                        </TableRow>
+                                                                    </TableHeader>
+                                                                    <TableBody>
+                                                                        {subGroup.transactions.map(tx => (
+                                                                            <TableRow key={tx.id} className="text-xs">
+                                                                                <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
+                                                                                <TableCell className="max-w-[150px] truncate">{tx.description}</TableCell>
+                                                                                <TableCell className={cn("text-right font-medium", tx.amount >= 0 ? 'text-green-600' : 'text-slate-800')}>
+                                                                                    {formatCurrency(tx.amount)}
+                                                                                </TableCell>
+                                                                            </TableRow>
+                                                                        ))}
+                                                                    </TableBody>
+                                                                  </Table>
+                                                              </AccordionContent>
+                                                          </AccordionItem>
+                                                      )
+                                                  })}
+                                               </Accordion>
                                             </AccordionContent>
                                         </AccordionItem>
                                     )
@@ -199,3 +227,4 @@ export function DetailedLedgerReport() {
     </div>
   );
 }
+
