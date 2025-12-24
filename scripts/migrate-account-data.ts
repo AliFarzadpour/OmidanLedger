@@ -19,7 +19,47 @@ const db = admin.firestore();
 
 
 // 2. The Master Mapping Table provided by the user
-const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: string }> = {
+const mappingTable: Record<string, {l0: string, l1: string, l2: string, l3: string}> = {
+  // --- INCOME & INTEREST ---
+  "Interest Income > Bank Interest": { l0: "Income", l1: "Non-Operating", l2: "Bank Interest", l3: "Interest Earned" },
+  "Food & Dining > Groceries > Supermarkets & Grocers": { l0: "Expense", l1: "Office Admin", l2: "Line 19: Other Expenses", l3: "Supplies" },
+
+  // --- MORTGAGE & LOANS ---
+  "Expenses > Mortgage Interest > Adelyn - Mortgage Interest Paid": { l0: "Expense", l1: "Financing", l2: "Line 12: Mortgage Interest", l3: "Adelyn" },
+  "Mortgage & Loans > Principal & Interest > Loan Payment": { l0: "Liability", l1: "Loan Paydown", l2: "Mortgage Principal", l3: "Principal Paydown" },
+
+  // --- TRANSFERS & CREDIT CARDS ---
+  "Transfer Credit Card Payment > Business Card Payments > Business Credit Card Payments": { l0: "Liability", l1: "CC Payment", l2: "Internal Transfer", l3: "BofA Business" },
+  "Transfer Credit Card Payment > Credit card payment > Barclay Credit card payment": { l0: "Liability", l1: "CC Payment", l2: "Internal Transfer", l3: "Barclay" },
+  "Transfer Credit Card Payment > Credit card payment > Citi Credit card payment": { l0: "Liability", l1: "CC Payment", l2: "Internal Transfer", l3: "Citi" },
+  "Transfer Credit Card Payment > Credit card payment > Credit card Payment": { l0: "Liability", l1: "CC Payment", l2: "Internal Transfer", l3: "Credit Card" },
+  "Transportation > Transfer > Transportation": { l0: "Expense", l1: "Travel", l2: "Line 6: Auto & Travel", l3: "Uber/Travel" },
+  "Transportation > Travel Expenses > Transportation": { l0: "Expense", l1: "Travel", l2: "Line 6: Auto & Travel", l3: "Uber/Travel" },
+
+  // --- PROPERTY OPERATIONS & HOA ---
+  "Operating Expenses > Hoa > Hoa": { l0: "Expense", l1: "HOA", l2: "Line 19: Other Expenses", l3: "HOA Fees" },
+  "Real Estate > Property Operating Expenses > Homeowners Association (HOA) Fees": { l0: "Expense", l1: "HOA", l2: "Line 19: Other Expenses", l3: "HOA Fees" },
+  "Real Estate > Property Management > Fees & Services": { l0: "Expense", l1: "Management", l2: "Line 10: Professional Fees", l3: "Property Mgmt" },
+
+  // --- MEALS & ENTERTAINMENT ---
+  "Meals & Entertainment > Business Meals > Restaurant/Cafe": { l0: "Expense", l1: "Meals", l2: "Line 19: Other (Meals)", l3: "Cafe/Restaurant" },
+  "Operating Expenses > Meals & Entertainment > Business Meals": { l0: "Expense", l1: "Meals", l2: "Line 19: Other (Meals)", l3: "Business Meals" },
+  "Dining & Entertainment > Food & Beverages > Fast Food": { l0: "Expense", l1: "Meals", l2: "Line 19: Other (Meals)", l3: "Fast Food" },
+  "Owner's Draw > Personal > Food & Entertainment": { l0: "Equity", l1: "Owner Draw", l2: "Personal Spending", l3: "Personal Meals" },
+
+  // --- SOFTWARE & TECHNOLOGY ---
+  "Operating Expenses > Services > Subscriptions": { l0: "Expense", l1: "Office Admin", l2: "Line 19: Other Expenses", l3: "Subscriptions" },
+  "Technology & Software > Software & Subscriptions > Digital Content & Services": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Digital Services" },
+  "Technology > Software & Subscriptions > Cloud Storage & Services": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Cloud Storage" },
+
+  // --- PERSONAL & EQUITY ---
+  "Owner's Draw > Personal > Charity & Donation": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Donations" },
+  "Owner's Draw > Personal Care > Hair & Beauty": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Hair & Beauty" },
+  "Owner's Draw > Personal > Digital Purchases": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "App Store" },
+
+  // --- BANK FEES ---
+  "Operating Expenses > Bank & Credit Card Fees > Transaction Fee": { l0: "Expense", l1: "Bank Fees", l2: "Line 19: Other Expenses", l3: "Transaction Fee" },
+
   // === LEVEL 0: INCOME (Schedule E, Line 3) ===
   "Income > Rental Income > Adelyn - Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Adelyn" },
   "Income > Rental Income > Adelyn Rental Income": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Adelyn" },
@@ -65,7 +105,6 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   // === LEVEL 0: LIABILITY (Balance Sheet) ===
   "Debt Service > Loan Payments > SBA EIDL Loan Payment": { l0: "Liability", l1: "Debt Service", l2: "Loan Paydown", l3: "SBA EIDL" },
   "Transportation > Vehicle Expenses > Car & Truck": { l0: "Liability", l1: "Debt Service", l2: "Vehicle Loan", l3: "Auto Payment" },
-  "Mortgage & Loans > Principal & Interest > Loan Payment": { l0: "Liability", l1: "Debt Service", l2: "Mortgage Principal", l3: "Loan Pay" },
   "Liability > Deposit > Security Deposit Received": { l0: "Liability", l1: "Tenant Deposits", l2: "Security Deposits Held", l3: "Deposit In" },
   "Liability > Security Deposits > Security Deposits Refund": { l0: "Liability", l1: "Tenant Deposits", l2: "Security Deposits Held", l3: "Deposit Out" },
 
