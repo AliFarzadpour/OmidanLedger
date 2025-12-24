@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building } from 'lucide-react';
+import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 export default function ReportsPage() {
   const reports = [
@@ -72,6 +73,7 @@ export default function ReportsPage() {
               </Card>
           </Link>
         ))}
+        <DatabaseStructureCard />
       </div>
     </div>
   );
