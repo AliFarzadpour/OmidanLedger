@@ -92,18 +92,18 @@ export function ProfitAndLossReport() {
     let totalExpenses = 0;
   
     transactions.forEach((txn) => {
-      // 1. Try to get data from the new hierarchy object first
-      // 2. Fall back to the old fields (primaryCategory and subcategory) if hierarchy is missing
-      const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
-      const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
-    
-      if (l0 === 'income') {
-        totalIncome += txn.amount;
-        incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
-      } else if (l0 === 'expense' || l0 === 'expenses') {
-        totalExpenses += txn.amount;
-        expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
-      }
+        // 1. Try to get data from the new hierarchy object first
+        // 2. Fall back to the old fields (primaryCategory and subcategory) if hierarchy is missing
+        const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
+        const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
+
+        if (l0 === 'income') {
+            totalIncome += txn.amount;
+            incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
+        } else if (l0 === 'expense' || l0 === 'expenses') {
+            totalExpenses += txn.amount;
+            expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
+        }
     });
   
     const toArray = (map: Map<string, number>) => 
@@ -174,6 +174,10 @@ export function ProfitAndLossReport() {
   };
   
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
+
+  console.log("Current User ID:", user?.uid);
+  console.log("Searching from:", format(activeDateRange?.from || new Date(), 'yyyy-MM-dd'), "to:", format(activeDateRange?.to || new Date(), 'yyyy-MM-dd'));
+  console.log("Transactions Found in DB:", transactions?.length);
 
   return (
     <div className="space-y-6 p-4 md:p-8">
