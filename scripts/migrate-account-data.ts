@@ -84,7 +84,26 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
 
   // === LEVEL 0: ASSET (Internal Movements) ===
   "Balance Sheet > Transfers > Internal Transfer": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Bank Transfer" },
-  "Transfer Between Bank Accounts > Transfer > Savings to Checking": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Savings Move" }
+  "Transfer Between Bank Accounts > Transfer > Savings to Checking": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Savings Move" },
+
+  // --- GAP FILL MAPPINGS ---
+  "Expense > Office & Admin > Line 19: Other Expenses": { l0: "Expense", l1: "Office & Admin", l2: "Line 19: Other Expenses", l3: "Supplies" },
+  "Operating Expenses > Office Expenses > Supplies": { l0: "Expense", l1: "Office & Admin", l2: "Line 19: Other Expenses", l3: "Supplies" },
+  "Expense > Technology > Line 19: Other Expenses": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Software/Digital" },
+  "Operating Expenses > Software & Subscriptions > Digital Services": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Digital Services" },
+  "Expense > Utilities > Line 17: Utilities": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "General Utilities" },
+  "Expense > Transportation > Line 6: Auto & Travel": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Travel" },
+  "Operating Expenses > Vehicle & Travel > Travel & Lodging": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Travel" },
+  "Liability > Credit Card Payment > Internal Transfer": { l0: "Liability", l1: "Credit Card Payment", l2: "Internal Transfer", l3: "CC Payment" },
+  "Transfer Credit Card Payment > Credit card payment > Credit card Payment": { l0: "Liability", l1: "Credit Card Payment", l2: "Internal Transfer", l3: "CC Payment" },
+  "Cash & Bank > Transfers > Internal Bank Transfer": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Bank Transfer" },
+  "Operating Expense > Repairs & Maintenance > Property Repair & Maintenance": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Property Maint" },
+  "Operating Expenses > Property Management > Rent Expense": { l0: "Expense", l1: "Property Operations", l2: "Line 19: Other Expenses", l3: "Rent Expense" },
+  "Owner's Draw > Personal > Food & Beverage": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Personal Food" },
+  "Owner's Draw > Personal Expenses > Meals": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Personal Meals" },
+  "Owner's Draw > Personal > Software/Subscription": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Personal Software" },
+  "Expense > General > Needs Review": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "Review Required" },
+  "Operating Expenses > Uncategorized > General Expense": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "General Expense" }
 };
 
 // 3. The Migration Logic
