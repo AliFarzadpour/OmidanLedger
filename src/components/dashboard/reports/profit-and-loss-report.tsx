@@ -8,10 +8,10 @@ import { useFirestore, useUser, useCollection } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Calendar as CalendarIcon, PlayCircle } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -43,16 +43,10 @@ export function ProfitAndLossReport() {
   const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>();
   
   const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
-  const [isClient, setIsClient] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-  }, []);
-
-
-  useEffect(() => {
-    setIsClient(true);
     // Set initial date range only on the client to avoid hydration mismatch
     setPendingDateRange({
       from: startOfMonth(new Date()),
@@ -118,8 +112,15 @@ export function ProfitAndLossReport() {
   const totalIncome = income.reduce((acc, item) => acc + item.total, 0);
   const totalExpenses = expenses.reduce((acc, item) => acc + item.total, 0);
 
+  const handleDateInputChange = (field: 'from' | 'to', value: string) => {
+    const date = value ? new Date(value) : undefined;
+    if (date && !isNaN(date.getTime())) {
+      setPendingDateRange(prev => ({ ...prev, [field]: date }));
+    }
+  };
+
   const renderContent = () => {
-    if (!isClient) {
+    if (!mounted) {
       return <Skeleton className="h-64 w-full" />;
     }
     if (isLoading) {
@@ -165,7 +166,7 @@ export function ProfitAndLossReport() {
   
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
 
-  if (!isClient) {
+  if (!mounted) {
     return (
       <div className="space-y-6 p-4 md:p-8">
         <Skeleton className="h-10 w-1/3" />
@@ -185,47 +186,31 @@ export function ProfitAndLossReport() {
                 <p className="text-muted-foreground">Review your income, expenses, and profitability.</p>
             </div>
             {mounted && (
-              <div className="flex items-center gap-2">
-                  <Popover>
-                      <PopoverTrigger asChild>
-                      <Button
-                          id="date"
-                          variant={"outline"}
-                          className={cn(
-                          "w-[300px] justify-start text-left font-normal",
-                          !pendingDateRange && "text-muted-foreground"
-                          )}
-                      >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {pendingDateRange?.from ? (
-                          pendingDateRange.to ? (
-                              <>
-                              {format(pendingDateRange.from, "LLL dd, y")} -{" "}
-                              {format(pendingDateRange.to, "LLL dd, y")}
-                              </>
-                          ) : (
-                              format(pendingDateRange.from, "LLL dd, y")
-                          )
-                          ) : (
-                          <span>Pick a date</span>
-                          )}
-                      </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="end">
-                      <Calendar
-                          initialFocus
-                          mode="range"
-                          defaultMonth={pendingDateRange?.from}
-                          selected={pendingDateRange}
-                          onSelect={setPendingDateRange}
-                          numberOfMonths={2}
-                      />
-                      </PopoverContent>
-                  </Popover>
-                  <Button onClick={handleRunReport} disabled={isLoading}>
-                      <PlayCircle className="mr-2 h-4 w-4" />
-                      {isLoading ? 'Loading...' : 'Run Report'}
-                  </Button>
+              <div className="flex items-end gap-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="start-date">Start Date</Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    value={pendingDateRange?.from ? format(pendingDateRange.from, 'yyyy-MM-dd') : ''}
+                    onChange={(e) => handleDateInputChange('from', e.target.value)}
+                    className="w-[180px]"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="end-date">End Date</Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    value={pendingDateRange?.to ? format(pendingDateRange.to, 'yyyy-MM-dd') : ''}
+                    onChange={(e) => handleDateInputChange('to', e.target.value)}
+                    className="w-[180px]"
+                  />
+                </div>
+                <Button onClick={handleRunReport} disabled={isLoading}>
+                    <PlayCircle className="mr-2 h-4 w-4" />
+                    {isLoading ? 'Loading...' : 'Run Report'}
+                </Button>
               </div>
             )}
        </div>
