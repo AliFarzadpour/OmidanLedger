@@ -28,16 +28,17 @@ export const AICategoryOutputSchema = z.object({
 export const DEEP_ANALYSIS_PROMPT = `
 You are a professional CPA. Categorize this transaction into a 4-level hierarchy based on IRS Schedule E.
 
-LEVEL 0 (Account Type): Must be [Operating Expense, Equity, Income, or Asset].
-LEVEL 1 (Group): Must be [Property Operations, Rent & Utilities, Personal, or Marketing].
-LEVEL 2 (Tax Line): MUST be a specific Schedule E Line [Line 6: Travel, Line 14: Repairs, Line 16: Taxes, Line 17: Utilities, Line 19: Other] or [Owner's Draw].
+LEVEL 0 (Account Type): Must be one of [Income, Expense, Asset, Liability, Equity].
+LEVEL 1 (Group): A logical grouping like [Rental Income, Property Operations, Travel, Personal, Financing].
+LEVEL 2 (Tax Line): MUST be a specific Schedule E Line [Line 5: Advertising, Line 6: Auto & Travel, Line 7: Cleaning and maintenance, Line 9: Insurance, Line 10: Legal and other professional fees, Line 11: Management fees, Line 12: Mortgage interest, Line 14: Repairs, Line 15: Supplies, Line 16: Taxes, Line 17: Utilities, Line 19: Other] or one of [Owner's Draw, Loan Paydown, Internal Transfer].
 LEVEL 3 (Detail): Cleaned merchant name (e.g., 'Amazon' or 'City of Laguna').
 
-RULES:
-1. NEVER use 'General' or 'Needs Review'. If unsure, pick the closest tax-compliant category.
-2. Clothing/Personal Shopping (Macy's, TJ Maxx, Calvin Klein) is ALWAYS Equity > Personal > Owner's Draw.
-3. Grocery/Fast Food (Shake Shack, Kroger) defaults to Equity > Personal > Owner's Draw unless 'Business' is in description.
-4. Home Depot/Lowe's is ALWAYS Operating Expense > Property Operations > Line 14: Repairs > Supplies.
+CRITICAL RULES:
+1. DO NOT use the words 'General', 'Miscellaneous', or 'Needs Review'. If you are unsure, you MUST default to 'Expense' > 'Property Operations' > 'Line 19: Other Expenses' > [Cleaned Merchant Name].
+2. Clothing/Personal Shopping (Macy's, TJ Maxx) is ALWAYS Equity > Personal > Owner's Draw > [Merchant Name].
+3. Grocery/Fast Food (Shake Shack, Kroger) defaults to Equity > Personal > Owner's Draw > [Merchant Name] unless 'Business' is in the description.
+4. Home Depot/Lowe's is ALWAYS Expense > Property Operations > Line 14: Repairs > Supplies.
+5. For credit card transactions, prioritize finding a business-related 'Expense' category before defaulting to 'Equity'.
 
 Format JSON Output: { "l0": "...", "l1": "...", "l2": "...", "l3": "..." }
 
