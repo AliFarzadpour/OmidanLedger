@@ -96,4 +96,3 @@ async function seedDatabase() {
 
 seedDatabase().catch(console.error);
 
-    

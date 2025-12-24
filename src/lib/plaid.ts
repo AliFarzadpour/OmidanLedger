@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -186,16 +185,11 @@ export async function categorizeWithHeuristics(
   const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
   
-  // LAW #0: ABSOLUTE FIRST - CATCH CREDIT CARD PAYMENTS, WHICH ARE NOT INCOME.
-  if (amount > 0 && (desc.includes('PAYMENT RECEIVED') || desc.includes('PAYMENT THANK YOU'))) {
+  // LAW #0: ABSOLUTE FIRST - CATCH CREDIT CARD PAYMENTS (positive amounts on a CC statement or negative from a bank)
+  if (desc.includes('PAYMENT RECEIVED') || desc.includes('PAYMENT THANK YOU') || desc.includes('PAYMENT - THANK YOU') || desc.includes('ONLINE PAYMENT') || desc.includes('BANK OF AMERICA BUSINESS CARD') || desc.includes('BARCLAYCARD US') || desc.includes('CITI AUTOPAY')) {
     return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
 
-  // LAW #1: Handle Credit Card Payments (from the bank account side)
-  if (amount < 0 && (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK') || desc.includes('ONLINE PAYMENT') || desc.includes('BANK OF AMERICA BUSINESS CARD') || desc.includes('BARCLAYCARD US') || desc.includes('CITI AUTOPAY'))) {
-    return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
-  }
-  
   // Rule for Internal Bank Transfers
   if (desc.includes('ONLINE BANKING TRANSFER') || 
       desc.includes('TRANSFER TO CHK') || 
@@ -226,14 +220,14 @@ export async function categorizeWithHeuristics(
       return { l0: 'Liability', l1: 'Debt Service', l2: 'Loan Paydown', l3: 'Loan/Mortgage Payment', confidence: 0.95 };
   }
   
-  // Handle Expenses using Plaid hints
+  // Handle Expenses using Plaid hints (with business-first assumption)
   if (amount < 0) {
-      if (plaidPrimary === 'FOOD_AND_DRINK') {
-          return { l0: 'Expense', l1: 'Meals', l2: 'Line 19: Other', l3: 'Business Meals', confidence: 0.8 };
-      }
-       if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
+    if (plaidPrimary === 'FOOD_AND_DRINK' && !desc.includes('BUSINESS')) {
+        return { l0: 'Equity', l1: 'Personal', l2: 'Owner\'s Draw', l3: 'Personal Meal', confidence: 0.8 };
+    }
+    if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
         if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
-            return { l0: 'Equity', l1: 'Owner Distribution', l2: 'Non-Deductible', l3: 'Personal Spending', confidence: 0.9 };
+            return { l0: 'Equity', l1: 'Personal', l2: 'Owner\'s Draw', l3: 'Personal Spending', confidence: 0.9 };
         }
     }
     if (plaidPrimary === 'TRAVEL') {
@@ -259,8 +253,8 @@ export async function categorizeWithHeuristics(
       return { l0: 'Expense', l1: 'Property Operations', l2: 'Line 19: Other', l3: 'Rent Expense', confidence: 0.9 };
   }
 
-  // Final fallback
-  return { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'General Expense', confidence: 0.1 };
+  // Final fallback to a business expense that needs review
+  return { l0: 'Expense', l1: 'Property Operations', l2: 'Line 19: Other', l3: 'Uncategorized Business Expense', confidence: 0.1 };
 }
 
 /**
@@ -363,7 +357,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     const signedAmount = originalTx.amount * -1;
                     let finalCategory: any;
 
-                    // <<<<---- NEW LOGIC ---->>>>
                     // 1. RULES ENGINE FIRST
                     const ruleResult = await getCategoryFromDatabase(originalTx.name, userContext, db);
                     
@@ -385,14 +378,9 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             date: originalTx.date
                         });
                         
-                        if (deepResult && deepResult.confidence > 0.7) {
-                            finalCategory = {
-                                categoryHierarchy: {
-                                    l0: deepResult.primaryCategory,
-                                    l1: deepResult.secondaryCategory,
-                                    l2: deepResult.subcategory,
-                                    l3: deepResult.merchantName, // Use merchant as detail
-                                },
+                        if (deepResult) {
+                           finalCategory = {
+                                categoryHierarchy: deepResult.categoryHierarchy,
                                 confidence: deepResult.confidence,
                                 aiExplanation: deepResult.reasoning,
                                 merchantName: deepResult.merchantName,
@@ -418,14 +406,13 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         }
                     }
 
-                    // *** NEW GUARDRAIL ***
-                    if (!finalCategory || !finalCategory.categoryHierarchy) {
-                        finalCategory = {
-                            categoryHierarchy: { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'Uncategorized' },
-                            confidence: 0.0,
-                            aiExplanation: 'Categorization failed, requires manual review.',
-                            reviewStatus: 'needs-review'
-                        };
+                    if (!finalCategory?.categoryHierarchy) {
+                      finalCategory = {
+                          categoryHierarchy: { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'Uncategorized' },
+                          confidence: 0.0,
+                          aiExplanation: 'Categorization failed, requires manual review.',
+                          reviewStatus: 'needs-review'
+                      };
                     }
                     
                     // 4. FINAL ACCOUNTING GUARDRAIL
@@ -573,3 +560,4 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
+
