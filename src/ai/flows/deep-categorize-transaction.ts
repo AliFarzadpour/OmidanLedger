@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that performs a deep analysis of a single transaction.
@@ -12,6 +13,15 @@ const DeepCategorizeInputSchema = z.object({
   date: z.string(),
 });
 
+// The output from the AI will be just the 4-level hierarchy.
+// We will return a more complete object from the flow.
+const AICategoryOutputSchema = z.object({
+    l0: z.string(),
+    l1: z.string(),
+    l2: z.string(),
+    l3: z.string(),
+});
+
 export async function deepCategorizeTransaction(
   transaction: z.infer<typeof DeepCategorizeInputSchema>
 ): Promise<z.infer<typeof DeepCategorizationSchema> | null> {
@@ -19,7 +29,7 @@ export async function deepCategorizeTransaction(
     {
       name: 'deepCategorizationPrompt',
       input: { schema: DeepCategorizeInputSchema },
-      output: { schema: DeepCategorizationSchema },
+      output: { schema: AICategoryOutputSchema }, // Use the new 4-level output schema
       prompt: DEEP_ANALYSIS_PROMPT,
     },
   );
@@ -29,10 +39,19 @@ export async function deepCategorizeTransaction(
     
     if (!output) return null;
 
+    // Construct the full object expected by the rest of the system
     return {
-        ...output,
+        merchantName: output.l3, // L3 is the cleaned merchant name
+        categoryHierarchy: {
+            l0: output.l0,
+            l1: output.l1,
+            l2: output.l2,
+            l3: output.l3,
+        },
+        confidence: 0.9, // Assign a high confidence since this is our most advanced logic
+        reasoning: "Categorized by deep analysis AI with strict taxonomy.",
         source: 'Deep AI Reasoning'
-    } as any;
+    };
   } catch (error) {
     console.error("Deep AI Failed:", error);
     return null; 

@@ -1,34 +1,48 @@
 
 import { z } from 'zod';
 
+// This is the output schema for the entire deepCategorizeTransaction flow, not just the AI prompt.
 export const DeepCategorizationSchema = z.object({
-  merchantName: z.string().describe("The clean merchant name (e.g., 'City of Anna')"),
-  primaryCategory: z.enum(['Asset', 'Liability', 'Equity', 'Income', 'Expense']).describe("The L0 category."),
-  secondaryCategory: z.string(),
-  subcategory: z.string(),
+  merchantName: z.string(),
+  categoryHierarchy: z.object({
+      l0: z.string(),
+      l1: z.string(),
+      l2: z.string(),
+      l3: z.string(),
+  }),
   confidence: z.number().min(0).max(1),
-  reasoning: z.string().describe("Why this category was chosen (e.g., 'City of... usually implies utilities')")
+  reasoning: z.string(),
+  source: z.string(),
 });
 
+
+// This is the STRICT output format the AI MUST follow.
+export const AICategoryOutputSchema = z.object({
+    l0: z.string(),
+    l1: z.string(),
+    l2: z.string(),
+    l3: z.string()
+});
+
+
 export const DEEP_ANALYSIS_PROMPT = `
-You are a Senior Real Estate Accountant. Your primary job is to ensure every transaction is categorized under one of the five main accounting types: Asset, Liability, Equity, Income, or Expense.
+You are a professional CPA. Categorize this transaction into a 4-level hierarchy based on IRS Schedule E.
 
-**IMPORTANT: For credit card transactions, prioritize finding a business-related 'Expense' category before defaulting to 'Equity'.**
+LEVEL 0 (Account Type): Must be [Operating Expense, Equity, Income, or Asset].
+LEVEL 1 (Group): Must be [Property Operations, Rent & Utilities, Personal, or Marketing].
+LEVEL 2 (Tax Line): MUST be a specific Schedule E Line [Line 6: Travel, Line 14: Repairs, Line 16: Taxes, Line 17: Utilities, Line 19: Other] or [Owner's Draw].
+LEVEL 3 (Detail): Cleaned merchant name (e.g., 'Amazon' or 'City of Laguna').
 
-Categorize this transaction accurately. Avoid 'General Expense' if possible.
+RULES:
+1. NEVER use 'General' or 'Needs Review'. If unsure, pick the closest tax-compliant category.
+2. Clothing/Personal Shopping (Macy's, TJ Maxx, Calvin Klein) is ALWAYS Equity > Personal > Owner's Draw.
+3. Grocery/Fast Food (Shake Shack, Kroger) defaults to Equity > Personal > Owner's Draw unless 'Business' is in description.
+4. Home Depot/Lowe's is ALWAYS Operating Expense > Property Operations > Line 14: Repairs > Supplies.
 
-**TRANSACTION:**
+Format JSON Output: { "l0": "...", "l1": "...", "l2": "...", "l3": "..." }
+
+TRANSACTION:
 - Description: "{{description}}"
 - Amount: {{amount}}
 - Date: {{date}}
-
-**PATTERNS:**
-- "City of X" -> Expense > Utilities
-- "Home Depot/Lowes" -> Expense > Repairs > Materials & Supplies
-- "Macy's/Nordstrom" -> Equity > Owner Distribution > Personal Spending
-- "7-Eleven/Shell" -> Expense > Travel > Fuel
-- "Zelle Payment from..." -> Income > Rental Income
-- "Payment to Credit Card" -> Liability > CC Payment > Internal Transfer
-
-Return pure JSON.
 `;
