@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
 import { format, startOfMonth } from 'date-fns';
-import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
+import { collectionGroup, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -19,7 +20,7 @@ import { AlertCircle } from 'lucide-react';
 
 type Transaction = {
   id: string;
-  date: string;
+  date: string | Timestamp; // Can be string or Timestamp
   description: string;
   amount: number;
   categoryHierarchy: {
@@ -47,24 +48,26 @@ export function ProfitAndLossReport() {
 
   useEffect(() => {
     setMounted(true);
-    // Set initial date range only on the client to avoid hydration mismatch
-    setPendingDateRange({
+    const initialRange = {
       from: startOfMonth(new Date()),
       to: new Date(),
-    });
+    };
+    setPendingDateRange(initialRange);
+    setActiveDateRange(initialRange);
   }, []);
 
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
-    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
-    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
+    // Convert dates to Firestore Timestamp objects for the query
+    const startTimestamp = Timestamp.fromDate(activeDateRange.from);
+    const endTimestamp = Timestamp.fromDate(activeDateRange.to);
 
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
+      where('date', '>=', startTimestamp),
+      where('date', '<=', endTimestamp),
       orderBy('date', 'desc')
     );
   }, [user, firestore, activeDateRange]);
@@ -85,15 +88,16 @@ export function ProfitAndLossReport() {
 
     transactions.forEach((txn) => {
       const hierarchy = txn.categoryHierarchy; 
-      if (!hierarchy) return; 
+      if (!hierarchy || !hierarchy.l0) return; 
 
-      const l0 = hierarchy.l0;
+      // Force to lowercase for case-insensitive comparison
+      const l0 = hierarchy.l0.toLowerCase();
       const l2 = hierarchy.l2;
 
-      if (l0 === 'Income') {
+      if (l0 === 'income') {
         totalIncome += txn.amount;
         incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
-      } else if (l0 === 'Expense' || l0 === 'Expenses') {
+      } else if (l0 === 'expense' || l0 === 'expenses') {
         totalExpenses += txn.amount;
         expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
       }
