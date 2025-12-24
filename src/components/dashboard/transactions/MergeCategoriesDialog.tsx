@@ -9,10 +9,11 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { Loader2, ArrowRight, Combine, AlertCircle } from 'lucide-react';
+import { Loader2, ArrowRight, Combine, AlertCircle, Search, ArrowDownUp } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction } from '../transactions-table';
+import { Input } from '@/components/ui/input';
 
 interface MergeCategoriesDialogProps {
   isOpen: boolean;
@@ -38,6 +39,13 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
 
   const [fromCategories, setFromCategories] = useState<Set<string>>(new Set());
   const [toCategory, setToCategory] = useState<string | null>(null);
+
+  // New state for filtering and sorting
+  const [fromFilter, setFromFilter] = useState('');
+  const [toFilter, setToFilter] = useState('');
+  const [fromSort, setFromSort] = useState<'asc' | 'desc'>('asc');
+  const [toSort, setToSort] = useState<'asc' | 'desc'>('asc');
+
 
   useEffect(() => {
     if (!isOpen || !user || !firestore) return;
@@ -117,6 +125,19 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
     }
   };
 
+  const processColumnData = (filter: string, sort: 'asc' | 'desc') => {
+    return uniqueCategories
+      .filter(cat => cat.id.toLowerCase().includes(filter.toLowerCase()))
+      .sort((a, b) => {
+        if (sort === 'asc') return a.id.localeCompare(b.id);
+        return b.id.localeCompare(a.id);
+      });
+  };
+
+  const fromColumnData = useMemo(() => processColumnData(fromFilter, fromSort), [uniqueCategories, fromFilter, fromSort]);
+  const toColumnData = useMemo(() => processColumnData(toFilter, toSort), [uniqueCategories, toFilter, toSort]);
+
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
@@ -134,9 +155,18 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
             {/* From Column */}
             <div className="flex flex-col border rounded-lg p-4 min-h-0">
               <h3 className="font-semibold mb-2">1. Select categories to merge FROM</h3>
+              <div className="flex items-center gap-2 mb-2">
+                 <div className="relative flex-grow">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Filter..." className="pl-9 h-9" value={fromFilter} onChange={e => setFromFilter(e.target.value)} />
+                 </div>
+                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setFromSort(s => s === 'asc' ? 'desc' : 'asc')}>
+                    <ArrowDownUp className="h-4 w-4"/>
+                 </Button>
+              </div>
               <ScrollArea className="flex-1 -mr-4 pr-4">
                 <div className="space-y-2">
-                  {uniqueCategories.map(cat => (
+                  {fromColumnData.map(cat => (
                     <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                       <Checkbox id={cat.id} onCheckedChange={() => handleFromToggle(cat.id)} />
                       <label htmlFor={cat.id} className="text-sm font-medium leading-none cursor-pointer">
@@ -152,10 +182,19 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
             {/* To Column */}
             <div className="flex flex-col border rounded-lg p-4 bg-muted/50 min-h-0">
               <h3 className="font-semibold mb-2">2. Select category to merge TO</h3>
+               <div className="flex items-center gap-2 mb-2">
+                 <div className="relative flex-grow">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Filter..." className="pl-9 h-9" value={toFilter} onChange={e => setToFilter(e.target.value)} />
+                 </div>
+                 <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => setToSort(s => s === 'asc' ? 'desc' : 'asc')}>
+                    <ArrowDownUp className="h-4 w-4"/>
+                 </Button>
+              </div>
               <ScrollArea className="flex-1 -mr-4 pr-4">
                 <RadioGroup onValueChange={setToCategory}>
                   <div className="space-y-2">
-                    {uniqueCategories.map(cat => (
+                    {toColumnData.map(cat => (
                       <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-background">
                         <RadioGroupItem value={cat.id} id={`to-${cat.id}`} />
                         <Label htmlFor={`to-${cat.id}`} className="cursor-pointer">
