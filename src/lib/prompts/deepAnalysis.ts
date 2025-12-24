@@ -22,11 +22,11 @@ Categorize this transaction accurately. Avoid 'General Expense' if possible.
 
 **PATTERNS:**
 - "City of X" -> Expense > Utilities
-- "Home Depot/Lowes" -> Expense > Repairs
-- "Macy's/Nordstrom" -> Equity > Owner's Draw
-- "7-Eleven/Shell" -> Expense > Transportation
+- "Home Depot/Lowes" -> Expense > Repairs > Materials & Supplies
+- "Macy's/Nordstrom" -> Equity > Owner Distribution > Personal Spending
+- "7-Eleven/Shell" -> Expense > Travel > Fuel
 - "Zelle Payment from..." -> Income > Rental Income
-- "Payment to Credit Card" -> Liability > Credit Card Payment
+- "Payment to Credit Card" -> Liability > CC Payment > Internal Transfer
 
 Return pure JSON.
 `;

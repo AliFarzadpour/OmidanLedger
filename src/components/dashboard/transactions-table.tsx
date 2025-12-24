@@ -28,7 +28,7 @@ import { BatchEditDialog } from './transactions/batch-edit-dialog';
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Expense': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   'Balance Sheet': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
@@ -50,10 +50,14 @@ export interface Transaction {
     l2: string;
     l3: string;
   };
-  primaryCategory: string; // Legacy
-  secondaryCategory: string; // Legacy
-  subcategory: string; // Legacy
-  details?: string; // Legacy
+  /** @deprecated */
+  primaryCategory: string;
+  /** @deprecated */
+  secondaryCategory: string;
+  /** @deprecated */
+  subcategory: string;
+  /** @deprecated */
+  details?: string;
   confidence?: number;
   accountId?: string;
   accountName?: string; 
