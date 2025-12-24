@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -22,7 +23,12 @@ type Transaction = {
   date: string;
   description: string;
   amount: number;
-  primaryCategory: string;
+  categoryHierarchy: {
+    l0: string;
+    l1: string;
+    l2: string;
+    l3: string;
+  };
 };
 
 type ReportSection = {
@@ -35,13 +41,11 @@ export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // pendingDateRange is for the UI picker
   const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>({
     from: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     to: new Date(),
   });
   
-  // activeDateRange is what's submitted to the query
   const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
 
   const transactionsQuery = useMemo(() => {
@@ -65,51 +69,41 @@ export function ProfitAndLossReport() {
     setActiveDateRange(pendingDateRange);
   };
 
-  const { income, cogs, expenses, netIncome, grossProfit } = useMemo(() => {
-    if (!transactions) {
-      return { income: [], cogs: [], expenses: [], netIncome: 0, grossProfit: 0 };
-    }
+  const { income, expenses, netIncome } = useMemo(() => {
+    if (!transactions) return { income: [], expenses: [], netIncome: 0 };
 
     const incomeMap = new Map<string, number>();
-    const cogsMap = new Map<string, number>();
     const expenseMap = new Map<string, number>();
-
     let totalIncome = 0;
-    let totalCogs = 0;
     let totalExpenses = 0;
 
     transactions.forEach((txn) => {
-      // Use includes for more flexible matching
-      const primaryCategory = txn.primaryCategory || '';
-      
-      if (primaryCategory.includes('Income')) {
-          totalIncome += txn.amount;
-          incomeMap.set(primaryCategory, (incomeMap.get(primaryCategory) || 0) + txn.amount);
-      } else if (primaryCategory.includes('COGS') || primaryCategory.includes('Cost of Goods Sold')) {
-          totalCogs += txn.amount;
-          cogsMap.set(primaryCategory, (cogsMap.get(primaryCategory) || 0) + txn.amount);
-      } else if (primaryCategory.includes('Expense')) { // Catches "Operating Expenses" and "Other Expenses"
-          totalExpenses += txn.amount;
-          expenseMap.set(primaryCategory, (expenseMap.get(primaryCategory) || 0) + txn.amount);
+      const hierarchy = txn.categoryHierarchy; 
+      if (!hierarchy) return; 
+
+      const l0 = hierarchy.l0;
+      const l2 = hierarchy.l2;
+
+      if (l0 === 'Income') {
+        totalIncome += txn.amount;
+        incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
+      } else if (l0 === 'Expense') {
+        totalExpenses += txn.amount;
+        expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
       }
     });
 
-    const grossProfit = totalIncome + totalCogs; // COGS is negative
-    const netIncome = grossProfit + totalExpenses; // Expenses are negative
-
-    const toArray = (map: Map<string, number>) => Array.from(map, ([name, total]) => ({ name, total }));
+    const toArray = (map: Map<string, number>) => 
+      Array.from(map, ([name, total]) => ({ name, total }));
 
     return {
       income: toArray(incomeMap),
-      cogs: toArray(cogsMap),
       expenses: toArray(expenseMap),
-      grossProfit,
-      netIncome,
+      netIncome: totalIncome + totalExpenses,
     };
   }, [transactions]);
 
   const totalIncome = income.reduce((acc, item) => acc + item.total, 0);
-  const totalCogs = cogs.reduce((acc, item) => acc + item.total, 0);
   const totalExpenses = expenses.reduce((acc, item) => acc + item.total, 0);
 
   const renderContent = () => {
@@ -144,12 +138,7 @@ export function ProfitAndLossReport() {
       <Table>
         <TableBody>
           <ReportSection title="Income" items={income} total={totalIncome} isBold />
-          <ReportSection title="Cost of Goods Sold" items={cogs} total={totalCogs} />
-          <TableRow className="font-bold bg-muted/50">
-            <TableCell>Gross Profit</TableCell>
-            <TableCell className="text-right">{formatCurrency(grossProfit)}</TableCell>
-          </TableRow>
-          <ReportSection title="Operating Expenses" items={expenses} total={totalExpenses} />
+          <ReportSection title="Expenses" items={expenses} total={totalExpenses} isBold />
           <TableRow className="font-bold text-lg bg-card border-t-2">
             <TableCell>Net Income</TableCell>
             <TableCell className="text-right">{formatCurrency(netIncome)}</TableCell>
