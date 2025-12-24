@@ -238,8 +238,8 @@ export async function categorizeWithHeuristics(
       desc.includes('PAYMENT RECEIVED, THANK') || 
       desc.includes('ONLINE PAYMENT') ||
       desc.includes('BANK OF AMERICA BUSINESS CARD') || // From user feedback
-      desc.includes('BARCLAYCARD US') || // From user feedback
-      desc.includes('CITI AUTOPAY') // From user feedback
+      desc.includes('BARCLAYCARD US') ||
+      desc.includes('CITI AUTOPAY')
      ) {
       return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
