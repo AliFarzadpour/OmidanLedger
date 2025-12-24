@@ -34,7 +34,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
   const [isLoading, setIsLoading] = useState(true);
   const [isMerging, setIsMerging] = useState(false);
   const [uniqueCategories, setUniqueCategories] = useState<UniqueCategory[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactions, setTransactions] = useState<(Transaction & { _originalRef: any })[]>([]);
 
   const [fromCategories, setFromCategories] = useState<Set<string>>(new Set());
   const [toCategory, setToCategory] = useState<string | null>(null);
@@ -119,22 +119,22 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[80vh]">
+      <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Combine/> Merge Transaction Categories</DialogTitle>
           <DialogDescription>Clean up your books by merging multiple categories into one.</DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin h-8 w-8" /></div>
+          <div className="flex-1 flex justify-center items-center"><Loader2 className="animate-spin h-8 w-8" /></div>
         ) : uniqueCategories.length === 0 ? (
-          <div className="flex justify-center items-center h-full"><p>No categories found to merge.</p></div>
+          <div className="flex-1 flex justify-center items-center"><p>No categories found to merge.</p></div>
         ) : (
-          <div className="grid grid-cols-2 gap-6 h-full py-4">
+          <div className="grid grid-cols-2 gap-6 flex-1 min-h-0 py-4">
             {/* From Column */}
-            <div className="flex flex-col border rounded-lg p-4">
+            <div className="flex flex-col border rounded-lg p-4 min-h-0">
               <h3 className="font-semibold mb-2">1. Select categories to merge FROM</h3>
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 -mr-4 pr-4">
                 <div className="space-y-2">
                   {uniqueCategories.map(cat => (
                     <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
@@ -150,9 +150,9 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
             </div>
 
             {/* To Column */}
-            <div className="flex flex-col border rounded-lg p-4 bg-muted/50">
+            <div className="flex flex-col border rounded-lg p-4 bg-muted/50 min-h-0">
               <h3 className="font-semibold mb-2">2. Select category to merge TO</h3>
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 -mr-4 pr-4">
                 <RadioGroup onValueChange={setToCategory}>
                   <div className="space-y-2">
                     {uniqueCategories.map(cat => (
