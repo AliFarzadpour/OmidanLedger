@@ -1,3 +1,4 @@
+
 {
   "name": "nextn",
   "version": "0.1.0",
@@ -13,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "db:seed": "tsc --project tsconfig.scripts.json && node dist/seedGlobalRules.js",
     "db:migrate": "tsc --project tsconfig.scripts.json && node dist/migrate-account-data.js",
-    "db:analyze": "tsc --project tsconfig.scripts.json && node dist/analyze-categories.js"
+    "db:analyze": "tsc --project tsconfig.scripts.json && node dist/analyze-categories.js",
+    "db:inspect": "tsc --project tsconfig.scripts.json && node dist/inspect-recent-transactions.js"
   },
   "dependencies": {
     "@genkit-ai/firebase": "^1.20.0",
