@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -230,7 +231,7 @@ export async function categorizeWithHeuristics(
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
   
   // LAW #1: Handle Credit Card Payments (from both sides of the transaction)
-  if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && (plaidDetailed.includes('CREDIT_CARD_PAYMENT') || desc.includes('PAYMENT THANK YOU'))) {
+  if (amount > 0 && (plaidPrimary === 'TRANSFER_IN' && plaidDetailed.includes('CREDIT_CARD_PAYMENT')) || desc.includes('PAYMENT THANK YOU') || desc.includes('PAYMENT RECEIVED')) {
     return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   if (amount < 0 && (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK') || desc.includes('ONLINE PAYMENT') || desc.includes('BANK OF AMERICA BUSINESS CARD') || desc.includes('BARCLAYCARD US') || desc.includes('CITI AUTOPAY'))) {
