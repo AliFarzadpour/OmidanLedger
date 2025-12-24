@@ -29,6 +29,7 @@ type Transaction = {
     l2: string;
     l3: string;
   };
+  reviewStatus?: 'approved' | 'needs-review' | 'incorrect';
 };
 
 type ReportSection = {
@@ -67,6 +68,7 @@ export function ProfitAndLossReport() {
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
+      where('reviewStatus', '==', 'approved'), // Only include approved transactions
       where('date', '>=', startTimestamp),
       where('date', '<=', endTimestamp),
       orderBy('date', 'desc')
@@ -89,10 +91,10 @@ export function ProfitAndLossReport() {
 
     transactions.forEach((txn) => {
       const hierarchy = txn.categoryHierarchy; 
-      if (!hierarchy || !hierarchy.l0) return; 
+      if (!hierarchy || !hierarchy.l0 || !hierarchy.l2) return;
 
       const l0 = hierarchy.l0.toLowerCase();
-      const l2 = hierarchy.l2 || 'Uncategorized';
+      const l2 = hierarchy.l2;
 
       if (l0 === 'income') {
         totalIncome += txn.amount;
@@ -149,7 +151,7 @@ export function ProfitAndLossReport() {
     if (!transactions || transactions.length === 0) {
       return (
         <p className="py-8 text-center text-muted-foreground">
-          No transaction data available for the selected period.
+          No approved transaction data available for the selected period.
         </p>
       );
     }
@@ -220,7 +222,7 @@ export function ProfitAndLossReport() {
                 {renderContent()}
             </CardContent>
             <CardFooter>
-                 <p className="text-xs text-muted-foreground">This report is generated based on categorized transactions. Uncategorized items are not included.</p>
+                 <p className="text-xs text-muted-foreground">This report is generated based on approved transactions only. Items marked for review are not included.</p>
             </CardFooter>
         </Card>
     </div>
