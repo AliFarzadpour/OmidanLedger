@@ -27,6 +27,7 @@ type UniqueCategory = {
   primary: string;
   secondary: string;
   sub: string;
+  details: string; // L3
 };
 
 const PRIMARY_CATEGORY_OPTIONS = ["Asset", "Liability", "Equity", "Income", "Expense"];
@@ -64,13 +65,14 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
 
       const categoryMap = new Map<string, UniqueCategory>();
       allTxs.forEach(tx => {
-        const id = `${tx.primaryCategory}>${tx.secondaryCategory}>${tx.subcategory}`;
+        const id = `${tx.primaryCategory || ''}>${tx.secondaryCategory || ''}>${tx.subcategory || ''}>${tx.details || ''}`;
         if (!categoryMap.has(id)) {
           categoryMap.set(id, {
             id,
             primary: tx.primaryCategory,
             secondary: tx.secondaryCategory,
             sub: tx.subcategory,
+            details: tx.details || ''
           });
         }
       });
@@ -107,7 +109,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
     }
     
     const transactionsToUpdate = transactions.filter(tx => {
-        const catId = `${tx.primaryCategory}>${tx.secondaryCategory}>${tx.subcategory}`;
+        const catId = `${tx.primaryCategory || ''}>${tx.secondaryCategory || ''}>${tx.subcategory || ''}>${tx.details || ''}`;
         return fromCategories.has(catId);
     });
 
@@ -117,6 +119,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
         primaryCategory: overridePrimary || destinationCategory.primary,
         secondaryCategory: destinationCategory.secondary,
         subcategory: destinationCategory.sub,
+        details: destinationCategory.details,
       });
     });
 
@@ -171,13 +174,13 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                  </Button>
               </div>
               <ScrollArea className="flex-1 -mr-4 pr-4">
-                <div className="space-y-2">
+                <div className="space-y-1">
                   {fromColumnData.map(cat => (
                     <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                       <Checkbox id={cat.id} onCheckedChange={() => handleFromToggle(cat.id)} />
-                      <label htmlFor={cat.id} className="text-sm font-medium leading-none cursor-pointer">
-                        {cat.primary}
-                        <span className="text-muted-foreground"> {'>'} {cat.secondary} {'>'} {cat.sub}</span>
+                      <label htmlFor={cat.id} className="text-xs leading-tight cursor-pointer">
+                        <span className="font-medium text-slate-800">{cat.primary}</span>
+                        <span className="text-slate-500"> > {cat.secondary} > {cat.sub} > {cat.details}</span>
                       </label>
                     </div>
                   ))}
@@ -214,13 +217,13 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
               </div>
               <ScrollArea className="flex-1 -mr-4 pr-4">
                 <RadioGroup onValueChange={setToCategory}>
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     {toColumnData.map(cat => (
                       <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-background">
                         <RadioGroupItem value={cat.id} id={`to-${cat.id}`} />
-                        <Label htmlFor={`to-${cat.id}`} className="cursor-pointer">
-                          {cat.primary}
-                          <span className="text-muted-foreground"> {'>'} {cat.secondary} {'>'} {cat.sub}</span>
+                        <Label htmlFor={`to-${cat.id}`} className="cursor-pointer text-xs leading-tight">
+                           <span className="font-medium text-slate-800">{cat.primary}</span>
+                           <span className="text-slate-500"> > {cat.secondary} > {cat.sub} > {cat.details}</span>
                         </Label>
                       </div>
                     ))}
