@@ -36,7 +36,6 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   "Office & Administrative > Software & Subscriptions > Account Verification": { l0: "Income", l1: "Adjustments", l2: "Line 3: Rents Received", l3: "Verification Credit" },
 
   // === LEVEL 0: EXPENSE (Tax Deductible) ===
-  // Repairs (Line 14)
   "Operating Expenses > Repairs & Maintenance > Repairs & Maintenance": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "General" },
   "Operating Expenses > Repairs & Maintenance > Talia - Pool Maintenance": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Pool Service" },
   "Operating Expenses > Repairs & Maintenance > Lawn Mowing Services": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Lawn Care" },
@@ -44,20 +43,14 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   "Repairs & Maintenance > Repairs > Adelyn - Repairs & Maintenance": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Adelyn Repair" },
   "Repairs & Maintenance > Repairs > Helmoken - Repairs & Maintenance": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Helmoken Repair" },
   "Real Estate Operations > Property Expenses > Repairs & Maintenance": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "General Maint" },
-  
-  // Utilities (Line 17)
   "Expenses > Utilities > Talia - Water": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Water" },
   "Operating Expenses > Utilities > Electricity": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Electricity" },
   "Operating Expenses > Utilities > Phone/Internet": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Phone/Internet" },
   "Operating Expenses > Communications & Utilities > Telecommunications": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Telecom" },
   "Rent & Utilities > Utilities > Telecommunications/Internet": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Internet" },
-
-  // Insurance & Taxes (Line 9 & 16)
   "Operating Expenses > Insurance > Property Insurance": { l0: "Expense", l1: "Insurance", l2: "Line 9: Insurance", l3: "Property" },
   "Operating Expenses > Property Insurance > Building Insurance": { l0: "Expense", l1: "Insurance", l2: "Line 9: Insurance", l3: "Building" },
   "Operating Expenses > Taxes > Property Tax": { l0: "Expense", l1: "Taxes", l2: "Line 16: Taxes", l3: "Property Tax" },
-
-  // Professional & Other (Line 10 & 19)
   "Professional Fees > Financial Services > Accounting & Tax preparation": { l0: "Expense", l1: "Professional", l2: "Line 10: Legal/Professional", l3: "Accounting" },
   "Professional Services > Accounting & Tax Services > Tax Consulting": { l0: "Expense", l1: "Professional", l2: "Line 10: Legal/Professional", l3: "Tax Prep" },
   "Operating Expenses > Cosoltation > Contractors and consultation": { l0: "Expense", l1: "Professional", l2: "Line 10: Legal/Professional", l3: "Contractors" },
@@ -103,7 +96,28 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   "Owner's Draw > Personal Expenses > Meals": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Personal Meals" },
   "Owner's Draw > Personal > Software/Subscription": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Personal Software" },
   "Expense > General > Needs Review": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "Review Required" },
-  "Operating Expenses > Uncategorized > General Expense": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "General Expense" }
+  "Operating Expenses > Uncategorized > General Expense": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "General Expense" },
+  
+  // --- Self-Referential Mappings (Prevents errors for already migrated docs) ---
+  "Expense > Utilities > Line 17: Utilities": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "General" },
+  "Expense > Office & Admin > Line 19: Other Expenses": { l0: "Expense", l1: "Office & Admin", l2: "Line 19: Other Expenses", l3: "Supplies" },
+  "Expense > Technology > Line 19: Other Expenses": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Software" },
+  "Expense > Insurance > Line 9: Insurance": { l0: "Expense", l1: "Insurance", l2: "Line 9: Insurance", l3: "Property Insurance" },
+  "Expense > Repairs > Line 14: Repairs": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Maintenance" },
+  "Expense > Professional > Line 10: Legal/Professional": { l0: "Expense", l1: "Professional", l2: "Line 10: Legal/Professional", l3: "Consulting" },
+  "Expense > Transportation > Line 6: Auto & Travel": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Travel" },
+  "Expense > General > Needs Review": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "Uncategorized" },
+  "Expense > Taxes > Line 16: Taxes": { l0: "Expense", l1: "Taxes", l2: "Line 16: Taxes", l3: "Property Tax" },
+  "Liability > Credit Card Payment > Internal Transfer": { l0: "Liability", l1: "CC Payment", l2: "Internal Transfer", l3: "Payment" },
+  "Liability > Debt Service > Loan Paydown": { l0: "Liability", l1: "Debt Service", l2: "Loan Principal", l3: "SBA/Mortgage" },
+  "Liability > Debt Service > Vehicle Loan": { l0: "Liability", l1: "Debt Service", l2: "Vehicle Loan", l3: "Auto Payment" },
+  "Liability > Debt Service > Mortgage Principal": { l0: "Liability", l1: "Debt Service", l2: "Mortgage Principal", l3: "Rosegate/Flagstar" },
+  "Liability > Tenant Deposits > Security Deposits Held": { l0: "Liability", l1: "Security Deposits", l2: "Tenant Deposits Held", l3: "Security Deposit" },
+  "Asset > Cash Movement > Internal Transfer": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Bank Transfer" },
+  "Income > Rental Income > Line 3: Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Rental Income" },
+  "Income > Adjustments > Line 3: Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Refund/Adjustment" },
+  "Income > Non-Operating > Bank Interest": { l0: "Income", l1: "Non-Operating", l2: "Interest Income", l3: "Bank Interest" },
+  "Equity > Owner Distribution > Personal Draw": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Owner's Draw" }
 };
 
 // 3. The Migration Logic
@@ -138,6 +152,12 @@ async function runMigration() {
 
     transactionsSnap.forEach(doc => {
       const tx = doc.data();
+
+      // --- IMPROVED LOGIC: CHECK IF ALREADY MIGRATED ---
+      // If the 'details' field exists, we assume it's in the new format and skip it.
+      if (tx.details) {
+          return;
+      }
       
       // Construct the "old" messy key from the existing data and trim it
       const oldKey = `${tx.primaryCategory} > ${tx.secondaryCategory} > ${tx.subcategory}`.trim();
@@ -155,7 +175,7 @@ async function runMigration() {
         });
         updatedInThisAccount++;
       } else {
-          console.warn(` - No mapping found for old key: "${oldKey}" (Transaction ID: ${doc.id})`);
+          console.warn(`- No mapping found for old key: "${oldKey}" (Transaction ID: ${doc.id})`);
       }
     });
 
@@ -173,3 +193,5 @@ async function runMigration() {
 }
 
 runMigration().catch(console.error);
+
+    
