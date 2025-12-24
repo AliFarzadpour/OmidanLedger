@@ -213,59 +213,30 @@
       "type": "object",
       "description": "Represents a financial transaction with a 4-level category structure.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the Transaction entity."
+        "id": { "type": "string", "description": "Unique identifier for the Transaction entity." },
+        "userId": { "type": "string", "description": "Denormalized reference to User for efficient querying." },
+        "bankAccountId": { "type": "string", "description": "Reference to BankAccount. (Relationship: BankAccount 1:N Transaction)"},
+        "date": { "type": "string", "description": "The date of the transaction.", "format": "date-time" },
+        "description": { "type": "string", "description": "Description of the transaction." },
+        "amount": { "type": "number", "description": "The amount of the transaction." },
+        "categoryHierarchy": {
+            "type": "object",
+            "description": "A 4-level category structure for professional accounting and tax readiness.",
+            "properties": {
+                "l0": { "type": "string", "description": "L0: Account Type (e.g., 'Operating Expense', 'Equity', 'Income', 'Liability')." },
+                "l1": { "type": "string", "description": "L1: Category Group (e.g., 'Rent & Utilities', 'Personal Expenses', 'Financial')." },
+                "l2": { "type": "string", "description": "L2: Tax Line (e.g., 'Line 17: Utilities')." },
+                "l3": { "type": "string", "description": "L3: Specific Detail (e.g., 'Electricity', 'Software', 'Fuel')." }
+            },
+            "required": ["l0", "l1", "l2", "l3"]
         },
-        "userId": {
-          "type": "string",
-          "description": "Denormalized reference to User for efficient querying."
-        },
-        "bankAccountId": {
-          "type": "string",
-          "description": "Reference to BankAccount. (Relationship: BankAccount 1:N Transaction)"
-        },
-        "date": {
-          "type": "string",
-          "description": "The date of the transaction.",
-          "format": "date-time"
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the transaction."
-        },
-        "amount": {
-          "type": "number",
-          "description": "The amount of the transaction."
-        },
-        "primaryCategory": {
-          "type": "string",
-          "description": "Level 0: Major Type (e.g., 'Income', 'Expenses')."
-        },
-        "secondaryCategory": {
-          "type": "string",
-          "description": "Level 1: Financial Category (e.g., 'Rental Income', 'Utilities')."
-        },
-        "subcategory": {
-          "type": "string",
-          "description": "Level 2: Tax/Schedule E Category (e.g., 'Line 14 Repairs')."
-        },
-        "details": {
-          "type": "string",
-          "description": "Level 3: User-specific details (e.g., 'Adelyn - HVAC Repair')."
-        }
+        "primaryCategory": { "type": "string", "description": "DEPRECATED: Use categoryHierarchy.l0" },
+        "secondaryCategory": { "type": "string", "description": "DEPRECATED: Use categoryHierarchy.l1" },
+        "subcategory": { "type": "string", "description": "DEPRECATED: Use categoryHierarchy.l2" },
+        "details": { "type": "string", "description": "DEPRECATED: Use categoryHierarchy.l3" }
       },
       "required": [
-        "id",
-        "userId",
-        "bankAccountId",
-        "date",
-        "description",
-        "amount",
-        "primaryCategory",
-        "secondaryCategory",
-        "subcategory",
-        "details"
+        "id", "userId", "bankAccountId", "date", "description", "amount", "categoryHierarchy"
       ]
     },
     "Property": {
@@ -740,5 +711,3 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
-
-    

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -43,11 +42,17 @@ export interface Transaction {
   id: string;
   date: string;
   description: string;
-  primaryCategory: string;
-  secondaryCategory: string;
-  subcategory: string;
-  details?: string;
   amount: number;
+  primaryCategory: string; // Legacy
+  secondaryCategory: string; // Legacy
+  subcategory: string; // Legacy
+  details?: string; // Legacy
+  categoryHierarchy: {
+    l0: string;
+    l1: string;
+    l2: string;
+    l3: string;
+  };
   confidence?: number;
   accountId?: string;
   accountName?: string; 
@@ -125,11 +130,16 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleCategoryChange = async (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; details: string; }) => {
-    if (!firestore || !user) return;
+    if (!user || !firestore) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
     
     await updateDoc(transactionRef, { 
-        ...newCategories,
+        categoryHierarchy: {
+            l0: newCategories.primaryCategory,
+            l1: newCategories.secondaryCategory,
+            l2: newCategories.subcategory,
+            l3: newCategories.details,
+        },
         confidence: 1.0, 
         status: 'posted',
         reviewStatus: 'approved'
@@ -186,7 +196,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? t.primaryCategory === filterCategory : true;
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? (t.categoryHierarchy?.l0 || t.primaryCategory) === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
@@ -207,8 +217,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
       
       if (sortConfig.key === 'category') {
-        aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}${a.details}`;
-        bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}${b.details}`;
+        const aCats = a.categoryHierarchy || {l0: a.primaryCategory, l1: a.secondaryCategory, l2: a.subcategory, l3: a.details};
+        const bCats = b.categoryHierarchy || {l0: b.primaryCategory, l1: b.secondaryCategory, l2: b.subcategory, l3: b.details};
+        aValue = `${aCats.l0}${aCats.l1}${aCats.l2}${aCats.l3}`;
+        bValue = `${bCats.l0}${bCats.l1}${bCats.l2}${bCats.l3}`;
       } else if (sortConfig.key === 'date') {
         return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
@@ -426,10 +438,12 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
 
 function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [primary, setPrimary] = useState(transaction.primaryCategory);
-    const [secondary, setSecondary] = useState(transaction.secondaryCategory);
-    const [sub, setSub] = useState(transaction.subcategory);
-    const [details, setDetails] = useState(transaction.details || '');
+    const cats = transaction.categoryHierarchy || { l0: transaction.primaryCategory, l1: transaction.secondaryCategory, l2: transaction.subcategory, l3: transaction.details || '' };
+    
+    const [primary, setPrimary] = useState(cats.l0);
+    const [secondary, setSecondary] = useState(cats.l1);
+    const [sub, setSub] = useState(cats.l2);
+    const [details, setDetails] = useState(cats.l3);
 
     const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit' | 'thankYouPayment', isOpen: boolean }>({ type: 'none', isOpen: false });
 
@@ -449,16 +463,16 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
             <Popover open={isOpen} onOpenChange={setIsOpen}>
                 <PopoverTrigger asChild>
                     <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
-                            {transaction.primaryCategory}
+                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0] || 'bg-slate-100')}>
+                            {cats.l0}
                             <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
                         </Badge>
                         <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {transaction.secondaryCategory} {'>'} {transaction.subcategory}
+                            {cats.l1} {'>'} {cats.l2}
                         </span>
-                        {transaction.details && (
+                        {cats.l3 && (
                              <span className="text-xs text-muted-foreground pl-1 font-medium">
-                                {transaction.details}
+                                {cats.l3}
                             </span>
                         )}
                     </div>
@@ -470,10 +484,10 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                             <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
                         </div>
                         <div className="grid gap-2">
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
-                             <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">Details</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">L0</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">L1</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">L2</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                             <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">L3</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
                         </div>
                         <Button type="submit">Confirm & Save</Button>
                     </form>

@@ -20,6 +20,15 @@ service cloud.firestore {
     function isLandlordOfTenant(tenantUserId) {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(tenantUserId)).data.landlordId == request.auth.uid;
     }
+    
+    // VALIDATION: Enforce the 4-level category structure for all transactions
+    function hasValidCategoryHierarchy(data) {
+        return 'categoryHierarchy' in data &&
+               'l0' in data.categoryHierarchy && data.categoryHierarchy.l0 is string &&
+               'l1' in data.categoryHierarchy && data.categoryHierarchy.l1 is string &&
+               'l2' in data.categoryHierarchy && data.categoryHierarchy.l2 is string &&
+               'l3' in data.categoryHierarchy && data.categoryHierarchy.l3 is string;
+    }
 
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -34,7 +43,8 @@ service cloud.firestore {
 
             match /transactions/{transactionId} {
                 // Inherit permissions from parent bank account.
-                allow read, write, delete: if isOwner(userId);
+                allow read, delete: if isOwner(userId);
+                allow create, update: if isOwner(userId) && hasValidCategoryHierarchy(request.resource.data);
             }
         }
         
@@ -45,7 +55,8 @@ service cloud.firestore {
     
     // Rule to allow collection group queries on 'transactions'
     match /{path=**}/transactions/{transactionId} {
-      allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+       allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+       allow write: if isSignedIn() && resource.data.userId == request.auth.uid && hasValidCategoryHierarchy(request.resource.data);
     }
 
     match /properties/{propertyId} {
