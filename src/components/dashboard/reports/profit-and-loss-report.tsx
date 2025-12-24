@@ -63,6 +63,7 @@ export function ProfitAndLossReport() {
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
+    // Use format to create strings like "2025-02-27" to match your DB
     const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
     const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
   
@@ -71,17 +72,17 @@ export function ProfitAndLossReport() {
       where('userId', '==', user.uid),
       where('date', '>=', startDate),
       where('date', '<=', endDate),
-      orderBy('date', 'desc')
+      orderBy('date', 'desc') // This MUST match the 'Descending' in your Index
     );
   }, [user, firestore, activeDateRange]);
 
   const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
   
   useEffect(() => {
-    if (error) {
-      console.error("FULL FIRESTORE ERROR:", error);
-    }
-  }, [error]);
+    if (transactions) console.log("SUCCESS: Data received!", transactions.length);
+    if (error) console.error("QUERY ERROR:", error.code, error.message);
+  }, [transactions, error]);
+
 
   const handleRunReport = () => {
     setActiveDateRange(pendingDateRange);
@@ -96,16 +97,18 @@ export function ProfitAndLossReport() {
     let totalExpenses = 0;
   
     transactions.forEach((txn) => {
-        const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
-        const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
-
-        if (l0 === 'income') {
-            totalIncome += txn.amount;
-            incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
-        } else if (l0 === 'expense' || l0 === 'expenses') {
-            totalExpenses += txn.amount;
-            expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
-        }
+      // 1. Try to get data from the new hierarchy object first
+      // 2. Fall back to the old fields (primaryCategory and subcategory) if hierarchy is missing
+      const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
+      const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
+    
+      if (l0 === 'income') {
+        totalIncome += txn.amount;
+        incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
+      } else if (l0 === 'expense' || l0 === 'expenses') {
+        totalExpenses += txn.amount;
+        expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
+      }
     });
   
     const toArray = (map: Map<string, number>) => 
@@ -124,6 +127,7 @@ export function ProfitAndLossReport() {
   const handleDateInputChange = (field: 'from' | 'to', value: string) => {
     const date = value ? new Date(value) : undefined;
     if (date && !isNaN(date.getTime())) {
+      // Adjust for timezone offset by creating date in UTC
       const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       setPendingDateRange(prev => ({ ...prev, [field]: localDate }));
     }
@@ -141,7 +145,10 @@ export function ProfitAndLossReport() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
+          <AlertDescription>
+            <p>An error occurred while fetching your financial data. This is often due to a missing Firestore index.</p>
+            <p className="font-mono text-xs mt-2 bg-slate-100 p-2 rounded">{error.message}</p>
+          </AlertDescription>
         </Alert>
       );
     }
@@ -179,6 +186,7 @@ export function ProfitAndLossReport() {
   console.log("Current User ID:", user?.uid);
   console.log("Searching from:", activeDateRange?.from ? format(activeDateRange.from, 'yyyy-MM-dd') : 'N/A', "to:", activeDateRange?.to ? format(activeDateRange.to, 'yyyy-MM-dd') : 'N/A');
   console.log("Transactions Found in DB:", transactions?.length);
+
 
   return (
     <div className="space-y-6 p-4 md:p-8">
