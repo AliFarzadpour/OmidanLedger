@@ -30,12 +30,12 @@ export default function ReportsPage() {
     //   href: '/dashboard/reports/general-ledger',
     //   icon: BookUser,
     // },
-    // {
-    //   title: 'Detailed Ledger',
-    //   description: 'An interactive report of all transactions, grouped by category.',
-    //   href: '/dashboard/reports/detailed-ledger',
-    //   icon: ListOrdered,
-    // },
+    {
+      title: 'Detailed Ledger',
+      description: 'An interactive report of all transactions, grouped by category.',
+      href: '/dashboard/reports/detailed-ledger',
+      icon: ListOrdered,
+    },
     // {
     //   title: 'Chart of Accounts',
     //   description: 'Summary of total income and expenses by category.',
