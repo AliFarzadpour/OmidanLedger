@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -231,21 +230,11 @@ export async function categorizeWithHeuristics(
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
   
   // LAW #1: Handle Credit Card Payments (from both sides of the transaction)
-  if (plaidPrimary === 'TRANSFER_OUT' && plaidDetailed.includes('CREDIT_CARD')) {
-      return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
+  if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && (plaidDetailed.includes('CREDIT_CARD_PAYMENT') || desc.includes('PAYMENT THANK YOU'))) {
+    return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
-  if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && plaidDetailed.includes('CREDIT_CARD_PAYMENT')) {
-      return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
-  }
-  // Enhanced Rule for Bank Account Debits to Credit Cards
-  if (desc.includes('PAYMENT - THANK YOU') || 
-      desc.includes('PAYMENT RECEIVED, THANK') || 
-      desc.includes('ONLINE PAYMENT') ||
-      desc.includes('BANK OF AMERICA BUSINESS CARD') || 
-      desc.includes('BARCLAYCARD US') ||
-      desc.includes('CITI AUTOPAY')
-     ) {
-      return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
+  if (amount < 0 && (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK') || desc.includes('ONLINE PAYMENT') || desc.includes('BANK OF AMERICA BUSINESS CARD') || desc.includes('BARCLAYCARD US') || desc.includes('CITI AUTOPAY'))) {
+    return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   
   // Rule for Internal Bank Transfers
@@ -259,7 +248,7 @@ export async function categorizeWithHeuristics(
   // Handle Income
   if (amount > 0) {
       if (desc.includes('RENT') || desc.includes('LEASE')) {
-          return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3a Rents Received', l3: 'Rent', confidence: 1.0 };
+          return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3: Rents Received', l3: 'Rent', confidence: 1.0 };
       }
       if (desc.includes('DEPOSIT') && !desc.includes('REFUND')) {
           return { l0: 'Liability', l1: 'Tenant Deposits', l2: 'Security Deposits Held', l3: 'Deposit In', confidence: 0.9 };
@@ -270,7 +259,7 @@ export async function categorizeWithHeuristics(
       if (desc.includes('REFUND') || desc.includes('RETURN')) {
            return { l0: 'Income', l1: 'Adjustments', l2: 'Refunds/Credits', l3: 'Refund', confidence: 0.8 };
       }
-      return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3a Rents Received', l3: 'Uncategorized Income', confidence: 0.7 };
+      return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3: Rents Received', l3: 'Uncategorized Income', confidence: 0.7 };
   }
   
   // Handle Debt Payments (non-credit card)
@@ -281,7 +270,7 @@ export async function categorizeWithHeuristics(
   // Handle Expenses using Plaid hints
   if (amount < 0) {
       if (plaidPrimary === 'FOOD_AND_DRINK') {
-          return { l0: 'Expense', l1: 'Meals', l2: 'Line 19 Other', l3: 'Business Meals', confidence: 0.8 };
+          return { l0: 'Expense', l1: 'Meals', l2: 'Line 19: Other', l3: 'Business Meals', confidence: 0.8 };
       }
        if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
         if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
@@ -290,25 +279,25 @@ export async function categorizeWithHeuristics(
     }
     if (plaidPrimary === 'TRAVEL') {
         if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
-            return { l0: 'Expense', l1: 'Travel', l2: 'Line 6 Auto & Travel', l3: 'Tolls & Parking', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Tolls & Parking', confidence: 0.9 };
         }
         if (plaidDetailed.includes('GAS')) {
-            return { l0: 'Expense', l1: 'Travel', l2: 'Line 6 Auto & Travel', l3: 'Fuel', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Fuel', confidence: 0.9 };
         }
-        return { l0: 'Expense', l1: 'Travel', l2: 'Line 6 Auto & Travel', l3: 'Travel & Lodging', confidence: 0.9 };
+        return { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Travel & Lodging', confidence: 0.9 };
     }
     if (plaidPrimary === 'SERVICE') {
         if (plaidDetailed.includes('INTERNET') || plaidDetailed.includes('TELEPHONE')) {
-            return { l0: 'Expense', l1: 'Utilities', l2: 'Line 17 Utilities', l3: 'Telephone & Internet', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Utilities', l2: 'Line 17: Utilities', l3: 'Telephone & Internet', confidence: 0.9 };
         }
         if (plaidDetailed.includes('UTILITIES')) {
-            return { l0: 'Expense', l1: 'Utilities', l2: 'Line 17 Utilities', l3: 'General Utilities', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Utilities', l2: 'Line 17: Utilities', l3: 'General Utilities', confidence: 0.9 };
         }
     }
   }
 
   if (desc.includes('RENT') || desc.includes('LEASE')) {
-      return { l0: 'Expense', l1: 'Operations', l2: 'Line 19 Other', l3: 'Rent Expense', confidence: 0.9 };
+      return { l0: 'Expense', l1: 'Property Operations', l2: 'Line 19: Other', l3: 'Rent Expense', confidence: 0.9 };
   }
 
   // Final fallback
@@ -615,5 +604,3 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
-
-    

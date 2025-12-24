@@ -50,14 +50,6 @@ export interface Transaction {
     l2: string;
     l3: string;
   };
-  /** @deprecated */
-  primaryCategory: string;
-  /** @deprecated */
-  secondaryCategory: string;
-  /** @deprecated */
-  subcategory: string;
-  /** @deprecated */
-  details?: string;
   confidence?: number;
   accountId?: string;
   accountName?: string; 
@@ -201,7 +193,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? (t.categoryHierarchy?.l0 || t.primaryCategory) === filterCategory : true;
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? (t.categoryHierarchy?.l0) === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
@@ -222,8 +214,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
       
       if (sortConfig.key === 'category') {
-        const aCats = a.categoryHierarchy || {l0: a.primaryCategory, l1: a.secondaryCategory, l2: a.subcategory, l3: a.details};
-        const bCats = b.categoryHierarchy || {l0: b.primaryCategory, l1: b.secondaryCategory, l2: b.subcategory, l3: b.details};
+        const aCats = a.categoryHierarchy;
+        const bCats = b.categoryHierarchy;
         aValue = `${aCats.l0}${aCats.l1}${aCats.l2}${aCats.l3}`;
         bValue = `${bCats.l0}${bCats.l1}${bCats.l2}${bCats.l3}`;
       } else if (sortConfig.key === 'date') {
@@ -443,7 +435,7 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
 
 function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
-    const cats = transaction.categoryHierarchy || { l0: transaction.primaryCategory, l1: transaction.secondaryCategory, l2: transaction.subcategory, l3: transaction.details || '' };
+    const cats = transaction.categoryHierarchy;
     
     const [primary, setPrimary] = useState(cats.l0);
     const [secondary, setSecondary] = useState(cats.l1);
