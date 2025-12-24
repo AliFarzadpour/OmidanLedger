@@ -417,6 +417,16 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                             };
                         }
                     }
+
+                    // *** NEW GUARDRAIL ***
+                    if (!finalCategory || !finalCategory.categoryHierarchy) {
+                        finalCategory = {
+                            categoryHierarchy: { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'Uncategorized' },
+                            confidence: 0.0,
+                            aiExplanation: 'Categorization failed, requires manual review.',
+                            reviewStatus: 'needs-review'
+                        };
+                    }
                     
                     // 4. FINAL ACCOUNTING GUARDRAIL
                     const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
@@ -563,5 +573,3 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
-
-    
