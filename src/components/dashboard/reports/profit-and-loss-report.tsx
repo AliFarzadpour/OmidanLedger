@@ -23,6 +23,8 @@ type Transaction = {
   date: string | Timestamp; // Can be string or Timestamp
   description: string;
   amount: number;
+  primaryCategory: string; // Keep for fallback
+  subcategory: string; // Keep for fallback
   categoryHierarchy?: {
     l0: string;
     l1: string;
@@ -62,17 +64,15 @@ export function ProfitAndLossReport() {
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
-    // IMPORTANT: Ensure the data type used here (Timestamp or string) matches your Firestore data.
-    // If your `date` field is a string (e.g., '2024-07-31'), use format(date, 'yyyy-MM-dd').
-    // If your `date` field is a Firestore Timestamp, use Timestamp.fromDate(date).
-    const startTimestamp = Timestamp.fromDate(activeDateRange.from);
-    const endTimestamp = Timestamp.fromDate(activeDateRange.to);
-
+    // Use format to create strings like "2025-02-27" to match your DB
+    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
+    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
+  
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
-      where('date', '>=', startTimestamp),
-      where('date', '<=', endTimestamp),
+      where('date', '>=', startDate),
+      where('date', '<=', endDate),
       orderBy('date', 'desc')
     );
   }, [user, firestore, activeDateRange]);
@@ -85,19 +85,18 @@ export function ProfitAndLossReport() {
 
   const { income, expenses, netIncome } = useMemo(() => {
     if (!transactions) return { income: [], expenses: [], netIncome: 0 };
-
+  
     const incomeMap = new Map<string, number>();
     const expenseMap = new Map<string, number>();
     let totalIncome = 0;
     let totalExpenses = 0;
-
+  
     transactions.forEach((txn) => {
-      const hierarchy = txn.categoryHierarchy; 
-      if (!hierarchy || !hierarchy.l0) return;
-
-      const l0 = hierarchy.l0.toLowerCase();
-      const l2 = hierarchy.l2;
-
+      // 1. Try to get data from the new hierarchy object first
+      // 2. Fall back to the old fields (primaryCategory and subcategory) if hierarchy is missing
+      const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
+      const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
+    
       if (l0 === 'income') {
         totalIncome += txn.amount;
         incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
@@ -106,14 +105,14 @@ export function ProfitAndLossReport() {
         expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
       }
     });
-
+  
     const toArray = (map: Map<string, number>) => 
       Array.from(map, ([name, total]) => ({ name, total }));
-
+  
     return {
       income: toArray(incomeMap),
       expenses: toArray(expenseMap),
-      netIncome: totalIncome + totalExpenses,
+      netIncome: totalIncome + totalExpenses, // Expenses are negative
     };
   }, [transactions]);
 
@@ -123,7 +122,9 @@ export function ProfitAndLossReport() {
   const handleDateInputChange = (field: 'from' | 'to', value: string) => {
     const date = value ? new Date(value) : undefined;
     if (date && !isNaN(date.getTime())) {
-      setPendingDateRange(prev => ({ ...prev, [field]: date }));
+      // Create a new date object at midnight in the local timezone to avoid off-by-one errors
+      const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      setPendingDateRange(prev => ({ ...prev, [field]: localDate }));
     }
   };
 
