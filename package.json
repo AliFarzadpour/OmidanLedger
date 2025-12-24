@@ -1,7 +1,7 @@
 {
   "name": "nextn",
   "version": "0.1.0",
-  "private": true,
+  "private": true, 
   "scripts": {
     "dev": "next dev --port 9002 --hostname 0.0.0.0",
     "db:seed-and-dev": "npm run db:seed && npm run dev",
