@@ -167,7 +167,7 @@ export function ProfitAndLossReport() {
 
   if (!isClient) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 p-4 md:p-8">
         <Skeleton className="h-10 w-1/3" />
         <Card>
           <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
@@ -178,7 +178,7 @@ export function ProfitAndLossReport() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4 md:p-8">
        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Profit &amp; Loss Statement</h1>
