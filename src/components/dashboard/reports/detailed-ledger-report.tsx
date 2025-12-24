@@ -22,10 +22,11 @@ type Transaction = {
   primaryCategory: string;
   secondaryCategory: string;
   subcategory: string;
+  details?: string;
   userId: string;
 };
 
-// New 3-level nested structure
+// New 4-level nested structure
 type GroupedData = {
   [primary: string]: {
     total: number;
@@ -35,14 +36,18 @@ type GroupedData = {
         subCategoryGroups: {
           [subcategory: string]: {
             total: number;
-            transactions: Transaction[];
+            detailGroups: {
+                [detail: string]: {
+                    total: number;
+                    transactions: Transaction[];
+                }
+            }
           };
         };
       };
     };
   };
 };
-
 
 export function DetailedLedgerReport() {
   const { user } = useUser();
@@ -66,27 +71,18 @@ export function DetailedLedgerReport() {
       const primary = tx.primaryCategory || 'Uncategorized';
       const secondary = tx.secondaryCategory || 'Uncategorized';
       const subcategory = tx.subcategory || 'Uncategorized';
+      const detail = tx.details || 'General';
 
-      // Ensure primary group exists
-      if (!acc[primary]) {
-        acc[primary] = { total: 0, secondaryGroups: {} };
-      }
+      if (!acc[primary]) acc[primary] = { total: 0, secondaryGroups: {} };
+      if (!acc[primary].secondaryGroups[secondary]) acc[primary].secondaryGroups[secondary] = { total: 0, subCategoryGroups: {} };
+      if (!acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory]) acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory] = { total: 0, detailGroups: {} };
+      if (!acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].detailGroups[detail]) acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].detailGroups[detail] = { total: 0, transactions: [] };
 
-      // Ensure secondary group exists
-      if (!acc[primary].secondaryGroups[secondary]) {
-        acc[primary].secondaryGroups[secondary] = { total: 0, subCategoryGroups: {} };
-      }
-      
-      // Ensure subcategory group exists
-      if (!acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory]) {
-        acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory] = { total: 0, transactions: [] };
-      }
-
-      // Add amount to totals and push transaction
       acc[primary].total += tx.amount;
       acc[primary].secondaryGroups[secondary].total += tx.amount;
       acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].total += tx.amount;
-      acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].transactions.push(tx);
+      acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].detailGroups[detail].total += tx.amount;
+      acc[primary].secondaryGroups[secondary].subCategoryGroups[subcategory].detailGroups[detail].transactions.push(tx);
 
       return acc;
     }, {} as GroupedData);
@@ -101,35 +97,17 @@ export function DetailedLedgerReport() {
     if (isLoading) {
       return (
         <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-8 w-1/3" />
-              </CardHeader>
-            </Card>
-          ))}
+          {[...Array(3)].map((_, i) => ( <Card key={i}><CardHeader><Skeleton className="h-8 w-1/3" /></CardHeader></Card> ))}
         </div>
       );
     }
   
     if (error) {
-      return (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>{error.message}</AlertDescription>
-        </Alert>
-      );
+      return ( <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert> );
     }
   
     if (!transactions || transactions.length === 0) {
-      return (
-        <Card>
-          <CardContent className="pt-6 text-center text-muted-foreground">
-            No transactions found.
-          </CardContent>
-        </Card>
-      );
+      return ( <Card><CardContent className="pt-6 text-center text-muted-foreground">No transactions found.</CardContent></Card> );
     }
 
     return (
@@ -141,9 +119,7 @@ export function DetailedLedgerReport() {
                         <Card className="shadow-md bg-white">
                         <AccordionTrigger className="p-6 hover:no-underline">
                             <div className="flex justify-between items-center w-full">
-                                <div className="text-left">
-                                    <h3 className="text-xl font-semibold">{primaryCategory}</h3>
-                                </div>
+                                <h3 className="text-xl font-semibold">{primaryCategory}</h3>
                                 <div className={cn("text-xl font-bold", primaryGroup.total >= 0 ? "text-green-600" : "text-slate-800")}>
                                     {formatCurrency(primaryGroup.total)}
                                 </div>
@@ -158,9 +134,7 @@ export function DetailedLedgerReport() {
                                             <AccordionTrigger className="px-4 py-3 text-base hover:no-underline">
                                                 <div className="flex justify-between items-center w-full">
                                                     <span className="font-medium">{secondaryCategory}</span>
-                                                    <span className={cn("text-base font-semibold", secondaryGroup.total >= 0 ? "text-green-600" : "text-slate-700")}>
-                                                        {formatCurrency(secondaryGroup.total)}
-                                                    </span>
+                                                    <span className={cn("text-base font-semibold", secondaryGroup.total >= 0 ? "text-green-600" : "text-slate-700")}>{formatCurrency(secondaryGroup.total)}</span>
                                                 </div>
                                             </AccordionTrigger>
                                             <AccordionContent className="p-0 border-t bg-white">
@@ -172,32 +146,35 @@ export function DetailedLedgerReport() {
                                                               <AccordionTrigger className="px-4 py-2 text-sm hover:no-underline bg-slate-50 hover:bg-slate-100">
                                                                   <div className="flex justify-between items-center w-full">
                                                                     <Badge variant="outline">{subcategory}</Badge>
-                                                                    <span className={cn("font-medium", subGroup.total >= 0 ? "text-green-600" : "text-slate-700")}>
-                                                                        {formatCurrency(subGroup.total)}
-                                                                    </span>
+                                                                    <span className={cn("font-medium", subGroup.total >= 0 ? 'text-green-600' : 'text-slate-700')}>{formatCurrency(subGroup.total)}</span>
                                                                   </div>
                                                               </AccordionTrigger>
                                                               <AccordionContent className="p-0">
-                                                                  <Table>
-                                                                    <TableHeader>
-                                                                        <TableRow className="text-xs">
-                                                                            <TableHead>Date</TableHead>
-                                                                            <TableHead>Description</TableHead>
-                                                                            <TableHead className="text-right">Amount</TableHead>
-                                                                        </TableRow>
-                                                                    </TableHeader>
-                                                                    <TableBody>
-                                                                        {subGroup.transactions.map(tx => (
-                                                                            <TableRow key={tx.id} className="text-xs">
-                                                                                <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                                                                                <TableCell className="max-w-[150px] truncate">{tx.description}</TableCell>
-                                                                                <TableCell className={cn("text-right font-medium", tx.amount >= 0 ? 'text-green-600' : 'text-slate-800')}>
-                                                                                    {formatCurrency(tx.amount)}
-                                                                                </TableCell>
-                                                                            </TableRow>
-                                                                        ))}
-                                                                    </TableBody>
-                                                                  </Table>
+                                                                <Accordion type="multiple" className="w-full">
+                                                                    {Object.keys(subGroup.detailGroups).sort((a, b) => Math.abs(subGroup.detailGroups[b].total) - Math.abs(subGroup.detailGroups[a].total)).map(detail => {
+                                                                        const detailGroup = subGroup.detailGroups[detail];
+                                                                        return (
+                                                                            <AccordionItem key={detail} value={detail} className="border-b last:border-b-0">
+                                                                                <AccordionTrigger className="pl-8 pr-4 py-2 text-xs hover:no-underline bg-white hover:bg-slate-50">
+                                                                                     <div className="flex justify-between items-center w-full">
+                                                                                         <span className="font-mono text-muted-foreground">{detail}</span>
+                                                                                         <span className={cn("font-mono", detailGroup.total >= 0 ? 'text-green-600' : 'text-slate-700')}>{formatCurrency(detailGroup.total)}</span>
+                                                                                     </div>
+                                                                                </AccordionTrigger>
+                                                                                <AccordionContent className="p-0">
+                                                                                    <Table>
+                                                                                        <TableHeader><TableRow className="text-xs"><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                                                                                        <TableBody>
+                                                                                            {detailGroup.transactions.map(tx => (
+                                                                                                <TableRow key={tx.id} className="text-xs"><TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell><TableCell className="max-w-[150px] truncate">{tx.description}</TableCell><TableCell className={cn("text-right font-medium", tx.amount >= 0 ? 'text-green-600' : 'text-slate-800')}>{formatCurrency(tx.amount)}</TableCell></TableRow>
+                                                                                            ))}
+                                                                                        </TableBody>
+                                                                                    </Table>
+                                                                                </AccordionContent>
+                                                                            </AccordionItem>
+                                                                        )
+                                                                    })}
+                                                                </Accordion>
                                                               </AccordionContent>
                                                           </AccordionItem>
                                                       )
@@ -227,3 +204,5 @@ export function DetailedLedgerReport() {
     </div>
   );
 }
+
+    

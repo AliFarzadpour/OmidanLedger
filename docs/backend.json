@@ -211,7 +211,7 @@
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Transaction",
       "type": "object",
-      "description": "Represents a financial transaction.",
+      "description": "Represents a financial transaction with a 4-level category structure.",
       "properties": {
         "id": {
           "type": "string",
@@ -240,15 +240,19 @@
         },
         "primaryCategory": {
           "type": "string",
-          "description": "The top-level category."
+          "description": "Level 0: Major Type (e.g., 'Income', 'Expenses')."
         },
         "secondaryCategory": {
           "type": "string",
-          "description": "The second-level category."
+          "description": "Level 1: Financial Category (e.g., 'Rental Income', 'Utilities')."
         },
         "subcategory": {
           "type": "string",
-          "description": "The most specific, third-level category."
+          "description": "Level 2: Tax/Schedule E Category (e.g., 'Line 14 Repairs')."
+        },
+        "details": {
+          "type": "string",
+          "description": "Level 3: User-specific details (e.g., 'Adelyn - HVAC Repair')."
         }
       },
       "required": [
@@ -260,7 +264,8 @@
         "amount",
         "primaryCategory",
         "secondaryCategory",
-        "subcategory"
+        "subcategory",
+        "details"
       ]
     },
     "Property": {

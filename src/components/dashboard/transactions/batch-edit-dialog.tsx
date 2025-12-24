@@ -30,15 +30,17 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
   const [primaryCategory, setPrimaryCategory] = useState('');
   const [secondaryCategory, setSecondaryCategory] = useState('');
   const [subcategory, setSubcategory] = useState('');
+  const [details, setDetails] = useState('');
   const [ruleName, setRuleName] = useState('');
 
   // Pre-populate the fields when the dialog opens with a new set of transactions
   useEffect(() => {
     if (isOpen && transactions.length > 0) {
       const firstTx = transactions[0];
-      setPrimaryCategory(firstTx.primaryCategory || 'Operating Expenses');
+      setPrimaryCategory(firstTx.primaryCategory || 'Expenses');
       setSecondaryCategory(firstTx.secondaryCategory || '');
       setSubcategory(firstTx.subcategory || '');
+      setDetails(firstTx.details || '');
       setRuleName(''); // Always reset the rule name
     }
   }, [transactions, isOpen]);
@@ -47,7 +49,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
   const handleBatchUpdate = async () => {
     if (!user || !firestore || transactions.length === 0) return;
     if (!primaryCategory || !secondaryCategory || !subcategory) {
-      toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please fill out all category levels.' });
+      toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please fill out all three main category levels.' });
       return;
     }
     
@@ -60,9 +62,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
           primaryCategory,
           secondaryCategory,
           subcategory,
+          details,
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
-          reviewStatus: 'approved' // Set status to approved on batch update
+          reviewStatus: 'approved'
         });
       });
       await batch.commit();
@@ -70,7 +73,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       const keywordForRule = ruleName.trim();
       if (keywordForRule) {
         await learnCategoryMapping({
-            transactionDescription: keywordForRule, // FIX: Use the user-entered rule name
+            transactionDescription: keywordForRule,
             primaryCategory,
             secondaryCategory,
             subcategory,
@@ -88,7 +91,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       }
       
       onOpenChange(false);
-      onSuccess(); // Call the success handler to clear selection
+      onSuccess();
       
     } catch (error: any) {
       console.error(error);
@@ -109,16 +112,20 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div className="grid gap-2">
-            <Label htmlFor="primary">Primary Category</Label>
-            <Input id="primary" value={primaryCategory} onChange={(e) => setPrimaryCategory(e.target.value)} />
+            <Label htmlFor="primary">Primary Category (Level 0)</Label>
+            <Input id="primary" value={primaryCategory} onChange={(e) => setPrimaryCategory(e.target.value)} placeholder="e.g., Expenses" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="secondary">Secondary Category</Label>
-            <Input id="secondary" value={secondaryCategory} onChange={(e) => setSecondaryCategory(e.target.value)} placeholder="e.g., General & Administrative" />
+            <Label htmlFor="secondary">Financial Category (Level 1)</Label>
+            <Input id="secondary" value={secondaryCategory} onChange={(e) => setSecondaryCategory(e.target.value)} placeholder="e.g., Repairs" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="sub">Subcategory</Label>
-            <Input id="sub" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g., Office Supplies" />
+            <Label htmlFor="sub">Tax Category (Level 2)</Label>
+            <Input id="sub" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g., Line 14 Repairs" />
+          </div>
+           <div className="grid gap-2">
+            <Label htmlFor="details">Details (Level 3 - Optional)</Label>
+            <Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} placeholder="e.g., Adelyn - HVAC Repair" />
           </div>
 
           <div className="border-t pt-4 space-y-2">
@@ -145,3 +152,5 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
     </Dialog>
   );
 }
+
+    

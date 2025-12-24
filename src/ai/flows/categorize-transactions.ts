@@ -25,9 +25,10 @@ const CategorizeTransactionsInputSchema = z.object({
 export type CategorizeTransactionsInput = z.infer<typeof CategorizeTransactionsInputSchema>;
 
 const CategorizeTransactionsOutputSchema = z.object({
-  primaryCategory: z.string().describe('The top-level category (e.g., "Operating Expenses").'),
-  secondaryCategory: z.string().describe('The second-level category (e.g., "Marketing & Advertising").'),
-  subcategory: z.string().describe('The most specific, third-level category (e.g., "Google Ads").'),
+  primaryCategory: z.string().describe("Level 0: Major Type (e.g., 'Expenses')"),
+  secondaryCategory: z.string().describe("Level 1: Financial Category (e.g., 'Repairs')"),
+  subcategory: z.string().describe("Level 2: Tax/Schedule E Category (e.g., 'Line 14 Repairs')"),
+  details: z.string().describe("Level 3: User-specific details (e.g., 'Adelyn - HVAC Repair')"),
   confidence: z
     .number()
     .describe('The confidence level (0-1) of the categorization, with 1 being the most confident.'),
@@ -43,8 +44,8 @@ const categorizeTransactionsPrompt = ai.definePrompt({
   name: 'categorizeTransactionsPrompt',
   input: {schema: CategorizeTransactionsInputSchema},
   output: {schema: CategorizeTransactionsOutputSchema},
-  prompt: `You are a world-class financial bookkeeping expert specializing in AI-powered transaction categorization.
-Your task is to analyze a single transaction description and classify it with extreme accuracy according to the provided three-level Master Category Framework.
+  prompt: `You are a world-class real estate bookkeeping expert specializing in AI-powered transaction categorization for tax purposes (Schedule E).
+Your task is to analyze a single transaction description and classify it with extreme accuracy according to the provided 4-level Master Category Framework.
 
 **Context:**
 The business operates in the **{{{userTrade}}}** industry.
@@ -57,10 +58,11 @@ ${MasterCategoryFramework}
 
 **Your Instructions:**
 1.  Analyze the transaction description carefully.
-2.  Match it to the most specific subcategory within the Master Category Framework.
+2.  Match it to the most specific category within the Master Category Framework.
 3.  Return a JSON object with the exact "primaryCategory", "secondaryCategory", and "subcategory" from the framework.
-4.  Provide a confidence score from 0 to 1.
-5.  Add a brief note explaining your reasoning (e.g., "Matched with known vendor 'Google Ads Billing'.").
+4.  For "details", provide a very brief summary, often including the property name if identifiable.
+5.  Provide a confidence score from 0 to 1.
+6.  Add a brief note explaining your reasoning (e.g., "Matched with known vendor 'Home Depot'.").
 `, 
 });
 
@@ -77,7 +79,7 @@ const categorizeTransactionsFlow = ai.defineFlow(
 
     const userTrade = userProfileSnap.exists()
         ? userProfileSnap.data().trade
-        : 'General Business';
+        : 'Real Estate';
     
     const flowInput = {
         ...input,
@@ -88,3 +90,5 @@ const categorizeTransactionsFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
