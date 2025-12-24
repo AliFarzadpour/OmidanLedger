@@ -477,5 +477,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </>
     );
 }
-
-    
