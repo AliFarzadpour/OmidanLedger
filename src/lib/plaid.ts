@@ -223,12 +223,16 @@ export async function categorizeWithHeuristics(
   const safeDesc = description || ''; 
   const desc = safeDesc.toUpperCase();
   const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
+  const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
   
-  // LAW #1: Positive payments to credit cards are liability payments.
-  if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && (plaidCategory?.detailed || '').includes('CREDIT_CARD_PAYMENT')) {
+  // LAW #1: Handle Credit Card Payments (from both sides of the transaction)
+  if (plaidPrimary === 'TRANSFER_OUT' && plaidDetailed.includes('CREDIT_CARD')) {
       return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK')) {
+  if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && plaidDetailed.includes('CREDIT_CARD_PAYMENT')) {
+      return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
+  }
+  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK') || desc.includes('ONLINE PAYMENT')) {
       return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   
@@ -262,8 +266,6 @@ export async function categorizeWithHeuristics(
       return { l0: 'Liability', l1: 'Debt Service', l2: 'Loan Paydown', l3: 'Loan/Mortgage Payment', confidence: 0.95 };
   }
   
-  const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
-
   // Handle Expenses using Plaid hints
   if (amount < 0) {
       if (plaidPrimary === 'FOOD_AND_DRINK') {
