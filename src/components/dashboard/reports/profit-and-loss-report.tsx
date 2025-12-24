@@ -128,7 +128,7 @@ export function ProfitAndLossReport() {
     if (!activeDateRange) {
          return (
             <p className="py-8 text-center text-muted-foreground">
-                Please select a date range and click "Run Report" to generate your Profit & Loss statement.
+                Please select a date range and click "Run Report" to generate your Profit &amp; Loss statement.
             </p>
         );
     }
@@ -165,7 +165,7 @@ export function ProfitAndLossReport() {
     <div className="space-y-6">
        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Profit & Loss Statement</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Profit &amp; Loss Statement</h1>
                 <p className="text-muted-foreground">Review your income, expenses, and profitability.</p>
             </div>
             <div className="flex items-center gap-2">
