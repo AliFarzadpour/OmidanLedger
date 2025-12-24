@@ -99,25 +99,15 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   "Operating Expenses > Uncategorized > General Expense": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "General Expense" },
   
   // --- Self-Referential Mappings (Prevents errors for already migrated docs) ---
-  "Expense > Utilities > Line 17: Utilities": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "General" },
-  "Expense > Office & Admin > Line 19: Other Expenses": { l0: "Expense", l1: "Office & Admin", l2: "Line 19: Other Expenses", l3: "Supplies" },
-  "Expense > Technology > Line 19: Other Expenses": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Software" },
   "Expense > Insurance > Line 9: Insurance": { l0: "Expense", l1: "Insurance", l2: "Line 9: Insurance", l3: "Property Insurance" },
   "Expense > Repairs > Line 14: Repairs": { l0: "Expense", l1: "Repairs", l2: "Line 14: Repairs", l3: "Maintenance" },
   "Expense > Professional > Line 10: Legal/Professional": { l0: "Expense", l1: "Professional", l2: "Line 10: Legal/Professional", l3: "Consulting" },
-  "Expense > Transportation > Line 6: Auto & Travel": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Travel" },
-  "Expense > General > Needs Review": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "Uncategorized" },
   "Expense > Taxes > Line 16: Taxes": { l0: "Expense", l1: "Taxes", l2: "Line 16: Taxes", l3: "Property Tax" },
-  "Liability > Credit Card Payment > Internal Transfer": { l0: "Liability", l1: "CC Payment", l2: "Internal Transfer", l3: "Payment" },
   "Liability > Debt Service > Loan Paydown": { l0: "Liability", l1: "Debt Service", l2: "Loan Principal", l3: "SBA/Mortgage" },
   "Liability > Debt Service > Vehicle Loan": { l0: "Liability", l1: "Debt Service", l2: "Vehicle Loan", l3: "Auto Payment" },
   "Liability > Debt Service > Mortgage Principal": { l0: "Liability", l1: "Debt Service", l2: "Mortgage Principal", l3: "Rosegate/Flagstar" },
   "Liability > Tenant Deposits > Security Deposits Held": { l0: "Liability", l1: "Security Deposits", l2: "Tenant Deposits Held", l3: "Security Deposit" },
-  "Asset > Cash Movement > Internal Transfer": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Bank Transfer" },
   "Income > Rental Income > Line 3: Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Rental Income" },
-  "Income > Adjustments > Line 3: Rents Received": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Refund/Adjustment" },
-  "Income > Non-Operating > Bank Interest": { l0: "Income", l1: "Non-Operating", l2: "Interest Income", l3: "Bank Interest" },
-  "Equity > Owner Distribution > Personal Draw": { l0: "Equity", l1: "Owner Distribution", l2: "Personal Draw", l3: "Owner's Draw" }
 };
 
 // 3. The Migration Logic
