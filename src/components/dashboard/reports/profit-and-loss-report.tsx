@@ -62,13 +62,15 @@ export function ProfitAndLossReport() {
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
+    // IMPORTANT: Ensure the data type used here (Timestamp or string) matches your Firestore data.
+    // If your `date` field is a string (e.g., '2024-07-31'), use format(date, 'yyyy-MM-dd').
+    // If your `date` field is a Firestore Timestamp, use Timestamp.fromDate(date).
     const startTimestamp = Timestamp.fromDate(activeDateRange.from);
     const endTimestamp = Timestamp.fromDate(activeDateRange.to);
 
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
-      where('reviewStatus', '==', 'approved'), // Only include approved transactions
       where('date', '>=', startTimestamp),
       where('date', '<=', endTimestamp),
       orderBy('date', 'desc')
@@ -91,7 +93,7 @@ export function ProfitAndLossReport() {
 
     transactions.forEach((txn) => {
       const hierarchy = txn.categoryHierarchy; 
-      if (!hierarchy || !hierarchy.l0 || !hierarchy.l2) return;
+      if (!hierarchy || !hierarchy.l0) return;
 
       const l0 = hierarchy.l0.toLowerCase();
       const l2 = hierarchy.l2;
@@ -151,7 +153,7 @@ export function ProfitAndLossReport() {
     if (!transactions || transactions.length === 0) {
       return (
         <p className="py-8 text-center text-muted-foreground">
-          No approved transaction data available for the selected period.
+          No transaction data available for the selected period.
         </p>
       );
     }
@@ -222,7 +224,7 @@ export function ProfitAndLossReport() {
                 {renderContent()}
             </CardContent>
             <CardFooter>
-                 <p className="text-xs text-muted-foreground">This report is generated based on approved transactions only. Items marked for review are not included.</p>
+                 <p className="text-xs text-muted-foreground">This report includes all transactions within the period, regardless of review status.</p>
             </CardFooter>
         </Card>
     </div>
