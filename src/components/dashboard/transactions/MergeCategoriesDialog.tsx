@@ -14,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction } from '../transactions-table';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface MergeCategoriesDialogProps {
   isOpen: boolean;
@@ -27,6 +28,8 @@ type UniqueCategory = {
   sub: string;
 };
 
+const PRIMARY_CATEGORY_OPTIONS = ["Income", "Expenses", "Balance Sheet", "Equity", "Cost of Goods Sold"];
+
 export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesDialogProps) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -39,6 +42,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
 
   const [fromCategories, setFromCategories] = useState<Set<string>>(new Set());
   const [toCategory, setToCategory] = useState<string | null>(null);
+  const [overridePrimary, setOverridePrimary] = useState<string | null>(null);
 
   // New state for filtering and sorting
   const [fromFilter, setFromFilter] = useState('');
@@ -75,6 +79,19 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
 
     fetchData();
   }, [isOpen, user, firestore]);
+  
+  useEffect(() => {
+    // When the target category changes, set the override dropdown to its original primary category
+    if (toCategory) {
+      const selected = uniqueCategories.find(c => c.id === toCategory);
+      if (selected) {
+        setOverridePrimary(selected.primary);
+      }
+    } else {
+      setOverridePrimary(null);
+    }
+  }, [toCategory, uniqueCategories]);
+
 
   const handleFromToggle = (categoryId: string) => {
     const newFrom = new Set(fromCategories);
@@ -108,7 +125,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
     const batch = writeBatch(firestore);
     transactionsToUpdate.forEach(tx => {
       batch.update(tx._originalRef, {
-        primaryCategory: destinationCategory.primary,
+        primaryCategory: overridePrimary || destinationCategory.primary,
         secondaryCategory: destinationCategory.secondary,
         subcategory: destinationCategory.sub,
       });
@@ -171,7 +188,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                       <Checkbox id={cat.id} onCheckedChange={() => handleFromToggle(cat.id)} />
                       <label htmlFor={cat.id} className="text-sm font-medium leading-none cursor-pointer">
                         {cat.primary}
-                        <span className="text-muted-foreground"> &gt; {cat.secondary} &gt; {cat.sub}</span>
+                        <span className="text-muted-foreground"> > {cat.secondary} > {cat.sub}</span>
                       </label>
                     </div>
                   ))}
@@ -199,13 +216,28 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                         <RadioGroupItem value={cat.id} id={`to-${cat.id}`} />
                         <Label htmlFor={`to-${cat.id}`} className="cursor-pointer">
                           {cat.primary}
-                          <span className="text-muted-foreground"> &gt; {cat.secondary} &gt; {cat.sub}</span>
+                          <span className="text-muted-foreground"> > {cat.secondary} > {cat.sub}</span>
                         </Label>
                       </div>
                     ))}
                   </div>
                 </RadioGroup>
               </ScrollArea>
+              {toCategory && (
+                <div className="mt-4 pt-4 border-t space-y-2 animate-in fade-in">
+                  <Label>Override Primary Category (Level 0)</Label>
+                   <Select value={overridePrimary || ''} onValueChange={setOverridePrimary}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Keep original or change..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRIMARY_CATEGORY_OPTIONS.map(opt => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                   </Select>
+                </div>
+              )}
             </div>
           </div>
         )}
