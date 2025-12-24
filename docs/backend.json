@@ -223,7 +223,11 @@
             "type": "object",
             "description": "A 4-level category structure for professional accounting and tax readiness.",
             "properties": {
-                "l0": { "type": "string", "description": "L0: Account Type (e.g., 'Operating Expense', 'Equity', 'Income', 'Liability')." },
+                "l0": { 
+                    "type": "string", 
+                    "description": "L0: Top-level account type.",
+                    "enum": ["Asset", "Liability", "Equity", "Income", "Expense"]
+                },
                 "l1": { "type": "string", "description": "L1: Category Group (e.g., 'Rent & Utilities', 'Personal Expenses', 'Financial')." },
                 "l2": { "type": "string", "description": "L2: Tax Line (e.g., 'Line 17: Utilities')." },
                 "l3": { "type": "string", "description": "L3: Specific Detail (e.g., 'Electricity', 'Software', 'Fuel')." }
