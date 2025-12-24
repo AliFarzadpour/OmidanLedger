@@ -81,18 +81,6 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
     fetchData();
   }, [isOpen, user, firestore]);
   
-  useEffect(() => {
-    // When the target category changes, set the override dropdown to its original primary category
-    if (toCategory) {
-      const selected = uniqueCategories.find(c => c.id === toCategory);
-      if (selected) {
-        setOverridePrimary(selected.primary);
-      }
-    } else {
-      setOverridePrimary(null);
-    }
-  }, [toCategory, uniqueCategories]);
-
 
   const handleFromToggle = (categoryId: string) => {
     const newFrom = new Set(fromCategories);
@@ -195,6 +183,21 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                   ))}
                 </div>
               </ScrollArea>
+               {fromCategories.size > 0 && (
+                <div className="mt-4 pt-4 border-t space-y-2 animate-in fade-in">
+                  <Label>Change Primary Category for ALL selected to:</Label>
+                   <Select value={overridePrimary || ''} onValueChange={setOverridePrimary}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Optional: Change Level 0..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PRIMARY_CATEGORY_OPTIONS.map(opt => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                   </Select>
+                </div>
+              )}
             </div>
 
             {/* To Column */}
@@ -224,21 +227,6 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                   </div>
                 </RadioGroup>
               </ScrollArea>
-              {toCategory && (
-                <div className="mt-4 pt-4 border-t space-y-2 animate-in fade-in">
-                  <Label>Override Primary Category (Level 0)</Label>
-                   <Select value={overridePrimary || ''} onValueChange={setOverridePrimary}>
-                      <SelectTrigger className="bg-white">
-                        <SelectValue placeholder="Keep original or change..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PRIMARY_CATEGORY_OPTIONS.map(opt => (
-                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                        ))}
-                      </SelectContent>
-                   </Select>
-                </div>
-              )}
             </div>
           </div>
         )}
