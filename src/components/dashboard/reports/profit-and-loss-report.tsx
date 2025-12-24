@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -64,7 +63,6 @@ export function ProfitAndLossReport() {
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
-    // Use format to create strings like "2025-02-27" to match your DB
     const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
     const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
   
@@ -78,6 +76,12 @@ export function ProfitAndLossReport() {
   }, [user, firestore, activeDateRange]);
 
   const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
+  
+  useEffect(() => {
+    if (error) {
+      console.error("FULL FIRESTORE ERROR:", error);
+    }
+  }, [error]);
 
   const handleRunReport = () => {
     setActiveDateRange(pendingDateRange);
@@ -92,8 +96,6 @@ export function ProfitAndLossReport() {
     let totalExpenses = 0;
   
     transactions.forEach((txn) => {
-        // 1. Try to get data from the new hierarchy object first
-        // 2. Fall back to the old fields (primaryCategory and subcategory) if hierarchy is missing
         const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
         const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
 
@@ -112,7 +114,7 @@ export function ProfitAndLossReport() {
     return {
       income: toArray(incomeMap),
       expenses: toArray(expenseMap),
-      netIncome: totalIncome + totalExpenses, // Expenses are negative
+      netIncome: totalIncome + totalExpenses,
     };
   }, [transactions]);
 
@@ -122,7 +124,6 @@ export function ProfitAndLossReport() {
   const handleDateInputChange = (field: 'from' | 'to', value: string) => {
     const date = value ? new Date(value) : undefined;
     if (date && !isNaN(date.getTime())) {
-      // Create a new date object at midnight in the local timezone to avoid off-by-one errors
       const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
       setPendingDateRange(prev => ({ ...prev, [field]: localDate }));
     }
@@ -176,7 +177,7 @@ export function ProfitAndLossReport() {
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
 
   console.log("Current User ID:", user?.uid);
-  console.log("Searching from:", format(activeDateRange?.from || new Date(), 'yyyy-MM-dd'), "to:", format(activeDateRange?.to || new Date(), 'yyyy-MM-dd'));
+  console.log("Searching from:", activeDateRange?.from ? format(activeDateRange.from, 'yyyy-MM-dd') : 'N/A', "to:", activeDateRange?.to ? format(activeDateRange.to, 'yyyy-MM-dd') : 'N/A');
   console.log("Transactions Found in DB:", transactions?.length);
 
   return (
