@@ -37,6 +37,8 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   "Expenses > Utilities > Talia - Water": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Water" },
   "Operating Expenses > Utilities > Electricity": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Electricity" },
   "Rent & Utilities > Utilities > Telecommunications/Internet": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Internet" },
+  "Operating Expenses > Utilities > Phone/Internet": { l0: "Expense", l1: "Utilities", l2: "Line 17: Utilities", l3: "Phone & Internet" },
+
 
   // --- MORTGAGE & LOANS (Major Type: Expense, Schedule E Line 12) ---
   "Expenses > Mortgage Interest > Adelyn - Mortgage Interest Paid": { l0: "Expense", l1: "Financing", l2: "Line 12: Mortgage Interest", l3: "Mortgage" },
@@ -53,10 +55,25 @@ const mappingTable: Record<string, { l0: string; l1: string; l2: string; l3: str
   // --- TRANSFERS (Major Type: Asset - Movement Only) ---
   "Balance Sheet > Transfers > Internal Transfer": { l0: "Asset", l1: "Cash Movement", l2: "Internal Transfer", l3: "Bank Transfer" },
   "Transfer Credit Card Payment > Credit card payment > Barclay Credit card payment": { l0: "Liability", l1: "Credit Card Payment", l2: "Debt Paydown", l3: "Barclay" },
+  "Transfer to Credit Card > Credit card payment recived > Credit card Payment": { l0: "Liability", l1: "Credit Card Payment", l2: "Internal Transfer", l3: "Credit Card Paydown" },
 
   // --- TAXES (Major Type: Expense, Schedule E Line 16) ---
   "Operating Expenses > Taxes > Property Tax": { l0: "Expense", l1: "Taxes", l2: "Line 16: Taxes", l3: "Property Tax" },
-  "Taxes > Federal Taxes > Income Tax": { l0: "Equity", l1: "Personal Tax", l2: "Non-Deductible", l3: "Income Tax" }
+  "Taxes > Federal Taxes > Income Tax": { l0: "Equity", l1: "Personal Tax", l2: "Non-Deductible", l3: "Income Tax" },
+  
+  // --- OFFICE EXPENSES (Line 19) ---
+  "Operating Expenses > Office Expenses > Office Supplies": { l0: "Expense", l1: "Office & Admin", l2: "Line 19: Other Expenses", l3: "Office Supplies" },
+
+  // --- SOFTWARE (Line 19 or Line 10) ---
+  "Operating Expenses > Software & Subscriptions > Software & Subscriptions": { l0: "Expense", l1: "Technology", l2: "Line 19: Other Expenses", l3: "Software" },
+
+  // --- TRANSPORTATION / TOLLS (Line 6) ---
+  "Transportation > Vehicle Expenses > Tolls": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Tolls" },
+  "Transportation > Tolls > Road & Bridge Tolls": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Tolls" },
+  "Transportation > Auto > Tolls": { l0: "Expense", l1: "Transportation", l2: "Line 6: Auto & Travel", l3: "Tolls" },
+
+  // --- UNCATEGORIZED ---
+  "Operating Expenses > Uncategorized > General Expense": { l0: "Expense", l1: "General", l2: "Needs Review", l3: "Uncategorized" }
 };
 
 // 3. The Migration Logic
@@ -96,7 +113,7 @@ async function runMigration() {
     const tx = doc.data();
     
     // Construct the "old" messy key from the existing data
-    const oldKey = `${tx.primaryCategory} > ${tx.secondaryCategory} > ${tx.subcategory}`;
+    const oldKey = `${tx.primaryCategory} > ${tx.secondaryCategory} > ${tx.subcategory}`.trim();
 
     // Look it up in the mapping table
     const newCategories = mappingTable[oldKey];

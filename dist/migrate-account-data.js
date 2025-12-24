@@ -37,7 +37,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const admin = __importStar(require("firebase-admin"));
 const path = __importStar(require("path"));
 // --- CONFIGURATION ---
-const TARGET_USER_ID = 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2';
+const TARGET_USER_ID = 'QsMUGG2ldOa0bpRHJCnVP3pKyIv1';
 const TARGET_ACCOUNT_SUFFIX = '4748';
 // 1. Initialize Admin SDK
 const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
@@ -88,7 +88,8 @@ async function runMigration() {
     const snapshot = await accountsCollection.get();
     const targetAccount = snapshot.docs.find(doc => {
         const data = doc.data();
-        return data.accountNumber && data.accountNumber.endsWith(TARGET_ACCOUNT_SUFFIX);
+        const numberToCheck = data.accountNumber || data.plaidAccountId || data.mask;
+        return numberToCheck && numberToCheck.endsWith(TARGET_ACCOUNT_SUFFIX);
     });
     if (!targetAccount) {
         console.error(`Error: Could not find a bank account ending in '${TARGET_ACCOUNT_SUFFIX}' for user '${TARGET_USER_ID}'.`);
