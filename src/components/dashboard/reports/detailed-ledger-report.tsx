@@ -24,12 +24,19 @@ type Transaction = {
   userId: string;
 };
 
-type GroupedTransactions = {
-  [key: string]: {
+// New 3-level nested structure
+type GroupedData = {
+  [primary: string]: {
     total: number;
-    transactions: Transaction[];
-  };
+    secondaryGroups: {
+      [secondary: string]: {
+        total: number;
+        transactions: Transaction[];
+      }
+    }
+  }
 };
+
 
 export function DetailedLedgerReport() {
   const { user } = useUser();
@@ -48,27 +55,33 @@ export function DetailedLedgerReport() {
 
   const groupedData = useMemo(() => {
     if (!transactions) return {};
-    return transactions.reduce((acc, txn) => {
-      const category = txn.primaryCategory || 'Uncategorized';
-      if (!acc[category]) {
-        acc[category] = { total: 0, transactions: [] };
+    
+    return transactions.reduce((acc, tx) => {
+      const primary = tx.primaryCategory || 'Uncategorized';
+      const secondary = tx.secondaryCategory || 'Uncategorized';
+
+      // Ensure primary group exists
+      if (!acc[primary]) {
+        acc[primary] = { total: 0, secondaryGroups: {} };
       }
-      acc[category].total += txn.amount;
-      acc[category].transactions.push(txn);
+
+      // Ensure secondary group exists within primary
+      if (!acc[primary].secondaryGroups[secondary]) {
+        acc[primary].secondaryGroups[secondary] = { total: 0, transactions: [] };
+      }
+
+      // Add amount to totals and push transaction
+      acc[primary].total += tx.amount;
+      acc[primary].secondaryGroups[secondary].total += tx.amount;
+      acc[primary].secondaryGroups[secondary].transactions.push(tx);
+
       return acc;
-    }, {} as GroupedTransactions);
+    }, {} as GroupedData);
+
   }, [transactions]);
 
-  const sortedCategories = useMemo(() => {
-    return Object.keys(groupedData).sort((a, b) => {
-      const totalA = groupedData[a].total;
-      const totalB = groupedData[b].total;
-      // Sort income categories first (positive totals), then expense categories (negative totals)
-      if (totalA > 0 && totalB < 0) return -1;
-      if (totalA < 0 && totalB > 0) return 1;
-      // Within type, sort by absolute value descending
-      return Math.abs(totalB) - Math.abs(totalA);
-    });
+  const sortedPrimaryCategories = useMemo(() => {
+    return Object.keys(groupedData).sort((a, b) => Math.abs(groupedData[b].total) - Math.abs(groupedData[a].total));
   }, [groupedData]);
   
   const renderContent = () => {
@@ -108,47 +121,65 @@ export function DetailedLedgerReport() {
 
     return (
         <Accordion type="multiple" className="w-full space-y-4">
-            {sortedCategories.map((category) => {
-                const { total, transactions } = groupedData[category];
+            {sortedPrimaryCategories.map((primaryCategory) => {
+                const primaryGroup = groupedData[primaryCategory];
                 return (
-                    <AccordionItem key={category} value={category} className="border-none">
-                        <Card className="shadow-md">
+                    <AccordionItem key={primaryCategory} value={primaryCategory} className="border-none">
+                        <Card className="shadow-md bg-white">
                         <AccordionTrigger className="p-6 hover:no-underline">
                             <div className="flex justify-between items-center w-full">
                                 <div className="text-left">
-                                    <h3 className="text-xl font-semibold">{category}</h3>
-                                    <p className="text-sm text-muted-foreground">{transactions.length} transactions</p>
+                                    <h3 className="text-xl font-semibold">{primaryCategory}</h3>
                                 </div>
-                                <div className={cn("text-xl font-bold", total >= 0 ? "text-green-600" : "text-foreground")}>
-                                    {formatCurrency(total)}
+                                <div className={cn("text-xl font-bold", primaryGroup.total >= 0 ? "text-green-600" : "text-slate-800")}>
+                                    {formatCurrency(primaryGroup.total)}
                                 </div>
                             </div>
                         </AccordionTrigger>
                         <AccordionContent className="px-6 pb-6">
-                           <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Description</TableHead>
-                                        <TableHead>Category Path</TableHead>
-                                        <TableHead className="text-right">Amount</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {transactions.map((tx) => (
-                                        <TableRow key={tx.id}>
-                                            <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                                            <TableCell>{tx.description}</TableCell>
-                                            <TableCell>
-                                                <Badge variant="outline">{tx.secondaryCategory} &gt; {tx.subcategory}</Badge>
-                                            </TableCell>
-                                            <TableCell className={cn("text-right font-medium", tx.amount >= 0 ? 'text-green-600' : 'text-foreground')}>
-                                                {formatCurrency(tx.amount)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                           </Table>
+                           <Accordion type="multiple" className="w-full space-y-2">
+                                {Object.keys(primaryGroup.secondaryGroups).sort((a, b) => Math.abs(primaryGroup.secondaryGroups[b].total) - Math.abs(primaryGroup.secondaryGroups[a].total)).map(secondaryCategory => {
+                                    const secondaryGroup = primaryGroup.secondaryGroups[secondaryCategory];
+                                    return (
+                                        <AccordionItem key={secondaryCategory} value={secondaryCategory} className="border bg-slate-50/70 rounded-md">
+                                            <AccordionTrigger className="px-4 py-3 text-base hover:no-underline">
+                                                <div className="flex justify-between items-center w-full">
+                                                    <span className="font-medium">{secondaryCategory}</span>
+                                                    <span className={cn("text-base font-semibold", secondaryGroup.total >= 0 ? "text-green-600" : "text-slate-700")}>
+                                                        {formatCurrency(secondaryGroup.total)}
+                                                    </span>
+                                                </div>
+                                            </AccordionTrigger>
+                                            <AccordionContent className="p-0 border-t">
+                                                <Table>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead>Date</TableHead>
+                                                            <TableHead>Description</TableHead>
+                                                            <TableHead>Subcategory</TableHead>
+                                                            <TableHead className="text-right">Amount</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
+                                                    <TableBody>
+                                                        {secondaryGroup.transactions.map(tx => (
+                                                            <TableRow key={tx.id}>
+                                                                <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
+                                                                <TableCell className="max-w-[200px] truncate">{tx.description}</TableCell>
+                                                                <TableCell>
+                                                                    <Badge variant="outline">{tx.subcategory}</Badge>
+                                                                </TableCell>
+                                                                <TableCell className={cn("text-right font-medium", tx.amount >= 0 ? 'text-green-600' : 'text-slate-800')}>
+                                                                    {formatCurrency(tx.amount)}
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        ))}
+                                                    </TableBody>
+                                                </Table>
+                                            </AccordionContent>
+                                        </AccordionItem>
+                                    )
+                                })}
+                           </Accordion>
                         </AccordionContent>
                         </Card>
                     </AccordionItem>
@@ -159,10 +190,10 @@ export function DetailedLedgerReport() {
   };
   
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 p-4 md:p-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Detailed Ledger</h1>
-        <p className="text-muted-foreground">An interactive report of all transactions, grouped by primary category.</p>
+        <p className="text-muted-foreground">An interactive report of all transactions, grouped by category.</p>
       </div>
       {renderContent()}
     </div>
