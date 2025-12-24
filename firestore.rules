@@ -44,7 +44,7 @@ service cloud.firestore {
             match /transactions/{transactionId} {
                 // Inherit permissions from parent bank account.
                 allow read, delete: if isOwner(userId);
-                allow create, update: if isOwner(userId);
+                allow create, update: if isOwner(userId) && hasValidCategoryHierarchy(request.resource.data);
             }
         }
         
@@ -56,7 +56,7 @@ service cloud.firestore {
     // Rule to allow collection group queries on 'transactions'
     match /{path=**}/transactions/{transactionId} {
        allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
-       allow write: if isSignedIn() && resource.data.userId == request.auth.uid;
+       allow write: if isSignedIn() && resource.data.userId == request.auth.uid && hasValidCategoryHierarchy(request.resource.data);
     }
 
     match /properties/{propertyId} {
