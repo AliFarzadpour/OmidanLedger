@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -79,10 +80,12 @@ export function ProfitAndLossReport() {
   const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
   
   useEffect(() => {
-    if (transactions) console.log("SUCCESS: Data received!", transactions.length);
-    if (error) console.error("QUERY ERROR:", error.code, error.message);
-  }, [transactions, error]);
-
+    if (error) {
+      console.log("--- FIRESTORE ERROR DETECTED ---");
+      console.log("Code:", error.code);
+      console.log("Message:", error.message);
+    }
+  }, [error]);
 
   const handleRunReport = () => {
     setActiveDateRange(pendingDateRange);
@@ -184,7 +187,9 @@ export function ProfitAndLossReport() {
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
 
   console.log("Current User ID:", user?.uid);
-  console.log("Searching from:", activeDateRange?.from ? format(activeDateRange.from, 'yyyy-MM-dd') : 'N/A', "to:", activeDateRange?.to ? format(activeDateRange.to, 'yyyy-MM-dd') : 'N/A');
+  if(activeDateRange?.from && activeDateRange?.to) {
+    console.log("Searching from:", format(activeDateRange.from, 'yyyy-MM-dd'), "to:", format(activeDateRange.to, 'yyyy-MM-dd'));
+  }
   console.log("Transactions Found in DB:", transactions?.length);
 
 

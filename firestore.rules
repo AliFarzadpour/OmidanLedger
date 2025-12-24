@@ -43,8 +43,9 @@ service cloud.firestore {
         }
     }
     
+    // Rule to allow collection group queries on 'transactions'
     match /{path=**}/transactions/{transactionId} {
-      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isServerProcess();
+      allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /properties/{propertyId} {
