@@ -55,23 +55,30 @@ interface UserContext {
   propertyAddresses: string[];
   userRules: Array<{
     keyword: string;
-    primaryCategory: string;
-    secondaryCategory: string;
-    subcategory: string;
-    propertyId: string | null; // ✅ Allow null
+    categoryHierarchy: {
+        l0: string;
+        l1: string;
+        l2: string;
+        l3: string;
+    },
+    propertyId: string | null;
   }>;
 }
 
 // 1. ROBUST SANITIZER
 function sanitizeVendorId(text: string): string {
   if (!text) return 'UNKNOWN_VENDOR';
-  return text.toUpperCase()
-    .replace(/\//g, '_')     
-    .replace(/\\/g, '_')      
-    .replace(/[#\?]/g, '')    
-    .replace(/[^\w\s_]/g, '') 
-    .replace(/\s+/g, '_')     
+  // Remove common suffixes and prefixes, asterisks, and truncate at the first sign of a transaction ID
+  const cleaned = text.toUpperCase()
+    .replace(/\s+(LLC|INC|CORP|LTD)\.?$/g, '')
+    .replace(/^(SQ|TST)\*/, '')
+    .replace(/\*.*$/, '') // Remove everything after a star, often indicating a terminal ID
+    .replace(/#\d+$/, '') // Remove trailing numbers like #1234
     .trim();
+
+  return cleaned
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "") // Remove most special characters
+    .replace(/\s+/g, '_'); // Replace spaces with underscores
 }
 
 export async function getCategoryFromDatabase(
@@ -82,8 +89,7 @@ export async function getCategoryFromDatabase(
   if (!merchantName) return null;
 
   const desc = merchantName.toUpperCase();
-  const cleanId = sanitizeVendorId(desc);
-
+  
   // --- A. CHECK USER RULES (IN-MEMORY) - Priority 1 ---
   const matchedRule = context.userRules.find(rule => 
       desc.includes(rule.keyword) 
@@ -91,34 +97,36 @@ export async function getCategoryFromDatabase(
 
   if (matchedRule) {
       return { 
-          primaryCategory: matchedRule.primaryCategory,
-          secondaryCategory: matchedRule.secondaryCategory,
-          subcategory: matchedRule.subcategory,
-          propertyId: matchedRule.propertyId || null, // ✅ PASS THE PROPERTY ID
+          categoryHierarchy: matchedRule.categoryHierarchy,
+          propertyId: matchedRule.propertyId || null,
           confidence: 1.0,
           source: 'User Rule' 
       };
   }
   
-    // --- B. CHECK GLOBAL MASTER DATABASE (FIRESTORE) - Priority 2 ---
+  // --- B. CHECK GLOBAL MASTER DATABASE (FIRESTORE) - Priority 2 ---
   try {
-      // 1. Check Exact Vendor Name (e.g. "HOME_DEPOT")
+      const cleanId = sanitizeVendorId(desc);
       const globalDoc = await db.collection('globalVendorMap').doc(cleanId).get();
       
       if (globalDoc.exists) {
           const data = globalDoc.data();
-          return { 
-              primaryCategory: data?.primaryCategory || data?.primary,
-              secondaryCategory: data?.secondaryCategory || data?.secondary,
-              subcategory: data?.subcategory || data?.sub,
-              confidence: 0.95, 
-              source: 'Global DB' 
-          };
+          if (data) {
+              return { 
+                  categoryHierarchy: {
+                      l0: data.primary,
+                      l1: data.secondary,
+                      l2: data.sub,
+                      l3: '' // Global rules don't have L3 detail
+                  },
+                  confidence: 0.95, 
+                  source: 'Global DB' 
+              };
+          }
       }
   } catch (error) {
       console.warn("Global DB Lookup failed:", error);
   }
-
 
   return null; 
 }
@@ -145,12 +153,10 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
   rulesSnap.forEach(doc => {
       const data = doc.data();
       const keyword = (data.transactionDescription || data.originalKeyword || '').toUpperCase();
-      if (keyword) {
+      if (keyword && data.categoryHierarchy) {
           context.userRules.push({
               keyword: keyword,
-              primaryCategory: data.primaryCategory,
-              secondaryCategory: data.secondaryCategory,
-              subcategory: data.subcategory,
+              categoryHierarchy: data.categoryHierarchy,
               propertyId: data.propertyId || null 
           });
       }
@@ -212,7 +218,7 @@ export async function categorizeWithHeuristics(
   amount: number, 
   plaidCategory: any, 
   context: UserContext
-): Promise<{ primary: string, secondary: string, sub: string, confidence: number }> {
+): Promise<{ l0: string, l1: string, l2: string, l3: string, confidence: number }> {
   
   const safeDesc = description || ''; 
   const desc = safeDesc.toUpperCase();
@@ -220,38 +226,37 @@ export async function categorizeWithHeuristics(
   const cleanDesc = desc.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g," ");
   
   const isIncome = amount > 0;
-  const { defaultIncomeCategory } = context.business || {};
 
   // Rule for Credit Card Payments (Priority 1)
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan/Card Payment', confidence: 1.0 };
+      return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   
   if (desc.includes('ONLINE BANKING TRANSFER') || 
       desc.includes('TRANSFER TO CHK') || 
       desc.includes('TRANSFER FROM CHK') || 
       desc.includes('INTERNAL TRANSFER')) {
-      return { primary: 'Balance Sheet', secondary: 'Transfers', sub: 'Internal Transfer', confidence: 1.0 };
+      return { l0: 'Asset', l1: 'Cash Movement', l2: 'Internal Transfer', l3: 'Bank Transfer', confidence: 1.0 };
   }
 
   if (isIncome) {
       if (desc.includes('RENT') || desc.includes('LEASE')) {
-          return { primary: 'Income', secondary: 'Rental Income', sub: 'Residential/Commercial Rent', confidence: 1.0 };
+          return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3: Rents Received', l3: 'Rent', confidence: 1.0 };
       }
       if (desc.includes('DEPOSIT') && !desc.includes('REFUND')) {
-          return { primary: 'Income', secondary: 'Rental Income', sub: 'Security Deposit', confidence: 0.9 };
+          return { l0: 'Liability', l1: 'Tenant Deposits', l2: 'Security Deposits Held', l3: 'Deposit In', confidence: 0.9 };
       }
       if (desc.includes('INTEREST')) {
-          return { primary: 'Income', secondary: 'Other Income', sub: 'Interest Income', confidence: 1.0 };
+          return { l0: 'Income', l1: 'Non-Operating', l2: 'Bank Interest', l3: 'Interest Earned', confidence: 1.0 };
       }
       if (desc.includes('REFUND') || desc.includes('RETURN')) {
-           return { primary: 'Income', secondary: 'Uncategorized', sub: 'Refunds/Credits', confidence: 0.8 };
+           return { l0: 'Income', l1: 'Adjustments', l2: 'Refunds/Credits', l3: 'Refund', confidence: 0.8 };
       }
-      return { primary: 'Income', secondary: 'Operating Income', sub: defaultIncomeCategory || 'Sales', confidence: 0.7 };
+      return { l0: 'Income', l1: 'Rental Income', l2: 'Line 3: Rents Received', l3: 'Uncategorized Income', confidence: 0.7 };
   }
   
   if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED') || desc.includes('CREDIT CARD') || desc.includes('LOAN') || desc.includes('MORTGAGE')) {
-      return { primary: 'Balance Sheet', secondary: 'Liabilities', sub: 'Loan/Card Payment', confidence: 0.95 };
+      return { l0: 'Liability', l1: 'Debt Service', l2: 'Loan Paydown', l3: 'Loan/Card Payment', confidence: 0.95 };
   }
   
   const plaidPrimary = (plaidCategory?.primary || '').toUpperCase();
@@ -259,68 +264,65 @@ export async function categorizeWithHeuristics(
 
   if (!isIncome) {
       if (plaidPrimary === 'FOOD_AND_DRINK') {
-          return { primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals', confidence: 0.8 };
+          return { l0: 'Expense', l1: 'Meals', l2: 'Line 19: Other (Meals)', l3: 'Business Meals', confidence: 0.8 };
       }
        if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
         if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
-            return { primary: 'Equity', secondary: 'Owner\'s Draw', sub: 'Personal Expense', confidence: 0.9 };
+            return { l0: 'Equity', l1: 'Owner Distribution', l2: 'Personal Draw', l3: 'Personal Spending', confidence: 0.9 };
         }
     }
     if (plaidPrimary === 'TRAVEL') {
         if (plaidDetailed.includes('TAXI') || plaidDetailed.includes('PARKING') || plaidDetailed.includes('TOLLS')) {
-            return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Tolls & Parking', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Transportation', l2: 'Line 6: Auto & Travel', l3: 'Tolls & Parking', confidence: 0.9 };
         }
         if (plaidDetailed.includes('GAS')) {
-            return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Transportation', l2: 'Line 6: Auto & Travel', l3: 'Fuel', confidence: 0.9 };
         }
-        return { primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging', confidence: 0.9 };
+        return { l0: 'Expense', l1: 'Transportation', l2: 'Line 6: Auto & Travel', l3: 'Travel & Lodging', confidence: 0.9 };
     }
     if (plaidPrimary === 'SERVICE') {
         if (plaidDetailed.includes('INTERNET') || plaidDetailed.includes('TELEPHONE')) {
-            return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Telephone & Internet', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Utilities', l2: 'Line 17: Utilities', l3: 'Telephone & Internet', confidence: 0.9 };
         }
         if (plaidDetailed.includes('UTILITIES')) {
-            return { primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities', confidence: 0.9 };
+            return { l0: 'Expense', l1: 'Utilities', l2: 'Line 17: Utilities', l3: 'General Utilities', confidence: 0.9 };
         }
     }
   }
 
   if (desc.includes('RENT') || desc.includes('LEASE')) {
-      return { primary: 'Operating Expenses', secondary: 'Rent & Lease', sub: 'Rent Expense', confidence: 0.9 };
+      return { l0: 'Expense', l1: 'Operations', l2: 'Line 19: Other Expenses', l3: 'Rent Expense', confidence: 0.9 };
   }
 
-  return { primary: 'Operating Expenses', secondary: 'Uncategorized', sub: 'General Expense', confidence: 0.1 };
+  return { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'General Expense', confidence: 0.1 };
 }
 
 /**
  * A final, non-negotiable check to enforce core accounting principles.
- * @param category - The category object determined by prior logic.
- * @param amount - The transaction amount.
- * @returns A potentially corrected category object.
  */
 export async function enforceAccountingRules(
   category: any, 
   amount: number
 ): Promise<any> {
   const isNegative = amount < 0;
-  const isIncomeCategory = category.primaryCategory?.toLowerCase().includes('income');
+  const isIncomeCategory = category.categoryHierarchy?.l0?.toLowerCase().includes('income');
 
   // **Guardrail 1: Negative Income**
-  // If an expense is categorized as income, force it to a generic expense category.
   if (isNegative && isIncomeCategory) {
     return {
       ...category,
-      primaryCategory: 'Operating Expenses',
-      secondaryCategory: 'Uncategorized',
-      subcategory: 'General Expense',
-      aiExplanation: `Rule Violation: Negative amount cannot be Income. Original: ${category.subcategory}`,
+      categoryHierarchy: {
+        l0: 'Expense',
+        l1: 'General',
+        l2: 'Needs Review',
+        l3: 'Uncategorized Expense',
+      },
+      aiExplanation: `Rule Violation: Negative amount cannot be Income. Original: ${category.categoryHierarchy.l2}`,
       reviewStatus: 'needs-review',
     };
   }
 
-  // Other rules can be added here...
-
-  return category; // Return the original category if no rules are violated.
+  return category; 
 }
 
 
@@ -370,7 +372,6 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
         
         const relevantTransactions = allTransactions.filter(tx => {
-            // Filter for the specific account AND ensure transaction is not pending.
             return tx.account_id === bankAccountId && !tx.pending;
         });
 
@@ -379,7 +380,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             return { count: 0 };
         }
 
-        const BATCH_SIZE = 3; 
+        const BATCH_SIZE = 10; 
         const batchPromises = [];
 
         for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
@@ -396,21 +397,22 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     const signedAmount = originalTx.amount * -1;
                     let finalCategory: any;
 
+                    // <<<<---- NEW LOGIC ---->>>>
+                    // 1. RULES ENGINE FIRST
                     const ruleResult = await getCategoryFromDatabase(originalTx.name, userContext, db);
-
+                    
                     if (ruleResult) {
                         finalCategory = {
-                            primaryCategory: ruleResult.primaryCategory,
-                            secondaryCategory: ruleResult.secondaryCategory,
-                            subcategory: ruleResult.subcategory,
+                            categoryHierarchy: ruleResult.categoryHierarchy,
+                            propertyId: ruleResult.propertyId || null,
                             confidence: 1.0,
-                            aiExplanation: `Matched User Rule: ${originalTx.name}`,
+                            aiExplanation: `Matched Rule: ${ruleResult.source}`,
                             merchantName: originalTx.merchant_name || originalTx.name,
                             status: 'posted',
-                            source: 'User Rule',
-                            propertyId: ruleResult.propertyId || null 
+                            source: ruleResult.source,
                         };
                     } else {
+                        // 2. AI FALLBACK
                         const deepResult = await deepCategorizeTransaction({
                             description: originalTx.name,
                             amount: signedAmount,
@@ -419,21 +421,28 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         
                         if (deepResult && deepResult.confidence > 0.7) {
                             finalCategory = {
-                                primaryCategory: deepResult.primaryCategory,
-                                secondaryCategory: deepResult.secondaryCategory,
-                                subcategory: deepResult.subcategory,
+                                categoryHierarchy: {
+                                    l0: deepResult.primaryCategory,
+                                    l1: deepResult.secondaryCategory,
+                                    l2: deepResult.subcategory,
+                                    l3: '',
+                                },
                                 confidence: deepResult.confidence,
                                 aiExplanation: deepResult.reasoning,
                                 merchantName: deepResult.merchantName,
                                 status: 'posted',
-                                propertyId: null
+                                propertyId: null // AI doesn't know property
                             };
                         } else {
+                            // 3. HEURISTICS LAST RESORT
                             const heuristicResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
                             finalCategory = {
-                                primaryCategory: heuristicResult.primary,
-                                secondaryCategory: heuristicResult.secondary,
-                                subcategory: heuristicResult.sub,
+                                categoryHierarchy: {
+                                    l0: heuristicResult.l0,
+                                    l1: heuristicResult.l1,
+                                    l2: heuristicResult.l2,
+                                    l3: heuristicResult.l3
+                                },
                                 confidence: heuristicResult.confidence,
                                 aiExplanation: 'Deep AI failed, used standard Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
@@ -443,6 +452,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         }
                     }
                     
+                    // 4. FINAL ACCOUNTING GUARDRAIL
                     const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
                     
                     const txData = {
@@ -455,11 +465,12 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         createdAt: FieldValue.serverTimestamp(),
                         ...enforcedCategory,
                         propertyId: enforcedCategory.propertyId || null,
-                        reviewStatus: 'needs-review', // Add default review status
+                        reviewStatus: 'needs-review',
                     };
 
                     batch.set(docRef, txData, { merge: true });
 
+                    // Increment stats only if a property is linked
                     if (txData.propertyId) {
                         incrementPropertyStats({
                             propertyId: txData.propertyId,

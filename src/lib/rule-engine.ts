@@ -16,17 +16,19 @@ async function setRule(
 ) {
   if (!keyword) return;
 
-  const idContent = `${userId}-${keyword}-${propertyId}`;
-  const mappingId = createHash('md5').update(idContent.toUpperCase()).digest('hex');
+  // Use a consistent ID generation scheme. Using propertyId ensures property-specific rules
+  // for the same keyword (e.g., "Water Bill") don't overwrite each other.
+  const idContent = `${userId}-${keyword.toUpperCase()}-${propertyId}`;
+  const mappingId = createHash('md5').update(idContent).digest('hex');
   
   const ruleRef = db.collection('users').doc(userId).collection('categoryMappings').doc(mappingId);
 
   const ruleData = {
     userId,
-    transactionDescription: keyword,
-    categoryHierarchy: categories, // Save the new object
-    propertyId: propertyId,
-    source: 'Auto-Generated',
+    transactionDescription: keyword, // The string to match against
+    categoryHierarchy: categories,   // The 4-level object to apply
+    propertyId: propertyId,          // Link the rule to the property
+    source: 'Auto-Generated (Property)',
     updatedAt: new Date(),
   };
 
@@ -43,30 +45,31 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
 
   try {
     const propertyNickname = propertyData.name;
-    const propertyAddress = propertyData.address?.street;
 
     if (!propertyNickname) {
       console.warn(`Skipping rule generation for property ${propertyId} because it has no nickname.`);
       return;
     }
-
-    // Rule for the property nickname itself
-    await setRule(userId, propertyNickname, {
-      l0: 'Income',
-      l1: 'Rental Income',
-      l2: 'Line 3: Rents Received',
-      l3: propertyNickname
-    }, propertyId);
     
-    // Rule for the property address
-    if (propertyAddress) {
-      await setRule(userId, propertyAddress, {
-        l0: 'Expense',
-        l1: 'Property Operations',
-        l2: 'Line 19: Other Expenses', // Default for a general address match
-        l3: propertyNickname
-      }, propertyId);
-    }
+    // --- INCOME RULES ---
+    const processTenants = (tenants: any[], propNick: string) => {
+      if (tenants && Array.isArray(tenants)) {
+        for (const tenant of tenants) {
+          if (tenant.firstName && tenant.lastName) {
+            const fullName = `${tenant.firstName} ${tenant.lastName}`;
+            setRule(userId, fullName, {
+              l0: 'Income',
+              l1: 'Rental Income',
+              l2: 'Line 3: Rents Received',
+              l3: `${propNick} - ${fullName}`
+            }, propertyId);
+          }
+        }
+      }
+    };
+    processTenants(propertyData.tenants, propertyNickname);
+
+    // --- EXPENSE RULES ---
 
     // Mortgage Interest
     if (propertyData.mortgage?.lenderName) {
@@ -136,24 +139,6 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
       }, propertyId);
     }
 
-    // Tenant Income Rules
-    const processTenants = (tenants: any[], propertyNickname: string) => {
-      if (tenants && Array.isArray(tenants)) {
-        for (const tenant of tenants) {
-          if (tenant.firstName && tenant.lastName) {
-            const fullName = `${tenant.firstName} ${tenant.lastName}`;
-            setRule(userId, fullName, {
-              l0: 'Income',
-              l1: 'Rental Income',
-              l2: 'Line 3: Rents Received',
-              l3: `${propertyNickname} - ${fullName}`
-            }, propertyId);
-          }
-        }
-      }
-    };
-    
-    processTenants(propertyData.tenants, propertyNickname);
 
     return { success: true, message: '4-level rules generated successfully.' };
 
