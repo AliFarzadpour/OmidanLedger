@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar as CalendarIcon, PlayCircle } from 'lucide-react';
+import { PlayCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -23,7 +23,7 @@ type Transaction = {
   date: string | Timestamp; // Can be string or Timestamp
   description: string;
   amount: number;
-  categoryHierarchy: {
+  categoryHierarchy?: {
     l0: string;
     l1: string;
     l2: string;
@@ -47,19 +47,20 @@ export function ProfitAndLossReport() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
-    const initialRange = {
-      from: startOfMonth(new Date()),
-      to: new Date(),
-    };
-    setPendingDateRange(initialRange);
-    setActiveDateRange(initialRange);
-  }, []);
+    if (!mounted) {
+      const initialRange = {
+        from: startOfMonth(new Date()),
+        to: new Date(),
+      };
+      setPendingDateRange(initialRange);
+      setActiveDateRange(initialRange);
+      setMounted(true);
+    }
+  }, [mounted]);
 
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
     
-    // Convert dates to Firestore Timestamp objects for the query
     const startTimestamp = Timestamp.fromDate(activeDateRange.from);
     const endTimestamp = Timestamp.fromDate(activeDateRange.to);
 
@@ -90,9 +91,8 @@ export function ProfitAndLossReport() {
       const hierarchy = txn.categoryHierarchy; 
       if (!hierarchy || !hierarchy.l0) return; 
 
-      // Force to lowercase for case-insensitive comparison
       const l0 = hierarchy.l0.toLowerCase();
-      const l2 = hierarchy.l2;
+      const l2 = hierarchy.l2 || 'Uncategorized';
 
       if (l0 === 'income') {
         totalIncome += txn.amount;
@@ -169,18 +169,6 @@ export function ProfitAndLossReport() {
   };
   
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
-
-  if (!mounted) {
-    return (
-      <div className="space-y-6 p-4 md:p-8">
-        <Skeleton className="h-10 w-1/3" />
-        <Card>
-          <CardHeader><Skeleton className="h-8 w-1/2" /></CardHeader>
-          <CardContent><Skeleton className="h-40 w-full" /></CardContent>
-        </Card>
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6 p-4 md:p-8">
