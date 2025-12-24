@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -43,16 +44,16 @@ export interface Transaction {
   date: string;
   description: string;
   amount: number;
-  primaryCategory: string; // Legacy
-  secondaryCategory: string; // Legacy
-  subcategory: string; // Legacy
-  details?: string; // Legacy
   categoryHierarchy: {
     l0: string;
     l1: string;
     l2: string;
     l3: string;
   };
+  primaryCategory: string; // Legacy
+  secondaryCategory: string; // Legacy
+  subcategory: string; // Legacy
+  details?: string; // Legacy
   confidence?: number;
   accountId?: string;
   accountName?: string; 

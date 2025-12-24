@@ -1,3 +1,4 @@
+
 // scripts/seedGlobalRules.ts
 import * as admin from 'firebase-admin';
 import * as path from 'path';
@@ -13,65 +14,74 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// 2. Define the Master List (The "Universal Truths")
+// 2. Define the Master List (The "Universal Truths") - Now aligned with 4-level schema
 const globalRules = [
-  // RESTAURANTS
-  { keywords: ['STARBUCKS', 'MCDONALD', 'CHICK-FIL-A', 'IN-N-OUT', 'DUNKIN', 'CHUY', 'CHEESECAKE', 'BRAUMS', 'ROADHOUSE', 'WHATABURGER', 'PANERA', 'DENNY', 'WENDY', 'BURGER KING', 'TACO BELL', 'TB REST', 'TB RET', 'MISSION RANCH MARKET', 'SAIZERIYA'], 
-    primary: 'Operating Expenses', secondary: 'Meals & Entertainment', sub: 'Business Meals' },
+  // --- DINING & MEALS ---
+  { keywords: ['STARBUCKS', 'MCDONALD', 'CHICK-FIL-A', 'IN-N-OUT', 'DUNKIN', 'CHUY', 'CHEESECAKE', 'BRAUMS', 'ROADHOUSE', 'WHATABURGER', 'PANERA', 'DENNY', 'WENDY', 'BURGER KING', 'TACO BELL', 'TB REST', 'TB RET', 'MISSION RANCH MARKET', 'SAIZERIYA', 'SHAKE SHACK', 'PIZZA GUYS', 'THE COFFEE COMPANY', 'URTH CAFFE', 'MAGGIANOS'], 
+    primary: 'Expense', secondary: 'Meals', sub: 'Line 19: Other (Meals)', details: 'Business Meals' },
   
-  // RETAIL / PERSONAL
-  { keywords: ['TJ MAXX', 'MACY', 'NORDSTROM', 'DILLARD', 'MARSHALLS', 'ROSS', 'H&M', 'ZARA', 'UNIQLO', 'SKECHERS', 'NIKE', 'ADIDAS', 'LULULEMON', 'SEPHORA', 'ULTA', 'CALVIN', 'NAUTICA', 'COLUMBIA', 'STONEBRIAR', 'BEYOND CLIPS'], 
-    primary: 'Equity', secondary: "Owner's Draw", sub: 'Personal Expense' },
+  // --- PERSONAL / RETAIL ---
+  { keywords: ['TJ MAXX', 'MACY', 'NORDSTROM', 'DILLARD', 'MARSHALLS', 'ROSS', 'H&M', 'ZARA', 'UNIQLO', 'SKECHERS', 'NIKE', 'ADIDAS', 'LULULEMON', 'SEPHORA', 'ULTA', 'CALVIN', 'NAUTICA', 'COLUMBIA', 'STONEBRIAR', 'BEYOND CLIPS', 'SAFFRON & ROSE ICE CRE', 'CA PARKS YODEL PARK'], 
+    primary: 'Equity', secondary: "Owner Distribution", sub: 'Personal Draw', details: 'Personal Spending' },
 
-  // OFFICE SUPPLIES
-  { keywords: ['OFFICE DEPOT', 'STAPLES', 'HOME DEPOT', 'LOWES', 'AMAZON', 'COSTCO', 'WALMART', 'TARGET', 'SAMS CLUB', 'MICRO CENTER'], 
-    primary: 'Operating Expenses', secondary: 'Office Expenses', sub: 'Supplies' },
+  // --- OFFICE, REPAIRS, & SUPPLIES ---
+  { keywords: ['OFFICE DEPOT', 'STAPLES', 'HOME DEPOT', 'LOWES', 'MICRO CENTER'], 
+    primary: 'Expense', secondary: 'Supplies', sub: 'Line 15 Supplies', details: 'General Supplies' },
+  { keywords: ['AMAZON', 'WALMART', 'TARGET', 'COSTCO', 'SAMS CLUB'], 
+    primary: 'Expense', secondary: 'Supplies', sub: 'Line 15 Supplies', details: 'General Supplies' },
 
-  // SOFTWARE
-  { keywords: ['OPENAI', 'CHATGPT', 'DIGITALOCEAN', 'GODADDY', 'NAME-CHEAP', 'ADOBE', 'INTUIT', 'GOOGLE', 'MICROSOFT', 'VPN', 'ESIGN', 'TRADE IDEAS', 'GSUITE', 'AWS', 'CLOUD', 'INVIDEO', 'ADROLL'], 
-    primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Software & Subscriptions' },
+  // --- SOFTWARE & SUBSCRIPTIONS ---
+  { keywords: ['OPENAI', 'CHATGPT', 'DIGITALOCEAN', 'GODADDY', 'NAME-CHEAP', 'ADOBE', 'INTUIT', 'GOOGLE', 'MICROSOFT', 'VPN', 'ESIGN', 'TRADE IDEAS', 'GSUITE', 'AWS', 'CLOUD', 'INVIDEO', 'ADROLL', 'AMAZON PRIME'], 
+    primary: 'Expense', secondary: 'General & Administrative', sub: 'Line 19: Other Expenses', details: 'Software & Subscriptions' },
 
-  // TRAVEL
-  { keywords: ['TRIP.COM', 'EXPEDIA', 'KLOOK', 'AGODA', 'AIRBNB', 'HOTEL', 'INN', 'LODGE', 'RESORT', 'HILTON', 'SHERATON', 'MARRIOTT', 'HYATT', 'WESTIN', 'FAIRMONT', 'SIXT', 'HERTZ', 'AVIS', 'BUDGET', 'ENTERPRISE', 'FRONTIER A', 'FRONTIER K', 'AMERICAN AIR', 'DELTA', 'UNITED', 'SOUTHWEST', 'TRAVELOCITY', 'WISECARS'], 
-    primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Travel & Lodging' },
+  // --- TRAVEL & TRANSPORTATION ---
+  { keywords: ['TRIP.COM', 'EXPEDIA', 'KLOOK', 'AGODA', 'AIRBNB', 'HOTEL', 'INN', 'LODGE', 'RESORT', 'HILTON', 'SHERATON', 'MARRIOTT', 'HYATT', 'WESTIN', 'FAIRMONT', 'SIXT', 'HERTZ', 'AVIS', 'BUDGET', 'ENTERPRISE', 'TRAVELOCITY', 'WISECARS'], 
+    primary: 'Expense', secondary: 'Travel', sub: 'Line 6: Auto & Travel', details: 'Travel & Lodging' },
+  { keywords: ['AMERICAN AIR', 'DELTA', 'UNITED', 'SOUTHWEST', 'FRONTIER A', 'FRONTIER K'],
+    primary: 'Expense', secondary: 'Travel', sub: 'Line 6: Auto & Travel', details: 'Airfare' },
+  { keywords: ['NTTA'],
+    primary: 'Expense', secondary: 'Travel', sub: 'Line 6: Auto & Travel', details: 'Tolls'},
+  { keywords: ['SAN CLEMENTE PARKING'],
+    primary: 'Expense', secondary: 'Travel', sub: 'Line 6: Auto & Travel', details: 'Parking'},
 
-  // UTILITIES & GOV
-  { keywords: ['CITY OF', 'TOWN OF', 'WATER', 'ELECTRIC', 'POWER', 'ATMOS', 'WASTE', 'TRASH', 'FRONTIER'], 
-    primary: 'Operating Expenses', secondary: 'General & Administrative', sub: 'Rent & Utilities' },
+  // --- UTILITIES & GOVERNMENT ---
+  { keywords: ['CITY OF', 'TOWN OF', 'WATER', 'ELECTRIC', 'POWER', 'ATMOS', 'WASTE', 'TRASH', 'FRONTIER', 'VERIZON', 'AT&T', 'T-MOBILE'], 
+    primary: 'Expense', secondary: 'Utilities', sub: 'Line 17: Utilities', details: 'General Utilities' },
+  { keywords: ['CITITURF', 'CITY OF LAGUNA BEACH'],
+    primary: 'Expense', secondary: 'Taxes', sub: 'Line 16: Taxes', details: 'Municipal Fees' },
 
-  // FUEL
+  // --- FUEL ---
   { keywords: ['SHELL', 'EXXON', 'CHEVRON', 'QT', 'QUIKTRIP', '7-ELEVEN', 'RACETRAC', 'CIRCLE K', 'PHILLIPS 66', 'CONOCO', 'CENEX'], 
-    primary: 'Operating Expenses', secondary: 'Vehicle & Travel', sub: 'Fuel' }
+    primary: 'Expense', secondary: 'Travel', sub: 'Line 6: Auto & Travel', details: 'Fuel' }
 ];
 
 async function seedDatabase() {
   const batch = db.batch();
   
-  console.log("Starting seed...");
+  console.log("Starting seed with 4-level tax-aligned categories...");
 
   for (const group of globalRules) {
-    // We create a document for EACH keyword so lookup is fast O(1)
-    // Doc ID: "STARBUCKS" -> Data: { category: "Meals" }
     for (const keyword of group.keywords) {
-        // FIX: Sanitize ID by replacing slashes and special chars with underscores
         const cleanId = keyword.toUpperCase()
-            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "_") // Replace punctuation with _
-            .replace(/\s+/g, '_'); // Replace spaces with _
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "_")
+            .replace(/\s+/g, '_');
 
         const docRef = db.collection('globalVendorMap').doc(cleanId);
         
+        // Use the new 4-level structure
         batch.set(docRef, {
             originalKeyword: keyword,
-            primary: group.primary,
-            secondary: group.secondary,
-            sub: group.sub,
-            source: 'global_seed'
-        });
+            primary: group.primary,     // L0
+            secondary: group.secondary, // L1
+            sub: group.sub,             // L2 (Tax Line)
+            details: group.details,     // L3 (Detail)
+            source: 'global_seed_v2'
+        }, { merge: true }); // Use merge to avoid overwriting user custom rules
     }
   }
 
   await batch.commit();
-  console.log("Database seeded successfully!");
+  console.log("Database seeded successfully with updated taxonomy!");
 }
 
 seedDatabase().catch(console.error);
