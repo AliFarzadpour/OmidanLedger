@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -232,7 +233,14 @@ export async function categorizeWithHeuristics(
   if (amount > 0 && plaidPrimary === 'TRANSFER_IN' && plaidDetailed.includes('CREDIT_CARD_PAYMENT')) {
       return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
-  if (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK') || desc.includes('ONLINE PAYMENT')) {
+  // Enhanced Rule for Bank Account Debits to Credit Cards
+  if (desc.includes('PAYMENT - THANK YOU') || 
+      desc.includes('PAYMENT RECEIVED, THANK') || 
+      desc.includes('ONLINE PAYMENT') ||
+      desc.includes('BANK OF AMERICA BUSINESS CARD') || // From user feedback
+      desc.includes('BARCLAYCARD US') || // From user feedback
+      desc.includes('CITI AUTOPAY') // From user feedback
+     ) {
       return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   
