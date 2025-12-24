@@ -427,45 +427,54 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     const [sub, setSub] = useState(transaction.subcategory);
     const [details, setDetails] = useState(transaction.details || '');
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave(transaction, { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details });
+    const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit' | 'thankYouPayment', isOpen: boolean }>({ type: 'none', isOpen: false });
+
+    const finalizeSave = (cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => {
+        onSave(transaction, cats);
         setIsOpen(false);
     };
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const cats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details };
+        finalizeSave(cats);
+    };
+
     return (
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
-                        {transaction.primaryCategory}
-                        <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
-                    </Badge>
-                    <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                        {transaction.secondaryCategory} {'>'} {transaction.subcategory}
-                    </span>
-                    {transaction.details && (
-                         <span className="text-xs text-muted-foreground pl-1 font-medium">
-                            {transaction.details}
+        <>
+            <Popover open={isOpen} onOpenChange={setIsOpen}>
+                <PopoverTrigger asChild>
+                    <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
+                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
+                            {transaction.primaryCategory}
+                            <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                        </Badge>
+                        <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                            {transaction.secondaryCategory} {'>'} {transaction.subcategory}
                         </span>
-                    )}
-                </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-80">
-                <form onSubmit={handleSubmit} className="grid gap-4">
-                    <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Edit Category</h4>
-                        <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
+                        {transaction.details && (
+                             <span className="text-xs text-muted-foreground pl-1 font-medium">
+                                {transaction.details}
+                            </span>
+                        )}
                     </div>
-                    <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">L0</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">L1</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">L2</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
-                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">L3</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
-                    </div>
-                    <Button type="submit">Confirm & Save Rule</Button>
-                </form>
-            </PopoverContent>
-        </Popover>
+                </PopoverTrigger>
+                <PopoverContent className="w-80">
+                    <form onSubmit={handleSubmit} className="grid gap-4">
+                        <div className="space-y-2">
+                            <h4 className="font-medium leading-none">Edit Category</h4>
+                            <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
+                        </div>
+                        <div className="grid gap-2">
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
+                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                             <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">Details</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
+                        </div>
+                        <Button type="submit">Confirm & Save</Button>
+                    </form>
+                </PopoverContent>
+            </Popover>
+        </>
     );
 }

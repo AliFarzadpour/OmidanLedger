@@ -20,7 +20,7 @@ const LearnCategoryMappingInputSchema = z.object({
     primaryCategory: z.string().describe('The user-corrected l0 category.'),
     secondaryCategory: z.string().describe('The user-corrected l1 category.'),
     subcategory: z.string().describe('The user-corrected l2 category.'),
-    details: z.string().describe('The user-corrected l3 category.'),
+    details: z.string().optional().describe('The user-corrected l3 category.'),
     userId: z.string().describe('The Firebase UID of the user.'),
 });
 
@@ -61,7 +61,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
             l0: primaryCategory,
             l1: secondaryCategory,
             l2: subcategory,
-            l3: details,
+            l3: details || '',
           },
           source: 'User Manual',
           updatedAt: new Date(), 
