@@ -4,7 +4,7 @@ import * as admin from 'firebase-admin';
 import * as path from 'path';
 
 // --- CONFIGURATION ---
-const TARGET_USER_ID = 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2';
+const TARGET_USER_ID = 'QsMUGG2ldOa0bpRHJCnVP3pKyIv1';
 const TARGET_ACCOUNT_SUFFIX = '4748';
 
 // 1. Initialize Admin SDK
