@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -7,26 +8,27 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, CheckCircle2, AlertTriangle, HelpCircle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, setDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
-import { syncAndCategorizePlaidTransactions } from '@/ai/flows/plaid-flows';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { TransactionToolbar } from './transaction-toolbar';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BatchEditDialog } from './batch-edit-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'Operating Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Other Expenses': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  'Balance Sheet Categories': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Balance Sheet': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 interface DataSource {
@@ -36,60 +38,30 @@ interface DataSource {
   plaidAccessToken?: string;
 }
 
-interface Transaction {
+export interface Transaction {
   id: string;
   date: string;
   description: string;
   primaryCategory: string;
   secondaryCategory: string;
   subcategory: string;
+  details?: string;
   amount: number;
   confidence?: number;
   accountId?: string;
   accountName?: string; 
   status?: 'posted' | 'review' | 'error' | 'ready';
+  reviewStatus?: 'needs-review' | 'approved' | 'incorrect';
+  bankAccountId?: string;
 }
 
-type SortKey = 'date' | 'description' | 'category' | 'amount';
+type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus';
 type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
   dataSource: DataSource;
 }
 
-// --- STATUS INDICATOR (Trust the Link) ---
-function StatusIndicator({ transaction }: { transaction: Transaction }) {
-  if (transaction.status === 'posted') return null;
-
-  // GREEN: Trusted Match
-  // If we have an Account ID, we trust the link.
-  if (transaction.accountId) {
-    return (
-       <div className="flex items-center gap-1 w-fit text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full text-[10px] font-medium border border-emerald-100 mt-1 cursor-default">
-          <CheckCircle2 className="h-3 w-3" />
-          <span>Auto-Matched</span>
-       </div>
-    );
-  }
-
-  // SLATE: Unassigned 
-  return (
-       <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-             <div className="flex items-center gap-1 w-fit text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full text-[10px] font-medium border border-slate-200 mt-1 cursor-pointer hover:bg-slate-200">
-                <AlertTriangle className="h-3 w-3" />
-                <span>Unassigned</span>
-             </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>AI categorized this as <b>{transaction.subcategory}</b>.</p>
-            <p className="text-xs text-muted-foreground">We couldn't link it to a specific property ledger.<br/>Click to assign manually.</p>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-  );
-}
 
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
@@ -97,14 +69,17 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { toast } = useToast();
   
   const [isUploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isClearAlertOpen, setClearAlertOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'descending' });
   const [filterTerm, setFilterTerm] = useState('');
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [filterCategory, setFilterCategory] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -117,13 +92,22 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!firestore || !user || !dataSource || !transactionsQuery) return;
     setIsClearing(true);
     setClearAlertOpen(false);
+    
     try {
         const querySnapshot = await getDocs(transactionsQuery);
         const batch = writeBatch(firestore);
         querySnapshot.forEach((doc) => batch.delete(doc.ref));
+        
+        const bankAccountRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}`);
+        batch.update(bankAccountRef, { plaidSyncCursor: null });
+
         await batch.commit();
-        toast({ title: "Transactions Cleared", description: "All transactions deleted." });
-    } catch (error) { console.error(error); } 
+        
+        toast({ title: "Transactions Cleared", description: "History reset. You can now re-sync from scratch." });
+    } catch (error: any) {
+         console.error("Error clearing transactions:", error);
+        toast({ variant: "destructive", title: "Error", description: `Could not clear transactions. ${error.message}` });
+    } 
     finally { setIsClearing(false); }
   };
 
@@ -139,24 +123,62 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     } finally { setIsSyncing(false); }
   };
 
-  const handleCategoryChange = async (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; }) => {
+  const handleCategoryChange = async (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; details: string; }) => {
     if (!firestore || !user) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
     
-    await setDoc(transactionRef, { 
+    await updateDoc(transactionRef, { 
         ...newCategories,
         confidence: 1.0, 
-        status: 'posted' 
-    }, { merge: true });
+        status: 'posted',
+        reviewStatus: 'approved'
+    });
 
     await learnCategoryMapping({
         transactionDescription: transaction.description,
         primaryCategory: newCategories.primaryCategory,
         secondaryCategory: newCategories.secondaryCategory,
         subcategory: newCategories.subcategory,
+        details: newCategories.details,
         userId: user.uid,
     });
-    toast({ title: "Updated", description: "Category saved." });
+    toast({ title: "Updated", description: "Category saved and rule learned." });
+  };
+  
+  const handleSelectionChange = (id: string, checked: boolean) => {
+    setSelectedIds(prev => 
+        checked ? [...prev, id] : prev.filter(i => i !== id)
+    );
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+        setSelectedIds(sortedTransactions.map(t => t.id));
+    } else {
+        setSelectedIds([]);
+    }
+  };
+
+  const handleBatchStatusUpdate = async (newStatus: 'approved' | 'needs-review' | 'incorrect') => {
+    if (!user || !firestore || selectedIds.length === 0) return;
+    
+    const batch = writeBatch(firestore);
+    selectedIds.forEach(id => {
+      const docRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, id);
+      batch.update(docRef, { reviewStatus: newStatus });
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: "Batch Update Successful",
+        description: `${selectedIds.length} transactions have been marked as ${newStatus.replace('-', ' ')}.`,
+      });
+      setSelectedIds([]); // Clear selection after update
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: "destructive", title: "Batch Update Failed", description: error.message });
+    }
   };
 
   const sortedTransactions = useMemo(() => {
@@ -165,16 +187,27 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
        const matchesCategory = filterCategory && filterCategory !== 'all' ? t.primaryCategory === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
-       return matchesSearch && matchesCategory && matchesDate;
+       const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
+       return matchesSearch && matchesCategory && matchesDate && matchesStatus;
     });
 
+    const statusSortOrder: { [key: string]: number } = { 'incorrect': 1, 'needs-review': 2, 'approved': 3 };
+
     filtered.sort((a, b) => {
+      if (sortConfig.key === 'reviewStatus') {
+        const aStatus = a.reviewStatus || 'needs-review';
+        const bStatus = b.reviewStatus || 'needs-review';
+        const aOrder = statusSortOrder[aStatus];
+        const bOrder = statusSortOrder[bStatus];
+        return sortConfig.direction === 'ascending' ? aOrder - bOrder : bOrder - aOrder;
+      }
+      
       let aValue: any = a[sortConfig.key as keyof Transaction] || '';
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
       
       if (sortConfig.key === 'category') {
-        aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}`;
-        bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}`;
+        aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}${a.details}`;
+        bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}${b.details}`;
       } else if (sortConfig.key === 'date') {
         return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
@@ -183,7 +216,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory]);
+  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory, statusFilter]);
+  
+  const selectedTransactions = useMemo(() => {
+    return sortedTransactions.filter(tx => selectedIds.includes(tx.id));
+  }, [sortedTransactions, selectedIds]);
 
   const requestSort = (key: SortKey) => {
     setSortConfig({ key, direction: sortConfig.key === key && sortConfig.direction === 'ascending' ? 'descending' : 'ascending' });
@@ -212,54 +249,101 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         
         <CardContent>
-          <TransactionToolbar 
-              onSearch={setFilterTerm}
-              onDateChange={setFilterDate}
-              onCategoryFilter={setFilterCategory}
-              onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); }}
-          />
+          <div className="flex justify-between items-center">
+            <TransactionToolbar 
+                onSearch={setFilterTerm}
+                onDateChange={setFilterDate}
+                onCategoryFilter={setFilterCategory}
+                onStatusFilterChange={setStatusFilter}
+                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); setStatusFilter([]); }}
+            />
+            {selectedIds.length > 0 && (
+              <div className="flex items-center gap-2">
+                 <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBatchEditDialogOpen(true)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Batch Edit ({selectedIds.length})
+                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        Change Status
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleBatchStatusUpdate('approved')}>
+                         <Flag className="mr-2 h-4 w-4 text-green-500" /> Mark as Approved
+                      </DropdownMenuItem>
+                       <DropdownMenuItem onClick={() => handleBatchStatusUpdate('needs-review')}>
+                         <Flag className="mr-2 h-4 w-4 text-yellow-500" /> Mark as Needs Review
+                      </DropdownMenuItem>
+                       <DropdownMenuItem onClick={() => handleBatchStatusUpdate('incorrect')}>
+                         <Flag className="mr-2 h-4 w-4 text-red-500" /> Mark as Incorrect
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+              </div>
+            )}
+          </div>
+
 
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[50px] p-2">
+                  <Checkbox 
+                    checked={selectedIds.length === sortedTransactions.length && sortedTransactions.length > 0}
+                    onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                  />
+                </TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
+                <TableHead className="text-right p-2 w-[80px]">
+                    <Button variant="ghost" size="icon" onClick={() => requestSort('reviewStatus')}>
+                        <Flag className="h-4 w-4" />
+                        {getSortIcon('reviewStatus')}
+                    </Button>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
-                    <TableCell><Skeleton className="h-6 w-40 rounded-full" /></TableCell>
-                    <TableCell className="text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
+                    <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
                 sortedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
+                     <TableCell className="p-2">
+                        <Checkbox 
+                            checked={selectedIds.includes(transaction.id)}
+                            onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
+                        />
+                    </TableCell>
                     <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
-                          <CategoryEditor 
-                              transaction={transaction} 
-                              onSave={handleCategoryChange} 
-                              displayName={transaction.accountName} 
-                          />
-                          <StatusIndicator transaction={transaction} />
+                          <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                       </div>
                     </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
                     </TableCell>
+                     <TableCell className="align-top py-4 text-right">
+                       <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center">No transactions found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="h-24 text-center">No transactions found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -267,11 +351,20 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       </Card>
       
       {dataSource && <UploadTransactionsDialog isOpen={isUploadDialogOpen} onOpenChange={setUploadDialogOpen} dataSource={dataSource} />}
+      {isBatchEditDialogOpen && (
+        <BatchEditDialog
+          isOpen={isBatchEditDialogOpen}
+          onOpenChange={setBatchEditDialogOpen}
+          transactions={selectedTransactions}
+          dataSource={dataSource}
+          onSuccess={() => setSelectedIds([])}
+        />
+      )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete all transactions for <strong>{dataSource.accountName}</strong>.</AlertDialogDescription>
+            <AlertDialogDescription>This will permanently delete all transactions for <strong>{dataSource.accountName}</strong> and reset the sync history. This cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -283,43 +376,79 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   );
 }
 
-// --- UPDATED CATEGORY EDITOR (Shows Full Context + Pen) ---
-function CategoryEditor({ transaction, onSave, displayName }: { transaction: Transaction, onSave: any, displayName?: string }) {
+function StatusFlagEditor({ transaction, dataSource }: { transaction: Transaction; dataSource: DataSource; }) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
+  const handleStatusChange = async (newStatus: 'needs-review' | 'approved' | 'incorrect') => {
+    if (!user || !firestore) return;
+    const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
+    try {
+      await updateDoc(transactionRef, { reviewStatus: newStatus });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not update status.' });
+    }
+  };
+
+  const statusColor = {
+    'approved': 'text-green-500',
+    'needs-review': 'text-yellow-500',
+    'incorrect': 'text-red-500',
+  }[transaction.reviewStatus || 'needs-review'];
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+            <Flag className={`h-4 w-4 ${statusColor}`} />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => handleStatusChange('approved')}>
+          <Flag className="mr-2 h-4 w-4 text-green-500" /> Approved
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleStatusChange('needs-review')}>
+          <Flag className="mr-2 h-4 w-4 text-yellow-500" /> Needs Review
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleStatusChange('incorrect')}>
+          <Flag className="mr-2 h-4 w-4 text-red-500" /> Incorrect
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+
+function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
     const [primary, setPrimary] = useState(transaction.primaryCategory);
     const [secondary, setSecondary] = useState(transaction.secondaryCategory);
     const [sub, setSub] = useState(transaction.subcategory);
+    const [details, setDetails] = useState(transaction.details || '');
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSave(transaction, { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub });
+        onSave(transaction, { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details });
         setIsOpen(false);
     };
-    
+
     return (
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
                 <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                    
-                    {/* 1. REAL LEDGER NAME (If linked) */}
-                    {displayName && (
-                         <span className="font-bold text-sm text-slate-900 mb-1">
-                            {displayName}
-                         </span>
-                    )}
-
-                    {/* 2. FULL CATEGORY DISPLAY (Always Visible) */}
-                    <div className="flex flex-col">
-                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
-                            {transaction.primaryCategory}
-                            {/* Always show Pen on hover */}
-                            <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
-                        </Badge>
-                        <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {transaction.secondaryCategory} &gt; {transaction.subcategory}
+                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
+                        {transaction.primaryCategory}
+                        <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                    </Badge>
+                    <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                        {transaction.secondaryCategory} {'>'} {transaction.subcategory}
+                    </span>
+                    {transaction.details && (
+                         <span className="text-xs text-muted-foreground pl-1 font-medium">
+                            {transaction.details}
                         </span>
-                    </div>
-
+                    )}
                 </div>
             </PopoverTrigger>
             <PopoverContent className="w-80">
@@ -329,11 +458,12 @@ function CategoryEditor({ transaction, onSave, displayName }: { transaction: Tra
                         <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
                     </div>
                     <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">L0</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">L1</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">L2</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">L3</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
                     </div>
-                    <Button type="submit">Confirm & Save</Button>
+                    <Button type="submit">Confirm & Save Rule</Button>
                 </form>
             </PopoverContent>
         </Popover>

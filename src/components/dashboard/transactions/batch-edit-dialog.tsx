@@ -57,7 +57,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
     try {
       const batch = writeBatch(firestore);
       transactions.forEach(tx => {
-        const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, tx.id);
+        const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
         batch.update(txRef, {
           primaryCategory,
           secondaryCategory,
@@ -77,6 +77,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
             primaryCategory,
             secondaryCategory,
             subcategory,
+            details,
             userId: user.uid,
         });
         toast({
@@ -112,19 +113,19 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div className="grid gap-2">
-            <Label htmlFor="primary">Primary Category (Level 0)</Label>
+            <Label htmlFor="primary">Primary Category (l0)</Label>
             <Input id="primary" value={primaryCategory} onChange={(e) => setPrimaryCategory(e.target.value)} placeholder="e.g., Expenses" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="secondary">Financial Category (Level 1)</Label>
+            <Label htmlFor="secondary">Financial Category (l1)</Label>
             <Input id="secondary" value={secondaryCategory} onChange={(e) => setSecondaryCategory(e.target.value)} placeholder="e.g., Repairs" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="sub">Tax Category (Level 2)</Label>
+            <Label htmlFor="sub">Tax Category (l2)</Label>
             <Input id="sub" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g., Line 14 Repairs" />
           </div>
            <div className="grid gap-2">
-            <Label htmlFor="details">Details (Level 3 - Optional)</Label>
+            <Label htmlFor="details">Details (l3 - Optional)</Label>
             <Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} placeholder="e.g., Adelyn - HVAC Repair" />
           </div>
 
@@ -152,5 +153,3 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
     </Dialog>
   );
 }
-
-    

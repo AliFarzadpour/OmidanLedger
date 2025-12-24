@@ -17,9 +17,10 @@ const LearnCategoryMappingInputSchema = z.object({
     transactionDescription: z
         .string()
         .describe('The original transaction description from which a rule will be created.'),
-    primaryCategory: z.string().describe('The user-corrected primary category.'),
-    secondaryCategory: z.string().describe('The user-corrected secondary category.'),
-    subcategory: z.string().describe('The user-corrected subcategory.'),
+    primaryCategory: z.string().describe('The user-corrected l0 category.'),
+    secondaryCategory: z.string().describe('The user-corrected l1 category.'),
+    subcategory: z.string().describe('The user-corrected l2 category.'),
+    details: z.string().describe('The user-corrected l3 category.'),
     userId: z.string().describe('The Firebase UID of the user.'),
 });
 
@@ -40,9 +41,8 @@ const learnCategoryMappingFlow = ai.defineFlow(
     try {
       // 1. Initialize Server-Side Admin Firestore
       const { firestore } = initializeServerFirebase();
-      const { transactionDescription, primaryCategory, secondaryCategory, subcategory, userId } = input;
+      const { transactionDescription, primaryCategory, secondaryCategory, subcategory, details, userId } = input;
       
-      // FIX: Use the user-provided description directly, without generalization.
       const keywordForMatching = transactionDescription;
 
       // Create a consistent ID based on the *exact* keyword to prevent duplicates.
@@ -57,9 +57,12 @@ const learnCategoryMappingFlow = ai.defineFlow(
         .set({
           userId,
           transactionDescription: keywordForMatching, // The keyword for matching
-          primaryCategory,
-          secondaryCategory,
-          subcategory,
+          categoryHierarchy: {
+            l0: primaryCategory,
+            l1: secondaryCategory,
+            l2: subcategory,
+            l3: details,
+          },
           source: 'User Manual',
           updatedAt: new Date(), 
       }, { merge: true });

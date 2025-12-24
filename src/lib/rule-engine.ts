@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { db } from '@/lib/admin-db';
@@ -7,60 +6,35 @@ import { createHash } from 'crypto';
 
 /**
  * Creates or updates a specific categorization rule in Firestore.
- * Now prepends the property nickname and optional unit number to the subcategory.
- * @param userId - The user's ID.
- * @param keyword - The keyword to match in a transaction.
- * @param categories - The base category mapping.
- * @param propertyId - The associated property ID.
- * @param propertyNickname - The nickname of the property for descriptive categories.
- * @param unitId - The associated unit ID (optional).
- * @param unitNumber - The specific unit number (optional).
+ * Saves the new 4-level category hierarchy.
  */
 async function setRule(
   userId: string,
   keyword: string,
-  categories: { primary: string; secondary: string; sub: string },
-  propertyId: string,
-  propertyNickname: string,
-  unitId?: string | null,
-  unitNumber?: string | null
+  categories: { l0: string; l1: string; l2: string; l3: string },
+  propertyId: string
 ) {
   if (!keyword) return;
 
-  const idContent = `${userId}-${keyword}-${propertyId}` + (unitId ? `-${unitId}` : '');
+  const idContent = `${userId}-${keyword}-${propertyId}`;
   const mappingId = createHash('md5').update(idContent.toUpperCase()).digest('hex');
   
   const ruleRef = db.collection('users').doc(userId).collection('categoryMappings').doc(mappingId);
 
-  // Construct the descriptive subcategory
-  const subcategoryPrefix = unitNumber 
-    ? `${propertyNickname} ${unitNumber}` 
-    : propertyNickname;
-  
-  const ruleData: any = {
+  const ruleData = {
     userId,
     transactionDescription: keyword,
-    primaryCategory: categories.primary,
-    secondaryCategory: categories.secondary,
-    subcategory: `${subcategoryPrefix} - ${categories.sub}`, // New format
+    categoryHierarchy: categories, // Save the new object
     propertyId: propertyId,
     source: 'Auto-Generated',
     updatedAt: new Date(),
   };
 
-  if (unitId) {
-    ruleData.unitId = unitId;
-  }
-
   await ruleRef.set(ruleData, { merge: true });
 }
 
 /**
- * Generates categorization rules from property data, aligned with IRS Schedule E.
- * Differentiates between single-family and multi-family properties.
- * @param propertyId - The ID of the property.
- * @param propertyData - The full property data object.
- * @param userId - The ID of the user who owns the property.
+ * Generates categorization rules from property data, aligned with the new 4-level hierarchy.
  */
 export async function generateRulesForProperty(propertyId: string, propertyData: any, userId: string) {
   if (!propertyId || !userId) {
@@ -68,126 +42,120 @@ export async function generateRulesForProperty(propertyId: string, propertyData:
   }
 
   try {
-    const isMultiUnit = propertyData.isMultiUnit === true;
     const propertyNickname = propertyData.name;
     const propertyAddress = propertyData.address?.street;
 
     if (!propertyNickname) {
-        console.warn(`Skipping rule generation for property ${propertyId} because it has no nickname.`);
-        return;
+      console.warn(`Skipping rule generation for property ${propertyId} because it has no nickname.`);
+      return;
     }
 
-    // Rule for the property nickname itself, often used in manual Zelle/Venmo notes.
+    // Rule for the property nickname itself
     await setRule(userId, propertyNickname, {
-        primary: 'Income',
-        secondary: 'Rental Income',
-        sub: 'Rents Received'
-    }, propertyId, propertyNickname);
+      l0: 'Income',
+      l1: 'Rental Income',
+      l2: 'Line 3: Rents Received',
+      l3: propertyNickname
+    }, propertyId);
     
-    // Rule for the property address, often found in mortgage or utility payments.
+    // Rule for the property address
     if (propertyAddress) {
-        await setRule(userId, propertyAddress, {
-            primary: 'Expenses',
-            secondary: 'Property Operations', // A general bucket for address matches
-            sub: 'Unassigned Property Expense'
-        }, propertyId, propertyNickname);
+      await setRule(userId, propertyAddress, {
+        l0: 'Expense',
+        l1: 'Property Operations',
+        l2: 'Line 19: Other Expenses', // Default for a general address match
+        l3: propertyNickname
+      }, propertyId);
     }
-
-    // --- SCHEDULE E: EXPENSE RULES ---
 
     // Mortgage Interest
     if (propertyData.mortgage?.lenderName) {
       await setRule(userId, propertyData.mortgage.lenderName, {
-        primary: 'Expenses',
-        secondary: 'Mortgage Interest',
-        sub: 'Mortgage Interest Paid'
-      }, propertyId, propertyNickname);
+        l0: 'Expense',
+        l1: 'Financing',
+        l2: 'Line 12: Mortgage Interest',
+        l3: propertyNickname
+      }, propertyId);
     }
 
     // Insurance
     if (propertyData.taxAndInsurance?.insuranceProvider) {
       await setRule(userId, propertyData.taxAndInsurance.insuranceProvider, {
-        primary: 'Expenses',
-        secondary: 'Insurance',
-        sub: 'Property Insurance Premiums'
-      }, propertyId, propertyNickname);
+        l0: 'Expense',
+        l1: 'Insurance',
+        l2: 'Line 9: Insurance',
+        l3: propertyNickname
+      }, propertyId);
     }
     
     // Management Fees
     if (propertyData.management?.isManaged === 'professional' && propertyData.management.companyName) {
       await setRule(userId, propertyData.management.companyName, {
-          primary: 'Expenses',
-          secondary: 'Management Fees',
-          sub: 'Property Management Fees'
-      }, propertyId, propertyNickname);
+        l0: 'Expense',
+        l1: 'Management',
+        l2: 'Line 10: Professional Fees',
+        l3: propertyNickname
+      }, propertyId);
     }
 
     // Utilities
     if (propertyData.utilities && Array.isArray(propertyData.utilities)) {
-        for (const util of propertyData.utilities) {
-            if (util.providerName) {
-                await setRule(userId, util.providerName, {
-                    primary: 'Expenses',
-                    secondary: 'Utilities',
-                    sub: util.type 
-                }, propertyId, propertyNickname);
-            }
+      for (const util of propertyData.utilities) {
+        if (util.providerName) {
+          await setRule(userId, util.providerName, {
+            l0: 'Expense',
+            l1: 'Utilities',
+            l2: 'Line 17: Utilities',
+            l3: `${propertyNickname} - ${util.type}`
+          }, propertyId);
         }
+      }
     }
     
-    // Repairs, Maintenance, and Vendors
+    // Vendors
     if (propertyData.preferredVendors && Array.isArray(propertyData.preferredVendors)) {
-        for (const vendor of propertyData.preferredVendors) {
-            let subCat = 'General Repairs';
-            if (vendor.role?.toLowerCase().includes('clean') || vendor.role?.toLowerCase().includes('maint')) {
-                subCat = 'Cleaning & Maintenance';
-            } else if (vendor.role?.toLowerCase().includes('plumber') || vendor.role?.toLowerCase().includes('electric')) {
-                subCat = 'Plumbing & Electrical';
-            }
-
-            if (vendor.name) {
-                await setRule(userId, vendor.name, {
-                    primary: 'Expenses',
-                    secondary: 'Repairs',
-                    sub: subCat
-                }, propertyId, propertyNickname);
-            }
+      for (const vendor of propertyData.preferredVendors) {
+        if (vendor.name) {
+          await setRule(userId, vendor.name, {
+            l0: 'Expense',
+            l1: 'Repairs',
+            l2: 'Line 14: Repairs',
+            l3: `${propertyNickname} - ${vendor.role || 'General'}`
+          }, propertyId);
         }
+      }
     }
     
     // HOA Dues
     if (propertyData.hoa?.hasHoa === 'yes' && propertyData.hoa.contactName) {
-        await setRule(userId, propertyData.hoa.contactName, {
-            primary: 'Expenses',
-            secondary: 'Dues & Fees',
-            sub: 'HOA Dues'
-        }, propertyId, propertyNickname);
+      await setRule(userId, propertyData.hoa.contactName, {
+        l0: 'Expense',
+        l1: 'HOA',
+        l2: 'Line 19: Other Expenses',
+        l3: `${propertyNickname} HOA`
+      }, propertyId);
     }
 
-    // --- SCHEDULE E: INCOME RULES (TENANTS) ---
-    const processTenants = (tenants: any[], propertyNickname: string, unitId?: string, unitNumber?: string) => {
-        if (tenants && Array.isArray(tenants)) {
-            for (const tenant of tenants) {
-                if (tenant.firstName && tenant.lastName) {
-                    const fullName = `${tenant.firstName} ${tenant.lastName}`;
-                    setRule(userId, fullName, {
-                        primary: 'Income',
-                        secondary: 'Rental Income',
-                        sub: 'Rents Received'
-                    }, propertyId, propertyNickname, unitId, unitNumber);
-                }
-            }
+    // Tenant Income Rules
+    const processTenants = (tenants: any[], propertyNickname: string) => {
+      if (tenants && Array.isArray(tenants)) {
+        for (const tenant of tenants) {
+          if (tenant.firstName && tenant.lastName) {
+            const fullName = `${tenant.firstName} ${tenant.lastName}`;
+            setRule(userId, fullName, {
+              l0: 'Income',
+              l1: 'Rental Income',
+              l2: 'Line 3: Rents Received',
+              l3: `${propertyNickname} - ${fullName}`
+            }, propertyId);
+          }
         }
+      }
     };
     
-    if (isMultiUnit && propertyData.units) {
-      propertyData.units.forEach((unit: any) => processTenants(unit.tenants, propertyNickname, unit.id, unit.unitNumber));
-    } else {
-      processTenants(propertyData.tenants, propertyNickname);
-    }
+    processTenants(propertyData.tenants, propertyNickname);
 
-
-    return { success: true, message: 'Schedule E rules generated successfully.' };
+    return { success: true, message: '4-level rules generated successfully.' };
 
   } catch (error: any) {
     console.error("Failed to generate rules:", error);
