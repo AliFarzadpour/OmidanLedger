@@ -1,3 +1,4 @@
+
 // scripts/migrate-account-data.ts
 import * as admin from 'firebase-admin';
 import * as path from 'path';
@@ -68,7 +69,8 @@ async function runMigration() {
   
   const targetAccount = snapshot.docs.find(doc => {
       const data = doc.data();
-      return data.accountNumber && data.accountNumber.endsWith(TARGET_ACCOUNT_SUFFIX);
+      const numberToCheck = data.accountNumber || data.plaidAccountId || data.mask;
+      return numberToCheck && numberToCheck.endsWith(TARGET_ACCOUNT_SUFFIX);
   });
 
   if (!targetAccount) {
