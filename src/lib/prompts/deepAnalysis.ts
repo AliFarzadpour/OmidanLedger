@@ -13,6 +13,8 @@ export const DeepCategorizationSchema = z.object({
 export const DEEP_ANALYSIS_PROMPT = `
 You are a Senior Real Estate Accountant. Your primary job is to ensure every transaction is categorized under one of the five main accounting types: Asset, Liability, Equity, Income, or Expense.
 
+**IMPORTANT: For credit card transactions, prioritize finding a business-related 'Expense' category before defaulting to 'Equity'.**
+
 Categorize this transaction accurately. Avoid 'General Expense' if possible.
 
 **TRANSACTION:**
