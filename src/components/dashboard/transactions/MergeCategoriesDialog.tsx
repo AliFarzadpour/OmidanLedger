@@ -180,7 +180,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                       <Checkbox id={cat.id} onCheckedChange={() => handleFromToggle(cat.id)} />
                       <label htmlFor={cat.id} className="text-xs leading-tight cursor-pointer">
                         <span className="font-medium text-slate-800">{cat.primary}</span>
-                        <span className="text-slate-500"> > {cat.secondary} > {cat.sub} > {cat.details}</span>
+                        <span className="text-slate-500"> &gt; {cat.secondary} &gt; {cat.sub} &gt; {cat.details}</span>
                       </label>
                     </div>
                   ))}
@@ -223,7 +223,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                         <RadioGroupItem value={cat.id} id={`to-${cat.id}`} />
                         <Label htmlFor={`to-${cat.id}`} className="cursor-pointer text-xs leading-tight">
                            <span className="font-medium text-slate-800">{cat.primary}</span>
-                           <span className="text-slate-500"> > {cat.secondary} > {cat.sub} > {cat.details}</span>
+                           <span className="text-slate-500"> &gt; {cat.secondary} &gt; {cat.sub} &gt; {cat.details}</span>
                         </Label>
                       </div>
                     ))}
