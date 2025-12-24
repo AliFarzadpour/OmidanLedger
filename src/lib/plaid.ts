@@ -66,22 +66,6 @@ interface UserContext {
   }>;
 }
 
-// 1. ROBUST SANITIZER
-function sanitizeVendorId(text: string): string {
-  if (!text) return 'UNKNOWN_VENDOR';
-  // Remove common suffixes and prefixes, asterisks, and truncate at the first sign of a transaction ID
-  const cleaned = text.toUpperCase()
-    .replace(/\s+(LLC|INC|CORP|LTD)\.?$/g, '')
-    .replace(/^(SQ|TST)\*/, '')
-    .replace(/\*.*$/, '') // Remove everything after a star, often indicating a terminal ID
-    .replace(/#\d+$/, '') // Remove trailing numbers like #1234
-    .trim();
-
-  return cleaned
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "") // Remove most special characters
-    .replace(/\s+/g, '_'); // Replace spaces with underscores
-}
-
 export async function getCategoryFromDatabase(
   merchantName: string, 
   context: UserContext,
@@ -92,10 +76,9 @@ export async function getCategoryFromDatabase(
   const desc = merchantName.toUpperCase();
   
   // --- A. CHECK USER RULES (IN-MEMORY) - Priority 1 ---
-  // Find the most specific rule that matches
   const matchedRule = context.userRules
       .filter(rule => desc.includes(rule.keyword))
-      .sort((a, b) => b.keyword.length - a.keyword.length)[0]; // Longest match wins
+      .sort((a, b) => b.keyword.length - a.keyword.length)[0]; 
 
   if (matchedRule) {
       return { 
@@ -111,7 +94,6 @@ export async function getCategoryFromDatabase(
       const globalRulesSnap = await db.collection('globalVendorMap').get();
       const globalRules = globalRulesSnap.docs.map(doc => ({id: doc.id, ...doc.data()}));
 
-      // Find the most specific global rule that matches
       const matchedGlobalRule = globalRules
         .filter(rule => rule.originalKeyword && desc.includes(rule.originalKeyword.toUpperCase()))
         .sort((a,b) => b.originalKeyword.length - a.originalKeyword.length)[0];
@@ -119,12 +101,7 @@ export async function getCategoryFromDatabase(
       if (matchedGlobalRule) {
           const data = matchedGlobalRule;
           return { 
-              categoryHierarchy: {
-                  l0: data.primary,
-                  l1: data.secondary,
-                  l2: data.sub,
-                  l3: data.details || '' 
-              },
+              categoryHierarchy: data.categoryHierarchy,
               confidence: 0.95, 
               source: 'Global DB' 
           };
@@ -197,27 +174,6 @@ export async function fetchUserContext(db: FirebaseFirestore.Firestore, userId: 
   return context;
 }
 
-export async function categorizeBatchWithAI(
-  transactions: PlaidTransaction[], 
-  userContext: UserContext
-) {
-  const txListString = transactions.map(t => 
-    `ID: ${t.transaction_id} | Date: ${t.date} | Desc: "${t.name}" | Amount: ${t.amount}`
-  ).join('\n');
-
-  const llmResponse = await ai.generate({
-    prompt: CATEGORIZATION_SYSTEM_PROMPT
-      .replace('{{industry}}', userContext.business.industry)
-      .replace('{{tenantNames}}', userContext.tenantNames.join(', '))
-      .replace('{{vendorNames}}', Object.keys(userContext.vendorMap).join(', '))
-      .replace('{{propertyAddresses}}', userContext.propertyAddresses.join(', ')),
-    input: txListString,
-    output: { schema: BatchCategorizationSchema }
-  });
-
-  return llmResponse.output?.results || [];
-}
-
 export async function categorizeWithHeuristics(
   description: string, 
   amount: number, 
@@ -231,7 +187,7 @@ export async function categorizeWithHeuristics(
   const plaidDetailed = (plaidCategory?.detailed || '').toUpperCase();
   
   // LAW #1: Handle Credit Card Payments (from both sides of the transaction)
-  if (amount > 0 && (plaidPrimary === 'TRANSFER_IN' && plaidDetailed.includes('CREDIT_CARD_PAYMENT')) || desc.includes('PAYMENT THANK YOU') || desc.includes('PAYMENT RECEIVED')) {
+  if (amount > 0 && (plaidPrimary === 'TRANSFER_IN' && plaidDetailed.includes('CREDIT_CARD_PAYMENT')) || desc.includes('PAYMENT RECEIVED') || desc.includes('PAYMENT THANK YOU')) {
     return { l0: 'Liability', l1: 'CC Payment', l2: 'Internal Transfer', l3: 'Credit Card Payment', confidence: 1.0 };
   }
   if (amount < 0 && (desc.includes('PAYMENT - THANK YOU') || desc.includes('PAYMENT RECEIVED, THANK') || desc.includes('ONLINE PAYMENT') || desc.includes('BANK OF AMERICA BUSINESS CARD') || desc.includes('BARCLAYCARD US') || desc.includes('CITI AUTOPAY'))) {
@@ -275,7 +231,7 @@ export async function categorizeWithHeuristics(
       }
        if (plaidPrimary === 'PERSONAL_CARE' || plaidPrimary === 'GENERAL_MERCHANDISE') {
         if (plaidDetailed.includes('CLOTHING') || plaidDetailed.includes('BEAUTY') || plaidDetailed.includes('GYM') || plaidDetailed.includes('SPORTING')) {
-            return { l0: 'Equity', l1: 'Owner Distribution', l2: 'Personal Draw', l3: 'Personal Spending', confidence: 0.9 };
+            return { l0: 'Equity', l1: 'Owner Distribution', l2: 'Non-Deductible', l3: 'Personal Spending', confidence: 0.9 };
         }
     }
     if (plaidPrimary === 'TRAVEL') {
@@ -433,7 +389,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                                     l0: deepResult.primaryCategory,
                                     l1: deepResult.secondaryCategory,
                                     l2: deepResult.subcategory,
-                                    l3: '',
+                                    l3: deepResult.merchantName, // Use merchant as detail
                                 },
                                 confidence: deepResult.confidence,
                                 aiExplanation: deepResult.reasoning,
@@ -605,3 +561,5 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
+
+    

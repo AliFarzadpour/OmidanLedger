@@ -27,9 +27,10 @@ import { BatchEditDialog } from './transactions/batch-edit-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
   'Expense': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Balance Sheet': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'Equity': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  'Liability': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'Asset': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 interface DataSource {
@@ -435,61 +436,55 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
 
 function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
-    const cats = transaction.categoryHierarchy;
+    const cats = transaction.categoryHierarchy || { l0: '', l1: '', l2: '', l3: '' };
     
     const [primary, setPrimary] = useState(cats.l0);
     const [secondary, setSecondary] = useState(cats.l1);
     const [sub, setSub] = useState(cats.l2);
     const [details, setDetails] = useState(cats.l3);
 
-    const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit' | 'thankYouPayment', isOpen: boolean }>({ type: 'none', isOpen: false });
-
-    const finalizeSave = (cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => {
-        onSave(transaction, cats);
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const newCats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details };
+        onSave(transaction, newCats);
         setIsOpen(false);
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const cats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details };
-        finalizeSave(cats);
-    };
-
     return (
-        <>
-            <Popover open={isOpen} onOpenChange={setIsOpen}>
-                <PopoverTrigger asChild>
-                    <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0] || 'bg-slate-100')}>
-                            {cats.l0}
-                            <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
-                        </Badge>
-                        <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {cats.l1} {'>'} {cats.l2}
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverTrigger asChild>
+                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
+                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0] || 'bg-slate-100')}>
+                        {cats.l0}
+                        <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                    </Badge>
+                    <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                        {cats.l1} {'>'} {cats.l2}
+                    </span>
+                    {cats.l3 && (
+                         <span className="text-xs text-muted-foreground pl-1 font-medium">
+                            {cats.l3}
                         </span>
-                        {cats.l3 && (
-                             <span className="text-xs text-muted-foreground pl-1 font-medium">
-                                {cats.l3}
-                            </span>
-                        )}
+                    )}
+                </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+                <form onSubmit={handleSubmit} className="grid gap-4">
+                    <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Edit Category</h4>
+                        <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
                     </div>
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                    <form onSubmit={handleSubmit} className="grid gap-4">
-                        <div className="space-y-2">
-                            <h4 className="font-medium leading-none">Edit Category</h4>
-                            <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
-                        </div>
-                        <div className="grid gap-2">
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">L0</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">L1</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">L2</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
-                             <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">L3</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
-                        </div>
-                        <Button type="submit">Confirm & Save</Button>
-                    </form>
-                </PopoverContent>
-            </Popover>
-        </>
+                    <div className="grid gap-2">
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">L0</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">L1</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">L2</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
+                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">L3</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
+                    </div>
+                    <Button type="submit">Confirm & Save</Button>
+                </form>
+            </PopoverContent>
+        </Popover>
     );
 }
+
+    

@@ -1,4 +1,5 @@
 
+
 // scripts/seedGlobalRules.ts
 import * as admin from 'firebase-admin';
 import * as path from 'path';
@@ -17,49 +18,54 @@ const db = admin.firestore();
 // 2. Define the Master List (The "Universal Truths") - Now aligned with 4-level schema
 const globalRules = [
   // --- DINING & MEALS ---
-  { keywords: ['STARBUCKS', 'MCDONALD', 'CHICK-FIL-A', 'IN-N-OUT', 'DUNKIN', 'CHUY', 'CHEESECAKE', 'BRAUMS', 'ROADHOUSE', 'WHATABURGER', 'PANERA', 'DENNY', 'WENDY', 'BURGER KING', 'TACO BELL', 'TB REST', 'TB RET', 'MISSION RANCH MARKET', 'SAIZERIYA', 'SHAKE SHACK', 'PIZZA GUYS', 'THE COFFEE COMPANY', 'URTH CAFFE', 'MAGGIANOS'], 
-    primary: 'Expense', secondary: 'Meals', sub: 'Line 19 Other', details: 'Business Meals' },
-  
-  // --- PERSONAL / RETAIL ---
-  { keywords: ['TJ MAXX', 'MACY', 'NORDSTROM', 'DILLARD', 'MARSHALLS', 'ROSS', 'H&M', 'ZARA', 'UNIQLO', 'SKECHERS', 'NIKE', 'ADIDAS', 'LULULEMON', 'SEPHORA', 'ULTA', 'CALVIN', 'NAUTICA', 'COLUMBIA', 'STONEBRIAR', 'BEYOND CLIPS', 'SAFFRON & ROSE ICE CRE', 'CA PARKS YODEL PARK'], 
-    primary: 'Equity', secondary: "Owner Distribution", sub: 'Personal Draw', details: 'Personal Spending' },
+  { keywords: ['STARBUCKS', 'MCDONALD', 'CHICK-FIL-A', 'IN-N-OUT', 'DUNKIN', 'CHUY', 'CHEESECAKE', 'BRAUMS', 'ROADHOUSE', 'WHATABURGER', 'PANERA', 'DENNY', 'WENDY', 'BURGER KING', 'TACO BELL', 'TB REST', 'TB RET', 'SHAKE SHACK', 'PIZZA GUYS', 'THE COFFEE COMPANY'], 
+    categoryHierarchy: { l0: 'Expense', l1: 'Meals', l2: 'Line 19: Other', l3: 'Business Meals' } },
+  { keywords: ['MAGGIANOS'],
+    categoryHierarchy: { l0: 'Expense', l1: 'Meals', l2: 'Line 19: Other', l3: 'Business Dining' } },
 
+  // --- PERSONAL / RETAIL ---
+  { keywords: ['TJ MAXX', 'MACY', 'NORDSTROM', 'DILLARD', 'MARSHALLS', 'ROSS', 'H&M', 'ZARA', 'UNIQLO', 'SKECHERS', 'NIKE', 'ADIDAS', 'LULULEMON', 'SEPHORA', 'ULTA', 'CALVIN', 'NAUTICA', 'COLUMBIA', 'BEYOND CLIPS'], 
+    categoryHierarchy: { l0: 'Equity', l1: 'Owner Distribution', l2: 'Non-Deductible', l3: 'Personal Apparel' } },
+  { keywords: ['URTH CAFFE', 'SAFFRON & ROSE ICE CRE'],
+    categoryHierarchy: { l0: 'Equity', l1: 'Owner Distribution', l2: 'Non-Deductible', l3: 'Personal Food' } },
+  { keywords: ['CA PARKS YODEL PARK', 'STONEBRIAR'], // Stonebriar is a mall
+    categoryHierarchy: { l0: 'Equity', l1: 'Owner Distribution', l2: 'Non-Deductible', l3: 'Personal Entertainment' } },
+  
   // --- OFFICE, REPAIRS, & SUPPLIES ---
   { keywords: ['OFFICE DEPOT', 'STAPLES'], 
-    primary: 'Expense', secondary: 'Supplies', sub: 'Line 15 Supplies', details: 'Office Supplies' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Office Admin', l2: 'Line 15: Supplies', l3: 'Office Supplies' } },
   { keywords: ['HOME DEPOT', 'LOWES', 'MICRO CENTER'], 
-    primary: 'Expense', secondary: 'Repairs', sub: 'Line 14 Repairs', details: 'Materials & Supplies' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Repairs', l2: 'Line 14: Repairs', l3: 'Materials & Supplies' } },
   { keywords: ['AMAZON', 'WALMART', 'TARGET', 'COSTCO', 'SAMS CLUB'], 
-    primary: 'Expense', secondary: 'Supplies', sub: 'Line 15 Supplies', details: 'General Supplies' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Office Admin', l2: 'Line 15: Supplies', l3: 'General Supplies' } },
 
   // --- SOFTWARE & SUBSCRIPTIONS ---
   { keywords: ['OPENAI', 'CHATGPT', 'DIGITALOCEAN', 'GODADDY', 'NAME-CHEAP', 'ADOBE', 'INTUIT', 'GOOGLE', 'MICROSOFT', 'VPN', 'ESIGN', 'TRADE IDEAS', 'GSUITE', 'AWS', 'CLOUD', 'INVIDEO', 'ADROLL', 'AMAZON PRIME'], 
-    primary: 'Expense', secondary: 'General & Administrative', sub: 'Line 19 Other', details: 'Software & Subscriptions' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Office Admin', l2: 'Line 19: Other', l3: 'Software & Subscriptions' } },
 
   // --- TRAVEL & TRANSPORTATION ---
   { keywords: ['TRIP.COM', 'EXPEDIA', 'KLOOK', 'AGODA', 'AIRBNB', 'HOTEL', 'INN', 'LODGE', 'RESORT', 'HILTON', 'SHERATON', 'MARRIOTT', 'HYATT', 'WESTIN', 'FAIRMONT', 'SIXT', 'HERTZ', 'AVIS', 'BUDGET', 'ENTERPRISE', 'TRAVELOCITY', 'WISECARS'], 
-    primary: 'Expense', secondary: 'Travel', sub: 'Line 6 Auto & Travel', details: 'Travel & Lodging' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Travel & Lodging' } },
   { keywords: ['AMERICAN AIR', 'DELTA', 'UNITED', 'SOUTHWEST', 'FRONTIER A', 'FRONTIER K', 'AMERICAN 00122'],
-    primary: 'Expense', secondary: 'Travel', sub: 'Line 6 Auto & Travel', details: 'Airfare' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Airfare' } },
   { keywords: ['NTTA'],
-    primary: 'Expense', secondary: 'Travel', sub: 'Line 6 Auto & Travel', details: 'Tolls'},
+    categoryHierarchy: { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Tolls'}},
   { keywords: ['SAN CLEMENTE PARKING'],
-    primary: 'Expense', secondary: 'Travel', sub: 'Line 6 Auto & Travel', details: 'Parking'},
+    categoryHierarchy: { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Parking'}},
 
   // --- UTILITIES & GOVERNMENT ---
   { keywords: ['CITY OF', 'TOWN OF', 'WATER', 'ELECTRIC', 'POWER', 'ATMOS', 'WASTE', 'TRASH', 'FRONTIER', 'VERIZON', 'AT&T', 'T-MOBILE'], 
-    primary: 'Expense', secondary: 'Utilities', sub: 'Line 17 Utilities', details: 'General Utilities' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Utilities', l2: 'Line 17: Utilities', l3: 'General Utilities' } },
   { keywords: ['CITITURF', 'CITY OF LAGUNA BEACH'],
-    primary: 'Expense', secondary: 'Taxes', sub: 'Line 16 Taxes', details: 'Municipal Fees' },
+    categoryHierarchy: { l0: 'Expense', l1: 'Taxes', l2: 'Line 16: Taxes', l3: 'Municipal Fees' } },
   
   // --- MARKETING ---
   { keywords: ['ADS9577534252'], // Example of an opaque ad network ID
-    primary: 'Expense', secondary: 'Marketing', sub: 'Line 5 Advertising', details: 'Digital Ads' },
-
+    categoryHierarchy: { l0: 'Expense', l1: 'Marketing', l2: 'Line 5: Advertising', l3: 'Digital Ads' } },
 
   // --- FUEL ---
   { keywords: ['SHELL', 'EXXON', 'CHEVRON', 'QT', 'QUIKTRIP', '7-ELEVEN', 'RACETRAC', 'CIRCLE K', 'PHILLIPS 66', 'CONOCO', 'CENEX'], 
-    primary: 'Expense', secondary: 'Travel', sub: 'Line 6 Auto & Travel', details: 'Fuel' }
+    categoryHierarchy: { l0: 'Expense', l1: 'Travel', l2: 'Line 6: Auto & Travel', l3: 'Fuel' } }
 ];
 
 async function seedDatabase() {
@@ -78,11 +84,8 @@ async function seedDatabase() {
         // Use the new 4-level structure
         batch.set(docRef, {
             originalKeyword: keyword,
-            primary: group.primary,     // L0
-            secondary: group.secondary, // L1
-            sub: group.sub,             // L2 (Tax Line)
-            details: group.details,     // L3 (Detail)
-            source: 'global_seed_v2'
+            categoryHierarchy: group.categoryHierarchy,
+            source: 'global_seed_v3'
         }, { merge: true }); // Use merge to avoid overwriting user custom rules
     }
   }
@@ -92,3 +95,5 @@ async function seedDatabase() {
 }
 
 seedDatabase().catch(console.error);
+
+    

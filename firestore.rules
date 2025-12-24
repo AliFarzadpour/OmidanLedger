@@ -24,10 +24,9 @@ service cloud.firestore {
     // VALIDATION: Enforce the 4-level category structure for all transactions
     function hasValidCategoryHierarchy(data) {
         return 'categoryHierarchy' in data &&
-               'l0' in data.categoryHierarchy && data.categoryHierarchy.l0 is string &&
+               'l0' in data.categoryHierarchy && data.categoryHierarchy.l0 is string && data.categoryHierarchy.l0 in ['Asset', 'Liability', 'Equity', 'Income', 'Expense'] &&
                'l1' in data.categoryHierarchy && data.categoryHierarchy.l1 is string &&
-               'l2' in data.categoryHierarchy && data.categoryHierarchy.l2 is string &&
-               'l3' in data.categoryHierarchy && data.categoryHierarchy.l3 is string;
+               'l2' in data.categoryHierarchy && data.categoryHierarchy.l2 is string;
     }
 
     match /users/{userId} {
@@ -131,3 +130,5 @@ service firebase.storage {
     }
   }
 }
+
+    

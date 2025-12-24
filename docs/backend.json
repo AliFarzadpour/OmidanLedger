@@ -228,11 +228,11 @@
                     "description": "L0: Top-level account type.",
                     "enum": ["Asset", "Liability", "Equity", "Income", "Expense"]
                 },
-                "l1": { "type": "string", "description": "L1: Category Group (e.g., 'Rent & Utilities', 'Personal Expenses', 'Financial')." },
-                "l2": { "type": "string", "description": "L2: Tax Line (e.g., 'Line 17: Utilities')." },
+                "l1": { "type": "string", "description": "L1: Category Group (e.g., 'Rental Income', 'Property Operations', 'Financing')." },
+                "l2": { "type": "string", "description": "L2: Tax Line (e.g., 'Line 17: Utilities', 'Line 14: Repairs')." },
                 "l3": { "type": "string", "description": "L3: Specific Detail (e.g., 'Electricity', 'Software', 'Fuel')." }
             },
-            "required": ["l0", "l1", "l2", "l3"]
+            "required": ["l0", "l1", "l2"]
         },
         "primaryCategory": { "type": "string", "description": "DEPRECATED: Use categoryHierarchy.l0" },
         "secondaryCategory": { "type": "string", "description": "DEPRECATED: Use categoryHierarchy.l1" },
@@ -715,3 +715,5 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
+
+    
