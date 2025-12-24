@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -139,6 +140,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         primaryCategory: newCategories.primaryCategory,
         secondaryCategory: newCategories.secondaryCategory,
         subcategory: newCategories.subcategory,
+        details: newCategories.details,
         userId: user.uid,
     });
     toast({ title: "Updated", description: "Category saved and rule learned." });
@@ -248,7 +250,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         
         <CardContent>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-4">
             <TransactionToolbar 
                 onSearch={setFilterTerm}
                 onDateChange={setFilterDate}
@@ -257,14 +259,17 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); setStatusFilter([]); }}
             />
             {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-50">
+                <div className="flex-grow">
+                    <span className="font-semibold text-blue-800">{selectedIds.length}</span> items selected.
+                </div>
                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setBatchEditDialogOpen(true)}
                   >
                     <Edit className="mr-2 h-4 w-4" />
-                    Batch Edit ({selectedIds.length})
+                    Batch Edit
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
