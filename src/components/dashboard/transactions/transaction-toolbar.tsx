@@ -1,3 +1,4 @@
+
 'use client';
 
 import * as React from 'react';
@@ -10,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { ChartOfAccountsDialog } from './ChartOfAccountsDialog';
 import { MergeCategoriesDialog } from './MergeCategoriesDialog';
 
 interface TransactionToolbarProps {
@@ -32,7 +32,6 @@ export function TransactionToolbar({
   const [searchTerm, setSearchTerm] = React.useState('');
   const [category, setCategory] = React.useState('all');
   const [statusFilters, setStatusFilters] = React.useState<string[]>([]);
-  const [isChartOfAccountsOpen, setIsChartOfAccountsOpen] = React.useState(false);
   const [isMergeToolOpen, setIsMergeToolOpen] = React.useState(false);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,16 +151,6 @@ export function TransactionToolbar({
             </DropdownMenuContent>
         </DropdownMenu>
 
-        <Button 
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => setIsChartOfAccountsOpen(true)}
-        >
-            <BookUser className="mr-2 h-4 w-4" />
-            Chart of Accounts
-        </Button>
-
         <Button
             variant="outline"
             size="sm"
@@ -180,7 +169,6 @@ export function TransactionToolbar({
         )}
       </div>
     </div>
-    <ChartOfAccountsDialog isOpen={isChartOfAccountsOpen} onOpenChange={setIsChartOfAccountsOpen} />
     <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} />
     </>
   );
