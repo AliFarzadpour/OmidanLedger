@@ -1,11 +1,10 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
 import { format, startOfMonth } from 'date-fns';
 import { collectionGroup, query, where, orderBy, Timestamp } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -61,73 +60,73 @@ export function ProfitAndLossReport() {
     }
   }, [mounted]);
 
-  const transactionsQuery = useMemo(() => {
+  // --- REFACTORED DATA FETCHING ---
+  const incomeQuery = useMemoFirebase(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
-    
-    // Use format to create strings like "2025-02-27" to match your DB
     const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
     const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
-  
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
+      where('categoryHierarchy.l0', '==', 'Income'),
       where('date', '>=', startDate),
       where('date', '<=', endDate),
-      orderBy('date', 'asc') // FIX: Changed to 'asc' to match Firestore index
+      orderBy('date', 'asc')
     );
   }, [user, firestore, activeDateRange]);
 
-  const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
-  
-  useEffect(() => {
-    if (error) {
-      console.log("--- FIRESTORE ERROR DETECTED ---");
-      console.log("Code:", error.code);
-      console.log("Message:", error.message);
-    }
-  }, [error]);
+  const expenseQuery = useMemoFirebase(() => {
+    if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
+    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
+    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
+    return query(
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', user.uid),
+      where('categoryHierarchy.l0', 'in', ['Expense', 'Expenses']),
+      where('date', '>=', startDate),
+      where('date', '<=', endDate),
+      orderBy('date', 'asc')
+    );
+  }, [user, firestore, activeDateRange]);
+
+  const { data: incomeTransactions, isLoading: isLoadingIncome, error: incomeError } = useCollection<Transaction>(incomeQuery);
+  const { data: expenseTransactions, isLoading: isLoadingExpenses, error: expenseError } = useCollection<Transaction>(expenseQuery);
+  // --- END REFACTORED DATA FETCHING ---
 
   const handleRunReport = () => {
     if (pendingDateRange) {
-        setActiveDateRange({ ...pendingDateRange }); // Create a new object reference
+        setActiveDateRange({ ...pendingDateRange });
     }
   };
 
   const { income, expenses, netIncome } = useMemo(() => {
-    if (!transactions) return { income: [], expenses: [], netIncome: 0 };
+    const processTransactions = (transactions: Transaction[] | null) => {
+        if (!transactions) return [];
+        const map = new Map<string, number>();
+        transactions.forEach((txn) => {
+          const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
+          map.set(l2, (map.get(l2) || 0) + txn.amount);
+        });
+        return Array.from(map, ([name, total]) => ({ name, total }));
+    };
   
-    const incomeMap = new Map<string, number>();
-    const expenseMap = new Map<string, number>();
-    let totalIncome = 0;
-    let totalExpenses = 0;
-  
-    transactions.forEach((txn) => {
-      // 1. Try to get data from the new hierarchy object first
-      // 2. Fall back to the old fields (primaryCategory and subcategory) if hierarchy is missing
-      const l0 = (txn.categoryHierarchy?.l0 || txn.primaryCategory || "").toLowerCase();
-      const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
+    const incomeItems = processTransactions(incomeTransactions);
+    const expenseItems = processTransactions(expenseTransactions);
     
-      if (l0 === 'income') {
-        totalIncome += txn.amount;
-        incomeMap.set(l2, (incomeMap.get(l2) || 0) + txn.amount);
-      } else if (l0 === 'expense' || l0 === 'expenses') {
-        totalExpenses += txn.amount;
-        expenseMap.set(l2, (expenseMap.get(l2) || 0) + txn.amount);
-      }
-    });
-  
-    const toArray = (map: Map<string, number>) => 
-      Array.from(map, ([name, total]) => ({ name, total }));
-  
+    const totalIncome = incomeItems.reduce((acc, item) => acc + item.total, 0);
+    const totalExpenses = expenseItems.reduce((acc, item) => acc + item.total, 0);
+
     return {
-      income: toArray(incomeMap),
-      expenses: toArray(expenseMap),
+      income: incomeItems,
+      expenses: expenseItems,
       netIncome: totalIncome + totalExpenses,
     };
-  }, [transactions]);
+  }, [incomeTransactions, expenseTransactions]);
 
   const totalIncome = income.reduce((acc, item) => acc + item.total, 0);
   const totalExpenses = expenses.reduce((acc, item) => acc + item.total, 0);
+  const isLoading = isLoadingIncome || isLoadingExpenses;
+  const error = incomeError || expenseError;
 
   const handleDateInputChange = (field: 'from' | 'to', value: string) => {
     const date = value ? new Date(value) : undefined;
@@ -139,10 +138,7 @@ export function ProfitAndLossReport() {
   };
 
   const renderContent = () => {
-    if (!mounted) {
-      return <Skeleton className="h-64 w-full" />;
-    }
-    if (isLoading) {
+    if (!mounted || isLoading) {
       return <Skeleton className="h-64 w-full" />;
     }
     if (error) {
@@ -152,7 +148,7 @@ export function ProfitAndLossReport() {
           <AlertTitle>Error Loading Data</AlertTitle>
           <AlertDescription>
             <p>An error occurred while fetching your financial data. This is often due to a missing Firestore index.</p>
-            <p className="font-mono text-xs mt-2 bg-slate-100 p-2 rounded">{error.message}</p>
+            <pre className="font-mono text-xs mt-2 bg-slate-100 p-2 rounded whitespace-pre-wrap">{error.message}</pre>
           </AlertDescription>
         </Alert>
       );
@@ -164,7 +160,7 @@ export function ProfitAndLossReport() {
             </p>
         );
     }
-    if (!transactions || transactions.length === 0) {
+    if (!incomeTransactions?.length && !expenseTransactions?.length) {
       return (
         <p className="py-8 text-center text-muted-foreground">
           No transaction data available for the selected period.
@@ -187,13 +183,6 @@ export function ProfitAndLossReport() {
   };
   
   const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
-
-  console.log("Current User ID:", user?.uid);
-  if(activeDateRange?.from && activeDateRange?.to) {
-    console.log("Searching from:", format(activeDateRange.from, 'yyyy-MM-dd'), "to:", format(activeDateRange.to, 'yyyy-MM-dd'));
-  }
-  console.log("Transactions Found in DB:", transactions?.length);
-
 
   return (
     <div className="space-y-6 p-4 md:p-8">
