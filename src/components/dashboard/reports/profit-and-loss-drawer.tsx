@@ -79,7 +79,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
 }
 
 
-export function ProfitAndLossDrawer({ isOpen, onOpenChange, category }: { isOpen: boolean, onOpenChange: (open: boolean) => void, category: { name: string; transactions: Transaction[] } }) {
+export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }: { isOpen: boolean, onOpenChange: (open: boolean) => void, category: { name: string; transactions: Transaction[] }, onUpdate: () => void }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -105,6 +105,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category }: { isOpen
         userId: user.uid,
     });
     toast({ title: "Updated", description: "Category saved and rule learned." });
+    onUpdate(); // Trigger the refetch on the parent component
   };
   
   return (

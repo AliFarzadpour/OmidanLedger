@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
-import { useUser, useFirestore } from '@/firebase';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useUser, useFirestore, useCollection } from '@/firebase';
 import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
 import { parseISO, isWithinInterval } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
@@ -48,51 +48,59 @@ export function ProfitAndLossReport() {
   const [selectedCategory, setSelectedCategory] = useState<{ name: string; transactions: Transaction[] } | null>(null);
 
   useEffect(() => {
+    // This effect runs once on mount to set the initial date range client-side
+    const today = new Date();
+    const from = new Date(today.getFullYear(), 0, 1); // Jan 1st of current year
+    const to = new Date(today.getFullYear(), 11, 31); // Dec 31st of current year
+
     const initialDates = {
-      from: '2025-01-01',
-      to: '2025-12-31'
+      from: from.toISOString().split('T')[0],
+      to: to.toISOString().split('T')[0]
     };
     setDates(initialDates);
     setActiveRange(initialDates);
   }, []);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!user || !firestore) return;
     setIsLoading(true);
+    setError(null);
     
-    const fetchAllData = async () => {
-        try {
-            const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
-            if (accountsSnap.empty) {
-                setAllTransactions([]);
-                setIsLoading(false);
-                return;
-            }
-
-            const transactionPromises = accountsSnap.docs.map(accountDoc => 
-                getDocs(collection(accountDoc.ref, 'transactions'))
-            );
-
-            const transactionSnapshots = await Promise.all(transactionPromises);
-            const fetchedTransactions = transactionSnapshots.flatMap(snap => 
-                snap.docs.map(d => ({...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }))
-            );
-            
-            setAllTransactions(fetchedTransactions);
-
-        } catch (e: any) {
-            console.error(e);
-            setError(e.message);
-        } finally {
+    try {
+        const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
+        if (accountsSnap.empty) {
+            setAllTransactions([]);
             setIsLoading(false);
+            return;
         }
-    };
-    fetchAllData();
+
+        const transactionPromises = accountsSnap.docs.map(accountDoc => 
+            getDocs(collection(accountDoc.ref, 'transactions'))
+        );
+
+        const transactionSnapshots = await Promise.all(transactionPromises);
+        const fetchedTransactions = transactionSnapshots.flatMap(snap => 
+            snap.docs.map(d => ({...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }))
+        );
+        
+        setAllTransactions(fetchedTransactions);
+
+    } catch (e: any) {
+        console.error(e);
+        setError(e.message);
+    } finally {
+        setIsLoading(false);
+    }
   }, [user, firestore]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
 
   const reportData = useMemo(() => {
     const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0, rows: 0, filteredRows: 0 };
-    if (!allTransactions || !activeRange.from || !activeRange.to) return empty;
+    if (!allTransactions || allTransactions.length === 0 || !activeRange.from || !activeRange.to) return empty;
   
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
@@ -120,7 +128,8 @@ export function ProfitAndLossReport() {
   
       const h = tx.categoryHierarchy || {};
       const label = h.l2 || tx.subcategory || tx.secondaryCategory || tx.primaryCategory || 'Other / Uncategorized';
-      const normalizedLabel = label.trim().replace(/^Line \d+: /, '');
+      
+      const normalizedLabel = label.trim();
 
       const amountAbs = Math.abs(rawAmount);
   
@@ -257,6 +266,7 @@ export function ProfitAndLossReport() {
         isOpen={isDrawerOpen} 
         onOpenChange={setIsDrawerOpen}
         category={selectedCategory}
+        onUpdate={fetchData}
       />
     )}
     </>
