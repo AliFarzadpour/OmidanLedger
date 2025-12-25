@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
 import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
@@ -12,6 +13,26 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+// Helper: normalize Firestore Timestamp OR string to JS Date (or null)
+function toDate(value: any): Date | null {
+  if (!value) return null;
+
+  // Firestore Timestamp
+  if (typeof value === 'object' && typeof value.toDate === 'function') {
+    return value.toDate();
+  }
+
+  // ISO date string
+  if (typeof value === 'string') {
+    // expected "YYYY-MM-DD"
+    const d = parseISO(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  return null;
+}
+
 
 export function ProfitAndLossReport() {
   const { user } = useUser();
@@ -24,57 +45,100 @@ export function ProfitAndLossReport() {
   
   const [activeRange, setActiveRange] = useState(dates);
 
+  // ✅ Query only by userId (avoid date type mismatch in Firestore query)
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore) return null;
+
+    // If you HAVE an index for (userId asc, date asc) this orderBy is fine.
+    // If it errors, temporarily remove orderBy and rely on client sorting.
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
-      where('date', '>=', activeRange.from),
-      where('date', '<=', activeRange.to),
       orderBy('date', 'asc')
     );
-  }, [user, firestore, activeRange]);
+  }, [user, firestore]);
 
   const { data: transactions, isLoading, error } = useCollection(transactionsQuery);
 
   const reportData = useMemo(() => {
-    if (!transactions) return { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
-    
-    console.log(`Report Engine: Processing ${transactions.length} total rows found.`);
+    const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0, rows: 0, filteredRows: 0 };
+    if (!transactions) return empty;
 
-    const incMap = new Map();
-    const expMap = new Map();
+    const fromD = parseISO(activeRange.from);
+    const toD = parseISO(activeRange.to);
+
+    const incMap = new Map<string, number>();
+    const expMap = new Map<string, number>();
     let totalInc = 0;
     let totalExp = 0;
 
-    transactions.forEach((tx: any) => {
-      // 1. Combine all category fields into one string to prevent missing plural/singular matches
-      const h = tx.categoryHierarchy || {};
-      const categoryPath = `${h.l0 || ''} ${h.l1 || ''} ${tx.primaryCategory || ''}`.toLowerCase();
-      
-      const label = h.l2 || tx.subcategory || "Other / Uncategorized";
-      const amount = Math.abs(Number(tx.amount) || 0);
+    let filteredRows = 0;
 
-      // 2. Broad keyword matching
-      if (categoryPath.includes('income') || categoryPath.includes('revenue')) {
-        totalInc += amount;
-        incMap.set(label, (incMap.get(label) || 0) + amount);
-      } else if (categoryPath.includes('expense')) {
-        totalExp += amount;
-        expMap.set(label, (expMap.get(label) || 0) + amount);
+    for (const tx of transactions as any[]) {
+      const d = toDate(tx.date);
+      if (!d) continue;
+
+      // ✅ filter by date range on the client
+      const inRange = isWithinInterval(d, { start: fromD, end: toD });
+      if (!inRange) continue;
+      filteredRows++;
+
+      const rawAmount = Number(tx.amount) || 0;
+
+      // ✅ classify by amount sign (most reliable)
+      // Convention: income positive, expense negative.
+      const isIncome = rawAmount > 0;
+      const isExpense = rawAmount < 0;
+
+      // Pick best label available
+      const h = tx.categoryHierarchy || {};
+      const label =
+        h.l2 ||
+        tx.subcategory ||
+        tx.secondaryCategory ||
+        tx.primaryCategory ||
+        'Other / Uncategorized';
+
+      const amountAbs = Math.abs(rawAmount);
+
+      if (isIncome) {
+        totalInc += amountAbs;
+        incMap.set(label, (incMap.get(label) || 0) + amountAbs);
+      } else if (isExpense) {
+        totalExp += amountAbs;
+        expMap.set(label, (expMap.get(label) || 0) + amountAbs);
       } else {
-        console.warn(`Row Skipped - No 'income' or 'expense' keyword in path: "${categoryPath}" for ${tx.description}`);
+        // amount == 0 -> ignore
       }
-    });
+    }
+
+    const income = Array.from(incMap, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    const expenses = Array.from(expMap, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
 
     return {
-      income: Array.from(incMap, ([name, total]) => ({ name, total })),
-      expenses: Array.from(expMap, ([name, total]) => ({ name, total })),
+      income,
+      expenses,
       totalInc,
       totalExp,
-      net: totalInc - totalExp 
+      net: totalInc - totalExp,
+      rows: (transactions as any[]).length,
+      filteredRows,
     };
-  }, [transactions]);
+  }, [transactions, activeRange]);
+  
+
+  if (error) {
+    return (
+        <Alert variant="destructive" className="m-8">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Firestore Error</AlertTitle>
+            <AlertDescription>
+                Please ensure you have the required Firestore index and security rules.
+                <code className="mt-2 block text-xs font-mono">{error.message}</code>
+            </AlertDescription>
+        </Alert>
+    );
+  }
 
   return (
     <div className="p-8 space-y-6 max-w-5xl mx-auto">
@@ -103,46 +167,56 @@ export function ProfitAndLossReport() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <Table>
-            <TableBody>
-              {/* INCOME SECTION */}
-              <TableRow className="bg-green-50 font-bold border-b-2 border-green-200">
-                <TableCell className="text-green-800 text-lg">TOTAL INCOME</TableCell>
-                <TableCell className="text-right text-green-800 text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
-              </TableRow>
-              {reportData.income.length > 0 ? reportData.income.map(i => (
-                <TableRow key={i.name} className="border-none">
-                  <TableCell className="pl-12 text-muted-foreground">{i.name}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(i.total)}</TableCell>
+          <div className="text-xs text-muted-foreground text-center mb-4">
+            Loaded: {reportData.rows} total rows • Showing: {reportData.filteredRows} rows in date range
+          </div>
+          {isLoading ? (
+             <div className="flex flex-col items-center justify-center p-12 space-y-4">
+               <Loader2 className="h-8 w-8 animate-spin text-primary" />
+               <p className="text-sm text-muted-foreground italic">Fetching ledger data...</p>
+             </div>
+          ) : (
+            <Table>
+              <TableBody>
+                {/* INCOME SECTION */}
+                <TableRow className="bg-green-50 font-bold border-b-2 border-green-200">
+                  <TableCell className="text-green-800 text-lg">TOTAL INCOME</TableCell>
+                  <TableCell className="text-right text-green-800 text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
                 </TableRow>
-              )) : (
-                <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income transactions found.</TableCell></TableRow>
-              )}
-              
-              <TableRow className="h-8"><TableCell colSpan={2}/></TableRow>
+                {reportData.income.length > 0 ? reportData.income.map(i => (
+                  <TableRow key={i.name} className="border-none">
+                    <TableCell className="pl-12 text-muted-foreground">{i.name}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(i.total)}</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income transactions found.</TableCell></TableRow>
+                )}
+                
+                <TableRow className="h-8"><TableCell colSpan={2}/></TableRow>
 
-              {/* EXPENSE SECTION */}
-              <TableRow className="bg-red-50 font-bold border-b-2 border-red-200">
-                <TableCell className="text-red-800 text-lg">TOTAL EXPENSES</TableCell>
-                <TableCell className="text-right text-red-800 text-lg">({formatCurrency(reportData.totalExp)})</TableCell>
-              </TableRow>
-              {reportData.expenses.length > 0 ? reportData.expenses.map(e => (
-                <TableRow key={e.name} className="border-none">
-                  <TableCell className="pl-12 text-muted-foreground">{e.name}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(e.total)}</TableCell>
+                {/* EXPENSE SECTION */}
+                <TableRow className="bg-red-50 font-bold border-b-2 border-red-200">
+                  <TableCell className="text-red-800 text-lg">TOTAL EXPENSES</TableCell>
+                  <TableCell className="text-right text-red-800 text-lg">({formatCurrency(reportData.totalExp)})</TableCell>
                 </TableRow>
-              )) : (
-                <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expense transactions found.</TableCell></TableRow>
-              )}
-              
-              <TableRow className="border-t-4 border-double font-black text-2xl bg-slate-50">
-                <TableCell>NET OPERATING INCOME</TableCell>
-                <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(reportData.net)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                {reportData.expenses.length > 0 ? reportData.expenses.map(e => (
+                  <TableRow key={e.name} className="border-none">
+                    <TableCell className="pl-12 text-muted-foreground">{e.name}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(e.total)}</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expense transactions found.</TableCell></TableRow>
+                )}
+                
+                <TableRow className="border-t-4 border-double font-black text-2xl bg-slate-50">
+                  <TableCell>NET OPERATING INCOME</TableCell>
+                  <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(reportData.net)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
