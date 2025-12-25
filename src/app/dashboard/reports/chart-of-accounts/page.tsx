@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,7 @@ export default function ChartOfAccountsReport() {
   const firestore = useFirestore();
   const [loading, setLoading] = useState(true);
   const [treeData, setTreeData] = useState<any>({});
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "Income": true, "Operating Expenses": true, "Expense": true });
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({ "Income": true, "Expense": true });
 
   useEffect(() => {
     async function buildCOA() {
@@ -26,7 +26,6 @@ export default function ChartOfAccountsReport() {
         const accountsSnap = await getDocs(accountsRef);
         const hierarchy: any = {};
 
-        // Aggregate across all accounts
         for (const accountDoc of accountsSnap.docs) {
           const txRef = collection(firestore, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`);
           const txSnap = await getDocs(txRef);
@@ -35,14 +34,12 @@ export default function ChartOfAccountsReport() {
             const tx = txDoc.data();
             const h = tx.categoryHierarchy || {};
             
-            // Normalize the 4 Layers
             const l0 = h.l0 || (tx.amount > 0 ? "Income" : "Operating Expenses");
             const l1 = h.l1 || "General Group";
             const l2 = h.l2 || tx.subcategory || "Uncategorized Tax Line";
             const l3 = h.l3 || tx.description || "Misc Detail";
             const amt = Number(tx.amount) || 0;
 
-            // Build Tree: L0 -> L1 -> L2 -> L3
             if (!hierarchy[l0]) hierarchy[l0] = { balance: 0, sub: {} };
             if (!hierarchy[l0].sub[l1]) hierarchy[l0].sub[l1] = { balance: 0, sub: {} };
             if (!hierarchy[l0].sub[l1].sub[l2]) hierarchy[l0].sub[l1].sub[l2] = { balance: 0, sub: {} };
@@ -85,7 +82,10 @@ export default function ChartOfAccountsReport() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Object.entries(treeData).map(([l0Name, l0]: any) => (
+              {Object.entries(treeData).sort(([aName], [bName]) => {
+                  const order = { 'Income': 1, 'Expense': 2, 'Asset': 3, 'Liability': 4, 'Equity': 5 };
+                  return (order[aName as keyof typeof order] || 99) - (order[bName as keyof typeof order] || 99);
+              }).map(([l0Name, l0]: any) => (
                 <RenderRow key={l0Name} name={l0Name} data={l0} level={0} expanded={expanded} onToggle={toggle} />
               ))}
             </TableBody>
@@ -99,20 +99,30 @@ export default function ChartOfAccountsReport() {
 function RenderRow({ name, data, level, expanded, onToggle }: any) {
   const isExpanded = expanded[name];
   const hasSub = data.sub && Object.keys(data.sub).length > 0;
-  const paddingClass = ["pl-4 font-black bg-slate-100", "pl-8 font-bold bg-slate-50", "pl-12 font-semibold", "pl-16 italic text-muted-foreground"][level];
+
+  const styleConfig = [
+    { padding: 'pl-4', font: 'font-bold', bg: 'bg-slate-100', text: 'text-slate-900' }, // L0
+    { padding: 'pl-8', font: 'font-semibold', bg: 'bg-slate-50', text: 'text-slate-800' },  // L1
+    { padding: 'pl-12', font: 'font-medium', bg: 'bg-white', text: 'text-slate-700' },   // L2
+    { padding: 'pl-16', font: 'font-normal', bg: 'bg-white', text: 'text-slate-500' },    // L3
+  ][level];
 
   return (
     <>
-      <TableRow className={cn("cursor-pointer hover:bg-muted/50 transition-colors", paddingClass)} onClick={() => hasSub && onToggle(name)}>
-        <TableCell className="flex items-center gap-2">
-          {hasSub ? (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />) : <div className="w-4" />}
+      <TableRow className={cn("cursor-pointer hover:bg-muted/50 transition-colors", styleConfig.bg)} onClick={() => hasSub && onToggle(name)}>
+        <TableCell className={cn("flex items-center gap-2", styleConfig.padding, styleConfig.font, styleConfig.text)}>
+          {hasSub ? (isExpanded ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />) : <div className="w-4 shrink-0" />}
           {name}
         </TableCell>
-        <TableCell className="text-right font-mono">
+        <TableCell className={cn(
+            "text-right font-mono",
+            styleConfig.font,
+            data.balance >= 0 ? 'text-green-600' : 'text-slate-800'
+        )}>
           {formatCurrency(data.balance)}
         </TableCell>
       </TableRow>
-      {hasSub && isExpanded && Object.entries(data.sub).map(([subName, subData]: any) => (
+      {hasSub && isExpanded && Object.entries(data.sub).sort(([aName], [bName]) => aName.localeCompare(bName)).map(([subName, subData]: any) => (
         <RenderRow key={subName} name={subName} data={subData} level={level + 1} expanded={expanded} onToggle={onToggle} />
       ))}
     </>
