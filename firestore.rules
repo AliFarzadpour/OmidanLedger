@@ -21,12 +21,12 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(tenantUserId)).data.landlordId == request.auth.uid;
     }
     
-    // VALIDATION: Enforce the 4-level category structure for all transactions
-    function hasValidCategoryHierarchy(data) {
-        return 'categoryHierarchy' in data &&
-               'l0' in data.categoryHierarchy && data.categoryHierarchy.l0 is string &&
-               'l1' in data.categoryHierarchy && data.categoryHierarchy.l1 is string &&
-               'l2' in data.categoryHierarchy && data.categoryHierarchy.l2 is string;
+    // Rule to allow collection group queries on 'transactions'
+    // This recursive wildcard match is required for reports like P&L to function.
+    match /{path=**}/transactions/{transactionId} {
+       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+       allow list: if isSignedIn() && request.query.resource.data.userId == request.auth.uid;
+       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     match /users/{userId} {
@@ -50,15 +50,6 @@ service cloud.firestore {
         match /categoryMappings/{mappingId} {
             allow read, write, delete: if isOwner(userId);
         }
-    }
-    
-    // Rule to allow collection group queries on 'transactions'
-    match /{path=**}/transactions/{transactionId} {
-       // Corrected Rule: Check the query constraints, not just the resource.
-       // This allows the P&L and other reports to run correctly.
-       allow list: if isSignedIn() && request.query.resource.data.userId == request.auth.uid;
-       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     match /properties/{propertyId} {
