@@ -2,11 +2,17 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building, TrendingUp, Scale } from 'lucide-react';
+import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building, TrendingUp, Scale, ShieldAlert } from 'lucide-react';
 import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 export default function ReportsPage() {
   const reports = [
+    {
+      title: 'Financial Audit',
+      description: 'Scan all transactions for errors and inconsistencies.',
+      href: '/dashboard/reports/audit',
+      icon: ShieldAlert,
+    },
     {
       title: 'AI Financial Report',
       description: 'Use natural language to ask questions about your financial data.',
