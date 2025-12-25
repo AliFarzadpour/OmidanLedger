@@ -34,6 +34,7 @@ interface Transaction {
     description: string;
     primaryCategory: string;
     amount: number;
+    bankAccountId?: string; // Add bankAccountId for a more unique key
 }
 
 interface RecentTransactionsProps {
@@ -71,8 +72,8 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                     </TableRow>
                  ))
             ) : recentTransactions.length > 0 ? (
-              recentTransactions.map((transaction) => (
-                <TableRow key={transaction.id}>
+              recentTransactions.map((transaction, index) => (
+                <TableRow key={`${transaction.id}-${index}`}>
                   <TableCell>
                     <div className="font-medium">{transaction.description}</div>
                     <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
