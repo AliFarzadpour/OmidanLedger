@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collectionGroup, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -51,37 +51,36 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: Merge
   const [fromSort, setFromSort] = useState<'asc' | 'desc'>('asc');
   const [toSort, setToSort] = useState<'asc' | 'desc'>('asc');
 
-
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!isOpen || !user || !firestore) return;
 
-    const fetchData = async () => {
-      setIsLoading(true);
-      const q = query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
-      const snapshot = await getDocs(q);
-      const allTxs = snapshot.docs.map(d => ({ id: d.id, ...d.data(), _originalRef: d.ref })) as (Transaction & { _originalRef: any })[];
-      setTransactions(allTxs);
+    setIsLoading(true);
+    const q = query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
+    const snapshot = await getDocs(q);
+    const allTxs = snapshot.docs.map(d => ({ id: d.id, ...d.data(), _originalRef: d.ref })) as (Transaction & { _originalRef: any })[];
+    setTransactions(allTxs);
 
-      const categoryMap = new Map<string, UniqueCategory>();
-      allTxs.forEach(tx => {
-        const h = tx.categoryHierarchy || {};
-        const id = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
-        if (!categoryMap.has(id)) {
-          categoryMap.set(id, {
-            id,
-            l0: h.l0 || '',
-            l1: h.l1 || '',
-            l2: h.l2 || '',
-            l3: h.l3 || ''
-          });
-        }
-      });
-      setUniqueCategories(Array.from(categoryMap.values()).sort((a, b) => a.id.localeCompare(b.id)));
-      setIsLoading(false);
-    };
-
-    fetchData();
+    const categoryMap = new Map<string, UniqueCategory>();
+    allTxs.forEach(tx => {
+      const h = tx.categoryHierarchy || {};
+      const id = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
+      if (!categoryMap.has(id)) {
+        categoryMap.set(id, {
+          id,
+          l0: h.l0 || '',
+          l1: h.l1 || '',
+          l2: h.l2 || '',
+          l3: h.l3 || ''
+        });
+      }
+    });
+    setUniqueCategories(Array.from(categoryMap.values()).sort((a, b) => a.id.localeCompare(b.id)));
+    setIsLoading(false);
   }, [isOpen, user, firestore]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
   
 
   const handleFromToggle = (categoryId: string) => {
