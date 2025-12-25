@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
-import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection } from '@/firebase';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -33,37 +33,60 @@ export function ProfitAndLossReport() {
   const firestore = useFirestore();
 
   const [dates, setDates] = useState({
-    from: '2025-01-01',
-    to: '2025-12-31'
+    from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+    to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
   });
   
   const [activeRange, setActiveRange] = useState(dates);
-  const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
 
   useEffect(() => {
-    setIsMounted(true);
-    const initialRange = { 
-        from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-        to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    if (!user || !firestore) return;
+
+    const fetchAllTransactions = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const finalTransactions: any[] = [];
+        
+        // 1. Get all bank accounts for the user
+        const accountsQuery = query(collection(firestore, `users/${user.uid}/bankAccounts`));
+        const accountsSnap = await getDocs(accountsQuery);
+
+        if (accountsSnap.empty) {
+          console.log("No bank accounts found for this user.");
+          setAllTransactions([]);
+          setIsLoading(false);
+          return;
+        }
+
+        // 2. For each account, fetch all its transactions
+        for (const accountDoc of accountsSnap.docs) {
+          const transactionsQuery = query(collection(accountDoc.ref, 'transactions'));
+          const transactionsSnap = await getDocs(transactionsQuery);
+          transactionsSnap.forEach(txDoc => {
+            finalTransactions.push({ id: txDoc.id, ...txDoc.data() });
+          });
+        }
+        
+        setAllTransactions(finalTransactions);
+
+      } catch (e: any) {
+        console.error("Error fetching transactions:", e);
+        setError(e.message);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    setDates(initialRange);
-    setActiveRange(initialRange);
-  }, []);
 
-  // ✅ Query now only filters by date. We will filter by userId on the client.
-  const transactionsQuery = useMemo(() => {
-    if (!user || !firestore) return null;
-    return query(
-      collectionGroup(firestore, 'transactions'),
-      orderBy('date', 'asc')
-    );
+    fetchAllTransactions();
   }, [user, firestore]);
-
-  const { data: allTransactions, isLoading, error } = useCollection(transactionsQuery);
 
   const reportData = useMemo(() => {
     const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0, rows: 0, filteredRows: 0 };
-    if (!allTransactions || !user) return empty;
+    if (!allTransactions) return empty;
 
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
@@ -74,30 +97,26 @@ export function ProfitAndLossReport() {
     let totalExp = 0;
     let filteredRows = 0;
 
-    for (const tx of allTransactions as any[]) {
-      // ✅ Critical Fix: Filter for the correct user on the client.
-      if (tx.userId !== user.uid) {
-        continue;
-      }
-      
+    for (const tx of allTransactions) {
       const d = toDate(tx.date);
       if (!d) continue;
 
       const inRange = isWithinInterval(d, { start: fromD, end: toD });
       if (!inRange) continue;
-      
       filteredRows++;
 
       const rawAmount = Number(tx.amount) || 0;
+      const isIncome = rawAmount > 0;
+      const isExpense = rawAmount < 0;
+
       const h = tx.categoryHierarchy || {};
       const label = h.l2 || tx.subcategory || tx.secondaryCategory || tx.primaryCategory || 'Other';
       const amountAbs = Math.abs(rawAmount);
 
-      // ✅ Classify by amount sign (most reliable)
-      if (rawAmount > 0) {
+      if (isIncome) {
         totalInc += amountAbs;
         incMap.set(label, (incMap.get(label) || 0) + amountAbs);
-      } else if (rawAmount < 0) {
+      } else if (isExpense) {
         totalExp += amountAbs;
         expMap.set(label, (expMap.get(label) || 0) + amountAbs);
       }
@@ -115,7 +134,7 @@ export function ProfitAndLossReport() {
       rows: allTransactions.length,
       filteredRows,
     };
-  }, [allTransactions, activeRange, user]);
+  }, [allTransactions, activeRange]);
   
   if (error) {
     return (
@@ -123,15 +142,10 @@ export function ProfitAndLossReport() {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Firestore Error</AlertTitle>
             <AlertDescription>
-                Please ensure you have the required Firestore index and security rules.
-                <code className="mt-2 block text-xs font-mono">{error.message}</code>
+                <code className="mt-2 block text-xs font-mono">{error}</code>
             </AlertDescription>
         </Alert>
     );
-  }
-
-  if (!isMounted) {
-      return null;
   }
 
   return (
@@ -164,7 +178,7 @@ export function ProfitAndLossReport() {
           <div className="text-xs text-muted-foreground text-center mb-4 font-mono">
             Auth UID: {user?.uid} • Loaded: {reportData.rows} total tx • Showing: {reportData.filteredRows} rows in range
           </div>
-          {isLoading && !allTransactions ? (
+          {isLoading ? (
              <div className="flex flex-col items-center justify-center p-12 space-y-4">
                <Loader2 className="h-8 w-8 animate-spin text-primary" />
                <p className="text-sm text-muted-foreground italic">Fetching ledger data...</p>
