@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -32,6 +33,7 @@ function toDate(value: any): Date | null {
 
   return null;
 }
+
 
 export function ProfitAndLossReport() {
   const { user } = useUser();
@@ -122,15 +124,20 @@ export function ProfitAndLossReport() {
       if (!inRange) continue;
       filteredRows++;
   
-      const rawAmount = Number(tx.amount) || 0;
-      const isIncome = rawAmount > 0;
-      const isExpense = rawAmount < 0;
-  
       const h = tx.categoryHierarchy || {};
-      const label = h.l2 || tx.subcategory || tx.secondaryCategory || tx.primaryCategory || 'Other / Uncategorized';
-      
-      const normalizedLabel = label.trim();
+      const primaryCategory = (h.l0 || tx.primaryCategory || '').toLowerCase();
 
+      // --- FIX: Ensure we only include Income or Expense categories ---
+      const isIncome = primaryCategory.includes('income');
+      const isExpense = primaryCategory.includes('expense');
+      
+      if (!isIncome && !isExpense) {
+          continue; // Skip Assets, Liabilities, and Equity
+      }
+
+      const rawAmount = Number(tx.amount) || 0;
+      const label = h.l2 || tx.subcategory || tx.secondaryCategory || 'Other';
+      const normalizedLabel = label.trim();
       const amountAbs = Math.abs(rawAmount);
   
       if (isIncome) {
@@ -148,8 +155,12 @@ export function ProfitAndLossReport() {
       }
     }
   
-    const income = Array.from(incMap, ([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total);
-    const expenses = Array.from(expMap, ([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total);
+    const income = Array.from(incMap.entries())
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.total - a.total);
+    const expenses = Array.from(expMap.entries())
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.total - a.total);
   
     return {
       income,
