@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -19,15 +18,11 @@ export function ProfitAndLossReport() {
   const firestore = useFirestore();
 
   const [dates, setDates] = useState({
-    from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    from: '2025-01-01', // Setting a wide range for your 2025 data
+    to: '2025-12-31'
   });
   
   const [activeRange, setActiveRange] = useState(dates);
-
-  const handleRunReport = () => {
-    setActiveRange({ ...dates });
-  };
 
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore) return null;
@@ -45,7 +40,7 @@ export function ProfitAndLossReport() {
   const reportData = useMemo(() => {
     if (!transactions) return { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
     
-    console.log(`Report Engine: Processing ${transactions.length} rows...`);
+    console.log(`Report Engine: Processing ${transactions.length} transactions...`);
 
     const incMap = new Map();
     const expMap = new Map();
@@ -53,27 +48,23 @@ export function ProfitAndLossReport() {
     let totalExp = 0;
 
     transactions.forEach((tx: any) => {
-      // 1. Collect EVERY possible category label into one string
+      // 1. Extract and normalize all labels
       const h = tx.categoryHierarchy || {};
-      const allLabels = [
-        h.l0, h.l1, h.l2, h.l3, 
-        tx.primaryCategory, 
-        tx.subcategory
-      ].filter(Boolean).join(' ').toLowerCase();
+      const l0 = (h.l0 || tx.primaryCategory || "").toLowerCase();
+      const l2 = h.l2 || tx.subcategory || "Other";
       
-      const label = h.l2 || tx.subcategory || 'General / Uncategorized';
+      // 2. Use absolute value for math, but keep sign awareness
       const amount = Number(tx.amount) || 0;
 
-      // 2. Check for keywords anywhere in those labels
-      if (allLabels.includes('income') || allLabels.includes('revenue')) {
-        totalInc += amount;
-        incMap.set(label, (incMap.get(label) || 0) + amount);
-      } else if (allLabels.includes('expense')) {
-        totalExp += amount;
-        expMap.set(label, (expMap.get(label) || 0) + amount);
-      } else {
-        // This log will tell you EXACTLY why a transaction is being ignored
-        console.warn(`Row Ignored: "${tx.description}". Labels found: [${allLabels}]`);
+      // 3. Match based on your actual DB strings: "Operating Expenses" and "Income"
+      if (l0.includes('income') || l0.includes('revenue')) {
+        const val = Math.abs(amount);
+        totalInc += val;
+        incMap.set(l2, (incMap.get(l2) || 0) + val);
+      } else if (l0.includes('expense')) {
+        const val = Math.abs(amount);
+        totalExp += val;
+        expMap.set(l2, (expMap.get(l2) || 0) + val);
       }
     });
 
@@ -82,18 +73,17 @@ export function ProfitAndLossReport() {
       expenses: Array.from(expMap, ([name, total]) => ({ name, total })),
       totalInc,
       totalExp,
-      net: totalInc + totalExp 
+      net: totalInc - totalExp 
     };
   }, [transactions]);
 
-  // Display error if Firestore blocks the request
   if (error) return (
     <Alert variant="destructive" className="m-8">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Firestore Error</AlertTitle>
       <AlertDescription>
-        Ensure you have the {`{path=**}`} wildcard in your security rules.
-        <code className="block mt-2 text-xs font-mono">{error.message}</code>
+        Ensure you have the Composite Index (userId: ASC, date: ASC) and the {`{path=**}`} Security Rule enabled.
+        <code className="block mt-2 text-xs">{error.message}</code>
       </AlertDescription>
     </Alert>
   );
@@ -111,67 +101,40 @@ export function ProfitAndLossReport() {
             <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
           </div>
         </div>
-        <Button onClick={handleRunReport} disabled={isLoading}>
+        <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-          Run Fiscal Report
+          Run Report
         </Button>
       </div>
 
       <Card className="shadow-lg border-t-4 border-t-primary">
         <CardHeader className="border-b bg-slate-50/50 text-center">
           <CardTitle className="text-3xl">Profit & Loss Statement</CardTitle>
-          <CardDescription className="font-mono">
-             {activeRange.from} — {activeRange.to}
-          </CardDescription>
+          <CardDescription className="font-mono">FiscalFlow Reporting Engine</CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          {isLoading ? (
+           {isLoading ? (
              <div className="flex flex-col items-center justify-center p-12 space-y-4">
                <Loader2 className="h-8 w-8 animate-spin text-primary" />
                <p className="text-sm text-muted-foreground italic">Fetching ledger data...</p>
              </div>
           ) : (
-            <Table>
-              <TableBody>
-                {/* INCOME SECTION */}
-                <TableRow className="bg-green-50/50 font-bold">
-                  <TableCell className="text-lg text-green-700">Total Income</TableCell>
-                  <TableCell className="text-right text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
-                </TableRow>
-                {reportData.income.length > 0 ? reportData.income.map(item => (
-                  <TableRow key={item.name} className="border-none">
-                    <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
-                  </TableRow>
-                )) : (
-                  <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No income found.</TableCell></TableRow>
-                )}
+          <Table>
+            <TableBody>
+              <TableRow className="bg-green-50 font-bold"><TableCell>Total Income</TableCell><TableCell className="text-right">{formatCurrency(reportData.totalInc)}</TableCell></TableRow>
+              {reportData.income.map(i => <TableRow key={i.name}><TableCell className="pl-8">{i.name}</TableCell><TableCell className="text-right">{formatCurrency(i.total)}</TableCell></TableRow>)}
+              
+              <TableRow className="h-4"><TableCell colSpan={2}/></TableRow>
 
-                <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
-
-                {/* EXPENSE SECTION */}
-                <TableRow className="bg-red-50/50 font-bold">
-                  <TableCell className="text-lg text-red-700">Total Expenses</TableCell>
-                  <TableCell className="text-right text-lg">{formatCurrency(reportData.totalExp)}</TableCell>
-                </TableRow>
-                {reportData.expenses.length > 0 ? reportData.expenses.map(item => (
-                  <TableRow key={item.name} className="border-none">
-                    <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
-                  </TableRow>
-                )) : (
-                   <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No expenses found.</TableCell></TableRow>
-                )}
-
-                {/* NET INCOME */}
-                <TableRow className="border-t-4 border-double font-black text-2xl">
-                  <TableCell>Net Operating Income</TableCell>
-                  <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(reportData.net)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+              <TableRow className="bg-red-50 font-bold"><TableCell>Total Expenses</TableCell><TableCell className="text-right">({formatCurrency(reportData.totalExp)})</TableCell></TableRow>
+              {reportData.expenses.map(e => <TableRow key={e.name}><TableCell className="pl-8">{e.name}</TableCell><TableCell className="text-right">{formatCurrency(e.total)}</TableCell></TableRow>)}
+              
+              <TableRow className="border-t-4 font-black text-xl">
+                <TableCell>Net Income</TableCell>
+                <TableCell className="text-right">{formatCurrency(reportData.net)}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
           )}
         </CardContent>
       </Card>
