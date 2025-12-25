@@ -18,28 +18,19 @@ export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // Initialize dates to null on the server
-  const [dates, setDates] = useState<{ from: string; to: string } | null>(null);
-  const [activeRange, setActiveRange] = useState<{ from: string; to: string } | null>(null);
-
-  // Set initial dates only on the client
-  useEffect(() => {
-    const initialDates = {
-      from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-      to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
-    };
-    setDates(initialDates);
-    setActiveRange(initialDates);
-  }, []);
+  const [dates, setDates] = useState({
+    from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+    to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+  });
+  
+  const [activeRange, setActiveRange] = useState(dates);
 
   const handleRunReport = () => {
-    if (dates?.from && dates?.to) {
-      setActiveRange({ ...dates });
-    }
+    setActiveRange({ ...dates });
   };
 
   const transactionsQuery = useMemo(() => {
-    if (!user || !firestore || !activeRange) return null;
+    if (!user || !firestore) return null;
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
@@ -53,6 +44,8 @@ export function ProfitAndLossReport() {
 
   const reportData = useMemo(() => {
     if (!transactions) return { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
+    
+    console.log(`Processing ${transactions.length} transactions for report...`);
 
     const incMap = new Map();
     const expMap = new Map();
@@ -60,16 +53,21 @@ export function ProfitAndLossReport() {
     let totalExp = 0;
 
     transactions.forEach((tx: any) => {
-      const categoryType = (tx.categoryHierarchy?.l0 || 'uncategorized').toLowerCase();
-      const label = tx.categoryHierarchy?.l2 || tx.subcategory || 'General / Misc';
+      // Robust detection of type regardless of casing or missing L0
+      const hierarchy = tx.categoryHierarchy || {};
+      const typeStr = `${hierarchy.l0 || ''} ${hierarchy.l1 || ''} ${tx.primaryCategory || ''}`.toLowerCase();
+      
+      const label = hierarchy.l2 || tx.subcategory || 'Uncategorized Detail';
       const amount = Number(tx.amount) || 0;
 
-      if (categoryType.includes('income')) {
+      if (typeStr.includes('income')) {
         totalInc += amount;
         incMap.set(label, (incMap.get(label) || 0) + amount);
-      } else if (categoryType.includes('expense')) {
+      } else if (typeStr.includes('expense')) {
         totalExp += amount;
         expMap.set(label, (expMap.get(label) || 0) + amount);
+      } else {
+        console.warn(`Skipping transaction (No Income/Expense type found):`, tx.description, typeStr);
       }
     });
 
@@ -82,13 +80,14 @@ export function ProfitAndLossReport() {
     };
   }, [transactions]);
 
+  // Display error if Firestore blocks the request
   if (error) return (
     <Alert variant="destructive" className="m-8">
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Firestore Error</AlertTitle>
       <AlertDescription>
-        A permission issue or missing index is preventing data from loading.
-        <code className="block mt-2 text-xs">{error.message}</code>
+        Ensure you have the {`{path=**}`} wildcard in your security rules.
+        <code className="block mt-2 text-xs font-mono">{error.message}</code>
       </AlertDescription>
     </Alert>
   );
@@ -99,11 +98,11 @@ export function ProfitAndLossReport() {
         <div className="flex gap-4">
           <div className="grid gap-2">
             <Label>Start Date</Label>
-            <Input type="date" value={dates?.from || ''} onChange={e => setDates(d => ({...(d || { from: '', to: '' }), from: e.target.value}))} />
+            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d, from: e.target.value}))} />
           </div>
           <div className="grid gap-2">
             <Label>End Date</Label>
-            <Input type="date" value={dates?.to || ''} onChange={e => setDates(d => ({...(d || { from: '', to: '' }), to: e.target.value}))} />
+            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
           </div>
         </div>
         <Button onClick={handleRunReport} disabled={isLoading}>
@@ -113,20 +112,22 @@ export function ProfitAndLossReport() {
       </div>
 
       <Card className="shadow-lg border-t-4 border-t-primary">
-        <CardHeader className="border-b bg-slate-50/50">
-          <CardTitle className="text-3xl text-center">Profit & Loss Statement</CardTitle>
-          <CardDescription className="text-center font-mono">
-             {activeRange ? `${format(new Date(activeRange.from), 'MMM d, yyyy')} — ${format(new Date(activeRange.to), 'MMM d, yyyy')}` : '...'}
+        <CardHeader className="border-b bg-slate-50/50 text-center">
+          <CardTitle className="text-3xl">Profit &amp; Loss Statement</CardTitle>
+          <CardDescription className="font-mono">
+             {activeRange.from} — {activeRange.to}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           {isLoading ? (
-            <div className="flex justify-center p-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
+             <div className="flex flex-col items-center justify-center p-12 space-y-4">
+               <Loader2 className="h-8 w-8 animate-spin text-primary" />
+               <p className="text-sm text-muted-foreground italic">Fetching ledger data...</p>
+             </div>
           ) : (
             <Table>
               <TableBody>
+                {/* INCOME SECTION */}
                 <TableRow className="bg-green-50/50 font-bold">
                   <TableCell className="text-lg text-green-700">Total Income</TableCell>
                   <TableCell className="text-right text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
@@ -137,11 +138,12 @@ export function ProfitAndLossReport() {
                     <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
                   </TableRow>
                 )) : (
-                  <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No income recorded for this period.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No income found.</TableCell></TableRow>
                 )}
 
                 <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
 
+                {/* EXPENSE SECTION */}
                 <TableRow className="bg-red-50/50 font-bold">
                   <TableCell className="text-lg text-red-700">Total Expenses</TableCell>
                   <TableCell className="text-right text-lg">{formatCurrency(reportData.totalExp)}</TableCell>
@@ -152,9 +154,10 @@ export function ProfitAndLossReport() {
                     <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
                   </TableRow>
                 )) : (
-                   <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No expenses recorded for this period.</TableCell></TableRow>
+                   <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No expenses found.</TableCell></TableRow>
                 )}
 
+                {/* NET INCOME */}
                 <TableRow className="border-t-4 border-double font-black text-2xl">
                   <TableCell>Net Operating Income</TableCell>
                   <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
