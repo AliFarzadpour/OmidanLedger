@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -20,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface MergeCategoriesDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
 }
 
 type UniqueCategory = {
@@ -32,7 +32,7 @@ type UniqueCategory = {
 
 const PRIMARY_CATEGORY_OPTIONS = ["Asset", "Liability", "Equity", "Income", "Expense"];
 
-export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesDialogProps) {
+export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: MergeCategoriesDialogProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -129,6 +129,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
     try {
       await batch.commit();
       toast({ title: 'Merge Successful', description: `${transactionsToUpdate.length} transactions were updated.` });
+      onSuccess();
       onOpenChange(false);
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Merge Failed', description: error.message });

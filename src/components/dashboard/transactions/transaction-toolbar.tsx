@@ -20,6 +20,7 @@ interface TransactionToolbarProps {
   onCategoryFilter: (category: string) => void;
   onStatusFilterChange: (statuses: string[]) => void;
   onClear: () => void;
+  onRefresh: () => void;
 }
 
 export function TransactionToolbar({ 
@@ -27,7 +28,8 @@ export function TransactionToolbar({
   onDateChange, 
   onCategoryFilter, 
   onStatusFilterChange,
-  onClear 
+  onClear,
+  onRefresh
 }: TransactionToolbarProps) {
   const [date, setDate] = React.useState<Date>();
   const [searchTerm, setSearchTerm] = React.useState('');
@@ -172,7 +174,7 @@ export function TransactionToolbar({
         )}
       </div>
     </div>
-    <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} />
+    <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} onSuccess={onRefresh} />
     </>
   );
 }
