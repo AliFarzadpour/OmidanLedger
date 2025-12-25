@@ -18,16 +18,18 @@ export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const [dates, setDates] = useState({
-    from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-    to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
-  });
-  
-  const [activeRange, setActiveRange] = useState(dates);
-  const [isClient, setIsClient] = useState(false);
+  // Initialize dates to null on the server
+  const [dates, setDates] = useState<{ from: string; to: string } | null>(null);
+  const [activeRange, setActiveRange] = useState<{ from: string; to: string } | null>(null);
 
+  // Set initial dates only on the client
   useEffect(() => {
-    setIsClient(true);
+    const initialDates = {
+      from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+      to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    };
+    setDates(initialDates);
+    setActiveRange(initialDates);
   }, []);
 
   const handleRunReport = () => {
@@ -37,7 +39,7 @@ export function ProfitAndLossReport() {
   };
 
   const transactionsQuery = useMemo(() => {
-    if (!user || !firestore) return null;
+    if (!user || !firestore || !activeRange) return null;
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
@@ -58,11 +60,11 @@ export function ProfitAndLossReport() {
     let totalExp = 0;
 
     transactions.forEach((tx: any) => {
-      const categoryType = (tx.categoryHierarchy?.l0 || tx.primaryCategory || 'uncategorized').toLowerCase();
+      const categoryType = (tx.categoryHierarchy?.l0 || 'uncategorized').toLowerCase();
       const label = tx.categoryHierarchy?.l2 || tx.subcategory || 'General / Misc';
       const amount = Number(tx.amount) || 0;
 
-      if (categoryType.includes('income') || categoryType.includes('revenue')) {
+      if (categoryType.includes('income')) {
         totalInc += amount;
         incMap.set(label, (incMap.get(label) || 0) + amount);
       } else if (categoryType.includes('expense')) {
@@ -76,7 +78,7 @@ export function ProfitAndLossReport() {
       expenses: Array.from(expMap, ([name, total]) => ({ name, total })),
       totalInc,
       totalExp,
-      net: totalInc - Math.abs(totalExp)
+      net: totalInc + totalExp 
     };
   }, [transactions]);
 
@@ -97,11 +99,11 @@ export function ProfitAndLossReport() {
         <div className="flex gap-4">
           <div className="grid gap-2">
             <Label>Start Date</Label>
-            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d, from: e.target.value}))} />
+            <Input type="date" value={dates?.from || ''} onChange={e => setDates(d => ({...(d || { from: '', to: '' }), from: e.target.value}))} />
           </div>
           <div className="grid gap-2">
             <Label>End Date</Label>
-            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
+            <Input type="date" value={dates?.to || ''} onChange={e => setDates(d => ({...(d || { from: '', to: '' }), to: e.target.value}))} />
           </div>
         </div>
         <Button onClick={handleRunReport} disabled={isLoading}>
@@ -114,7 +116,7 @@ export function ProfitAndLossReport() {
         <CardHeader className="border-b bg-slate-50/50">
           <CardTitle className="text-3xl text-center">Profit & Loss Statement</CardTitle>
           <CardDescription className="text-center font-mono">
-             {isClient ? `${format(new Date(activeRange.from), 'MMM d, yyyy')} — ${format(new Date(activeRange.to), 'MMM d, yyyy')}` : '...'}
+             {activeRange ? `${format(new Date(activeRange.from), 'MMM d, yyyy')} — ${format(new Date(activeRange.to), 'MMM d, yyyy')}` : '...'}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
