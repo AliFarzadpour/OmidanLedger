@@ -79,8 +79,8 @@ export default function DashboardPage() {
         if (snapshot.empty) {
             setAllTransactions([]);
         } else {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
-            data.sort((a, b) => (new Date(b.date).getTime() - new Date(a.date).getTime()));
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), bankAccountId: doc.ref.parent.parent?.id })) as Transaction[];
+            data.sort((a, b) => (new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime()));
             setAllTransactions(data);
         }
         setIsLoading(false);
@@ -103,8 +103,8 @@ export default function DashboardPage() {
   // 2. CALCULATIONS (Added New KPIs)
   const stats = useMemo(() => {
     const filtered = allTransactions.filter(tx => {
-        const txDate = new Date(tx.date);
-        return txDate >= new Date(startDate) && txDate <= new Date(endDate);
+        const txDate = new Date(tx.date + 'T00:00:00');
+        return txDate >= new Date(startDate + 'T00:00:00') && txDate <= new Date(endDate + 'T00:00:00');
     });
 
     let income = 0;
