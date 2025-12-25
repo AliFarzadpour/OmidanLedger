@@ -73,7 +73,7 @@ export function ProfitAndLossReport() {
       where('userId', '==', user.uid),
       where('date', '>=', startDate),
       where('date', '<=', endDate),
-      orderBy('date', 'desc') // This MUST match the 'Descending' in your Index
+      orderBy('date', 'asc') // FIX: Changed to 'asc' to match Firestore index
     );
   }, [user, firestore, activeDateRange]);
 
