@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -49,7 +50,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                         <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
                     </Badge>
                     <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                        {cats.l1} > {cats.l2}
+                        {cats.l1} {'>'} {cats.l2}
                     </span>
                     {cats.l3 && (
                          <span className="text-xs text-muted-foreground pl-1 font-medium">
