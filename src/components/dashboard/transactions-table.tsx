@@ -10,7 +10,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -127,11 +127,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     } finally { setIsSyncing(false); }
   };
 
-  const handleCategoryChange = async (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; details: string; }) => {
+  const handleCategoryChange = (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; details: string; }) => {
     if (!user || !firestore) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
     
-    await updateDoc(transactionRef, { 
+    const updateData = { 
         categoryHierarchy: {
             l0: newCategories.primaryCategory,
             l1: newCategories.secondaryCategory,
@@ -141,9 +141,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         confidence: 1.0, 
         status: 'posted',
         reviewStatus: 'approved'
-    });
+    };
+    
+    updateDocumentNonBlocking(transactionRef, updateData);
 
-    await learnCategoryMapping({
+    learnCategoryMapping({
         transactionDescription: transaction.description,
         primaryCategory: newCategories.primaryCategory,
         secondaryCategory: newCategories.secondaryCategory,
@@ -486,4 +488,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
 
