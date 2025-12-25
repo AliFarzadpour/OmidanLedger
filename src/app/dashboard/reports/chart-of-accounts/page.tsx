@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
-import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
+import { collection, getDocs, query, collectionGroup, writeBatch, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,30 +24,31 @@ export default function ChartOfAccountsReport() {
     setLoading(true);
     
     try {
-      const q = query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
-      const accountsSnap = await getDocs(q);
+      const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
       const hierarchy: any = {};
-
-      accountsSnap.forEach(txDoc => {
-        const tx = txDoc.data();
-        const h = tx.categoryHierarchy || {};
-        
-        const l0 = h.l0 || (tx.amount > 0 ? "Income" : "Expense");
-        const l1 = h.l1 || "General Group";
-        const l2 = h.l2 || tx.subcategory || "Uncategorized Tax Line";
-        const l3 = h.l3 || tx.description || "Misc Detail";
-        const amt = Number(tx.amount) || 0;
-
-        if (!hierarchy[l0]) hierarchy[l0] = { balance: 0, sub: {} };
-        if (!hierarchy[l0].sub[l1]) hierarchy[l0].sub[l1] = { balance: 0, sub: {} };
-        if (!hierarchy[l0].sub[l1].sub[l2]) hierarchy[l0].sub[l1].sub[l2] = { balance: 0, sub: {} };
-        if (!hierarchy[l0].sub[l1].sub[l2].sub[l3]) hierarchy[l0].sub[l1].sub[l2].sub[l3] = { balance: 0 };
-
-        hierarchy[l0].balance += amt;
-        hierarchy[l0].sub[l1].balance += amt;
-        hierarchy[l0].sub[l1].sub[l2].balance += amt;
-        hierarchy[l0].sub[l1].sub[l2].sub[l3].balance += amt;
-      });
+  
+      for (const accountDoc of accountsSnap.docs) {
+          const txSnap = await getDocs(collection(accountDoc.ref, 'transactions'));
+          txSnap.forEach(txDoc => {
+              const tx = txDoc.data();
+              const h = tx.categoryHierarchy || {};
+              const l0 = h.l0 || (tx.amount > 0 ? "Income" : "Expense");
+              const l1 = h.l1 || "General Group";
+              const l2 = h.l2 || tx.subcategory || "Uncategorized Tax Line";
+              const l3 = h.l3 || tx.description || "Misc Detail";
+              const amt = Number(tx.amount) || 0;
+  
+              if (!hierarchy[l0]) hierarchy[l0] = { balance: 0, sub: {} };
+              if (!hierarchy[l0].sub[l1]) hierarchy[l0].sub[l1] = { balance: 0, sub: {} };
+              if (!hierarchy[l0].sub[l1].sub[l2]) hierarchy[l0].sub[l1].sub[l2] = { balance: 0, sub: {} };
+              if (!hierarchy[l0].sub[l1].sub[l2].sub[l3]) hierarchy[l0].sub[l1].sub[l2].sub[l3] = { balance: 0 };
+  
+              hierarchy[l0].balance += amt;
+              hierarchy[l0].sub[l1].balance += amt;
+              hierarchy[l0].sub[l1].sub[l2].balance += amt;
+              hierarchy[l0].sub[l1].sub[l2].sub[l3].balance += amt;
+          });
+      }
       setTreeData(hierarchy);
     } catch (e) {
       console.error("COA Error:", e);

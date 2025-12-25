@@ -1,22 +1,23 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collectionGroup, query, where, getDocs, FirestoreError } from 'firebase/firestore'; 
+import { collection, query, getDocs, FirestoreError } from 'firebase/firestore'; 
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
 import { 
-  DollarSign, CreditCard, Activity, AlertCircle, Percent, Flame, ShoppingBag 
+  DollarSign, CreditCard, Activity, AlertCircle, Percent, ShoppingBag 
 } from 'lucide-react';
 import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FirestorePermissionError, errorEmitter } from '@/firebase';
+import { FirestorePermissionError, errorEmitter } from '@/firebase/errors';
 
 type Transaction = {
   id: string;
@@ -70,30 +71,38 @@ export default function DashboardPage() {
     setIsLoading(true);
     setError(null);
 
-    const q = query(
-        collectionGroup(firestore, 'transactions'),
-        where('userId', '==', user.uid)
-    );
+    try {
+      const bankAccountsQuery = query(collection(firestore, `users/${user.uid}/bankAccounts`));
+      const bankAccountsSnap = await getDocs(bankAccountsQuery);
+      
+      const allTxPromises = bankAccountsSnap.docs.map(async (accountDoc) => {
+        const transactionsQuery = query(collection(firestore, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`));
+        const transactionsSnap = await getDocs(transactionsQuery);
+        return transactionsSnap.docs.map(txDoc => ({ 
+            id: txDoc.id, 
+            ...txDoc.data(),
+            bankAccountId: accountDoc.id 
+        })) as Transaction[];
+      });
 
-    getDocs(q).then(snapshot => {
-        if (snapshot.empty) {
-            setAllTransactions([]);
-        } else {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), bankAccountId: doc.ref.parent.parent?.id })) as Transaction[];
-            data.sort((a, b) => (new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime()));
-            setAllTransactions(data);
-        }
-        setIsLoading(false);
-    }).catch(err => {
+      const allTxArrays = await Promise.all(allTxPromises);
+      const combinedTransactions = allTxArrays.flat();
+      
+      combinedTransactions.sort((a, b) => (new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime()));
+      setAllTransactions(combinedTransactions);
+
+    } catch (err: any) {
         console.error("Fetch Error:", err);
-        const permissionError = new FirestorePermissionError({
-          path: `transactions`,
-          operation: 'list',
-        });
-        errorEmitter.emit('permission-error', permissionError);
-        setError(permissionError.message);
+        let message = 'An unknown error occurred while fetching data.';
+        if (err instanceof FirestoreError) {
+          message = err.message;
+        } else if (err.message) {
+          message = err.message;
+        }
+        setError(message);
+    } finally {
         setIsLoading(false);
-    });
+    }
   }, [user, firestore]);
 
   useEffect(() => {
