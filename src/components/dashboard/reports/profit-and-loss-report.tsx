@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -24,8 +25,18 @@ export function ProfitAndLossReport() {
   });
   
   const [activeRange, setActiveRange] = useState(dates);
+  const [isClient, setIsClient] = useState(false);
 
-  // 1. The Power Query: Hierarchy-agnostic
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const handleRunReport = () => {
+    if (dates?.from && dates?.to) {
+      setActiveRange({ ...dates });
+    }
+  };
+
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore) return null;
     return query(
@@ -39,7 +50,6 @@ export function ProfitAndLossReport() {
 
   const { data: transactions, isLoading, error } = useCollection(transactionsQuery);
 
-  // 2. The Logic Engine: Grouping & Net Income
   const reportData = useMemo(() => {
     if (!transactions) return { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
 
@@ -49,7 +59,6 @@ export function ProfitAndLossReport() {
     let totalExp = 0;
 
     transactions.forEach((tx: any) => {
-      // Look for L0/Primary category and normalize to lowercase
       const categoryType = (tx.categoryHierarchy?.l0 || tx.primaryCategory || 'uncategorized').toLowerCase();
       const label = tx.categoryHierarchy?.l2 || tx.subcategory || 'General / Misc';
       const amount = Number(tx.amount) || 0;
@@ -68,7 +77,7 @@ export function ProfitAndLossReport() {
       expenses: Array.from(expMap, ([name, total]) => ({ name, total })),
       totalInc,
       totalExp,
-      net: totalInc - Math.abs(totalExp) // Assuming expenses might be stored as positive or negative
+      net: totalInc - Math.abs(totalExp)
     };
   }, [transactions]);
 
@@ -96,7 +105,7 @@ export function ProfitAndLossReport() {
             <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
           </div>
         </div>
-        <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
+        <Button onClick={handleRunReport} disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
           Run Fiscal Report
         </Button>
@@ -106,13 +115,12 @@ export function ProfitAndLossReport() {
         <CardHeader className="border-b bg-slate-50/50">
           <CardTitle className="text-3xl text-center">Profit & Loss Statement</CardTitle>
           <CardDescription className="text-center font-mono">
-            {format(new Date(activeRange.from), 'MMM d, yyyy')} — {format(new Date(activeRange.to), 'MMM d, yyyy')}
+            {isClient ? `${format(new Date(activeRange.from), 'MMM d, yyyy')} — ${format(new Date(activeRange.to), 'MMM d, yyyy')}` : '...'}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
           <Table>
             <TableBody>
-              {/* INCOME SECTION */}
               <TableRow className="bg-green-50/50 font-bold">
                 <TableCell className="text-lg text-green-700">Total Income</TableCell>
                 <TableCell className="text-right text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
@@ -126,7 +134,6 @@ export function ProfitAndLossReport() {
 
               <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
 
-              {/* EXPENSE SECTION */}
               <TableRow className="bg-red-50/50 font-bold">
                 <TableCell className="text-lg text-red-700">Total Expenses</TableCell>
                 <TableCell className="text-right text-lg">{formatCurrency(reportData.totalExp)}</TableCell>
@@ -138,7 +145,6 @@ export function ProfitAndLossReport() {
                 </TableRow>
               ))}
 
-              {/* NET INCOME */}
               <TableRow className="border-t-4 border-double font-black text-2xl">
                 <TableCell>Net Operating Income</TableCell>
                 <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
