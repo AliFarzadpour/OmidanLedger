@@ -24,8 +24,9 @@ service cloud.firestore {
     // Rule to allow collection group queries on 'transactions'
     // This recursive wildcard match is required for reports like P&L to function.
     match /{path=**}/transactions/{transactionId} {
-       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-       allow list: if isSignedIn() && request.query.resource.data.userId == request.auth.uid;
+       allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+       // Allow a LIST operation (used by collectionGroup) if the query is filtering by the user's own UID.
+       allow list: if isSignedIn() && request.query.where.userId == request.auth.uid;
        allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
