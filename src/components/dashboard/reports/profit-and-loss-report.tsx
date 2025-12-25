@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { format, startOfMonth, endOfMonth, parseISO, isWithinInterval } from 'date-fns';
-import { collection, query, where, orderBy, getDocs, collectionGroup } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection } from '@/firebase';
+import { collection, getDocs, query, collectionGroup, where } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { format, parseISO, isWithinInterval } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -28,12 +28,11 @@ function toDate(value: any): Date | null {
   return null;
 }
 
-
 export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [dates, setDates] = useState<{ from: string, to: string } | null>(null);
-  const [activeRange, setActiveRange] = useState<{ from: string, to: string } | null>(null);
+  const [dates, setDates] = useState({ from: '', to: '' });
+  const [activeRange, setActiveRange] = useState({ from: '', to: '' });
   const [allTransactions, setAllTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,8 +40,8 @@ export function ProfitAndLossReport() {
   useEffect(() => {
     // This runs only on the client, after the initial render
     const initialDates = {
-      from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
-      to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+      from: format(new Date('2025-01-01'), 'yyyy-MM-dd'),
+      to: format(new Date('2025-12-31'), 'yyyy-MM-dd')
     };
     setDates(initialDates);
     setActiveRange(initialDates);
@@ -68,7 +67,7 @@ export function ProfitAndLossReport() {
             });
 
             const transactionSnapshots = await Promise.all(transactionPromises);
-            const fetchedTransactions = transactionSnapshots.flatMap(snap => snap.docs.map(d => d.data()));
+            const fetchedTransactions = transactionSnapshots.flatMap(snap => snap.docs.map(d => ({id: d.id, ...d.data()})));
             
             setAllTransactions(fetchedTransactions);
 
@@ -83,50 +82,69 @@ export function ProfitAndLossReport() {
   }, [user, firestore]);
 
   const reportData = useMemo(() => {
-    const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
-    if (!allTransactions || !activeRange) return empty;
-
+    const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0, rows: 0, filteredRows: 0 };
+    if (!allTransactions || !activeRange.from || !activeRange.to) return empty;
+  
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
-
+  
     const incMap = new Map<string, number>();
     const expMap = new Map<string, number>();
     let totalInc = 0;
     let totalExp = 0;
-    
+  
+    let filteredRows = 0;
+  
+    // Filter by user ID on the client side
     const userTransactions = allTransactions.filter(tx => tx.userId === user?.uid);
 
-    userTransactions.forEach((tx: any) => {
-        const d = toDate(tx.date);
-        if (!d || !isWithinInterval(d, { start: fromD, end: toD })) return;
-        
-        const rawAmount = Number(tx.amount) || 0;
-        const isIncome = rawAmount > 0;
-        const isExpense = rawAmount < 0;
+    for (const tx of userTransactions) {
+      const d = toDate(tx.date);
+      if (!d) continue;
+  
+      // filter by date range on the client
+      const inRange = isWithinInterval(d, { start: fromD, end: toD });
+      if (!inRange) continue;
+      filteredRows++;
+  
+      const rawAmount = Number(tx.amount) || 0;
+      const isIncome = rawAmount > 0;
+      const isExpense = rawAmount < 0;
+  
+      const h = tx.categoryHierarchy || {};
+      const label = h.l2 || tx.subcategory || tx.secondaryCategory || tx.primaryCategory || 'Other / Uncategorized';
+      
+      const normalizedLabel = label.trim()
+        .replace(/Expenses/gi, 'Expense')
+        .replace(/Line \d+: /i, '');
 
-        const h = tx.categoryHierarchy || {};
-        const label = (h.l2 || tx.subcategory || 'Uncategorized').trim();
 
-        const amountAbs = Math.abs(rawAmount);
-
-        if (isIncome) {
-            totalInc += amountAbs;
-            incMap.set(label, (incMap.get(label) || 0) + amountAbs);
-        } else if (isExpense) {
-            totalExp += amountAbs;
-            expMap.set(label, (expMap.get(label) || 0) + amountAbs);
-        }
-    });
-
+      const amountAbs = Math.abs(rawAmount);
+  
+      if (isIncome) {
+        totalInc += amountAbs;
+        incMap.set(normalizedLabel, (incMap.get(normalizedLabel) || 0) + amountAbs);
+      } else if (isExpense) {
+        totalExp += amountAbs;
+        expMap.set(normalizedLabel, (expMap.get(normalizedLabel) || 0) + amountAbs);
+      }
+    }
+  
+    const income = Array.from(incMap, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    const expenses = Array.from(expMap, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+  
     return {
-      income: Array.from(incMap, ([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total),
-      expenses: Array.from(expMap, ([name, total]) => ({ name, total })).sort((a,b) => b.total - a.total),
+      income,
+      expenses,
       totalInc,
       totalExp,
-      net: totalInc - totalExp
+      net: totalInc - totalExp,
+      rows: userTransactions.length,
+      filteredRows,
     };
   }, [allTransactions, user, activeRange]);
   
+
   if (error) {
     return (
         <Alert variant="destructive" className="m-8">
@@ -145,14 +163,14 @@ export function ProfitAndLossReport() {
         <div className="flex gap-4">
           <div className="grid gap-2">
             <Label>Start Date</Label>
-            <Input type="date" value={dates?.from} onChange={e => setDates(d => ({...d!, from: e.target.value}))} />
+            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d!, from: e.target.value}))} />
           </div>
           <div className="grid gap-2">
             <Label>End Date</Label>
-            <Input type="date" value={dates?.to} onChange={e => setDates(d => ({...d!, to: e.target.value}))} />
+            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d!, to: e.target.value}))} />
           </div>
         </div>
-        <Button onClick={() => setActiveRange({...dates!})} disabled={isLoading}>
+        <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
           Run Report
         </Button>
@@ -162,12 +180,12 @@ export function ProfitAndLossReport() {
         <CardHeader className="border-b bg-slate-50/50 text-center">
           <CardTitle className="text-3xl font-bold">Profit & Loss Statement</CardTitle>
           <CardDescription className="font-mono text-sm uppercase tracking-widest">
-             {activeRange ? `${activeRange.from} TO ${activeRange.to}` : "Select a date range"}
+             {activeRange.from && activeRange.to ? `${activeRange.from} TO ${activeRange.to}` : "Select a date range"}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
            <div className="text-xs text-muted-foreground text-center mb-4 font-mono">
-             Auth UID: {user?.uid} • Loaded: {allTransactions.length} total tx
+             Auth UID: {user?.uid} • Loaded: {reportData.rows} total tx • In range: {reportData.filteredRows} rows
            </div>
           {isLoading ? (
              <div className="flex flex-col items-center justify-center p-12 space-y-4">
