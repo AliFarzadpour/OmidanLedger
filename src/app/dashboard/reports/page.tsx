@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building, TrendingUp } from 'lucide-react';
+import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building, TrendingUp, Scale } from 'lucide-react';
 import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 export default function ReportsPage() {
@@ -42,6 +42,12 @@ export default function ReportsPage() {
       description: 'An interactive report of all transactions, grouped by category.',
       href: '/dashboard/reports/detailed-ledger',
       icon: ListOrdered,
+    },
+    {
+      title: 'Trial Balance',
+      description: 'A summary of debits and credits for all accounts to verify balance.',
+      href: '/dashboard/reports/trial-balance',
+      icon: Scale,
     },
     {
       title: 'Chart of Accounts',
