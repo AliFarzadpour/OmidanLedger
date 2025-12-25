@@ -21,15 +21,6 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(tenantUserId)).data.landlordId == request.auth.uid;
     }
     
-    // Rule to allow collection group queries on 'transactions'
-    // This recursive wildcard match is required for reports like P&L to function.
-    match /{path=**}/transactions/{transactionId} {
-       allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-       // Allow a LIST operation (used by collectionGroup) if the query is filtering by the user's own UID.
-       allow list: if isSignedIn() && request.query.where.userId == request.auth.uid;
-       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-    }
-
     match /users/{userId} {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && request.resource.data.id == userId;
@@ -125,5 +116,3 @@ service firebase.storage {
     }
   }
 }
-
-    
