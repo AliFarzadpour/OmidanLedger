@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -180,7 +181,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
-          dataSource={{ id: '', accountName: '' }} // dataSource is not strictly needed for this drawer's batch edit
+          dataSource={{ id: '', accountName: '' }} 
           onSuccess={() => {
             setSelectedIds([]);
             onUpdate();
