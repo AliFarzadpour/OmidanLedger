@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building } from 'lucide-react';
+import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building, TrendingUp } from 'lucide-react';
 import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
 
 export default function ReportsPage() {
@@ -24,6 +24,12 @@ export default function ReportsPage() {
       description: 'Review your income, expenses, and profitability over a period.',
       href: '/dashboard/reports/profit-and-loss',
       icon: FileText,
+    },
+    {
+      title: 'Income Statement',
+      description: 'A detailed breakdown of all revenue sources.',
+      href: '/dashboard/reports/income-statement',
+      icon: TrendingUp,
     },
     {
       title: 'General Ledger',
