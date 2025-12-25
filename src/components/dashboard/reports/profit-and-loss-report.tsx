@@ -1,73 +1,82 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { collection, getDocs, query, collectionGroup, where } from 'firebase/firestore';
-import { useFirestore, useUser } from '@/firebase';
-import { format, parseISO, isWithinInterval } from 'date-fns';
+import { useUser, useFirestore } from '@/firebase';
+import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
+import { parseISO, isWithinInterval } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { PlayCircle, AlertCircle, Loader2, ChevronsRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ProfitAndLossDrawer } from './profit-and-loss-drawer';
+import type { Transaction } from '@/components/dashboard/transactions-table';
 
 // Helper: normalize Firestore Timestamp OR string to JS Date (or null)
 function toDate(value: any): Date | null {
   if (!value) return null;
+
   // Firestore Timestamp
   if (typeof value === 'object' && typeof value.toDate === 'function') {
     return value.toDate();
   }
+
   // ISO date string
   if (typeof value === 'string') {
     const d = parseISO(value);
     return isNaN(d.getTime()) ? null : d;
   }
+
   return null;
 }
 
 export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
+
   const [dates, setDates] = useState({ from: '', to: '' });
   const [activeRange, setActiveRange] = useState({ from: '', to: '' });
   const [allTransactions, setAllTransactions] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // State for the drawer
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<{ name: string; transactions: Transaction[] } | null>(null);
+
   useEffect(() => {
-    // This runs only on the client, after the initial render
     const initialDates = {
-      from: format(new Date('2025-01-01'), 'yyyy-MM-dd'),
-      to: format(new Date('2025-12-31'), 'yyyy-MM-dd')
+      from: '2025-01-01',
+      to: '2025-12-31'
     };
     setDates(initialDates);
     setActiveRange(initialDates);
   }, []);
-  
+
   useEffect(() => {
     if (!user || !firestore) return;
     setIsLoading(true);
-
+    
     const fetchAllData = async () => {
         try {
-            const accountsQuery = query(collection(firestore, `users/${user.uid}/bankAccounts`));
-            const accountsSnap = await getDocs(accountsQuery);
+            const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
             if (accountsSnap.empty) {
                 setAllTransactions([]);
                 setIsLoading(false);
                 return;
             }
 
-            const transactionPromises = accountsSnap.docs.map(accountDoc => {
-                const transactionsColRef = collection(accountDoc.ref, 'transactions');
-                return getDocs(transactionsColRef);
-            });
+            const transactionPromises = accountsSnap.docs.map(accountDoc => 
+                getDocs(collection(accountDoc.ref, 'transactions'))
+            );
 
             const transactionSnapshots = await Promise.all(transactionPromises);
-            const fetchedTransactions = transactionSnapshots.flatMap(snap => snap.docs.map(d => ({id: d.id, ...d.data()})));
+            const fetchedTransactions = transactionSnapshots.flatMap(snap => 
+                snap.docs.map(d => ({...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }))
+            );
             
             setAllTransactions(fetchedTransactions);
 
@@ -88,21 +97,19 @@ export function ProfitAndLossReport() {
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
   
-    const incMap = new Map<string, number>();
-    const expMap = new Map<string, number>();
+    const incMap = new Map<string, { total: number; transactions: Transaction[] }>();
+    const expMap = new Map<string, { total: number; transactions: Transaction[] }>();
     let totalInc = 0;
     let totalExp = 0;
   
     let filteredRows = 0;
   
-    // Filter by user ID on the client side
     const userTransactions = allTransactions.filter(tx => tx.userId === user?.uid);
 
     for (const tx of userTransactions) {
       const d = toDate(tx.date);
       if (!d) continue;
   
-      // filter by date range on the client
       const inRange = isWithinInterval(d, { start: fromD, end: toD });
       if (!inRange) continue;
       filteredRows++;
@@ -113,25 +120,27 @@ export function ProfitAndLossReport() {
   
       const h = tx.categoryHierarchy || {};
       const label = h.l2 || tx.subcategory || tx.secondaryCategory || tx.primaryCategory || 'Other / Uncategorized';
-      
-      const normalizedLabel = label.trim()
-        .replace(/Expenses/gi, 'Expense')
-        .replace(/Line \d+: /i, '');
-
+      const normalizedLabel = label.trim().replace(/^Line \d+: /, '');
 
       const amountAbs = Math.abs(rawAmount);
   
       if (isIncome) {
         totalInc += amountAbs;
-        incMap.set(normalizedLabel, (incMap.get(normalizedLabel) || 0) + amountAbs);
+        const current = incMap.get(normalizedLabel) || { total: 0, transactions: [] };
+        current.total += amountAbs;
+        current.transactions.push(tx);
+        incMap.set(normalizedLabel, current);
       } else if (isExpense) {
         totalExp += amountAbs;
-        expMap.set(normalizedLabel, (expMap.get(normalizedLabel) || 0) + amountAbs);
+        const current = expMap.get(normalizedLabel) || { total: 0, transactions: [] };
+        current.total += amountAbs;
+        current.transactions.push(tx);
+        expMap.set(normalizedLabel, current);
       }
     }
   
-    const income = Array.from(incMap, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
-    const expenses = Array.from(expMap, ([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
+    const income = Array.from(incMap, ([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total);
+    const expenses = Array.from(expMap, ([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total);
   
     return {
       income,
@@ -143,6 +152,11 @@ export function ProfitAndLossReport() {
       filteredRows,
     };
   }, [allTransactions, user, activeRange]);
+
+  const handleRowClick = (name: string, transactions: Transaction[]) => {
+    setSelectedCategory({ name, transactions });
+    setIsDrawerOpen(true);
+  };
   
 
   if (error) {
@@ -158,16 +172,17 @@ export function ProfitAndLossReport() {
   }
 
   return (
+    <>
     <div className="p-8 space-y-6 max-w-5xl mx-auto">
       <div className="flex justify-between items-end bg-muted/50 p-6 rounded-xl border">
         <div className="flex gap-4">
           <div className="grid gap-2">
             <Label>Start Date</Label>
-            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d!, from: e.target.value}))} />
+            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d, from: e.target.value}))} />
           </div>
           <div className="grid gap-2">
             <Label>End Date</Label>
-            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d!, to: e.target.value}))} />
+            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
           </div>
         </div>
         <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
@@ -180,7 +195,7 @@ export function ProfitAndLossReport() {
         <CardHeader className="border-b bg-slate-50/50 text-center">
           <CardTitle className="text-3xl font-bold">Profit & Loss Statement</CardTitle>
           <CardDescription className="font-mono text-sm uppercase tracking-widest">
-             {activeRange.from && activeRange.to ? `${activeRange.from} TO ${activeRange.to}` : "Select a date range"}
+             {activeRange.from} TO {activeRange.to}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
@@ -201,9 +216,9 @@ export function ProfitAndLossReport() {
                   <TableCell className="text-right text-green-800 text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
                 </TableRow>
                 {reportData.income.length > 0 ? reportData.income.map(i => (
-                  <TableRow key={i.name} className="border-none">
-                    <TableCell className="pl-12 text-muted-foreground">{i.name}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(i.total)}</TableCell>
+                  <TableRow key={i.name} onClick={() => handleRowClick(i.name, i.transactions)} className="cursor-pointer hover:bg-slate-50">
+                    <TableCell className="pl-8 text-muted-foreground group-hover:text-primary">{i.name}</TableCell>
+                    <TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(i.total)} <ChevronsRight className="h-4 w-4 text-slate-300"/></TableCell>
                   </TableRow>
                 )) : (
                   <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income transactions found.</TableCell></TableRow>
@@ -217,9 +232,9 @@ export function ProfitAndLossReport() {
                   <TableCell className="text-right text-red-800 text-lg">({formatCurrency(reportData.totalExp)})</TableCell>
                 </TableRow>
                 {reportData.expenses.length > 0 ? reportData.expenses.map(e => (
-                  <TableRow key={e.name} className="border-none">
-                    <TableCell className="pl-12 text-muted-foreground">{e.name}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(e.total)}</TableCell>
+                  <TableRow key={e.name} onClick={() => handleRowClick(e.name, e.transactions)} className="cursor-pointer hover:bg-slate-50">
+                    <TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell>
+                     <TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} <ChevronsRight className="h-4 w-4 text-slate-300"/></TableCell>
                   </TableRow>
                 )) : (
                   <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expense transactions found.</TableCell></TableRow>
@@ -237,5 +252,13 @@ export function ProfitAndLossReport() {
         </CardContent>
       </Card>
     </div>
+    {selectedCategory && (
+      <ProfitAndLossDrawer 
+        isOpen={isDrawerOpen} 
+        onOpenChange={setIsDrawerOpen}
+        category={selectedCategory}
+      />
+    )}
+    </>
   );
 }
