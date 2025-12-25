@@ -54,8 +54,10 @@ service cloud.firestore {
     
     // Rule to allow collection group queries on 'transactions'
     match /{path=**}/transactions/{transactionId} {
-       allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
-       // This write rule is now more flexible.
+       // Corrected Rule: Check the query constraints, not just the resource.
+       // This allows the P&L and other reports to run correctly.
+       allow list: if isSignedIn() && request.query.resource.data.userId == request.auth.uid;
+       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
        allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
