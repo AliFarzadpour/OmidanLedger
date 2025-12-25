@@ -1,260 +1,154 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { DateRange } from 'react-day-picker';
-import { format, startOfMonth } from 'date-fns';
-import { collectionGroup, query, where, orderBy, Timestamp } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { collectionGroup, query, where, orderBy } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlayCircle } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PlayCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
-
-type Transaction = {
-  id: string;
-  date: string | Timestamp; // Can be string or Timestamp
-  description: string;
-  amount: number;
-  primaryCategory: string; // Keep for fallback
-  subcategory: string; // Keep for fallback
-  categoryHierarchy?: {
-    l0: string;
-    l1: string;
-    l2: string;
-    l3: string;
-  };
-  reviewStatus?: 'approved' | 'needs-review' | 'incorrect';
-};
-
-type ReportSection = {
-  title: string;
-  total: number;
-  items: { name: string; total: number }[];
-};
 
 export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>();
+  // Initialize with the current month
+  const [dates, setDates] = useState({
+    from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+    to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+  });
   
-  const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
-  const [mounted, setMounted] = useState(false);
+  const [activeRange, setActiveRange] = useState(dates);
 
-  useEffect(() => {
-    if (!mounted) {
-      const initialRange = {
-        from: startOfMonth(new Date()),
-        to: new Date(),
-      };
-      setPendingDateRange(initialRange);
-      setActiveDateRange(initialRange);
-      setMounted(true);
-    }
-  }, [mounted]);
-
-  // --- REFACTORED DATA FETCHING ---
-  const incomeQuery = useMemoFirebase(() => {
-    if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
-    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
-    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
+  // 1. The Power Query: Hierarchy-agnostic
+  const transactionsQuery = useMemo(() => {
+    if (!user || !firestore) return null;
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
-      where('categoryHierarchy.l0', '==', 'Income'),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
+      where('date', '>=', activeRange.from),
+      where('date', '<=', activeRange.to),
       orderBy('date', 'asc')
     );
-  }, [user, firestore, activeDateRange]);
+  }, [user, firestore, activeRange]);
 
-  const expenseQuery = useMemoFirebase(() => {
-    if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
-    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
-    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
-    return query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
-      where('categoryHierarchy.l0', 'in', ['Expense', 'Expenses']),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
-      orderBy('date', 'asc')
-    );
-  }, [user, firestore, activeDateRange]);
+  const { data: transactions, isLoading, error } = useCollection(transactionsQuery);
 
-  const { data: incomeTransactions, isLoading: isLoadingIncome, error: incomeError } = useCollection<Transaction>(incomeQuery);
-  const { data: expenseTransactions, isLoading: isLoadingExpenses, error: expenseError } = useCollection<Transaction>(expenseQuery);
-  // --- END REFACTORED DATA FETCHING ---
+  // 2. The Logic Engine: Grouping & Net Income
+  const reportData = useMemo(() => {
+    if (!transactions) return { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
 
-  const handleRunReport = () => {
-    if (pendingDateRange) {
-        setActiveDateRange({ ...pendingDateRange });
-    }
-  };
+    const incMap = new Map();
+    const expMap = new Map();
+    let totalInc = 0;
+    let totalExp = 0;
 
-  const { income, expenses, netIncome } = useMemo(() => {
-    const processTransactions = (transactions: Transaction[] | null) => {
-        if (!transactions) return [];
-        const map = new Map<string, number>();
-        transactions.forEach((txn) => {
-          const l2 = txn.categoryHierarchy?.l2 || txn.subcategory || "Uncategorized";
-          map.set(l2, (map.get(l2) || 0) + txn.amount);
-        });
-        return Array.from(map, ([name, total]) => ({ name, total }));
-    };
-  
-    const incomeItems = processTransactions(incomeTransactions);
-    const expenseItems = processTransactions(expenseTransactions);
-    
-    const totalIncome = incomeItems.reduce((acc, item) => acc + item.total, 0);
-    const totalExpenses = expenseItems.reduce((acc, item) => acc + item.total, 0);
+    transactions.forEach((tx: any) => {
+      // Look for L0/Primary category and normalize to lowercase
+      const categoryType = (tx.categoryHierarchy?.l0 || tx.primaryCategory || 'uncategorized').toLowerCase();
+      const label = tx.categoryHierarchy?.l2 || tx.subcategory || 'General / Misc';
+      const amount = Number(tx.amount) || 0;
+
+      if (categoryType.includes('income') || categoryType.includes('revenue')) {
+        totalInc += amount;
+        incMap.set(label, (incMap.get(label) || 0) + amount);
+      } else if (categoryType.includes('expense')) {
+        totalExp += amount;
+        expMap.set(label, (expMap.get(label) || 0) + amount);
+      }
+    });
 
     return {
-      income: incomeItems,
-      expenses: expenseItems,
-      netIncome: totalIncome + totalExpenses,
+      income: Array.from(incMap, ([name, total]) => ({ name, total })),
+      expenses: Array.from(expMap, ([name, total]) => ({ name, total })),
+      totalInc,
+      totalExp,
+      net: totalInc - Math.abs(totalExp) // Assuming expenses might be stored as positive or negative
     };
-  }, [incomeTransactions, expenseTransactions]);
+  }, [transactions]);
 
-  const totalIncome = income.reduce((acc, item) => acc + item.total, 0);
-  const totalExpenses = expenses.reduce((acc, item) => acc + item.total, 0);
-  const isLoading = isLoadingIncome || isLoadingExpenses;
-  const error = incomeError || expenseError;
-
-  const handleDateInputChange = (field: 'from' | 'to', value: string) => {
-    const date = value ? new Date(value) : undefined;
-    if (date && !isNaN(date.getTime())) {
-      // Adjust for timezone offset by creating date in UTC
-      const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      setPendingDateRange(prev => ({ ...prev, [field]: localDate }));
-    }
-  };
-
-  const renderContent = () => {
-    if (!mounted || isLoading) {
-      return <Skeleton className="h-64 w-full" />;
-    }
-    if (error) {
-      return (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error Loading Data</AlertTitle>
-          <AlertDescription>
-            <p>An error occurred while fetching your financial data. This is often due to a missing Firestore index.</p>
-            <pre className="font-mono text-xs mt-2 bg-slate-100 p-2 rounded whitespace-pre-wrap">{error.message}</pre>
-          </AlertDescription>
-        </Alert>
-      );
-    }
-    if (!activeDateRange) {
-         return (
-            <p className="py-8 text-center text-muted-foreground">
-                Please select a date range and click "Run Report" to generate your Profit &amp; Loss statement.
-            </p>
-        );
-    }
-    if (!incomeTransactions?.length && !expenseTransactions?.length) {
-      return (
-        <p className="py-8 text-center text-muted-foreground">
-          No transaction data available for the selected period.
-        </p>
-      );
-    }
-
-    return (
-      <Table>
-        <TableBody>
-          <ReportSection title="Income" items={income} total={totalIncome} isBold />
-          <ReportSection title="Expenses" items={expenses} total={totalExpenses} isBold />
-          <TableRow className="font-bold text-lg bg-card border-t-2">
-            <TableCell>Net Income</TableCell>
-            <TableCell className="text-right">{formatCurrency(netIncome)}</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    );
-  };
-  
-  const companyName = user?.displayName ? `${user.displayName}'s Company` : "FiscalFlow LLC";
-
-  return (
-    <div className="space-y-6 p-4 md:p-8">
-       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-                <h1 className="text-3xl font-bold tracking-tight">Profit &amp; Loss Statement</h1>
-                <p className="text-muted-foreground">Review your income, expenses, and profitability.</p>
-            </div>
-            {mounted && (
-              <div className="flex items-end gap-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="start-date">Start Date</Label>
-                  <Input
-                    id="start-date"
-                    type="date"
-                    value={pendingDateRange?.from ? format(pendingDateRange.from, 'yyyy-MM-dd') : ''}
-                    onChange={(e) => handleDateInputChange('from', e.target.value)}
-                    className="w-[180px]"
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="end-date">End Date</Label>
-                  <Input
-                    id="end-date"
-                    type="date"
-                    value={pendingDateRange?.to ? format(pendingDateRange.to, 'yyyy-MM-dd') : ''}
-                    onChange={(e) => handleDateInputChange('to', e.target.value)}
-                    className="w-[180px]"
-                  />
-                </div>
-                <Button onClick={handleRunReport} disabled={isLoading}>
-                    <PlayCircle className="mr-2 h-4 w-4" />
-                    {isLoading ? 'Loading...' : 'Run Report'}
-                </Button>
-              </div>
-            )}
-       </div>
-
-        <Card>
-            <CardHeader className="text-center">
-                <CardTitle className="text-2xl">{companyName}</CardTitle>
-                <CardDescription>
-                    {activeDateRange ? (
-                         <>For the period from {activeDateRange.from ? format(activeDateRange.from, 'MMMM d, yyyy') : '...'} to {activeDateRange.to ? format(activeDateRange.to, 'MMMM d, yyyy') : '...'}</>
-                    ) : 'No period selected'}
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                {renderContent()}
-            </CardContent>
-            <CardFooter>
-                 <p className="text-xs text-muted-foreground">This report includes all transactions within the period, regardless of review status.</p>
-            </CardFooter>
-        </Card>
-    </div>
+  if (error) return (
+    <Alert variant="destructive" className="m-8">
+      <AlertCircle className="h-4 w-4" />
+      <AlertTitle>Firestore Error</AlertTitle>
+      <AlertDescription>
+        Ensure you have the Composite Index (userId: ASC, date: ASC) and the {`{path=**}`} Security Rule enabled.
+        <code className="block mt-2 text-xs">{error.message}</code>
+      </AlertDescription>
+    </Alert>
   );
-}
 
-function ReportSection({ title, items, total, isBold = false }: { title: string; items: { name: string; total: number }[], total: number, isBold?: boolean }) {
-  if (items.length === 0) return null;
   return (
-    <>
-      <TableRow className={cn(isBold && "font-bold", "bg-muted/30")}>
-        <TableCell>{title}</TableCell>
-        <TableCell className="text-right">{formatCurrency(total)}</TableCell>
-      </TableRow>
-      {items.map((item) => (
-        <TableRow key={item.name}>
-          <TableCell className="pl-8 text-muted-foreground">{item.name}</TableCell>
-          <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
-        </TableRow>
-      ))}
-    </>
+    <div className="p-8 space-y-6 max-w-5xl mx-auto">
+      <div className="flex justify-between items-end bg-muted/50 p-6 rounded-xl border">
+        <div className="flex gap-4">
+          <div className="grid gap-2">
+            <Label>Start Date</Label>
+            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d, from: e.target.value}))} />
+          </div>
+          <div className="grid gap-2">
+            <Label>End Date</Label>
+            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
+          </div>
+        </div>
+        <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
+          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
+          Run Fiscal Report
+        </Button>
+      </div>
+
+      <Card className="shadow-lg border-t-4 border-t-primary">
+        <CardHeader className="border-b bg-slate-50/50">
+          <CardTitle className="text-3xl text-center">Profit & Loss Statement</CardTitle>
+          <CardDescription className="text-center font-mono">
+            {format(new Date(activeRange.from), 'MMM d, yyyy')} — {format(new Date(activeRange.to), 'MMM d, yyyy')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <Table>
+            <TableBody>
+              {/* INCOME SECTION */}
+              <TableRow className="bg-green-50/50 font-bold">
+                <TableCell className="text-lg text-green-700">Total Income</TableCell>
+                <TableCell className="text-right text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
+              </TableRow>
+              {reportData.income.map(item => (
+                <TableRow key={item.name} className="border-none">
+                  <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
+                </TableRow>
+              ))}
+
+              <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
+
+              {/* EXPENSE SECTION */}
+              <TableRow className="bg-red-50/50 font-bold">
+                <TableCell className="text-lg text-red-700">Total Expenses</TableCell>
+                <TableCell className="text-right text-lg">{formatCurrency(reportData.totalExp)}</TableCell>
+              </TableRow>
+              {reportData.expenses.map(item => (
+                <TableRow key={item.name} className="border-none">
+                  <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
+                </TableRow>
+              ))}
+
+              {/* NET INCOME */}
+              <TableRow className="border-t-4 border-double font-black text-2xl">
+                <TableCell>Net Operating Income</TableCell>
+                <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {formatCurrency(reportData.net)}
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
