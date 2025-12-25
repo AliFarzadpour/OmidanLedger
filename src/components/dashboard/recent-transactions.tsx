@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Badge } from '@/components/ui/badge';
@@ -73,10 +74,10 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                  ))
             ) : recentTransactions.length > 0 ? (
               recentTransactions.map((transaction, index) => (
-                <TableRow key={`${transaction.id}-${index}`}>
+                <TableRow key={`${transaction.id}-${transaction.bankAccountId}-${index}`}>
                   <TableCell>
                     <div className="font-medium">{transaction.description}</div>
-                    <div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div>
+                    <div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div>
                   </TableCell>
                   <TableCell>
                     <Badge

@@ -341,7 +341,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                             onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
                         />
                     </TableCell>
-                    <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
+                    <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
@@ -487,4 +487,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     );
 }
 
-    
