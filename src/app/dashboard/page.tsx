@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collectionGroup, query, where, getDocs } from 'firebase/firestore'; 
+import { collectionGroup, query, where, getDocs, FirestoreError } from 'firebase/firestore'; 
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { FirestorePermissionError, errorEmitter } from '@/firebase';
 
 type Transaction = {
   id: string;
@@ -26,6 +27,7 @@ type Transaction = {
   secondaryCategory?: string;
   subcategory?: string;
   userId: string;
+  bankAccountId?: string;
 };
 
 type FilterOption = 'this-month' | 'last-month' | 'this-year';
@@ -63,39 +65,47 @@ export default function DashboardPage() {
 
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
-  // 1. DATA FETCHING (Unchanged - Safe)
-  useEffect(() => {
-    async function fetchData() {
-        if (!user || !firestore) return;
-        setIsLoading(true);
-        setError(null);
+  const fetchData = useCallback(async () => {
+    if (!user || !firestore) return;
+    setIsLoading(true);
+    setError(null);
 
-        try {
-            const q = query(
-                collectionGroup(firestore, 'transactions'),
-                where('userId', '==', user.uid)
-            );
-            const snapshot = await getDocs(q);
-            if (snapshot.empty) {
-                setAllTransactions([]);
-            } else {
-                const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
-                data.sort((a, b) => (a.date < b.date ? 1 : -1));
-                setAllTransactions(data);
-            }
-        } catch (err: any) {
-            console.error("Fetch Error:", err);
-            setError(err.message);
-        } finally {
-            setIsLoading(false);
+    const q = query(
+        collectionGroup(firestore, 'transactions'),
+        where('userId', '==', user.uid)
+    );
+
+    getDocs(q).then(snapshot => {
+        if (snapshot.empty) {
+            setAllTransactions([]);
+        } else {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Transaction[];
+            data.sort((a, b) => (new Date(b.date).getTime() - new Date(a.date).getTime()));
+            setAllTransactions(data);
         }
-    }
+        setIsLoading(false);
+    }).catch(err => {
+        console.error("Fetch Error:", err);
+        const permissionError = new FirestorePermissionError({
+          path: `transactions`,
+          operation: 'list',
+        });
+        errorEmitter.emit('permission-error', permissionError);
+        setError(permissionError.message);
+        setIsLoading(false);
+    });
+  }, [user, firestore]);
+
+  useEffect(() => {
     fetchData();
-  }, [user, firestore]); 
+  }, [fetchData]);
 
   // 2. CALCULATIONS (Added New KPIs)
   const stats = useMemo(() => {
-    const filtered = allTransactions.filter(tx => tx.date >= startDate && tx.date <= endDate);
+    const filtered = allTransactions.filter(tx => {
+        const txDate = new Date(tx.date);
+        return txDate >= new Date(startDate) && txDate <= new Date(endDate);
+    });
 
     let income = 0;
     let expenses = 0;
@@ -298,3 +308,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+    
