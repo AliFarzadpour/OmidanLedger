@@ -88,7 +88,9 @@ export function ProfitAndLossReport() {
   }, [error]);
 
   const handleRunReport = () => {
-    setActiveDateRange(pendingDateRange);
+    if (pendingDateRange) {
+        setActiveDateRange({ ...pendingDateRange }); // Create a new object reference
+    }
   };
 
   const { income, expenses, netIncome } = useMemo(() => {
