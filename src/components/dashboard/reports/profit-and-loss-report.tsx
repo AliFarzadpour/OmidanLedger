@@ -18,7 +18,6 @@ export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  // Initialize with the current month
   const [dates, setDates] = useState({
     from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
     to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
@@ -86,7 +85,7 @@ export function ProfitAndLossReport() {
       <AlertCircle className="h-4 w-4" />
       <AlertTitle>Firestore Error</AlertTitle>
       <AlertDescription>
-        Ensure you have the Composite Index (userId: ASC, date: ASC) and the {`{path=**}`} Security Rule enabled.
+        A permission issue or missing index is preventing data from loading.
         <code className="block mt-2 text-xs">{error.message}</code>
       </AlertDescription>
     </Alert>
@@ -115,44 +114,54 @@ export function ProfitAndLossReport() {
         <CardHeader className="border-b bg-slate-50/50">
           <CardTitle className="text-3xl text-center">Profit & Loss Statement</CardTitle>
           <CardDescription className="text-center font-mono">
-            {isClient ? `${format(new Date(activeRange.from), 'MMM d, yyyy')} — ${format(new Date(activeRange.to), 'MMM d, yyyy')}` : '...'}
+             {isClient ? `${format(new Date(activeRange.from), 'MMM d, yyyy')} — ${format(new Date(activeRange.to), 'MMM d, yyyy')}` : '...'}
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <Table>
-            <TableBody>
-              <TableRow className="bg-green-50/50 font-bold">
-                <TableCell className="text-lg text-green-700">Total Income</TableCell>
-                <TableCell className="text-right text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
-              </TableRow>
-              {reportData.income.map(item => (
-                <TableRow key={item.name} className="border-none">
-                  <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
+          {isLoading ? (
+            <div className="flex justify-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : (
+            <Table>
+              <TableBody>
+                <TableRow className="bg-green-50/50 font-bold">
+                  <TableCell className="text-lg text-green-700">Total Income</TableCell>
+                  <TableCell className="text-right text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
                 </TableRow>
-              ))}
+                {reportData.income.length > 0 ? reportData.income.map(item => (
+                  <TableRow key={item.name} className="border-none">
+                    <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
+                  </TableRow>
+                )) : (
+                  <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No income recorded for this period.</TableCell></TableRow>
+                )}
 
-              <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
+                <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
 
-              <TableRow className="bg-red-50/50 font-bold">
-                <TableCell className="text-lg text-red-700">Total Expenses</TableCell>
-                <TableCell className="text-right text-lg">{formatCurrency(reportData.totalExp)}</TableCell>
-              </TableRow>
-              {reportData.expenses.map(item => (
-                <TableRow key={item.name} className="border-none">
-                  <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
+                <TableRow className="bg-red-50/50 font-bold">
+                  <TableCell className="text-lg text-red-700">Total Expenses</TableCell>
+                  <TableCell className="text-right text-lg">{formatCurrency(reportData.totalExp)}</TableCell>
                 </TableRow>
-              ))}
+                {reportData.expenses.length > 0 ? reportData.expenses.map(item => (
+                  <TableRow key={item.name} className="border-none">
+                    <TableCell className="pl-12 text-muted-foreground">{item.name}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.total)}</TableCell>
+                  </TableRow>
+                )) : (
+                   <TableRow><TableCell colSpan={2} className="text-center text-muted-foreground py-4">No expenses recorded for this period.</TableCell></TableRow>
+                )}
 
-              <TableRow className="border-t-4 border-double font-black text-2xl">
-                <TableCell>Net Operating Income</TableCell>
-                <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(reportData.net)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
+                <TableRow className="border-t-4 border-double font-black text-2xl">
+                  <TableCell>Net Operating Income</TableCell>
+                  <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(reportData.net)}
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
