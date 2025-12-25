@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -13,9 +12,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Pencil } from 'lucide-react';
+import { Pencil, Edit } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Transaction } from '../transactions-table';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BatchEditDialog } from '../transactions/batch-edit-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800',
@@ -84,6 +85,17 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
   const firestore = useFirestore();
   const { toast } = useToast();
 
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+
+  const selectedTransactions = category.transactions.filter(tx => selectedIds.includes(tx.id));
+
+  const handleSelectionChange = (id: string, checked: boolean) => {
+    setSelectedIds(prev => 
+        checked ? [...prev, id] : prev.filter(i => i !== id)
+    );
+  };
+  
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string }) => {
     if (!user || !firestore || !transaction.bankAccountId) return;
     
@@ -109,6 +121,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
   };
   
   return (
+    <>
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
       <SheetContent className="w-[600px] sm:max-w-none">
         <SheetHeader>
@@ -117,11 +130,34 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
             This list shows all the transactions that make up this line item on your report.
           </SheetDescription>
         </SheetHeader>
+        
+        {selectedIds.length > 0 && (
+            <div className="my-4 flex items-center gap-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex-grow">
+                    <span className="font-semibold text-blue-800">{selectedIds.length}</span> items selected.
+                </div>
+                 <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBatchEditDialogOpen(true)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Batch Edit
+                </Button>
+            </div>
+        )}
+
         <div className="mt-4">
           <Table>
             <TableBody>
               {category.transactions.map((transaction) => (
                 <TableRow key={transaction.id}>
+                    <TableCell className="w-[50px]">
+                         <Checkbox 
+                            checked={selectedIds.includes(transaction.id)}
+                            onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
+                        />
+                    </TableCell>
                   <TableCell>
                     <div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div>
                     <div className="font-medium max-w-[200px] truncate">{transaction.description}</div>
@@ -139,5 +175,18 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
         </div>
       </SheetContent>
     </Sheet>
+    {isBatchEditDialogOpen && (
+        <BatchEditDialog
+          isOpen={isBatchEditDialogOpen}
+          onOpenChange={setBatchEditDialogOpen}
+          transactions={selectedTransactions}
+          dataSource={{ id: '', accountName: '' }} // dataSource is not strictly needed for this drawer's batch edit
+          onSuccess={() => {
+            setSelectedIds([]);
+            onUpdate();
+          }}
+        />
+      )}
+    </>
   );
 }
