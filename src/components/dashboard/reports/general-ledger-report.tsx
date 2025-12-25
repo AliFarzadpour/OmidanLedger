@@ -1,177 +1,143 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { useUser, useFirestore, useCollection } from '@/firebase';
-import { collection, getDocs, query, orderBy, collectionGroup, where } from 'firebase/firestore';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
+import { useMemo } from 'react';
+import { collection, query, where, orderBy } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection } from '@/firebase';
+import { formatCurrency } from '@/lib/format';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
-// Types matching the database structure
-interface BankAccount {
-  id: string;
-  accountName: string;
-  bankName: string;
-}
-
-interface Transaction {
-  id: string;
-  date: string; // Assuming date is a string like 'YYYY-MM-DD'
-  description: string;
-  amount: number;
+interface LedgerProps {
   bankAccountId: string;
+  accountName: string;
+  dateRange: { from: string; to: string };
 }
 
-interface LedgerData {
-  account: BankAccount;
-  transactions: Transaction[];
-}
-
-export function GeneralLedgerReport() {
+export default function GeneralLedger({ bankAccountId, accountName, dateRange }: LedgerProps) {
   const { user } = useUser();
   const firestore = useFirestore();
 
-  const accountsQuery = useMemo(() => {
-    if (!user || !firestore) return null;
-    return collection(firestore, `users/${user.uid}/bankAccounts`);
-  }, [user, firestore]);
-  const { data: accounts, isLoading: isLoadingAccounts } = useCollection<BankAccount>(accountsQuery);
-
-  const transactionsQuery = useMemo(() => {
-    if (!user || !firestore) return null;
+  // 1. Direct Scoped Query - No collectionGroup needed
+  const ledgerQuery = useMemo(() => {
+    if (!user || !firestore || !bankAccountId) return null;
+    
     return query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
-      orderBy('date', 'asc')
+      collection(firestore, `users/${user.uid}/bankAccounts/${bankAccountId}/transactions`),
+      where('date', '>=', dateRange.from),
+      where('date', '<=', dateRange.to),
+      orderBy('date', 'desc') // Traditional ledger: newest at the top
     );
-  }, [user, firestore]);
-  const { data: transactions, isLoading: isLoadingTransactions } = useCollection<Transaction>(transactionsQuery);
+  }, [user, firestore, bankAccountId, dateRange]);
 
-  const ledgerData = useMemo((): LedgerData[] => {
-    if (!accounts || !transactions) return [];
+  const { data: transactions, isLoading, error } = useCollection(ledgerQuery);
 
-    return accounts.map(account => {
-      const accountTransactions = transactions.filter(tx => tx.bankAccountId === account.id);
-      return { account, transactions: accountTransactions };
+  // 2. Data Processing & Normalization
+  const processedLedger = useMemo(() => {
+    if (!transactions) return [];
+
+    // Note: To calculate a true running balance from DESC data, 
+    // we would need the starting balance of the account. 
+    // Here we focus on transaction-level detail.
+    return transactions.map((tx: any) => {
+      const h = tx.categoryHierarchy || {};
+      
+      // Apply the normalization we learned from the P&L fix
+      let l2Label = (h.l2 || tx.subcategory || "Uncategorized").trim();
+      if (l2Label.toLowerCase().includes("line 19")) {
+        l2Label = "Line 19: Other Expenses";
+      }
+
+      return {
+        ...tx,
+        displayCategory: l2Label,
+        isExpense: tx.amount < 0
+      };
     });
-  }, [accounts, transactions]);
-  
-  const isLoading = isLoadingAccounts || isLoadingTransactions;
+  }, [transactions]);
 
-  if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-10 w-1/3" />
-        <Skeleton className="h-6 w-1/2" />
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-1/4" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-full" />
-              <Skeleton className="h-6 w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  if (ledgerData.length === 0) {
-    return (
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">General Ledger</h1>
-        <p className="text-muted-foreground">A detailed history of all transactions, grouped by account.</p>
-        <Card className="mt-8">
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">
-              No bank accounts found. Please add a data source on the Transactions page to see the General Ledger.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">General Ledger</h1>
-        <p className="text-muted-foreground">A detailed history of all transactions, grouped by account.</p>
-      </div>
-
-      <Accordion type="multiple" className="w-full space-y-4">
-        {ledgerData.map(({ account, transactions }) => (
-          <AccountLedger key={account.id} account={account} transactions={transactions} />
-        ))}
-      </Accordion>
+  if (isLoading) return (
+    <div className="flex justify-center p-20">
+      <Loader2 className="h-10 w-10 animate-spin text-primary" />
     </div>
   );
-}
 
-function AccountLedger({ account, transactions }: LedgerData) {
-    let runningBalance = 0;
-  
-    return (
-      <AccordionItem value={account.id} className="border-none">
-        <Card className="shadow-md">
-          <AccordionTrigger className="p-6 hover:no-underline">
-            <div className="flex justify-between items-center w-full">
-              <div className="text-left">
-                <h3 className="text-xl font-semibold">{account.accountName}</h3>
-                <p className="text-sm text-muted-foreground">{account.bankName}</p>
-              </div>
-            </div>
-          </AccordionTrigger>
-          <AccordionContent className="px-6 pb-6">
-            {transactions.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {transactions.map((tx) => {
-                    runningBalance += tx.amount;
-                    return (
-                      <TableRow key={tx.id}>
-                        <TableCell>{new Date(tx.date).toLocaleDateString()}</TableCell>
-                        <TableCell>{tx.description}</TableCell>
-                        <TableCell
-                          className={cn(
-                            'text-right font-medium',
-                            tx.amount >= 0 ? 'text-green-600' : 'text-foreground'
-                          )}
-                        >
-                          {new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: 'USD',
-                          }).format(tx.amount)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {new Intl.NumberFormat('en-US', {
-                            style: 'currency',
-                            currency: 'USD',
-                          }).format(runningBalance)}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+  return (
+    <Card className="w-full shadow-md">
+      <CardHeader className="flex flex-row items-center justify-between border-b bg-muted/30">
+        <div>
+          <CardTitle className="text-xl font-bold">General Ledger</CardTitle>
+          <p className="text-sm text-muted-foreground">{accountName} • {dateRange.from} to {dateRange.to}</p>
+        </div>
+        <Badge variant="outline" className="text-xs">
+          {processedLedger.length} Transactions
+        </Badge>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="w-[120px]">Date</TableHead>
+              <TableHead>Description / Merchant</TableHead>
+              <TableHead>Category (L2)</TableHead>
+              <TableHead className="text-right">Debit (Exp)</TableHead>
+              <TableHead className="text-right">Credit (Inc)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {processedLedger.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                  No transactions found for this period.
+                </TableCell>
+              </TableRow>
             ) : (
-              <p className="text-center text-muted-foreground py-4">No transactions found for this account.</p>
+              processedLedger.map((tx) => (
+                <TableRow key={tx.id} className="hover:bg-muted/20 transition-colors">
+                  <TableCell className="font-mono text-xs">
+                    {tx.date}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-medium text-sm line-clamp-1">{tx.description}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{tx.merchantName || 'Direct Payment'}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="font-normal text-[10px]">
+                      {tx.displayCategory}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-red-600 font-mono">
+                    {tx.isExpense ? (
+                      <div className="flex items-center justify-end gap-1">
+                        {formatCurrency(Math.abs(tx.amount))}
+                        <ArrowDownLeft className="h-3 w-3" />
+                      </div>
+                    ) : '-'}
+                  </TableCell>
+                  <TableCell className="text-right text-green-600 font-mono">
+                    {!tx.isExpense ? (
+                      <div className="flex items-center justify-end gap-1">
+                        {formatCurrency(tx.amount)}
+                        <ArrowUpRight className="h-3 w-3" />
+                      </div>
+                    ) : '-'}
+                  </TableCell>
+                </TableRow>
+              ))
             )}
-          </AccordionContent>
-        </Card>
-      </AccordionItem>
-    );
-  }
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
+  );
+}
