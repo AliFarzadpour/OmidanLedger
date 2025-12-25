@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collectionGroup, query, where, getDocs, writeBatch, doc } from 'firebase/firestore';
+import { collectionGroup, query, where, getDocs, writeBatch, doc, collection } from 'firebase/firestore';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -53,29 +53,49 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: Merge
 
   const fetchData = useCallback(async () => {
     if (!isOpen || !user || !firestore) return;
-
     setIsLoading(true);
-    const q = query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
-    const snapshot = await getDocs(q);
-    const allTxs = snapshot.docs.map(d => ({ id: d.id, ...d.data(), _originalRef: d.ref })) as (Transaction & { _originalRef: any })[];
-    setTransactions(allTxs);
 
-    const categoryMap = new Map<string, UniqueCategory>();
-    allTxs.forEach(tx => {
-      const h = tx.categoryHierarchy || {};
-      const id = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
-      if (!categoryMap.has(id)) {
-        categoryMap.set(id, {
-          id,
-          l0: h.l0 || '',
-          l1: h.l1 || '',
-          l2: h.l2 || '',
-          l3: h.l3 || ''
+    try {
+        const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
+        if (accountsSnap.empty) {
+            setTransactions([]);
+            setUniqueCategories([]);
+            setIsLoading(false);
+            return;
+        }
+
+        const transactionPromises = accountsSnap.docs.map(accountDoc => 
+            getDocs(collection(accountDoc.ref, 'transactions'))
+        );
+
+        const transactionSnapshots = await Promise.all(transactionPromises);
+        const allTxs = transactionSnapshots.flatMap(snap => 
+            snap.docs.map(d => ({ id: d.id, ...d.data(), bankAccountId: d.ref.parent.parent?.id, _originalRef: d.ref } as (Transaction & { _originalRef: any })))
+        );
+        
+        setTransactions(allTxs);
+
+        const categoryMap = new Map<string, UniqueCategory>();
+        allTxs.forEach(tx => {
+            const h = tx.categoryHierarchy || {};
+            const id = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
+            if (!categoryMap.has(id)) {
+                categoryMap.set(id, {
+                id,
+                l0: h.l0 || '',
+                l1: h.l1 || '',
+                l2: h.l2 || '',
+                l3: h.l3 || ''
+                });
+            }
         });
-      }
-    });
-    setUniqueCategories(Array.from(categoryMap.values()).sort((a, b) => a.id.localeCompare(b.id)));
-    setIsLoading(false);
+        setUniqueCategories(Array.from(categoryMap.values()).sort((a, b) => a.id.localeCompare(b.id)));
+
+    } catch (e) {
+        console.error("Failed to fetch data for merge tool:", e);
+    } finally {
+        setIsLoading(false);
+    }
   }, [isOpen, user, firestore]);
 
   useEffect(() => {
@@ -115,7 +135,8 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: Merge
 
     const batch = writeBatch(firestore);
     transactionsToUpdate.forEach(tx => {
-      batch.update(tx._originalRef, {
+      const txRef = doc(firestore, `users/${user!.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
+      batch.update(txRef, {
         categoryHierarchy: {
             l0: overridePrimary || destinationCategory.l0,
             l1: destinationCategory.l1,
