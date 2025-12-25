@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -17,52 +16,54 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 // Helper: normalize Firestore Timestamp OR string to JS Date (or null)
 function toDate(value: any): Date | null {
   if (!value) return null;
-
   // Firestore Timestamp
   if (typeof value === 'object' && typeof value.toDate === 'function') {
     return value.toDate();
   }
-
   // ISO date string
   if (typeof value === 'string') {
-    // expected "YYYY-MM-DD"
     const d = parseISO(value);
     return isNaN(d.getTime()) ? null : d;
   }
-
   return null;
 }
-
 
 export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
   const [dates, setDates] = useState({
-    from: '2025-01-01', 
+    from: '2025-01-01',
     to: '2025-12-31'
   });
   
   const [activeRange, setActiveRange] = useState(dates);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // ✅ Query only by userId (avoid date type mismatch in Firestore query)
+  useEffect(() => {
+    setIsMounted(true);
+    const initialRange = { 
+        from: format(startOfMonth(new Date()), 'yyyy-MM-dd'),
+        to: format(endOfMonth(new Date()), 'yyyy-MM-dd')
+    };
+    setDates(initialRange);
+    setActiveRange(initialRange);
+  }, []);
+
+  // ✅ Query now only filters by date. We will filter by userId on the client.
   const transactionsQuery = useMemo(() => {
     if (!user || !firestore) return null;
-
-    // If you HAVE an index for (userId asc, date asc) this orderBy is fine.
-    // If it errors, temporarily remove orderBy and rely on client sorting.
     return query(
       collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
       orderBy('date', 'asc')
     );
   }, [user, firestore]);
 
-  const { data: transactions, isLoading, error } = useCollection(transactionsQuery);
+  const { data: allTransactions, isLoading, error } = useCollection(transactionsQuery);
 
   const reportData = useMemo(() => {
     const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0, rows: 0, filteredRows: 0 };
-    if (!transactions) return empty;
+    if (!allTransactions || !user) return empty;
 
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
@@ -71,44 +72,34 @@ export function ProfitAndLossReport() {
     const expMap = new Map<string, number>();
     let totalInc = 0;
     let totalExp = 0;
-
     let filteredRows = 0;
 
-    for (const tx of transactions as any[]) {
+    for (const tx of allTransactions as any[]) {
+      // ✅ Critical Fix: Filter for the correct user on the client.
+      if (tx.userId !== user.uid) {
+        continue;
+      }
+      
       const d = toDate(tx.date);
       if (!d) continue;
 
-      // ✅ filter by date range on the client
       const inRange = isWithinInterval(d, { start: fromD, end: toD });
       if (!inRange) continue;
+      
       filteredRows++;
 
       const rawAmount = Number(tx.amount) || 0;
-
-      // ✅ classify by amount sign (most reliable)
-      // Convention: income positive, expense negative.
-      const isIncome = rawAmount > 0;
-      const isExpense = rawAmount < 0;
-
-      // Pick best label available
       const h = tx.categoryHierarchy || {};
-      const label =
-        h.l2 ||
-        tx.subcategory ||
-        tx.secondaryCategory ||
-        tx.primaryCategory ||
-        'Other / Uncategorized';
-
+      const label = h.l2 || tx.subcategory || tx.secondaryCategory || tx.primaryCategory || 'Other';
       const amountAbs = Math.abs(rawAmount);
 
-      if (isIncome) {
+      // ✅ Classify by amount sign (most reliable)
+      if (rawAmount > 0) {
         totalInc += amountAbs;
         incMap.set(label, (incMap.get(label) || 0) + amountAbs);
-      } else if (isExpense) {
+      } else if (rawAmount < 0) {
         totalExp += amountAbs;
         expMap.set(label, (expMap.get(label) || 0) + amountAbs);
-      } else {
-        // amount == 0 -> ignore
       }
     }
 
@@ -121,12 +112,11 @@ export function ProfitAndLossReport() {
       totalInc,
       totalExp,
       net: totalInc - totalExp,
-      rows: (transactions as any[]).length,
+      rows: allTransactions.length,
       filteredRows,
     };
-  }, [transactions, activeRange]);
+  }, [allTransactions, activeRange, user]);
   
-
   if (error) {
     return (
         <Alert variant="destructive" className="m-8">
@@ -138,6 +128,10 @@ export function ProfitAndLossReport() {
             </AlertDescription>
         </Alert>
     );
+  }
+
+  if (!isMounted) {
+      return null;
   }
 
   return (
@@ -155,7 +149,7 @@ export function ProfitAndLossReport() {
         </div>
         <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
           {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-          Run Fiscal Report
+          Run Report
         </Button>
       </div>
 
@@ -167,10 +161,10 @@ export function ProfitAndLossReport() {
           </CardDescription>
         </CardHeader>
         <CardContent className="pt-6">
-          <div className="text-xs text-muted-foreground text-center mb-4">
-            Loaded: {reportData.rows} total rows • Showing: {reportData.filteredRows} rows in date range
+          <div className="text-xs text-muted-foreground text-center mb-4 font-mono">
+            Auth UID: {user?.uid} • Loaded: {reportData.rows} total tx • Showing: {reportData.filteredRows} rows in range
           </div>
-          {isLoading ? (
+          {isLoading && !allTransactions ? (
              <div className="flex flex-col items-center justify-center p-12 space-y-4">
                <Loader2 className="h-8 w-8 animate-spin text-primary" />
                <p className="text-sm text-muted-foreground italic">Fetching ledger data...</p>
