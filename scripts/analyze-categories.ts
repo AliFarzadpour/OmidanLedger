@@ -1,3 +1,4 @@
+
 // scripts/analyze-categories.ts
 import * as admin from 'firebase-admin';
 import * as path from 'path';
