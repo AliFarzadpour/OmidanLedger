@@ -24,10 +24,10 @@ interface MergeCategoriesDialogProps {
 
 type UniqueCategory = {
   id: string;
-  primary: string;
-  secondary: string;
-  sub: string;
-  details: string; // L3
+  l0: string;
+  l1: string;
+  l2: string;
+  l3: string;
 };
 
 const PRIMARY_CATEGORY_OPTIONS = ["Asset", "Liability", "Equity", "Income", "Expense"];
@@ -46,7 +46,6 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
   const [toCategory, setToCategory] = useState<string | null>(null);
   const [overridePrimary, setOverridePrimary] = useState<string | null>(null);
 
-  // New state for filtering and sorting
   const [fromFilter, setFromFilter] = useState('');
   const [toFilter, setToFilter] = useState('');
   const [fromSort, setFromSort] = useState<'asc' | 'desc'>('asc');
@@ -65,14 +64,15 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
 
       const categoryMap = new Map<string, UniqueCategory>();
       allTxs.forEach(tx => {
-        const id = `${tx.primaryCategory || ''}>${tx.secondaryCategory || ''}>${tx.subcategory || ''}>${tx.details || ''}`;
+        const h = tx.categoryHierarchy || {};
+        const id = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
         if (!categoryMap.has(id)) {
           categoryMap.set(id, {
             id,
-            primary: tx.primaryCategory,
-            secondary: tx.secondaryCategory,
-            sub: tx.subcategory,
-            details: tx.details || ''
+            l0: h.l0 || '',
+            l1: h.l1 || '',
+            l2: h.l2 || '',
+            l3: h.l3 || ''
           });
         }
       });
@@ -109,17 +109,20 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
     }
     
     const transactionsToUpdate = transactions.filter(tx => {
-        const catId = `${tx.primaryCategory || ''}>${tx.secondaryCategory || ''}>${tx.subcategory || ''}>${tx.details || ''}`;
+        const h = tx.categoryHierarchy || {};
+        const catId = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
         return fromCategories.has(catId);
     });
 
     const batch = writeBatch(firestore);
     transactionsToUpdate.forEach(tx => {
       batch.update(tx._originalRef, {
-        primaryCategory: overridePrimary || destinationCategory.primary,
-        secondaryCategory: destinationCategory.secondary,
-        subcategory: destinationCategory.sub,
-        details: destinationCategory.details,
+        categoryHierarchy: {
+            l0: overridePrimary || destinationCategory.l0,
+            l1: destinationCategory.l1,
+            l2: destinationCategory.l2,
+            l3: destinationCategory.l3,
+        }
       });
     });
 
@@ -179,8 +182,8 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                     <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-muted">
                       <Checkbox id={cat.id} onCheckedChange={() => handleFromToggle(cat.id)} />
                       <label htmlFor={cat.id} className="text-xs leading-tight cursor-pointer">
-                        <span className="font-medium text-slate-800">{cat.primary}</span>
-                        <span className="text-slate-500"> &gt; {cat.secondary} &gt; {cat.sub} &gt; {cat.details}</span>
+                        <span className="font-medium text-slate-800">{cat.l0}</span>
+                        <span className="text-slate-500"> &gt; {cat.l1} &gt; {cat.l2} &gt; {cat.l3}</span>
                       </label>
                     </div>
                   ))}
@@ -222,8 +225,8 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange }: MergeCategoriesD
                       <div key={cat.id} className="flex items-center space-x-2 p-2 rounded-md hover:bg-background">
                         <RadioGroupItem value={cat.id} id={`to-${cat.id}`} />
                         <Label htmlFor={`to-${cat.id}`} className="cursor-pointer text-xs leading-tight">
-                           <span className="font-medium text-slate-800">{cat.primary}</span>
-                           <span className="text-slate-500"> &gt; {cat.secondary} &gt; {cat.sub} &gt; {cat.details}</span>
+                           <span className="font-medium text-slate-800">{cat.l0}</span>
+                           <span className="text-slate-500"> &gt; {cat.l1} &gt; {cat.l2} &gt; {cat.l3}</span>
                         </Label>
                       </div>
                     ))}

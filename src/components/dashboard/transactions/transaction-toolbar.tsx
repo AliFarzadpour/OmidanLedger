@@ -112,8 +112,10 @@ export function TransactionToolbar({
              <SelectContent>
                  <SelectItem value="all">All Categories</SelectItem>
                  <SelectItem value="Income">Income</SelectItem>
-                 <SelectItem value="Operating Expenses">Expenses</SelectItem>
-                 <SelectItem value="Cost of Goods Sold">COGS</SelectItem>
+                 <SelectItem value="Expense">Expense</SelectItem>
+                 <SelectItem value="Equity">Equity</SelectItem>
+                 <SelectItem value="Liability">Liability</SelectItem>
+                 <SelectItem value="Asset">Asset</SelectItem>
              </SelectContent>
         </Select>
 

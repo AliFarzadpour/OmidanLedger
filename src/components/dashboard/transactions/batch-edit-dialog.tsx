@@ -27,20 +27,21 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
 
-  const [primaryCategory, setPrimaryCategory] = useState('');
-  const [secondaryCategory, setSecondaryCategory] = useState('');
-  const [subcategory, setSubcategory] = useState('');
-  const [details, setDetails] = useState('');
+  const [l0, setL0] = useState('');
+  const [l1, setL1] = useState('');
+  const [l2, setL2] = useState('');
+  const [l3, setL3] = useState('');
   const [ruleName, setRuleName] = useState('');
 
   // Pre-populate the fields when the dialog opens with a new set of transactions
   useEffect(() => {
     if (isOpen && transactions.length > 0) {
       const firstTx = transactions[0];
-      setPrimaryCategory(firstTx.primaryCategory || 'Expenses');
-      setSecondaryCategory(firstTx.secondaryCategory || '');
-      setSubcategory(firstTx.subcategory || '');
-      setDetails(firstTx.details || '');
+      const cats = firstTx.categoryHierarchy || { l0: 'Expense', l1: '', l2: '', l3: '' };
+      setL0(cats.l0);
+      setL1(cats.l1);
+      setL2(cats.l2);
+      setL3(cats.l3);
       setRuleName(''); // Always reset the rule name
     }
   }, [transactions, isOpen]);
@@ -48,7 +49,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
 
   const handleBatchUpdate = async () => {
     if (!user || !firestore || transactions.length === 0) return;
-    if (!primaryCategory || !secondaryCategory || !subcategory) {
+    if (!l0 || !l1 || !l2) {
       toast({ variant: 'destructive', title: 'Missing Fields', description: 'Please fill out all three main category levels.' });
       return;
     }
@@ -59,10 +60,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       transactions.forEach(tx => {
         const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
         batch.update(txRef, {
-          primaryCategory,
-          secondaryCategory,
-          subcategory,
-          details,
+          categoryHierarchy: { l0, l1, l2, l3 },
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
           reviewStatus: 'approved'
@@ -74,10 +72,10 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       if (keywordForRule) {
         await learnCategoryMapping({
             transactionDescription: keywordForRule,
-            primaryCategory,
-            secondaryCategory,
-            subcategory,
-            details,
+            primaryCategory: l0,
+            secondaryCategory: l1,
+            subcategory: l2,
+            details: l3,
             userId: user.uid,
         });
         toast({
@@ -113,20 +111,20 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         </DialogHeader>
         <div className="py-4 space-y-4">
           <div className="grid gap-2">
-            <Label htmlFor="primary">Primary Category (l0)</Label>
-            <Input id="primary" value={primaryCategory} onChange={(e) => setPrimaryCategory(e.target.value)} placeholder="e.g., Expenses" />
+            <Label htmlFor="l0">Primary Category (l0)</Label>
+            <Input id="l0" value={l0} onChange={(e) => setL0(e.target.value)} placeholder="e.g., Expense" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="secondary">Financial Category (l1)</Label>
-            <Input id="secondary" value={secondaryCategory} onChange={(e) => setSecondaryCategory(e.target.value)} placeholder="e.g., Repairs" />
+            <Label htmlFor="l1">Financial Category (l1)</Label>
+            <Input id="l1" value={l1} onChange={(e) => setL1(e.target.value)} placeholder="e.g., Repairs" />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="sub">Tax Category (l2)</Label>
-            <Input id="sub" value={subcategory} onChange={(e) => setSubcategory(e.target.value)} placeholder="e.g., Line 14 Repairs" />
+            <Label htmlFor="l2">Tax Category (l2)</Label>
+            <Input id="l2" value={l2} onChange={(e) => setL2(e.target.value)} placeholder="e.g., Line 14 Repairs" />
           </div>
            <div className="grid gap-2">
-            <Label htmlFor="details">Details (l3 - Optional)</Label>
-            <Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} placeholder="e.g., Adelyn - HVAC Repair" />
+            <Label htmlFor="l3">Details (l3 - Optional)</Label>
+            <Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} placeholder="e.g., Adelyn - HVAC Repair" />
           </div>
 
           <div className="border-t pt-4 space-y-2">

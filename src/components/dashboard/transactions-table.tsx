@@ -127,17 +127,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     } finally { setIsSyncing(false); }
   };
 
-  const handleCategoryChange = (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; details: string; }) => {
+  const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
     if (!user || !firestore) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
     
     const updateData = { 
-        categoryHierarchy: {
-            l0: newCategories.primaryCategory,
-            l1: newCategories.secondaryCategory,
-            l2: newCategories.subcategory,
-            l3: newCategories.details,
-        },
+        categoryHierarchy: newCategories,
         confidence: 1.0, 
         status: 'posted',
         reviewStatus: 'approved'
@@ -147,10 +142,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
 
     learnCategoryMapping({
         transactionDescription: transaction.description,
-        primaryCategory: newCategories.primaryCategory,
-        secondaryCategory: newCategories.secondaryCategory,
-        subcategory: newCategories.subcategory,
-        details: newCategories.details,
+        primaryCategory: newCategories.l0,
+        secondaryCategory: newCategories.l1,
+        subcategory: newCategories.l2,
+        details: newCategories.l3,
         userId: user.uid,
     });
     toast({ title: "Updated", description: "Category saved and rule learned." });
@@ -217,8 +212,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
       
       if (sortConfig.key === 'category') {
-        const aCats = a.categoryHierarchy;
-        const bCats = b.categoryHierarchy;
+        const aCats = a.categoryHierarchy || {l0:'',l1:'',l2:'',l3:''};
+        const bCats = b.categoryHierarchy || {l0:'',l1:'',l2:'',l3:''};
         aValue = `${aCats.l0}${aCats.l1}${aCats.l2}${aCats.l3}`;
         bValue = `${bCats.l0}${bCats.l1}${bCats.l2}${bCats.l3}`;
       } else if (sortConfig.key === 'date') {
@@ -436,18 +431,18 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
 }
 
 
-function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => void }) {
+function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { l0: string, l1: string, l2: string, l3: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
     const cats = transaction.categoryHierarchy || { l0: '', l1: '', l2: '', l3: '' };
     
-    const [primary, setPrimary] = useState(cats.l0);
-    const [secondary, setSecondary] = useState(cats.l1);
-    const [sub, setSub] = useState(cats.l2);
-    const [details, setDetails] = useState(cats.l3);
+    const [l0, setL0] = useState(cats.l0);
+    const [l1, setL1] = useState(cats.l1);
+    const [l2, setL2] = useState(cats.l2);
+    const [l3, setL3] = useState(cats.l3);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const newCats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details };
+        const newCats = { l0, l1, l2, l3 };
         onSave(transaction, newCats);
         setIsOpen(false);
     };
@@ -477,10 +472,10 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                         <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
                     </div>
                     <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">L0</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">L1</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">L2</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
-                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">L3</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l0">L0</Label><Input id="l0" value={l0} onChange={(e) => setL0(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l1">L1</Label><Input id="l1" value={l1} onChange={(e) => setL1(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l2">L2</Label><Input id="l2" value={l2} onChange={(e) => setL2(e.target.value)} className="col-span-2 h-8" /></div>
+                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l3">L3</Label><Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} className="col-span-2 h-8" /></div>
                     </div>
                     <Button type="submit">Confirm & Save</Button>
                 </form>
@@ -488,5 +483,6 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
 
 
