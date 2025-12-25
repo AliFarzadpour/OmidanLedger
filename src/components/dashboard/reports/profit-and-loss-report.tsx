@@ -45,7 +45,7 @@ export function ProfitAndLossReport() {
   const reportData = useMemo(() => {
     if (!transactions) return { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
     
-    console.log(`Processing ${transactions.length} transactions for report...`);
+    console.log(`Report Engine: Processing ${transactions.length} rows...`);
 
     const incMap = new Map();
     const expMap = new Map();
@@ -53,21 +53,27 @@ export function ProfitAndLossReport() {
     let totalExp = 0;
 
     transactions.forEach((tx: any) => {
-      // Robust detection of type regardless of casing or missing L0
-      const hierarchy = tx.categoryHierarchy || {};
-      const typeStr = `${hierarchy.l0 || ''} ${hierarchy.l1 || ''} ${tx.primaryCategory || ''}`.toLowerCase();
+      // 1. Collect EVERY possible category label into one string
+      const h = tx.categoryHierarchy || {};
+      const allLabels = [
+        h.l0, h.l1, h.l2, h.l3, 
+        tx.primaryCategory, 
+        tx.subcategory
+      ].filter(Boolean).join(' ').toLowerCase();
       
-      const label = hierarchy.l2 || tx.subcategory || 'Uncategorized Detail';
+      const label = h.l2 || tx.subcategory || 'General / Uncategorized';
       const amount = Number(tx.amount) || 0;
 
-      if (typeStr.includes('income')) {
+      // 2. Check for keywords anywhere in those labels
+      if (allLabels.includes('income') || allLabels.includes('revenue')) {
         totalInc += amount;
         incMap.set(label, (incMap.get(label) || 0) + amount);
-      } else if (typeStr.includes('expense')) {
+      } else if (allLabels.includes('expense')) {
         totalExp += amount;
         expMap.set(label, (expMap.get(label) || 0) + amount);
       } else {
-        console.warn(`Skipping transaction (No Income/Expense type found):`, tx.description, typeStr);
+        // This log will tell you EXACTLY why a transaction is being ignored
+        console.warn(`Row Ignored: "${tx.description}". Labels found: [${allLabels}]`);
       }
     });
 
@@ -113,7 +119,7 @@ export function ProfitAndLossReport() {
 
       <Card className="shadow-lg border-t-4 border-t-primary">
         <CardHeader className="border-b bg-slate-50/50 text-center">
-          <CardTitle className="text-3xl">Profit &amp; Loss Statement</CardTitle>
+          <CardTitle className="text-3xl">Profit & Loss Statement</CardTitle>
           <CardDescription className="font-mono">
              {activeRange.from} — {activeRange.to}
           </CardDescription>
