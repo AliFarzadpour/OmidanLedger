@@ -1,18 +1,17 @@
-
 'use client';
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { DateRange } from 'react-day-picker';
 import { format, startOfYear, endOfYear } from 'date-fns';
-import { collectionGroup, query, where, orderBy, Timestamp } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlayCircle } from 'lucide-react';
+import { PlayCircle, Loader2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
@@ -46,20 +45,57 @@ export default function IncomeStatementPage() {
     to: endOfYear(new Date()) 
   });
 
-  const transactionsQuery = useMemoFirebase(() => {
-    if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    return query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
-      where('categoryHierarchy.l0', '==', 'Income'),
-      where('date', '>=', format(activeDateRange.from, 'yyyy-MM-dd')),
-      where('date', '<=', format(activeDateRange.to, 'yyyy-MM-dd')),
-      orderBy('date', 'asc')
-    );
+  const fetchData = useCallback(async () => {
+    if (!user || !firestore) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
+      if (accountsSnap.empty) {
+        setTransactions([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const transactionPromises = accountsSnap.docs.map(accountDoc => {
+        const transactionsRef = collection(firestore, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`);
+        const q = query(
+          transactionsRef,
+          where('date', '>=', format(activeDateRange.from, 'yyyy-MM-dd')),
+          where('date', '<=', format(activeDateRange.to, 'yyyy-MM-dd'))
+        );
+        return getDocs(q);
+      });
+      
+      const transactionSnapshots = await Promise.all(transactionPromises);
+      
+      const allTxs = transactionSnapshots.flatMap(snap => 
+        snap.docs.map(d => ({ ...d.data(), id: d.id }))
+      ) as Transaction[];
+      
+      const incomeTxs = allTxs.filter(tx => tx.categoryHierarchy?.l0 === 'Income');
+      
+      incomeTxs.sort((a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime());
+      
+      setTransactions(incomeTxs);
+
+    } catch (err: any) {
+      console.error("Error fetching income statement data:", err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   }, [user, firestore, activeDateRange]);
 
-  const { data: transactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
 
   const { incomeItems, totalIncome } = useMemo(() => {
     if (!transactions) return { incomeItems: [], totalIncome: 0 };
@@ -68,6 +104,7 @@ export default function IncomeStatementPage() {
     let total = 0;
 
     transactions.forEach((tx) => {
+      // No need to filter by l0 here, it's pre-filtered
       const l2 = tx.categoryHierarchy?.l2 || tx.subcategory || 'Uncategorized Income';
       total += tx.amount;
       
@@ -92,7 +129,7 @@ export default function IncomeStatementPage() {
 
   const renderContent = () => {
     if (isLoading) {
-      return <Skeleton className="h-64 w-full" />;
+      return <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin" /></div>;
     }
     if (error) {
       return (
@@ -100,8 +137,8 @@ export default function IncomeStatementPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error Loading Data</AlertTitle>
           <AlertDescription>
-            <p>An error occurred while fetching your income data. This is often due to a missing Firestore index.</p>
-            <p className="font-mono text-xs mt-2 bg-slate-100 p-2 rounded">{error.message}</p>
+            <p>An error occurred while fetching your income data. This can happen if a required Firestore index is missing.</p>
+            <p className="font-mono text-xs mt-2 bg-slate-100 p-2 rounded">{error}</p>
           </AlertDescription>
         </Alert>
       );
@@ -132,7 +169,7 @@ export default function IncomeStatementPage() {
               {item.transactions.map(tx => (
                 <TableRow key={tx.id} className="text-sm">
                   <TableCell className="pl-8 text-muted-foreground">{tx.description}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(tx.amount)}</TableCell>
+                  <TableCell className={cn("text-right", tx.amount < 0 ? "text-red-600" : "text-slate-800")}>{formatCurrency(tx.amount)}</TableCell>
                 </TableRow>
               ))}
             </React.Fragment>
@@ -177,8 +214,8 @@ export default function IncomeStatementPage() {
               />
             </div>
             <Button onClick={handleRunReport} disabled={isLoading}>
-              <PlayCircle className="mr-2 h-4 w-4" />
-              {isLoading ? 'Loading...' : 'Run Report'}
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <PlayCircle className="mr-2 h-4 w-4" />}
+              Run Report
             </Button>
           </div>
       </div>
