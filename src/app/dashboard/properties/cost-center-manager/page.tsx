@@ -1,10 +1,10 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, collectionGroup, query, where, doc } from 'firebase/firestore';
+import { collection, collectionGroup, query, where, doc, getDocs } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,8 @@ import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Transaction } from '@/components/dashboard/transactions-table';
 
+type Tx = Transaction & { id: string };
+
 export default function CostCenterManagerPage() {
   const router = useRouter();
   const { user } = useUser();
@@ -26,12 +28,50 @@ export default function CostCenterManagerPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
 
-  const transactionsQuery = useMemoFirebase(() => {
-    if (!user || !firestore) return null;
-    return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
+  const [allTransactions, setAllTransactions] = useState<Tx[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+
+  const refetchTransactions = useCallback(async () => {
+    if (!user || !firestore) return;
+
+    setIsLoadingTransactions(true);
+    try {
+      // 1) get bank accounts
+      const bankSnap = await getDocs(
+        collection(firestore, "users", user.uid, "bankAccounts")
+      );
+
+      // 2) get transactions for each bank account
+      const txs: Tx[] = [];
+      for (const bankDoc of bankSnap.docs) {
+        const txSnap = await getDocs(
+          collection(
+            firestore,
+            "users",
+            user.uid,
+            "bankAccounts",
+            bankDoc.id,
+            "transactions"
+          )
+        );
+
+        txSnap.forEach((d) => {
+          txs.push({ id: d.id, ...(d.data() as any) });
+        });
+      }
+
+      // optional: sort by date if it's YYYY-MM-DD strings
+      txs.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+      setAllTransactions(txs);
+    } finally {
+      setIsLoadingTransactions(false);
+    }
   }, [user, firestore]);
 
-  const { data: allTransactions, isLoading: isLoadingTransactions, refetch } = useCollection<Transaction>(transactionsQuery);
+  useEffect(() => {
+    refetchTransactions();
+  }, [refetchTransactions]);
   
   const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -53,8 +93,17 @@ export default function CostCenterManagerPage() {
     if (!allTransactions) return [];
     return allTransactions.filter(tx => {
       // Filter by L0 category
-      if (l0Filter !== 'all' && (tx.categoryHierarchy?.l0 || 'Uncategorized') !== l0Filter) {
-        return false;
+      if (l0Filter !== "all") {
+        const l0 = (tx.categoryHierarchy?.l0 || "Uncategorized").toLowerCase();
+        const filter = l0Filter.toLowerCase();
+        const normalized =
+          l0.includes("income") ? "income" :
+          l0.includes("expense") ? "expense" :
+          l0.includes("asset") ? "asset" :
+          l0.includes("liabil") ? "liability" :
+          l0.includes("equity") ? "equity" :
+          "other";
+        if (normalized !== filter) return false;
       }
       // Filter by search term
       if (searchTerm && !tx.description.toLowerCase().includes(searchTerm.toLowerCase())) {
@@ -125,11 +174,11 @@ export default function CostCenterManagerPage() {
             </SelectTrigger>
             <SelectContent>
                 <SelectItem value="all">All L0 Categories</SelectItem>
-                <SelectItem value="Income">Income</SelectItem>
-                <SelectItem value="Expense">Expense</SelectItem>
-                <SelectItem value="Asset">Asset</SelectItem>
-                <SelectItem value="Liability">Liability</SelectItem>
-                <SelectItem value="Equity">Equity</SelectItem>
+                <SelectItem value="income">Income</SelectItem>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="asset">Asset</SelectItem>
+                <SelectItem value="liability">Liability</SelectItem>
+                <SelectItem value="equity">Equity</SelectItem>
             </SelectContent>
         </Select>
       </div>
@@ -203,7 +252,7 @@ export default function CostCenterManagerPage() {
           transactions={selectedTransactions}
           onSuccess={() => {
             setSelectedIds([]);
-            refetch();
+            refetchTransactions();
           }}
         />
     )}
