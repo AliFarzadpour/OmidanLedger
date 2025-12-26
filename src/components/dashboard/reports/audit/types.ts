@@ -10,7 +10,7 @@ export interface Transaction {
     l2: string;
     l3: string;
   };
-  bankAccountId: string;
+  bankAccountId: string; // This is crucial for updating the doc
 }
 
 export interface AuditIssue {

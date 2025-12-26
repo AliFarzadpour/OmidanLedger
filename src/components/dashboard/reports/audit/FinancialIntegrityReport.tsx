@@ -1,14 +1,18 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion } from '@/components/ui/accordion';
-import { CheckCircle, ShieldAlert } from 'lucide-react';
+import { CheckCircle, ShieldAlert, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
 import { AuditIssueSection } from './AuditIssueSection';
+import { BatchEditDialog } from '../../transactions/batch-edit-dialog';
 
 export function FinancialIntegrityReport({ transactions, onRefresh }: { transactions: Transaction[], onRefresh: () => void }) {
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
 
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
@@ -44,8 +48,30 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       return acc;
     }, {} as Record<string, AuditIssue[]>);
   }, [issues]);
+  
+  const handleSelectionChange = (id: string, checked: boolean) => {
+    setSelectedIds(prev => {
+        const newSet = new Set(prev);
+        if (checked) {
+            newSet.add(id);
+        } else {
+            newSet.delete(id);
+        }
+        return Array.from(newSet);
+    });
+  };
+
+  const selectedTransactions = useMemo(() => {
+    return transactions.filter(tx => selectedIds.includes(tx.id));
+  }, [transactions, selectedIds]);
+
+  const handleBatchEditSuccess = () => {
+    onRefresh();
+    setSelectedIds([]);
+  }
 
   return (
+    <>
     <div className="space-y-6">
        <div className="flex justify-between items-start">
         <div className="flex items-center gap-3">
@@ -59,6 +85,22 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             Re-run Audit
         </Button>
       </div>
+
+       {selectedIds.length > 0 && (
+            <div className="flex items-center gap-4 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-50">
+                <div className="flex-grow">
+                    <span className="font-semibold text-blue-800">{selectedIds.length}</span> items selected.
+                </div>
+                 <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setBatchEditDialogOpen(true)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Batch Edit
+                </Button>
+            </div>
+        )}
       
       {issues.length === 0 ? (
         <Card className="text-center py-20 bg-green-50/50 border-green-200">
@@ -68,11 +110,40 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         </Card>
       ) : (
         <Accordion type="multiple" defaultValue={Object.keys(groupedIssues)} className="w-full space-y-4">
-            <AuditIssueSection type="mismatch" title="Income/Expense Mismatches" issues={groupedIssues.mismatch} />
-            <AuditIssueSection type="uncategorized" title="Uncategorized Items" issues={groupedIssues.uncategorized} />
-            <AuditIssueSection type="missing_hierarchy" title="Missing Category Data" issues={groupedIssues.missing_hierarchy} />
+            <AuditIssueSection 
+                type="mismatch" 
+                title="Income/Expense Mismatches" 
+                issues={groupedIssues.mismatch} 
+                selectedIds={selectedIds}
+                onSelectionChange={handleSelectionChange}
+            />
+            <AuditIssueSection 
+                type="uncategorized" 
+                title="Uncategorized Items" 
+                issues={groupedIssues.uncategorized}
+                selectedIds={selectedIds}
+                onSelectionChange={handleSelectionChange}
+            />
+            <AuditIssueSection 
+                type="missing_hierarchy" 
+                title="Missing Category Data" 
+                issues={groupedIssues.missing_hierarchy}
+                selectedIds={selectedIds}
+                onSelectionChange={handleSelectionChange}
+            />
         </Accordion>
       )}
     </div>
+    
+    {isBatchEditDialogOpen && (
+        <BatchEditDialog
+          isOpen={isBatchEditDialogOpen}
+          onOpenChange={setBatchEditDialogOpen}
+          transactions={selectedTransactions}
+          dataSource={{ id: '', accountName: '' }} // Not needed for this context, but prop is required
+          onSuccess={handleBatchEditSuccess}
+        />
+    )}
+    </>
   );
 }
