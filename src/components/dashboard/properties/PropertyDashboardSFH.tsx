@@ -186,9 +186,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           <TabsList className="grid w-full grid-cols-5 lg:w-[750px]">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="tenants">Tenants</TabsTrigger>
+            <TabsTrigger value="income">Income</TabsTrigger>
+            <TabsTrigger value="expenses">Expenses</TabsTrigger>
             <TabsTrigger value="documents">Documents</TabsTrigger>
-            <TabsTrigger value="financials">Expenses</TabsTrigger>
-            <TabsTrigger value="leases">Lease Summary</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="mt-6">
@@ -268,11 +268,15 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             </Card>
           </TabsContent>
           
-          <TabsContent value="documents" className="mt-6">
-              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
+          <TabsContent value="income" className="mt-6">
+            <PropertyFinancials
+              propertyId={property.id}
+              propertyName={property.name}
+              view="income"
+            />
           </TabsContent>
-
-          <TabsContent value="financials" className="mt-6">
+          
+          <TabsContent value="expenses" className="mt-6">
             <PropertyFinancials
               propertyId={property.id}
               propertyName={property.name}
@@ -280,11 +284,8 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             />
           </TabsContent>
 
-          <TabsContent value="leases" className="mt-6">
-             <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
-                <p className="text-sm text-muted-foreground">Lease summary and key clauses will be displayed here.</p>
-            </div>
+          <TabsContent value="documents" className="mt-6">
+              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
           </TabsContent>
         </Tabs>
       </div>

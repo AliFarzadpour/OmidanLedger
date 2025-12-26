@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, where, getDocs, orderBy, collectionGroup } from 'firebase/firestore';
+import { collection, query, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -24,37 +25,47 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      if (!user || !propertyId) return;
-      
-      try {
-        const txsQuery = query(
-          collectionGroup(firestore, 'transactions'),
-          where('userId', '==', user.uid)
-        );
+      if (!user || !propertyId || !firestore) return;
+      setLoading(true);
 
-        const txsSnap = await getDocs(txsQuery);
-        
-        let allTx: any[] = txsSnap.docs
-            .map(d => ({ id: d.id, ...d.data() } as any))
-            .filter(tx => {
-                // Check 1: Direct Link to an account associated with the property
-                // This requires a more complex check if we were to fetch account docs.
-                // Simplified Check 2: The accountName contains the propertyName
-                // This is a good heuristic assuming a consistent naming convention like "Rent - PropertyName"
-                return tx.accountName?.toLowerCase().includes(propertyName.toLowerCase());
-            })
-            .filter(tx => {
-                // Check 3: Filter by Income vs Expense View
-                if (view === 'income') return tx.amount > 0;
-                if (view === 'expenses') return tx.amount < 0;
-                return false;
+      try {
+        // Fetch all bank accounts for the user
+        const accountsSnap = await getDocs(collection(firestore, `users/${user.uid}/bankAccounts`));
+        if (accountsSnap.empty) {
+            setTransactions([]);
+            setLoading(false);
+            return;
+        }
+
+        // Fetch all transactions from all accounts
+        let allUserTransactions: any[] = [];
+        for (const accountDoc of accountsSnap.docs) {
+            const txsSnap = await getDocs(collection(accountDoc.ref, 'transactions'));
+            txsSnap.forEach(txDoc => {
+                allUserTransactions.push({ id: txDoc.id, ...txDoc.data() });
             });
+        }
+        
+        // Filter transactions client-side
+        const filteredTxs = allUserTransactions.filter(tx => {
+            const isForProperty = tx.costCenter === propertyId;
+            const categoryL0 = tx.categoryHierarchy?.l0 || '';
+
+            if (view === 'income') {
+                return isForProperty && categoryL0 === 'Income';
+            }
+            if (view === 'expenses') {
+                return isForProperty && categoryL0 === 'Expense';
+            }
+            return false;
+        });
 
         // Sort by date desc
-        allTx.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        filteredTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         
-        setTransactions(allTx);
-        setTotalAmount(allTx.reduce((sum, t) => sum + t.amount, 0));
+        setTransactions(filteredTxs);
+        setTotalAmount(filteredTxs.reduce((sum, t) => sum + t.amount, 0));
+
       } catch (error) {
         console.error("Error fetching financials:", error);
       } finally {
@@ -63,7 +74,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
     };
 
     fetchTransactions();
-  }, [user, propertyId, propertyName, view, firestore]);
+  }, [user, propertyId, view, firestore]);
 
   const isIncome = view === 'income';
 
@@ -73,7 +84,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-            <CardTitle>{isIncome ? "Lease Collections" : "Property Expenses"}</CardTitle>
+            <CardTitle>{isIncome ? "Income Ledger" : "Expense Ledger"}</CardTitle>
             <CardDescription>
                 {isIncome ? "Rent and fees collected" : "Maintenance, utilities, and tax"} for {propertyName}.
             </CardDescription>
@@ -105,7 +116,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                             </TableCell>
                             <TableCell>
                                 <Badge variant="outline" className="font-normal">
-                                    {tx.subcategory || tx.accountName}
+                                    {tx.categoryHierarchy?.l2 || tx.accountName}
                                 </Badge>
                             </TableCell>
                             <TableCell className={`text-right font-medium ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
