@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -23,7 +22,6 @@ import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
-import { SplitTransactionDialog } from './transactions/split-transaction-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -344,7 +342,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading || isLoadingProperties ? (
+              {(isLoading || isLoadingProperties) ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
                     <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
@@ -365,11 +363,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                         <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                     </TableCell>
                     <TableCell className="align-top py-4 text-xs text-muted-foreground">
-                        {transaction.costCenter ? (propertyMap[transaction.costCenter] || transaction.costCenter) : 'N/A'}
+                        {transaction.costCenter && propertyMap[transaction.costCenter] ? propertyMap[transaction.costCenter] : 'N/A'}
                     </TableCell>
                     <TableCell 
-                        className={cn('text-right font-medium align-top py-4 cursor-pointer hover:bg-muted', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}
-                        onClick={() => setTransactionToSplit(transaction)}
+                        className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}
                     >
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
                     </TableCell>
@@ -395,17 +392,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           onSuccess={() => {setSelectedIds([]); refetch();}}
         />
       )}
-       {transactionToSplit && (
-        <SplitTransactionDialog
-          isOpen={!!transactionToSplit}
-          onOpenChange={() => setTransactionToSplit(null)}
-          transaction={transactionToSplit}
-          onSuccess={() => {
-            refetch();
-            setTransactionToSplit(null);
-          }}
-        />
-       )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
