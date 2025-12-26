@@ -257,6 +257,25 @@ export function ProfitAndLossReport() {
     setIsDrawerOpen(true);
   };
 
+  const handleUpdate = () => {
+    fetchData(); // Refetch all data
+    // The drawer will receive new `category` prop and re-render
+    // We need to update the `selectedCategory` with the fresh data
+    if (selectedCategory) {
+      // Find the updated category from the new data
+      const updatedIncomeCat = summaryReportData.income.find(c => c.name === selectedCategory.name);
+      const updatedExpenseCat = summaryReportData.expenses.find(c => c.name === selectedCategory.name);
+      const updatedCategory = updatedIncomeCat || updatedExpenseCat;
+      if (updatedCategory) {
+        setSelectedCategory(updatedCategory);
+      } else {
+        // The category might not exist anymore (e.g., all tx moved out of it)
+        setIsDrawerOpen(false); // Close drawer if category is gone
+      }
+    }
+  };
+
+
   if (error) return <Alert variant="destructive" className="m-8"><AlertCircle className="h-4 w-4" /><AlertTitle>Firestore Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>;
 
   return (
@@ -312,7 +331,7 @@ export function ProfitAndLossReport() {
             </TabsContent>
         </Tabs>
       </div>
-      {selectedCategory && <ProfitAndLossDrawer isOpen={isDrawerOpen} onOpenChange={setIsDrawerOpen} category={selectedCategory} onUpdate={fetchData} />}
+      {selectedCategory && <ProfitAndLossDrawer isOpen={isDrawerOpen} onOpenChange={setIsDrawerOpen} category={selectedCategory} onUpdate={handleUpdate} />}
     </>
   );
 }
