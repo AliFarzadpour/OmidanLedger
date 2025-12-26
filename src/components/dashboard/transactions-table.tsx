@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -9,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +23,7 @@ import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
+import { SplitTransactionDialog } from './transactions/split-transaction-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -77,6 +79,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [isClearAlertOpen, setClearAlertOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [transactionToSplit, setTransactionToSplit] = useState<Transaction | null>(null);
   
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'descending' });
   const [filterTerm, setFilterTerm] = useState('');
@@ -90,6 +93,22 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   }, [firestore, user, dataSource]);
 
   const { data: transactions, isLoading, refetch } = useCollection<Transaction>(transactionsQuery);
+
+  const propertiesQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  }, [user, firestore]);
+
+  const { data: properties, isLoading: isLoadingProperties } = useCollection(propertiesQuery);
+  
+  const propertyMap = useMemo(() => {
+    if (!properties) return {};
+    return properties.reduce((acc, prop: any) => {
+        acc[prop.id] = prop.name;
+        return acc;
+    }, {} as Record<string, string>);
+  }, [properties]);
+
 
   const handleClearTransactions = async () => {
     if (!firestore || !user || !dataSource || !transactionsQuery) return;
@@ -320,15 +339,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('costCenter')}>Cost Center {getSortIcon('costCenter')}</Button></TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
                 <TableHead className="text-right p-2 w-[80px]">
-                    <Button variant="ghost" size="icon" onClick={() => requestSort('reviewStatus')}>
-                        <Flag className="h-4 w-4" />
-                        {getSortIcon('reviewStatus')}
-                    </Button>
+                    Actions
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isLoading || isLoadingProperties ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
                     <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
@@ -346,17 +362,18 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
-                      <div className="flex flex-col gap-1">
-                          <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
-                      </div>
+                        <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                     </TableCell>
-                     <TableCell className="align-top py-4 text-xs text-muted-foreground">
-                        {transaction.costCenter || 'N/A'}
+                    <TableCell className="align-top py-4 text-xs text-muted-foreground">
+                        {transaction.costCenter ? (propertyMap[transaction.costCenter] || transaction.costCenter) : 'N/A'}
                     </TableCell>
-                    <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
+                    <TableCell 
+                        className={cn('text-right font-medium align-top py-4 cursor-pointer hover:bg-muted', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}
+                        onClick={() => setTransactionToSplit(transaction)}
+                    >
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
                     </TableCell>
-                     <TableCell className="align-top py-4 text-right">
+                    <TableCell className="align-top py-4 text-right">
                        <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
                     </TableCell>
                   </TableRow>
@@ -378,6 +395,17 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           onSuccess={() => {setSelectedIds([]); refetch();}}
         />
       )}
+       {transactionToSplit && (
+        <SplitTransactionDialog
+          isOpen={!!transactionToSplit}
+          onOpenChange={() => setTransactionToSplit(null)}
+          transaction={transactionToSplit}
+          onSuccess={() => {
+            refetch();
+            setTransactionToSplit(null);
+          }}
+        />
+       )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
