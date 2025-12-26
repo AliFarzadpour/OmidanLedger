@@ -149,7 +149,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       <div className="flex items-center gap-2">
         <Button asChild variant="outline">
             <Link href={`/dashboard/properties/${property.id}/transactions`}>
-                <BookOpen className="mr-2 h-4 w-4" /> View Ledger
+                <BookOpen className="mr-2 h-4 w-4" /> Cost Center Manager
             </Link>
         </Button>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

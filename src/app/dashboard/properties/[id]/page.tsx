@@ -5,13 +5,14 @@
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, writeBatch, deleteDoc } from 'firebase/firestore';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
-import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText } from 'lucide-react';
+import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText, BookOpen } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useEffect } from 'react';
 import { useUser, useStorage } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { deleteObject, ref } from 'firebase/storage';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -312,6 +313,11 @@ export default function PropertyDetailPage() {
                 </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button asChild variant="outline">
+                  <Link href={`/dashboard/properties/${id}/transactions`}>
+                      <BookOpen className="mr-2 h-4 w-4" /> Cost Center Manager
+                  </Link>
+              </Button>
               <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
               {units && <BulkOperationsDialog propertyId={id} units={units} />}
               <AddUnitDialog propertyId={id} onUnitAdded={handleUnitUpdate} />
