@@ -100,6 +100,9 @@ export default function PropertiesListPage() {
         
         <div className="flex items-center gap-2">
           <ImportPropertiesDialog />
+          <Button variant="outline" asChild>
+              <Link href="/dashboard/transactions">Manage All Ledgers</Link>
+          </Button>
           <AddPropertyModal onSuccess={refetch} />
         </div>
       </div>
@@ -156,14 +159,6 @@ export default function PropertiesListPage() {
                       className="w-full justify-between text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                   >
                     Manage Property <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
-                 <Link href={`/dashboard/properties/${property.id}/transactions`} className="w-full">
-                  <Button 
-                      variant="ghost" 
-                      className="w-full justify-between"
-                  >
-                    Manage Ledger <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
               </CardFooter>
