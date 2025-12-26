@@ -3,11 +3,12 @@
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion } from '@/components/ui/accordion';
-import { CheckCircle, ShieldAlert, Edit } from 'lucide-react';
+import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
 import { AuditIssueSection } from './AuditIssueSection';
 import { BatchEditDialog } from '../../transactions/batch-edit-dialog';
+import { isSameDay, subDays, addDays } from 'date-fns';
 
 export function FinancialIntegrityReport({ transactions, onRefresh }: { transactions: Transaction[], onRefresh: () => void }) {
 
@@ -16,24 +17,41 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
 
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
-    transactions.forEach(tx => {
+    const seenTransactions = new Set<string>();
+
+    transactions.forEach((tx, index) => {
       const cats = tx.categoryHierarchy;
       
+      // 1. Missing Hierarchy Check
       if (!cats || !cats.l0 || !cats.l2) {
         foundIssues.push({ type: 'missing_hierarchy', message: 'Category hierarchy is missing or incomplete.', transaction: tx });
-        return;
       }
 
-      const isIncomeL0 = cats.l0?.toLowerCase().includes('income');
-      const isExpenseL0 = cats.l0?.toLowerCase().includes('expense');
-      
+      // 2. Income/Expense Sign Mismatch Check
+      const isIncomeL0 = cats?.l0?.toLowerCase().includes('income');
+      const isExpenseL0 = cats?.l0?.toLowerCase().includes('expense');
       if ((isIncomeL0 && tx.amount < 0) || (isExpenseL0 && tx.amount > 0)) {
         foundIssues.push({ type: 'mismatch', message: `Amount is ${tx.amount < 0 ? 'negative' : 'positive'} but category is ${cats.l0}.`, transaction: tx });
       }
 
-      const isUncategorized = cats.l2?.toLowerCase().includes('uncategorized') || cats.l2?.toLowerCase().includes('needs review');
+      // 3. Uncategorized Check
+      const isUncategorized = cats?.l2?.toLowerCase().includes('uncategorized') || cats?.l2?.toLowerCase().includes('needs review');
       if (isUncategorized) {
-        foundIssues.push({ type: 'uncategorized', message: `Transaction is marked as '${cats.l2}'.`, transaction: tx });
+        foundIssues.push({ type: 'uncategorized', message: `Marked as '${cats.l2}'.`, transaction: tx });
+      }
+      
+      // 4. Duplicate Check
+      const uniqueTxString = `${tx.date}|${tx.description}|${tx.amount.toFixed(2)}`;
+      if (seenTransactions.has(uniqueTxString)) {
+        foundIssues.push({ type: 'duplicate', message: 'Exact duplicate found.', transaction: tx });
+      }
+      seenTransactions.add(uniqueTxString);
+
+      // 5. Transfer Miscategorization Check
+      const descLower = tx.description.toLowerCase();
+      const transferKeywords = ['transfer', 'zelle', 'venmo', 'payment to', 'payment from'];
+      if (transferKeywords.some(k => descLower.includes(k)) && (isIncomeL0 || isExpenseL0)) {
+        foundIssues.push({ type: 'transfer_error', message: 'Likely a transfer, but categorized as Income/Expense.', transaction: tx });
       }
     });
     return foundIssues;
@@ -110,6 +128,22 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         </Card>
       ) : (
         <Accordion type="multiple" defaultValue={Object.keys(groupedIssues)} className="w-full space-y-4">
+            <AuditIssueSection 
+                type="duplicate" 
+                icon={Repeat}
+                title="Duplicate Transactions" 
+                issues={groupedIssues.duplicate} 
+                selectedIds={selectedIds}
+                onSelectionChange={handleSelectionChange}
+            />
+            <AuditIssueSection 
+                type="transfer_error" 
+                icon={ArrowRightLeft}
+                title="Transfer Categorization Errors" 
+                issues={groupedIssues.transfer_error} 
+                selectedIds={selectedIds}
+                onSelectionChange={handleSelectionChange}
+            />
             <AuditIssueSection 
                 type="mismatch" 
                 title="Income/Expense Mismatches" 

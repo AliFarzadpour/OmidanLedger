@@ -9,10 +9,12 @@ import { AlertCircle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { AuditIssue } from './types';
 import { cn } from '@/lib/utils';
+import React from 'react';
 
 interface AuditIssueSectionProps {
   type: string;
   title: string;
+  icon: React.ElementType;
   issues?: AuditIssue[];
   selectedIds: string[];
   onSelectionChange: (id: string, checked: boolean) => void;
@@ -26,7 +28,7 @@ const primaryCategoryColors: Record<string, string> = {
   'Asset': 'bg-gray-200 text-gray-800',
 };
 
-export function AuditIssueSection({ type, title, issues, selectedIds, onSelectionChange }: AuditIssueSectionProps) {
+export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds, onSelectionChange }: AuditIssueSectionProps) {
     if (!issues || issues.length === 0) return null;
 
     return (
@@ -34,7 +36,7 @@ export function AuditIssueSection({ type, title, issues, selectedIds, onSelectio
             <Card className="shadow-md">
                 <AccordionTrigger className="p-6 hover:no-underline">
                     <div className="flex items-center gap-3">
-                        <AlertCircle className="h-5 w-5 text-destructive" />
+                        <Icon className="h-5 w-5 text-destructive" />
                         <h3 className="text-lg font-semibold">{title}</h3>
                         <Badge variant="destructive">{issues.length} Found</Badge>
                     </div>
