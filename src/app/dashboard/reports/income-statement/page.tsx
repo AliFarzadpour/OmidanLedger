@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
-import { format, startOfMonth } from 'date-fns';
+import { format, startOfYear, endOfYear } from 'date-fns';
 import { collectionGroup, query, where, orderBy, Timestamp } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection } from '@/firebase';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -35,31 +35,26 @@ type Transaction = {
 export default function IncomeStatementPage() {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [pendingDateRange, setPendingDateRange] = useState<DateRange | undefined>();
-  const [activeDateRange, setActiveDateRange] = useState<DateRange | undefined>();
-  const [mounted, setMounted] = useState(false);
+  
+  const [activeDateRange, setActiveDateRange] = useState({ 
+    from: startOfYear(new Date()), 
+    to: endOfYear(new Date()) 
+  });
+  
+  const [pendingDateRange, setPendingDateRange] = useState({ 
+    from: startOfYear(new Date()), 
+    to: endOfYear(new Date()) 
+  });
 
-  useEffect(() => {
-    if (!mounted) {
-      const initialRange = { from: startOfMonth(new Date()), to: new Date() };
-      setPendingDateRange(initialRange);
-      setActiveDateRange(initialRange);
-      setMounted(true);
-    }
-  }, [mounted]);
-
-  const transactionsQuery = useMemo(() => {
+  const transactionsQuery = useMemoFirebase(() => {
     if (!user || !firestore || !activeDateRange?.from || !activeDateRange?.to) return null;
-
-    const startDate = format(activeDateRange.from, 'yyyy-MM-dd');
-    const endDate = format(activeDateRange.to, 'yyyy-MM-dd');
 
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
       where('categoryHierarchy.l0', '==', 'Income'),
-      where('date', '>=', startDate),
-      where('date', '<=', endDate),
+      where('date', '>=', format(activeDateRange.from, 'yyyy-MM-dd')),
+      where('date', '<=', format(activeDateRange.to, 'yyyy-MM-dd')),
       orderBy('date', 'asc')
     );
   }, [user, firestore, activeDateRange]);
@@ -87,11 +82,8 @@ export default function IncomeStatementPage() {
   }, [transactions]);
 
   const handleDateInputChange = (field: 'from' | 'to', value: string) => {
-    const date = value ? new Date(value) : undefined;
-    if (date && !isNaN(date.getTime())) {
-      const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      setPendingDateRange(prev => ({ ...prev, [field]: localDate }));
-    }
+    const date = value ? new Date(value + 'T00:00:00') : new Date(); // Use local timezone
+    setPendingDateRange(prev => ({ ...prev, [field]: date }));
   };
 
   const handleRunReport = () => {
@@ -99,7 +91,7 @@ export default function IncomeStatementPage() {
   };
 
   const renderContent = () => {
-    if (!mounted || isLoading) {
+    if (isLoading) {
       return <Skeleton className="h-64 w-full" />;
     }
     if (error) {
@@ -163,14 +155,13 @@ export default function IncomeStatementPage() {
           <h1 className="text-3xl font-bold tracking-tight">Income Statement</h1>
           <p className="text-muted-foreground">A detailed breakdown of all your revenue sources.</p>
         </div>
-        {mounted && (
-          <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2">
             <div className="grid gap-2">
               <Label htmlFor="start-date">Start Date</Label>
               <Input
                 id="start-date"
                 type="date"
-                value={pendingDateRange?.from ? format(pendingDateRange.from, 'yyyy-MM-dd') : ''}
+                value={format(pendingDateRange.from, 'yyyy-MM-dd')}
                 onChange={(e) => handleDateInputChange('from', e.target.value)}
                 className="w-[180px]"
               />
@@ -180,7 +171,7 @@ export default function IncomeStatementPage() {
               <Input
                 id="end-date"
                 type="date"
-                value={pendingDateRange?.to ? format(pendingDateRange.to, 'yyyy-MM-dd') : ''}
+                value={format(pendingDateRange.to, 'yyyy-MM-dd')}
                 onChange={(e) => handleDateInputChange('to', e.target.value)}
                 className="w-[180px]"
               />
@@ -190,7 +181,6 @@ export default function IncomeStatementPage() {
               {isLoading ? 'Loading...' : 'Run Report'}
             </Button>
           </div>
-        )}
       </div>
 
       <Card>
