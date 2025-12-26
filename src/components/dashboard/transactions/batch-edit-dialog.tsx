@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -17,7 +18,6 @@ interface BatchEditDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   transactions: Transaction[];
-  dataSource: { id: string; accountName: string };
   onSuccess: () => void;
 }
 
@@ -27,7 +27,7 @@ interface Property {
     units: { id: string; unitNumber: string; }[]
 }
 
-export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource, onSuccess }: BatchEditDialogProps) {
+export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess }: BatchEditDialogProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -140,6 +140,15 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       setIsSaving(false);
     }
   };
+  
+  const handleCostCenterChange = (value: string) => {
+    // If user selects the placeholder 'none' value, set state to empty string
+    if (value === 'none') {
+      setCostCenter('');
+    } else {
+      setCostCenter(value);
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -153,12 +162,12 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
         <div className="py-4 space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="costCenter">Cost Center (Property/Unit)</Label>
-             <Select onValueChange={setCostCenter} value={costCenter}>
+             <Select onValueChange={handleCostCenterChange} value={costCenter || 'none'}>
                 <SelectTrigger id="costCenter">
                     <SelectValue placeholder="Assign to a property or unit..." />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="">None</SelectItem>
+                    <SelectItem value="none">None</SelectItem>
                     {properties.map(prop => (
                         <SelectGroup key={prop.id}>
                              <SelectItem value={prop.id}>{prop.name} (Building)</SelectItem>
