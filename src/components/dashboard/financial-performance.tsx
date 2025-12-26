@@ -1,14 +1,14 @@
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
-import { collectionGroup, query, where } from 'firebase/firestore';
+import { useFirestore, useUser } from '@/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
@@ -16,40 +16,60 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const db = useFirestore();
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   
   const currentMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
   const currentMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
 
-  // New direct query for transactions
-  const transactionsQuery = useMemoFirebase(() => {
-    if (!db || !user) return null;
-
-    let q = query(
-      collectionGroup(db, 'transactions'),
-      where('userId', '==', user.uid),
-      where('date', '>=', currentMonthStart),
-      where('date', '<=', currentMonthEnd)
-    );
+  const fetchTransactions = useCallback(async () => {
+    if (!db || !user) return;
+    setIsLoading(true);
+    setError(null);
     
-    // If a propertyId is provided, filter by costCenter.
-    if (propertyId) {
-      q = query(q, where('costCenter', '==', propertyId));
+    try {
+        const bankAccountsSnap = await getDocs(collection(db, `users/${user.uid}/bankAccounts`));
+        let allTxs: any[] = [];
+        
+        for (const accountDoc of bankAccountsSnap.docs) {
+            const txsQuery = query(
+                collection(db, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`),
+                where('date', '>=', currentMonthStart),
+                where('date', '<=', currentMonthEnd)
+            );
+            const txsSnap = await getDocs(txsQuery);
+            txsSnap.forEach(txDoc => {
+                allTxs.push({ id: txDoc.id, ...txDoc.data() });
+            });
+        }
+        setTransactions(allTxs);
+
+    } catch (e: any) {
+        setError(e);
+        console.error("Failed to fetch transactions:", e);
+    } finally {
+        setIsLoading(false);
     }
-    
-    return q;
-  }, [db, user, propertyId, currentMonthStart, currentMonthEnd, isRefreshing]);
+  }, [db, user, currentMonthStart, currentMonthEnd, isRefreshing]);
 
-  const { data: transactions, isLoading, error } = useCollection(transactionsQuery);
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
 
   const stats = useMemo(() => {
-    if (!transactions) {
-      return { income: 0, expenses: 0, netIncome: 0 };
+    let filteredTxs = transactions;
+
+    // If a propertyId is provided, filter by costCenter.
+    if (propertyId) {
+      filteredTxs = transactions.filter(tx => tx.costCenter === propertyId);
     }
 
     let income = 0;
     let expenses = 0;
 
-    transactions.forEach(tx => {
+    filteredTxs.forEach(tx => {
       const amount = Number(tx.amount) || 0;
       const category = tx.categoryHierarchy?.l0 || '';
       
@@ -61,7 +81,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     });
 
     return { income, expenses, netIncome: income + expenses };
-  }, [transactions]);
+  }, [transactions, propertyId]);
 
 
   const handleRecalculate = async () => {
@@ -70,6 +90,8 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     try {
         const res = await recalculateAllStats(user.uid);
         toast({ title: "Financials Updated", description: `Scanned and updated ${res.count} monthly records.` });
+        // After recalculating, refetch the latest data for the current view
+        await fetchTransactions();
     } catch(e: any) {
         toast({ variant: 'destructive', title: "Error", description: e.message });
         if (e.message.includes("requires an index")) {
