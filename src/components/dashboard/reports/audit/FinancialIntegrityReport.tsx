@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
@@ -70,7 +71,8 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       }
 
       // Rule 2 Check - CC Payment as Owner's Draw
-      if (descLower.includes('creditcard') && cats?.l0 === 'Equity' && cats?.l1 === "Owner's Draw") {
+      const creditCardKeywords = ["CREDITCARD", "CARD", "AUTOPAY", "PAYMENT"];
+      if (creditCardKeywords.some(k => descLower.includes(k.toLowerCase())) && cats?.l0 === 'Equity' && cats?.l1 === "Owner's Draw") {
           foundIssues.push({ type: 'credit_card_payment', message: "CC payment misclassified as Owner's Draw", transaction: tx });
       }
 
