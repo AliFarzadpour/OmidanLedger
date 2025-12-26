@@ -158,14 +158,7 @@ export default function PropertiesListPage() {
                     Manage Property <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>
-                <Link href={`/dashboard/properties/${property.id}/transactions`} className="w-full">
-                    <Button
-                        variant="ghost"
-                        className="w-full justify-between text-slate-600 hover:text-slate-700 hover:bg-slate-100"
-                    >
-                        Cost Center Manager <BookOpen className="h-4 w-4" />
-                    </Button>
-                </Link>
+                
               </CardFooter>
             </Card>
           );

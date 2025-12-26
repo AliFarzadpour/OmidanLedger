@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -55,12 +56,7 @@ export default function ReportsPage() {
       href: '/dashboard/reports/trial-balance',
       icon: Scale,
     },
-    {
-      title: 'Chart of Accounts',
-      description: 'Summary of total income and expenses by category.',
-      href: '/dashboard/reports/chart-of-accounts',
-      icon: BookUser,
-    },
+    
   ]
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">

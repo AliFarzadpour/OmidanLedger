@@ -1,10 +1,11 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, collectionGroup, where } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { PlusCircle, Upload, ArrowLeft, Trash2 } from 'lucide-react';
+import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
@@ -13,6 +14,7 @@ import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction } from '@/components/dashboard/transactions-table';
+import { ChartOfAccountsDialog } from '@/components/dashboard/transactions/ChartOfAccountsDialog';
 
 
 // Define the shape of a data source for type safety
@@ -33,6 +35,7 @@ export default function TransactionsPage() {
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingDataSource, setEditingDataSource] = useState<DataSource | null>(null);
   const [selectedDataSource, setSelectedDataSource] = useState<DataSource | null>(null);
+  const [isCoaOpen, setIsCoaOpen] = useState(false);
   
   const [isDeleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [deletingDataSource, setDeletingDataSource] = useState<DataSource | null>(null);
@@ -150,10 +153,15 @@ export default function TransactionsPage() {
                 <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
             </div>
         </div>
-        <Button onClick={handleAdd}>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Add Data Source
-        </Button>
+        <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={() => setIsCoaOpen(true)}>
+                <BookOpen className="mr-2 h-4 w-4" /> Chart of Accounts
+            </Button>
+            <Button onClick={handleAdd}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Data Source
+            </Button>
+        </div>
       </div>
 
       <DataSourceList 
@@ -203,6 +211,8 @@ export default function TransactionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      <ChartOfAccountsDialog isOpen={isCoaOpen} onOpenChange={setIsCoaOpen} />
     </>
   );
 }

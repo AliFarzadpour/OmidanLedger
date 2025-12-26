@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -9,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Combine } from 'lucide-react';
 
 type Transaction = {
   id: string;
@@ -110,9 +113,15 @@ export function ChartOfAccountsReport() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Chart of Accounts</CardTitle>
-        <CardDescription>A summary of total income and expenses by category.</CardDescription>
+      <CardHeader className="flex justify-between flex-row items-start">
+        <div>
+            <CardTitle>Chart of Accounts</CardTitle>
+            <CardDescription>A summary of total income and expenses by category.</CardDescription>
+        </div>
+        <Button variant="outline">
+            <Combine className="mr-2 h-4 w-4" />
+            Merge Categories
+        </Button>
       </CardHeader>
       <CardContent>{renderContent()}</CardContent>
     </Card>

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -221,7 +220,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
       
-      if (typeof aValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
+      if (typeof aValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(aValue) : bValue.localeCompare(aValue);
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
@@ -372,7 +371,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
-          dataSource={dataSource}
           onSuccess={() => setSelectedIds([])}
         />
       )}
