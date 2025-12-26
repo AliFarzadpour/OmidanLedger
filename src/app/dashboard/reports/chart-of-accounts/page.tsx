@@ -136,7 +136,7 @@ function RenderRow({ name, data, level, expanded, onToggle }: any) {
         </TableCell>
       </TableRow>
       {hasSub && isExpanded && Object.entries(data.sub).sort(([aName], [bName]) => aName.localeCompare(bName)).map(([subName, subData]: any) => (
-        <RenderRow key={subName} name={subName} data={subData} level={level + 1} expanded={expanded} onToggle={toggle} />
+        <RenderRow key={subName} name={subName} data={subData} level={level + 1} expanded={expanded} onToggle={onToggle} />
       ))}
     </>
   );
