@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -339,7 +340,7 @@ export default function CostCenterManagerPage() {
                             />
                         </TableCell>
                         <TableCell>{tx.date}</TableCell>
-                        <TableCell className="font-medium max-w-[300px] truncate">{tx.description}</TableCell>
+                        <TableCell className="font-medium">{tx.description}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[normalizedL0] || 'bg-slate-100')}>
                             {tx.categoryHierarchy?.l0 || 'N/A'}
