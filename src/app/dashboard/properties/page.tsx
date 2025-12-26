@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft, BookOpen } from 'lucide-react';
+import { Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft, BookOpen, Wrench } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -101,7 +101,10 @@ export default function PropertiesListPage() {
         <div className="flex items-center gap-2">
           <ImportPropertiesDialog />
           <Button variant="outline" asChild>
-              <Link href="/dashboard/transactions">Manage All Ledgers</Link>
+              <Link href="/dashboard/properties/cost-center-manager">
+                  <Wrench className="mr-2 h-4 w-4" />
+                  Cost Center Manager
+              </Link>
           </Button>
           <AddPropertyModal onSuccess={refetch} />
         </div>
