@@ -7,10 +7,9 @@ import { collection, query, getDocs, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, TrendingDown, ArrowUpDown, TrendingUp } from 'lucide-react';
-import { format, getYear, parseISO } from 'date-fns';
+import { Wrench, TrendingUp } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format';
 
 interface PropertyFinancialsProps {
@@ -76,7 +75,6 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
             });
         }
         
-        // Default sort by date descending
         fetchedTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setAllTransactions(fetchedTxs);
 
@@ -91,13 +89,16 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
   }, [user, propertyId, view, firestore]);
 
   const availableYears = useMemo(() => {
-      if (allTransactions.length === 0) return [String(new Date().getFullYear())];
+      if (allTransactions.length === 0) return ['All', String(new Date().getFullYear())];
       const years = new Set(allTransactions.map(tx => format(parseISO(tx.date), 'yyyy')));
-      return Array.from(years).sort((a, b) => b.localeCompare(a));
+      const sortedYears = Array.from(years).sort((a, b) => b.localeCompare(a));
+      return ['All', ...sortedYears];
   }, [allTransactions]);
 
   const groupedTransactions = useMemo(() => {
-    const yearFiltered = allTransactions.filter(tx => format(parseISO(tx.date), 'yyyy') === selectedYear);
+    const yearFiltered = selectedYear === 'All'
+        ? allTransactions
+        : allTransactions.filter(tx => format(parseISO(tx.date), 'yyyy') === selectedYear);
 
     const grouped: GroupedTransactions = yearFiltered.reduce((acc, tx) => {
         const month = format(parseISO(tx.date), 'yyyy-MM');
