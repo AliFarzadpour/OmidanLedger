@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -18,6 +17,7 @@ import { cn } from '@/lib/utils';
 import type { Transaction } from '../transactions-table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from '../transactions/batch-edit-dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800',
@@ -124,7 +124,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
   return (
     <>
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[600px] sm:max-w-none">
+      <SheetContent className="w-[600px] sm:max-w-none flex flex-col">
         <SheetHeader>
           <SheetTitle>Transactions for: {category.name}</SheetTitle>
           <SheetDescription>
@@ -148,31 +148,33 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
             </div>
         )}
 
-        <div className="mt-4">
-          <Table>
-            <TableBody>
-              {category.transactions.map((transaction) => (
-                <TableRow key={transaction.id}>
-                    <TableCell className="w-[50px]">
-                         <Checkbox 
-                            checked={selectedIds.includes(transaction.id)}
-                            onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
-                        />
+        <div className="mt-4 flex-1 min-h-0">
+          <ScrollArea className="h-full">
+            <Table>
+              <TableBody>
+                {category.transactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                      <TableCell className="w-[50px]">
+                          <Checkbox 
+                              checked={selectedIds.includes(transaction.id)}
+                              onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
+                          />
+                      </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div>
+                      <div className="font-medium max-w-[200px] truncate">{transaction.description}</div>
                     </TableCell>
-                  <TableCell>
-                    <div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div>
-                    <div className="font-medium max-w-[200px] truncate">{transaction.description}</div>
-                  </TableCell>
-                  <TableCell>
-                    <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
-                  </TableCell>
-                  <TableCell className={cn('text-right font-medium', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
-                    {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    <TableCell>
+                      <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
+                    </TableCell>
+                    <TableCell className={cn('text-right font-medium', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
+                      {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </ScrollArea>
         </div>
       </SheetContent>
     </Sheet>
