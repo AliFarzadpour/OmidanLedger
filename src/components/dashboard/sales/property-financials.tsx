@@ -1,14 +1,17 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, getDocs } from 'firebase/firestore';
+import { collection, query, getDocs, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { ArrowDownCircle, Wrench, TrendingUp, TrendingDown } from 'lucide-react';
-import { format } from 'date-fns';
+import { Wrench, TrendingDown, ArrowUpDown } from 'lucide-react';
+import { format, getYear, parseISO } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/format';
 
 interface PropertyFinancialsProps {
   propertyId: string;
@@ -16,12 +19,29 @@ interface PropertyFinancialsProps {
   view: 'income' | 'expenses';
 }
 
+type Transaction = {
+    id: string;
+    date: string;
+    description: string;
+    categoryHierarchy: { l2: string };
+    amount: number;
+};
+
+type GroupedTransactions = {
+    [month: string]: {
+        transactions: Transaction[];
+        total: number;
+    };
+};
+
 export function PropertyFinancials({ propertyId, propertyName, view }: PropertyFinancialsProps) {
   const { user } = useUser();
   const firestore = useFirestore();
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [totalAmount, setTotalAmount] = useState(0);
+
+  const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Transaction | 'none', direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -29,42 +49,35 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
       setLoading(true);
 
       try {
-        // Fetch all bank accounts for the user
         const accountsSnap = await getDocs(collection(firestore, `users/${user.uid}/bankAccounts`));
         if (accountsSnap.empty) {
-            setTransactions([]);
+            setAllTransactions([]);
             setLoading(false);
             return;
         }
 
-        // Fetch all transactions from all accounts
-        let allUserTransactions: any[] = [];
+        let fetchedTxs: Transaction[] = [];
         for (const accountDoc of accountsSnap.docs) {
             const txsSnap = await getDocs(collection(accountDoc.ref, 'transactions'));
             txsSnap.forEach(txDoc => {
-                allUserTransactions.push({ id: txDoc.id, ...txDoc.data() });
+                const data = txDoc.data();
+                const isForProperty = data.costCenter === propertyId;
+                const categoryL0 = data.categoryHierarchy?.l0 || '';
+
+                let include = false;
+                if (view === 'income' && isForProperty && categoryL0 === 'Income') {
+                    include = true;
+                } else if (view === 'expenses' && isForProperty && categoryL0 === 'Expense') {
+                    include = true;
+                }
+
+                if (include) {
+                    fetchedTxs.push({ id: txDoc.id, ...data } as Transaction);
+                }
             });
         }
         
-        // Filter transactions client-side
-        const filteredTxs = allUserTransactions.filter(tx => {
-            const isForProperty = tx.costCenter === propertyId;
-            const categoryL0 = tx.categoryHierarchy?.l0 || '';
-
-            if (view === 'income') {
-                return isForProperty && categoryL0 === 'Income';
-            }
-            if (view === 'expenses') {
-                return isForProperty && categoryL0 === 'Expense';
-            }
-            return false;
-        });
-
-        // Sort by date desc
-        filteredTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
-        setTransactions(filteredTxs);
-        setTotalAmount(filteredTxs.reduce((sum, t) => sum + t.amount, 0));
+        setAllTransactions(fetchedTxs);
 
       } catch (error) {
         console.error("Error fetching financials:", error);
@@ -76,9 +89,55 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
     fetchTransactions();
   }, [user, propertyId, view, firestore]);
 
-  const isIncome = view === 'income';
+  const availableYears = useMemo(() => {
+      const years = new Set(allTransactions.map(tx => format(parseISO(tx.date), 'yyyy')));
+      return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [allTransactions]);
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading financial data...</div>;
+  const groupedAndSortedTransactions = useMemo(() => {
+    const yearFiltered = allTransactions.filter(tx => format(parseISO(tx.date), 'yyyy') === selectedYear);
+
+    const grouped: GroupedTransactions = yearFiltered.reduce((acc, tx) => {
+        const month = format(parseISO(tx.date), 'yyyy-MM');
+        if (!acc[month]) {
+            acc[month] = { transactions: [], total: 0 };
+        }
+        acc[month].transactions.push(tx);
+        acc[month].total += tx.amount;
+        return acc;
+    }, {} as GroupedTransactions);
+
+    if (sortConfig.key !== 'none') {
+        for (const month in grouped) {
+            grouped[month].transactions.sort((a, b) => {
+                const key = sortConfig.key as keyof Transaction;
+                const aVal = a[key];
+                const bVal = b[key];
+
+                if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+    }
+
+    return grouped;
+  }, [allTransactions, selectedYear, sortConfig]);
+
+  const sortedMonths = Object.keys(groupedAndSortedTransactions).sort((a, b) => b.localeCompare(a));
+
+  const totalAmount = useMemo(() => {
+    return Object.values(groupedAndSortedTransactions).reduce((sum, group) => sum + group.total, 0);
+  }, [groupedAndSortedTransactions]);
+
+  const handleSort = (key: keyof Transaction | 'none') => {
+    setSortConfig(prev => ({
+        key,
+        direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  }
+
+  const isIncome = view === 'income';
 
   return (
     <Card>
@@ -89,48 +148,66 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                 {isIncome ? "Rent and fees collected" : "Maintenance, utilities, and tax"} for {propertyName}.
             </CardDescription>
         </div>
-        <div className="text-right">
-            <p className="text-sm text-muted-foreground">Total {isIncome ? "Collected" : "Spent"}</p>
-            <p className={`text-2xl font-bold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
-                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(totalAmount))}
-            </p>
+        <div className="flex items-center gap-4">
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    {availableYears.map(year => <SelectItem key={year} value={year}>{year}</SelectItem>)}
+                </SelectContent>
+            </Select>
+            <div className="text-right">
+                <p className="text-sm text-muted-foreground">Total for {selectedYear}</p>
+                <p className={`text-2xl font-bold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                    {formatCurrency(Math.abs(totalAmount))}
+                </p>
+            </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="w-1/4"><Button variant="ghost" onClick={() => handleSort('date')}>Date <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
+                    <TableHead className="w-1/2"><Button variant="ghost" onClick={() => handleSort('description')}>Description <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
+                    <TableHead><Button variant="ghost" onClick={() => handleSort('categoryHierarchy')}>Category <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
+                    <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('amount')}>Amount <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {transactions.length > 0 ? (
-                    transactions.map((tx) => (
-                        <TableRow key={tx.id}>
-                            <TableCell>{format(new Date(tx.date), 'MMM dd, yyyy')}</TableCell>
-                            <TableCell className="font-medium max-w-[200px] truncate" title={tx.description}>
-                                {tx.description}
-                            </TableCell>
-                            <TableCell>
-                                <Badge variant="outline" className="font-normal">
-                                    {tx.categoryHierarchy?.l2 || tx.accountName}
-                                </Badge>
-                            </TableCell>
-                            <TableCell className={`text-right font-medium ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
-                                {isIncome ? '+' : ''}
-                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(tx.amount)}
-                            </TableCell>
-                        </TableRow>
+                {loading ? (
+                    <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading financial data...</TableCell></TableRow>
+                ) : sortedMonths.length > 0 ? (
+                    sortedMonths.map(month => (
+                       <React.Fragment key={month}>
+                            <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                <TableCell colSpan={3} className="font-bold">{format(parseISO(month), 'MMMM yyyy')}</TableCell>
+                                <TableCell className="text-right font-bold">{formatCurrency(groupedAndSortedTransactions[month].total)}</TableCell>
+                            </TableRow>
+                            {groupedAndSortedTransactions[month].transactions.map((tx) => (
+                                <TableRow key={tx.id}>
+                                    <TableCell className="pl-8">{format(parseISO(tx.date), 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell className="font-medium max-w-[200px] truncate" title={tx.description}>
+                                        {tx.description}
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge variant="outline" className="font-normal">
+                                            {tx.categoryHierarchy?.l2 || 'N/A'}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className={`text-right font-medium ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                                        {isIncome ? '+' : ''}
+                                        {formatCurrency(tx.amount)}
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                       </React.Fragment>
                     ))
                 ) : (
                     <TableRow>
                         <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                             <div className="flex flex-col items-center justify-center gap-2">
-                                {isIncome ? <ArrowDownCircle className="h-8 w-8 text-slate-200" /> : <Wrench className="h-8 w-8 text-slate-200" />}
-                                <p>No {isIncome ? "income" : "expenses"} found for this property yet.</p>
+                                {isIncome ? <TrendingUp className="h-8 w-8 text-slate-200" /> : <Wrench className="h-8 w-8 text-slate-200" />}
+                                <p>No {isIncome ? "income" : "expenses"} found for this property in {selectedYear}.</p>
                             </div>
                         </TableCell>
                     </TableRow>
