@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useUser, useFirestore, updateDocumentNonBlocking } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Edit } from 'lucide-react';
+import { Pencil, Edit, Search, ArrowDown, ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Transaction } from '../transactions-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,7 +80,6 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     );
 }
 
-
 export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }: { isOpen: boolean, onOpenChange: (open: boolean) => void, category: { name: string; transactions: Transaction[] }, onUpdate: () => void }) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -88,8 +87,37 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
-  const selectedTransactions = category.transactions.filter(tx => selectedIds.includes(tx.id));
+  const filteredAndSortedTransactions = useMemo(() => {
+    let filtered = category.transactions.filter(tx => 
+      tx.description.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    filtered.sort((a, b) => {
+      let aValue, bValue;
+      if (sortConfig.key === 'date') {
+        aValue = new Date(a.date).getTime();
+        bValue = new Date(b.date).getTime();
+      } else { // amount
+        aValue = a.amount;
+        bValue = b.amount;
+      }
+      return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+    });
+
+    return filtered;
+  }, [category.transactions, searchTerm, sortConfig]);
+
+  const selectedTransactions = filteredAndSortedTransactions.filter(tx => selectedIds.includes(tx.id));
+
+  const handleSort = (key: 'date' | 'amount') => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
 
   const handleSelectionChange = (id: string, checked: boolean) => {
     setSelectedIds(prev => 
@@ -132,6 +160,24 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
           </SheetDescription>
         </SheetHeader>
         
+        <div className="flex items-center gap-2 py-4">
+          <div className="relative flex-grow">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Filter by description..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={() => handleSort('date')}>
+            Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />)}
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleSort('amount')}>
+            Amount {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />)}
+          </Button>
+        </div>
+
         {selectedIds.length > 0 && (
             <div className="my-4 flex items-center gap-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex-grow">
@@ -152,7 +198,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
           <ScrollArea className="h-full">
             <Table>
               <TableBody>
-                {category.transactions.map((transaction) => (
+                {filteredAndSortedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
                       <TableCell className="w-[50px]">
                           <Checkbox 
