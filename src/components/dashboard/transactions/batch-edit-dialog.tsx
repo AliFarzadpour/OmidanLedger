@@ -38,7 +38,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
   const [l2, setL2] = useState('');
   const [l3, setL3] = useState('');
   const [ruleName, setRuleName] = useState('');
-  const [costCenter, setCostCenter] = useState('');
+  const [costCenter, setCostCenter] = useState(''); // Default to empty
   const [properties, setProperties] = useState<Property[]>([]);
 
   useEffect(() => {
@@ -70,7 +70,8 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
       setL1(cats.l1);
       setL2(cats.l2);
       setL3(cats.l3);
-      setCostCenter(firstTx.costCenter || '');
+      // Reset costCenter to empty when dialog opens
+      setCostCenter(''); 
       setRuleName(''); 
     }
   }, [transactions, isOpen]);
@@ -99,8 +100,14 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
           aiExplanation: 'Manually updated in batch.',
           reviewStatus: 'approved',
           auditStatus: 'audited',
-          costCenter: costCenter === 'none' ? null : costCenter,
+          costCenter: costCenter, // costCenter will be the selected value ('', propertyId, or 'No Cost Center')
         };
+        
+        // If the user didn't make a selection, don't update the costCenter
+        if (costCenter === '') {
+            delete updateData.costCenter;
+        }
+
 
         batch.update(txRef, updateData);
       });
@@ -115,7 +122,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
             subcategory: l2,
             details: l3,
             userId: user.uid,
-            propertyId: costCenter !== 'none' ? costCenter : undefined
+            propertyId: costCenter !== '' ? costCenter : undefined
         });
         toast({
           title: 'Update & Rule Created',
@@ -155,12 +162,12 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
         <div className="py-4 space-y-4">
           <div className="grid gap-2">
             <Label htmlFor="costCenter">Cost Center (Property/Unit)</Label>
-             <Select onValueChange={handleCostCenterChange} value={costCenter || 'none'}>
+             <Select onValueChange={handleCostCenterChange} value={costCenter}>
                 <SelectTrigger id="costCenter">
                     <SelectValue placeholder="Assign to a property or unit..." />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="none">No Cost Center</SelectItem>
+                    <SelectItem value="No Cost Center">No Cost Center</SelectItem>
                     {properties.map(prop => (
                         <SelectGroup key={prop.id}>
                              <SelectItem value={prop.id}>{prop.name} (Building)</SelectItem>
