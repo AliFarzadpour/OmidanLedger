@@ -7,7 +7,7 @@ import { doc, collection, query, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2 } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
@@ -146,25 +146,31 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
         </div>
       </div>
-
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogTrigger asChild>
-          <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
-        </DialogTrigger>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit Property Settings</DialogTitle>
-            <DialogDescription>
-              Update tenants, mortgage details, and configuration for {property.name}.
-            </DialogDescription>
-          </DialogHeader>
-          <PropertyForm 
-            initialData={{ id: property.id, ...property }} 
-            onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
-            defaultTab={formTab} 
-          />
-        </DialogContent>
-      </Dialog>
+      <div className="flex items-center gap-2">
+        <Button asChild variant="outline">
+            <Link href={`/dashboard/properties/${property.id}/transactions`}>
+                <BookOpen className="mr-2 h-4 w-4" /> View Ledger
+            </Link>
+        </Button>
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+            <DialogTrigger asChild>
+            <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Edit Property Settings</DialogTitle>
+                <DialogDescription>
+                Update tenants, mortgage details, and configuration for {property.name}.
+                </DialogDescription>
+            </DialogHeader>
+            <PropertyForm 
+                initialData={{ id: property.id, ...property }} 
+                onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
+                defaultTab={formTab} 
+            />
+            </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 
