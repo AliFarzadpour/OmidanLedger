@@ -1,18 +1,15 @@
-
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useFirestore, useUser } from '@/firebase';
-import { doc, collectionGroup, query, where, getDocs } from 'firebase/firestore';
-import { useDoc } from '@/firebase/firestore/use-doc';
+import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { collectionGroup, query, where } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
 
 export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const { user } = useUser();
@@ -20,67 +17,52 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   
-  // State for Global Stats (when no propertyId is passed)
-  const [globalStats, setGlobalStats] = useState<{ income: number, expenses: number, netIncome: number } | null>(null);
-  const [globalLoading, setGlobalLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null); // New state for the error message
+  const currentMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
+  const currentMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
 
-  const currentMonthKey = format(new Date(), 'yyyy-MM');
+  // New direct query for transactions
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!db || !user) return null;
 
-  const docRef = useMemo(() => {
-    if (!db || !propertyId) return null;
-    return doc(db, `properties/${propertyId}/monthlyStats/${currentMonthKey}`);
-  }, [db, propertyId, currentMonthKey]);
+    let q = query(
+      collectionGroup(db, 'transactions'),
+      where('userId', '==', user.uid),
+      where('date', '>=', currentMonthStart),
+      where('date', '<=', currentMonthEnd)
+    );
+    
+    // If a propertyId is provided, add it to the filter.
+    if (propertyId) {
+      q = query(q, where('propertyId', '==', propertyId));
+    }
+    
+    return q;
+  }, [db, user, propertyId, currentMonthStart, currentMonthEnd, isRefreshing]);
 
-  // A. SINGLE PROPERTY MODE
-  const { data: singleStats, isLoading: singleLoading } = useDoc(docRef);
+  const { data: transactions, isLoading, error } = useCollection(transactionsQuery);
 
-  // B. GLOBAL PORTFOLIO MODE
-  useEffect(() => {
-    if (propertyId || !user || !db) return; 
+  const stats = useMemo(() => {
+    if (!transactions) {
+      return { income: 0, expenses: 0, netIncome: 0 };
+    }
 
-    const fetchGlobalStats = async () => {
-        setGlobalLoading(true);
-        setErrorMessage(null); // Clear previous errors
-        try {
-            const q = query(
-                collectionGroup(db, 'monthlyStats'),
-                where('userId', '==', user.uid),
-                where('month', '==', currentMonthKey)
-            );
-            
-            const snapshot = await getDocs(q);
-            
-            let inc = 0, exp = 0, net = 0;
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                inc += d.income || 0;
-                exp += d.expenses || 0;
-                net += d.netIncome || 0;
-            });
+    let income = 0;
+    let expenses = 0;
 
-            setGlobalStats({ income: inc, expenses: exp, netIncome: net });
-        } catch (error: any) {
-            console.error("Failed to fetch portfolio stats:", error);
-            setErrorMessage(error.message); // Store the full error message
-            if (error.code === 'failed-precondition') {
-                toast({
-                    variant: 'destructive',
-                    title: 'Database Index Required',
-                    description: 'A database index is needed for portfolio view. The full error is shown on screen.',
-                });
-            }
-        } finally {
-            setGlobalLoading(false);
-        }
-    };
+    transactions.forEach(tx => {
+      const amount = Number(tx.amount) || 0;
+      const category = tx.categoryHierarchy?.l0 || '';
+      
+      if (category === 'Income') {
+        income += amount;
+      } else if (category === 'Expense') {
+        expenses += amount; // expenses are negative
+      }
+    });
 
-    fetchGlobalStats();
-  }, [propertyId, user, currentMonthKey, db, isRefreshing, toast]); 
+    return { income, expenses, netIncome: income + expenses };
+  }, [transactions]);
 
-  // Determine view mode
-  const stats = propertyId ? singleStats : globalStats;
-  const loading = propertyId ? singleLoading : globalLoading;
 
   const handleRecalculate = async () => {
     if(!user) return;
@@ -102,12 +84,12 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
 
   return (
     <>
-      {errorMessage && (
+      {error && (
         <div className="mb-4 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
           <h3 className="font-bold text-destructive">Firestore Query Error</h3>
           <p className="text-sm text-destructive/80 mb-2">Please copy the full error message below to create the required index.</p>
           <pre className="bg-white p-3 rounded-md text-xs font-mono whitespace-pre-wrap break-all">
-            {errorMessage}
+            {error.message}
           </pre>
         </div>
       )}
@@ -121,11 +103,11 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
           </div>
           <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={isRefreshing} className="gap-2">
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {isRefreshing ? "Calculating..." : "Recalculate"}
+              {isRefreshing ? "Calculating..." : "Recalculate All"}
           </Button>
         </CardHeader>
         <CardContent>
-          {loading ? (
+          {isLoading ? (
               <div className="flex justify-center py-6"><Loader2 className="animate-spin text-muted-foreground" /></div>
           ) : (
               <div className="grid gap-4 md:grid-cols-3">
@@ -136,7 +118,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
                   <ArrowUpRight className="h-4 w-4" /> Total Income
                   </div>
                   <div className="mt-2 text-2xl font-bold text-green-700">
-                  {stats ? fmt(stats.income) : '$0.00'}
+                  {fmt(stats.income)}
                   </div>
               </div>
 
@@ -146,7 +128,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
                   <ArrowDownRight className="h-4 w-4" /> Total Expenses
                   </div>
                   <div className="mt-2 text-2xl font-bold text-red-700">
-                  {stats ? fmt(stats.expenses) : '$0.00'}
+                  {fmt(stats.expenses)}
                   </div>
               </div>
 
@@ -155,11 +137,11 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
                   <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
                   <DollarSign className="h-4 w-4" /> Net Income
                   </div>
-                  <div className={`mt-2 text-2xl font-bold ${stats && stats.netIncome >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                  {stats ? fmt(stats.netIncome) : '$0.00'}
+                  <div className={`mt-2 text-2xl font-bold ${stats.netIncome >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
+                  {fmt(stats.netIncome)}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
-                      {stats && stats.income > 0 
+                      {stats.income > 0 
                           ? `${Math.round((stats.netIncome / stats.income) * 100)}% Margin` 
                           : '0% Margin'}
                   </p>
