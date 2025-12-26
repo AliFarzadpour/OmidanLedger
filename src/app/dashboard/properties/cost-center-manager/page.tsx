@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -28,13 +29,13 @@ export default function CostCenterManagerPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState<'unassigned' | 'assigned' | 'all'>('unassigned');
   const [l0Filter, setL0Filter] = useState('all'); // ADDED L0 Filter State
-  const [sortConfig, setSortConfig = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
   
   // --- DATA & SELECTION STATE ---
-  const [selectedIds, setSelectedIds = useState<string[]>([]);
-  const [isBatchEditDialogOpen, setBatchEditDialogOpen = useState(false);
-  const [allTransactions, setAllTransactions = useState<Tx[]>([]);
-  const [isLoadingTransactions, setIsLoadingTransactions = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [allTransactions, setAllTransactions] = useState<Tx[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
 
   // --- DATA FETCHING ---
   const refetchTransactions = useCallback(async () => {
@@ -103,8 +104,8 @@ export default function CostCenterManagerPage() {
 
     // Sort
     filtered.sort((a, b) => {
-        const aVal = a[sortConfig.key] || '';
-        const bVal = b[sortConfig.key] || '';
+        const aVal = a[sortConfig.key as keyof typeof a] || '';
+        const bVal = b[sortConfig.key as keyof typeof b] || '';
         
         if (sortConfig.key === 'date') {
              return sortConfig.direction === 'asc' 
