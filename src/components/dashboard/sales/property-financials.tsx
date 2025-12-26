@@ -41,7 +41,6 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
   const [loading, setLoading] = useState(true);
 
   const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
-  const [sortConfig, setSortConfig] = useState<{ key: keyof Transaction | 'none', direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -77,6 +76,8 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
             });
         }
         
+        // Default sort by date descending
+        fetchedTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setAllTransactions(fetchedTxs);
 
       } catch (error) {
@@ -95,7 +96,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
       return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [allTransactions]);
 
-  const groupedAndSortedTransactions = useMemo(() => {
+  const groupedTransactions = useMemo(() => {
     const yearFiltered = allTransactions.filter(tx => format(parseISO(tx.date), 'yyyy') === selectedYear);
 
     const grouped: GroupedTransactions = yearFiltered.reduce((acc, tx) => {
@@ -108,52 +109,14 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
         return acc;
     }, {} as GroupedTransactions);
 
-    if (sortConfig.key !== 'none') {
-        for (const month in grouped) {
-            grouped[month].transactions.sort((a, b) => {
-                const key = sortConfig.key as keyof Transaction;
-                let aVal, bVal;
-
-                // Handle nested category property
-                if (key === 'categoryHierarchy') {
-                    aVal = a.categoryHierarchy?.l2 || '';
-                    bVal = b.categoryHierarchy?.l2 || '';
-                } else {
-                    aVal = a[key];
-                    bVal = b[key];
-                }
-                
-                let result = 0;
-                if (typeof aVal === 'string' && typeof bVal === 'string') {
-                    if (key === 'date') {
-                        result = new Date(aVal).getTime() - new Date(bVal).getTime();
-                    } else {
-                        result = aVal.localeCompare(bVal, undefined, { numeric: true });
-                    }
-                } else {
-                    result = (aVal as number) - (bVal as number);
-                }
-
-                return sortConfig.direction === 'asc' ? result : -result;
-            });
-        }
-    }
-
     return grouped;
-  }, [allTransactions, selectedYear, sortConfig]);
+  }, [allTransactions, selectedYear]);
 
-  const sortedMonths = Object.keys(groupedAndSortedTransactions).sort((a, b) => b.localeCompare(a));
+  const sortedMonths = Object.keys(groupedTransactions).sort((a, b) => b.localeCompare(a));
 
   const totalAmount = useMemo(() => {
-    return Object.values(groupedAndSortedTransactions).reduce((sum, group) => sum + group.total, 0);
-  }, [groupedAndSortedTransactions]);
-
-  const handleSort = (key: keyof Transaction | 'none') => {
-    setSortConfig(prev => ({
-        key,
-        direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
-    }));
-  }
+    return Object.values(groupedTransactions).reduce((sum, group) => sum + group.total, 0);
+  }, [groupedTransactions]);
 
   const isIncome = view === 'income';
 
@@ -185,10 +148,10 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
         <Table>
             <TableHeader>
                 <TableRow>
-                    <TableHead className="w-1/4"><Button variant="ghost" onClick={() => handleSort('date')}>Date <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
-                    <TableHead className="w-1/2"><Button variant="ghost" onClick={() => handleSort('description')}>Description <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
-                    <TableHead><Button variant="ghost" onClick={() => handleSort('categoryHierarchy')}>Category <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
-                    <TableHead className="text-right"><Button variant="ghost" onClick={() => handleSort('amount')}>Amount <ArrowUpDown className="h-3 w-3 inline-block" /></Button></TableHead>
+                    <TableHead className="w-1/4">Date</TableHead>
+                    <TableHead className="w-1/2">Description</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -196,7 +159,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                     <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading financial data...</TableCell></TableRow>
                 ) : sortedMonths.length > 0 ? (
                     sortedMonths.map(month => {
-                        const monthData = groupedAndSortedTransactions[month];
+                        const monthData = groupedTransactions[month];
                         const showTotal = monthData.transactions.length > 1;
 
                         return (
