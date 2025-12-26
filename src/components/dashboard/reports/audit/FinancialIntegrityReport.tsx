@@ -43,7 +43,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       // 2. Income/Expense Sign Mismatch Check
       const isIncomeL0 = cats?.l0?.toLowerCase().includes('income');
       const isExpenseL0 = cats?.l0?.toLowerCase().includes('expense');
-      if ((isIncomeL0 && tx.amount < 0) || (isExpenseLО && tx.amount > 0)) {
+      if ((isIncomeL0 && tx.amount < 0) || (isExpenseL0 && tx.amount > 0)) {
         foundIssues.push({ type: 'mismatch', message: `Amount is ${tx.amount < 0 ? 'negative' : 'positive'} but category is ${cats.l0}.`, transaction: tx });
       }
 
