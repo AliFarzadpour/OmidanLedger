@@ -4,12 +4,12 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, collectionGroup, query, where, doc, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Edit, Search } from 'lucide-react';
+import { ArrowLeft, Edit, Search, ArrowUpDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
@@ -17,6 +17,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import type { Transaction } from '@/components/dashboard/transactions-table';
 
 type Tx = Transaction & { id: string };
+type SortKey = 'date' | 'description' | 'category' | 'costCenter' | 'amount';
+type SortDirection = 'asc' | 'desc';
 
 export default function CostCenterManagerPage() {
   const router = useRouter();
@@ -24,7 +26,8 @@ export default function CostCenterManagerPage() {
   const firestore = useFirestore();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [l0Filter, setL0Filter] = useState('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'unassigned' | 'assigned' | 'all'>('unassigned');
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
 
@@ -36,12 +39,10 @@ export default function CostCenterManagerPage() {
 
     setIsLoadingTransactions(true);
     try {
-      // 1) get bank accounts
       const bankSnap = await getDocs(
         collection(firestore, "users", user.uid, "bankAccounts")
       );
 
-      // 2) get transactions for each bank account
       const txs: Tx[] = [];
       for (const bankDoc of bankSnap.docs) {
         const txSnap = await getDocs(
@@ -60,8 +61,7 @@ export default function CostCenterManagerPage() {
         });
       }
 
-      // optional: sort by date if it's YYYY-MM-DD strings
-      txs.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+      txs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
       setAllTransactions(txs);
     } finally {
@@ -88,34 +88,45 @@ export default function CostCenterManagerPage() {
     }, {} as Record<string, string>);
   }, [properties]);
 
-  // --- FILTERING LOGIC ---
-  const filteredTransactions = useMemo(() => {
-    if (!allTransactions) return [];
-    return allTransactions.filter(tx => {
-      // Filter by L0 category
-      if (l0Filter !== "all") {
-        const l0 = (tx.categoryHierarchy?.l0 || "Uncategorized").toLowerCase();
-        const filter = l0Filter.toLowerCase();
-        const normalized =
-          l0.includes("income") ? "income" :
-          l0.includes("expense") ? "expense" :
-          l0.includes("asset") ? "asset" :
-          l0.includes("liabil") ? "liability" :
-          l0.includes("equity") ? "equity" :
-          "other";
-        if (normalized !== filter) return false;
-      }
-      // Filter by search term
-      if (searchTerm && !tx.description.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return false;
-      }
-      return true;
+  const filteredAndSortedTransactions = useMemo(() => {
+    let filtered = allTransactions;
+
+    // Filter by assignment status
+    if (assignmentFilter === 'unassigned') {
+        filtered = filtered.filter(tx => !tx.costCenter);
+    } else if (assignmentFilter === 'assigned') {
+        filtered = filtered.filter(tx => !!tx.costCenter);
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+        filtered = filtered.filter(tx => tx.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+        const aVal = a[sortConfig.key] || '';
+        const bVal = b[sortConfig.key] || '';
+        
+        if (sortConfig.key === 'date') {
+             return sortConfig.direction === 'asc' 
+                ? new Date(aVal).getTime() - new Date(bVal).getTime() 
+                : new Date(bVal).getTime() - new Date(aVal).getTime();
+        }
+
+        if (sortConfig.direction === 'asc') {
+            return String(aVal).localeCompare(String(bVal), undefined, { numeric: true });
+        } else {
+            return String(bVal).localeCompare(String(aVal), undefined, { numeric: true });
+        }
     });
-  }, [allTransactions, l0Filter, searchTerm]);
+
+    return filtered;
+  }, [allTransactions, assignmentFilter, searchTerm, sortConfig]);
   
   const selectedTransactions = useMemo(() => {
-    return filteredTransactions.filter(tx => selectedIds.includes(tx.id));
-  }, [filteredTransactions, selectedIds]);
+    return filteredAndSortedTransactions.filter(tx => selectedIds.includes(tx.id));
+  }, [filteredAndSortedTransactions, selectedIds]);
   
   const handleSelectionChange = (id: string, checked: boolean) => {
     setSelectedIds(prev => 
@@ -125,11 +136,22 @@ export default function CostCenterManagerPage() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-        setSelectedIds(filteredTransactions.map(t => t.id));
+        setSelectedIds(filteredAndSortedTransactions.map(t => t.id));
     } else {
         setSelectedIds([]);
     }
   };
+  
+  const requestSort = (key: SortKey) => {
+    setSortConfig(prev => ({
+        key,
+        direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const getSortIcon = (key: SortKey) => (
+    sortConfig.key === key ? <ArrowUpDown className="h-4 w-4 inline" /> : <ArrowUpDown className="h-4 w-4 inline opacity-30" />
+  );
 
   const isLoading = isLoadingTransactions || isLoadingProperties;
 
@@ -168,17 +190,14 @@ export default function CostCenterManagerPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
         </div>
-        <Select value={l0Filter} onValueChange={setL0Filter}>
+        <Select value={assignmentFilter} onValueChange={(val: any) => setAssignmentFilter(val)}>
             <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by category..." />
+                <SelectValue placeholder="Filter by status..." />
             </SelectTrigger>
             <SelectContent>
-                <SelectItem value="all">All L0 Categories</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
-                <SelectItem value="expense">Expense</SelectItem>
-                <SelectItem value="asset">Asset</SelectItem>
-                <SelectItem value="liability">Liability</SelectItem>
-                <SelectItem value="equity">Equity</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                <SelectItem value="assigned">Assigned</SelectItem>
+                <SelectItem value="all">All</SelectItem>
             </SelectContent>
         </Select>
       </div>
@@ -207,24 +226,24 @@ export default function CostCenterManagerPage() {
               <TableRow>
                 <TableHead className="w-[50px] p-2">
                     <Checkbox
-                        checked={filteredTransactions.length > 0 && selectedIds.length === filteredTransactions.length}
+                        checked={filteredAndSortedTransactions.length > 0 && selectedIds.length === filteredAndSortedTransactions.length}
                         onCheckedChange={(checked) => handleSelectAll(!!checked)}
                     />
                 </TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Cost Center</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('costCenter')}>Cost Center {getSortIcon('costCenter')}</Button></TableHead>
+                <TableHead className="text-right"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 [...Array(10)].map((_, i) => <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-6 w-full" /></TableCell></TableRow>)
-              ) : filteredTransactions.length === 0 ? (
+              ) : filteredAndSortedTransactions.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center h-32">No matching transactions found.</TableCell></TableRow>
               ) : (
-                filteredTransactions.map(tx => (
+                filteredAndSortedTransactions.map(tx => (
                   <TableRow key={tx.id}>
                     <TableCell className="p-2">
                          <Checkbox 
