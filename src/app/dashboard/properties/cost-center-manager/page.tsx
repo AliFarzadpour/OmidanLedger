@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -25,44 +24,33 @@ export default function CostCenterManagerPage() {
   const { user } = useUser();
   const firestore = useFirestore();
 
+  // --- FILTER & SORT STATE ---
   const [searchTerm, setSearchTerm] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState<'unassigned' | 'assigned' | 'all'>('unassigned');
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [l0Filter, setL0Filter] = useState('all'); // ADDED L0 Filter State
+  const [sortConfig, setSortConfig = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
+  
+  // --- DATA & SELECTION STATE ---
+  const [selectedIds, setSelectedIds = useState<string[]>([]);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen = useState(false);
+  const [allTransactions, setAllTransactions = useState<Tx[]>([]);
+  const [isLoadingTransactions, setIsLoadingTransactions = useState(false);
 
-  const [allTransactions, setAllTransactions] = useState<Tx[]>([]);
-  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
-
+  // --- DATA FETCHING ---
   const refetchTransactions = useCallback(async () => {
     if (!user || !firestore) return;
 
     setIsLoadingTransactions(true);
     try {
-      const bankSnap = await getDocs(
-        collection(firestore, "users", user.uid, "bankAccounts")
-      );
-
+      const bankSnap = await getDocs(collection(firestore, "users", user.uid, "bankAccounts"));
       const txs: Tx[] = [];
       for (const bankDoc of bankSnap.docs) {
-        const txSnap = await getDocs(
-          collection(
-            firestore,
-            "users",
-            user.uid,
-            "bankAccounts",
-            bankDoc.id,
-            "transactions"
-          )
-        );
-
+        const txSnap = await getDocs(collection(firestore, "users", user.uid, "bankAccounts", bankDoc.id, "transactions"));
         txSnap.forEach((d) => {
           txs.push({ id: d.id, ...(d.data() as any) });
         });
       }
-
       txs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
       setAllTransactions(txs);
     } finally {
       setIsLoadingTransactions(false);
@@ -97,6 +85,16 @@ export default function CostCenterManagerPage() {
     } else if (assignmentFilter === 'assigned') {
         filtered = filtered.filter(tx => !!tx.costCenter);
     }
+
+    // UPDATED: Filter by L0 Category
+    if (l0Filter !== 'all') {
+        filtered = filtered.filter(tx => {
+            const l0 = (tx.categoryHierarchy?.l0 || 'Uncategorized').toLowerCase();
+            const filter = l0Filter.toLowerCase();
+            const normalized = l0.includes('income') ? 'income' : l0.includes('expense') ? 'expense' : l0.includes('asset') ? 'asset' : l0.includes('liabil') ? 'liability' : l0.includes('equity') ? 'equity' : 'other';
+            return normalized === filter;
+        });
+    }
     
     // Filter by search term
     if (searchTerm) {
@@ -122,7 +120,7 @@ export default function CostCenterManagerPage() {
     });
 
     return filtered;
-  }, [allTransactions, assignmentFilter, searchTerm, sortConfig]);
+  }, [allTransactions, assignmentFilter, l0Filter, searchTerm, sortConfig]);
   
   const selectedTransactions = useMemo(() => {
     return filteredAndSortedTransactions.filter(tx => selectedIds.includes(tx.id));
@@ -198,6 +196,20 @@ export default function CostCenterManagerPage() {
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 <SelectItem value="assigned">Assigned</SelectItem>
                 <SelectItem value="all">All</SelectItem>
+            </SelectContent>
+        </Select>
+        {/* L0 Category Filter */}
+        <Select value={l0Filter} onValueChange={setL0Filter}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectValue placeholder="Filter by category..." />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="income">Income</SelectItem>
+                <SelectItem value="expense">Expense</SelectItem>
+                <SelectItem value="asset">Asset</SelectItem>
+                <SelectItem value="liability">Liability</SelectItem>
+                <SelectItem value="equity">Equity</SelectItem>
             </SelectContent>
         </Select>
       </div>
