@@ -1,24 +1,33 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Edit, Search, ArrowUpDown } from 'lucide-react';
+import { ArrowLeft, Edit, Search, ArrowUpDown, FolderTree } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Transaction } from '@/components/dashboard/transactions-table';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 type Tx = Transaction & { id: string };
 type SortKey = 'date' | 'description' | 'category' | 'costCenter' | 'amount';
 type SortDirection = 'asc' | 'desc';
+
+const primaryCategoryColors: Record<string, string> = {
+  'income': 'bg-green-100 text-green-800',
+  'expense': 'bg-blue-100 text-blue-800',
+  'equity': 'bg-indigo-100 text-indigo-800',
+  'liability': 'bg-orange-100 text-orange-800',
+  'asset': 'bg-gray-200 text-gray-800',
+};
 
 export default function CostCenterManagerPage() {
   const router = useRouter();
@@ -28,7 +37,7 @@ export default function CostCenterManagerPage() {
   // --- FILTER & SORT STATE ---
   const [searchTerm, setSearchTerm] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState<'unassigned' | 'assigned' | 'all'>('unassigned');
-  const [l0Filter, setL0Filter] = useState('all'); // ADDED L0 Filter State
+  const [l0Filter, setL0Filter] = useState('all');
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
   
   // --- DATA & SELECTION STATE ---
@@ -62,7 +71,7 @@ export default function CostCenterManagerPage() {
     refetchTransactions();
   }, [refetchTransactions]);
   
-  const propertiesQuery = useMemoFirebase(() => {
+  const propertiesQuery = useMemo(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user, firestore]);
@@ -71,7 +80,7 @@ export default function CostCenterManagerPage() {
   
   const propertyMap = useMemo(() => {
     if (!properties) return {};
-    return properties.reduce((acc, prop) => {
+    return properties.reduce((acc, prop: any) => {
         acc[prop.id] = prop.name;
         return acc;
     }, {} as Record<string, string>);
@@ -87,7 +96,7 @@ export default function CostCenterManagerPage() {
         filtered = filtered.filter(tx => !!tx.costCenter);
     }
 
-    // UPDATED: Filter by L0 Category
+    // Filter by L0 Category
     if (l0Filter !== 'all') {
         filtered = filtered.filter(tx => {
             const l0 = (tx.categoryHierarchy?.l0 || 'Uncategorized').toLowerCase();
@@ -104,8 +113,8 @@ export default function CostCenterManagerPage() {
 
     // Sort
     filtered.sort((a, b) => {
-        const aVal = a[sortConfig.key as keyof typeof a] || '';
-        const bVal = b[sortConfig.key as keyof typeof b] || '';
+        const aVal = (a as any)[sortConfig.key] || '';
+        const bVal = (b as any)[sortConfig.key] || '';
         
         if (sortConfig.key === 'date') {
              return sortConfig.direction === 'asc' 
@@ -170,7 +179,10 @@ export default function CostCenterManagerPage() {
                   </>
               ) : (
                 <>
-                  <h1 className="text-3xl font-bold">Cost Center Manager</h1>
+                  <h1 className="text-3xl font-bold flex items-center gap-2">
+                    <FolderTree className="h-8 w-8 text-primary"/>
+                    Cost Center Manager
+                  </h1>
                   <p className="text-muted-foreground">Assign transactions to the correct property or unit.</p>
                 </>
               )}
@@ -256,21 +268,32 @@ export default function CostCenterManagerPage() {
               ) : filteredAndSortedTransactions.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center h-32">No matching transactions found.</TableCell></TableRow>
               ) : (
-                filteredAndSortedTransactions.map(tx => (
-                  <TableRow key={tx.id}>
-                    <TableCell className="p-2">
-                         <Checkbox 
-                            checked={selectedIds.includes(tx.id)}
-                            onCheckedChange={(checked) => handleSelectionChange(tx.id, !!checked)}
-                        />
-                    </TableCell>
-                    <TableCell>{tx.date}</TableCell>
-                    <TableCell className="font-medium max-w-[300px] truncate">{tx.description}</TableCell>
-                    <TableCell>{tx.categoryHierarchy?.l2 || tx.categoryHierarchy?.l1 || 'Uncategorized'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{tx.costCenter ? (propertyMap[tx.costCenter] || tx.costCenter) : 'Unassigned'}</TableCell>
-                    <TableCell className="text-right font-mono">{tx.amount.toFixed(2)}</TableCell>
-                  </TableRow>
-                ))
+                filteredAndSortedTransactions.map(tx => {
+                    const l0 = (tx.categoryHierarchy?.l0 || 'Uncategorized').toLowerCase();
+                    const normalizedL0 = l0.includes('income') ? 'income' : l0.includes('expense') ? 'expense' : l0.includes('asset') ? 'asset' : l0.includes('liabil') ? 'liability' : l0.includes('equity') ? 'equity' : 'other';
+                    return (
+                      <TableRow key={tx.id}>
+                        <TableCell className="p-2">
+                             <Checkbox 
+                                checked={selectedIds.includes(tx.id)}
+                                onCheckedChange={(checked) => handleSelectionChange(tx.id, !!checked)}
+                            />
+                        </TableCell>
+                        <TableCell>{tx.date}</TableCell>
+                        <TableCell className="font-medium max-w-[300px] truncate">{tx.description}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[normalizedL0] || 'bg-slate-100')}>
+                            {tx.categoryHierarchy?.l0 || 'N/A'}
+                          </Badge>
+                          <p className="text-xs text-muted-foreground">{tx.categoryHierarchy?.l1} &gt; {tx.categoryHierarchy?.l2}</p>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{tx.costCenter ? (propertyMap[tx.costCenter] || tx.costCenter) : <Badge variant="outline">Unassigned</Badge>}</TableCell>
+                        <TableCell className={cn("text-right font-mono", tx.amount > 0 ? "text-green-600 font-semibold" : "text-slate-700")}>
+                          {tx.amount > 0 && '+'}{tx.amount.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    )
+                })
               )}
             </TableBody>
           </Table>
