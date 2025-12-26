@@ -60,11 +60,15 @@ service cloud.firestore {
       
       match /units/{unitId} {
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow read, update, delete, list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow read, update, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       
         match /documents/{documentId} {
             allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
         }
+      }
+      // This rule specifically allows LISTING the units collection.
+      match /units/{unit} {
+        allow list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
     }
 
