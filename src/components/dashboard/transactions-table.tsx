@@ -51,6 +51,7 @@ export interface Transaction {
     l2: string;
     l3: string;
   };
+  costCenter?: string;
   confidence?: number;
   accountId?: string;
   accountName?: string; 
@@ -59,7 +60,7 @@ export interface Transaction {
   bankAccountId?: string;
 }
 
-type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus';
+type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus' | 'costCenter';
 type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
@@ -313,6 +314,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
+                <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('costCenter')}>Cost Center {getSortIcon('costCenter')}</Button></TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
                 <TableHead className="text-right p-2 w-[80px]">
                     <Button variant="ghost" size="icon" onClick={() => requestSort('reviewStatus')}>
@@ -326,7 +328,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               {isLoading ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
@@ -345,6 +347,9 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                           <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                       </div>
                     </TableCell>
+                     <TableCell className="align-top py-4 text-xs text-muted-foreground">
+                        {transaction.costCenter || 'N/A'}
+                    </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
                     </TableCell>
@@ -354,7 +359,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={6} className="h-24 text-center">No transactions found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-24 text-center">No transactions found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -483,6 +488,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-
-

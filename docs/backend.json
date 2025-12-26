@@ -219,7 +219,7 @@
         "date": { "type": "string", "description": "The date of the transaction.", "format": "date-time" },
         "description": { "type": "string", "description": "Description of the transaction." },
         "amount": { "type": "number", "description": "The amount of the transaction." },
-        "costCenter": { "type": "string", "description": "An optional tag to associate the transaction with a specific business unit, project, or location." },
+        "costCenter": { "type": "string", "description": "An optional ID to associate the transaction with a specific Property or Unit." },
         "auditStatus": { "type": "string", "enum": ["audited", "needs_audit"], "description": "The status of the transaction in the financial audit workflow."},
         "categoryHierarchy": {
             "type": "object",

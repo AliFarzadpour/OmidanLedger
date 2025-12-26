@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { writeBatch, doc } from 'firebase/firestore';
+import { writeBatch, doc, collection, getDocs, query, where } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
-import type { Transaction } from '../reports/audit/types'; // Updated import
+import type { Transaction } from '../reports/audit/types';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface BatchEditDialogProps {
   isOpen: boolean;
@@ -18,6 +19,12 @@ interface BatchEditDialogProps {
   transactions: Transaction[];
   dataSource: { id: string; accountName: string };
   onSuccess: () => void;
+}
+
+interface Property {
+    id: string;
+    name: string;
+    units: { id: string; unitNumber: string; }[]
 }
 
 export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource, onSuccess }: BatchEditDialogProps) {
@@ -31,8 +38,30 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
   const [l2, setL2] = useState('');
   const [l3, setL3] = useState('');
   const [ruleName, setRuleName] = useState('');
+  const [costCenter, setCostCenter] = useState('');
+  const [properties, setProperties] = useState<Property[]>([]);
 
-  // Pre-populate the fields when the dialog opens with a new set of transactions
+  useEffect(() => {
+    async function fetchProperties() {
+        if (!user || !firestore || !isOpen) return;
+
+        const propsQuery = query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+        const propsSnap = await getDocs(propsQuery);
+        const propsData: Property[] = [];
+        for (const propDoc of propsSnap.docs) {
+            const unitsSnap = await getDocs(collection(propDoc.ref, 'units'));
+            propsData.push({
+                id: propDoc.id,
+                name: propDoc.data().name,
+                units: unitsSnap.docs.map(unitDoc => ({ id: unitDoc.id, unitNumber: unitDoc.data().unitNumber }))
+            });
+        }
+        setProperties(propsData);
+    }
+    fetchProperties();
+  }, [user, firestore, isOpen]);
+
+
   useEffect(() => {
     if (isOpen && transactions.length > 0) {
       const firstTx = transactions[0];
@@ -41,7 +70,8 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       setL1(cats.l1);
       setL2(cats.l2);
       setL3(cats.l3);
-      setRuleName(''); // Always reset the rule name
+      setCostCenter(firstTx.costCenter || '');
+      setRuleName(''); 
     }
   }, [transactions, isOpen]);
 
@@ -59,16 +89,23 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
       transactions.forEach(tx => {
         if (!tx.bankAccountId) {
             console.warn(`Skipping transaction with missing bankAccountId: ${tx.id}`);
-            return; // Skip if bankAccountId is missing
+            return; 
         }
         const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
-        batch.update(txRef, {
+        
+        const updateData: any = {
           categoryHierarchy: { l0, l1, l2, l3 },
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
           reviewStatus: 'approved',
-          auditStatus: 'audited' // Also mark as audited
-        });
+          auditStatus: 'audited'
+        };
+
+        if (costCenter) {
+            updateData.costCenter = costCenter;
+        }
+
+        batch.update(txRef, updateData);
       });
       await batch.commit();
 
@@ -114,6 +151,25 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="costCenter">Cost Center (Property/Unit)</Label>
+             <Select onValueChange={setCostCenter} value={costCenter}>
+                <SelectTrigger id="costCenter">
+                    <SelectValue placeholder="Assign to a property or unit..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="">None</SelectItem>
+                    {properties.map(prop => (
+                        <SelectGroup key={prop.id}>
+                             <SelectItem value={prop.id}>{prop.name} (Building)</SelectItem>
+                             {prop.units.map((unit: any) => (
+                                 <SelectItem key={unit.id} value={unit.id}>&nbsp;&nbsp;&nbsp;↳ Unit {unit.unitNumber}</SelectItem>
+                             ))}
+                        </SelectGroup>
+                    ))}
+                </SelectContent>
+             </Select>
+          </div>
           <div className="grid gap-2">
             <Label htmlFor="l0">Primary Category (l0)</Label>
             <Input id="l0" value={l0} onChange={(e) => setL0(e.target.value)} placeholder="e.g., Expense" />
