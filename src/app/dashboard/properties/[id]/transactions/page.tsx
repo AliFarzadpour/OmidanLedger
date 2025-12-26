@@ -4,12 +4,12 @@
 import { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, collectionGroup, query, where, doc, getDocs } from 'firebase/firestore';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { collection, collectionGroup, query, where, doc } from 'firebase/firestore';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, BookOpen, Edit, Search } from 'lucide-react';
+import { ArrowLeft, Edit, Search } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
@@ -51,7 +51,7 @@ export default function PropertyLedgerPage() {
       if (!isRelevant) return false;
 
       // Filter by L0 category
-      if (l0Filter !== 'all' && tx.categoryHierarchy?.l0 !== l0Filter) {
+      if (l0Filter !== 'all' && (tx.categoryHierarchy?.l0 || 'Uncategorized') !== l0Filter) {
         return false;
       }
       // Filter by search term
@@ -79,7 +79,6 @@ export default function PropertyLedgerPage() {
         setSelectedIds([]);
     }
   };
-
 
   const isLoading = isLoadingProperty || isLoadingTransactions;
 
@@ -184,7 +183,7 @@ export default function PropertyLedgerPage() {
                     </TableCell>
                     <TableCell>{tx.date}</TableCell>
                     <TableCell className="font-medium max-w-[300px] truncate">{tx.description}</TableCell>
-                    <TableCell>{tx.categoryHierarchy?.l2 || tx.categoryHierarchy?.l1}</TableCell>
+                    <TableCell>{tx.categoryHierarchy?.l2 || tx.categoryHierarchy?.l1 || 'Uncategorized'}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{tx.costCenter ? propertyData?.name : 'Unassigned'}</TableCell>
                     <TableCell className="text-right font-mono">{tx.amount.toFixed(2)}</TableCell>
                   </TableRow>
