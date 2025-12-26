@@ -1,10 +1,9 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { useUser, useFirestore, useCollection } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
-import { parseISO, isWithinInterval } from 'date-fns';
+import { parseISO, isWithinInterval, startOfMonth, endOfMonth, eachMonthOfInterval, format } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -15,25 +14,112 @@ import { PlayCircle, AlertCircle, Loader2, ChevronsRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ProfitAndLossDrawer } from './profit-and-loss-drawer';
 import type { Transaction } from '@/components/dashboard/transactions-table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 // Helper: normalize Firestore Timestamp OR string to JS Date (or null)
 function toDate(value: any): Date | null {
   if (!value) return null;
-
-  // Firestore Timestamp
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
-    return value.toDate();
-  }
-
-  // ISO date string
+  if (typeof value === 'object' && typeof value.toDate === 'function') return value.toDate();
   if (typeof value === 'string') {
     const d = parseISO(value);
     return isNaN(d.getTime()) ? null : d;
   }
-
   return null;
 }
 
+function MonthlyBreakdownReport({ reportData }: { reportData: MonthlyReportData }) {
+    const { months, incomeByCategory, expensesByCategory, monthlyTotals } = reportData;
+  
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-[250px]">Category</TableHead>
+            {months.map(month => (
+              <TableHead key={month} className="text-right">{format(parseISO(month), 'MMM yyyy')}</TableHead>
+            ))}
+            <TableHead className="text-right font-bold">Total</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {/* INCOME */}
+          <TableRow className="bg-green-50 font-bold border-b-2 border-green-200">
+            <TableCell colSpan={months.length + 2} className="text-green-800 text-base">INCOME</TableCell>
+          </TableRow>
+          {Object.entries(incomeByCategory).map(([category, monthlyValues]) => (
+            <TableRow key={category}>
+              <TableCell className="pl-8 text-muted-foreground">{category}</TableCell>
+              {months.map(month => (
+                <TableCell key={month} className="text-right font-mono">{formatCurrency(monthlyValues[month] || 0)}</TableCell>
+              ))}
+              <TableCell className="text-right font-bold font-mono">{formatCurrency(Object.values(monthlyValues).reduce((a, b) => a + b, 0))}</TableCell>
+            </TableRow>
+          ))}
+          <TableRow className="bg-green-50/50 font-semibold">
+            <TableCell>Total Income</TableCell>
+            {months.map(month => (
+              <TableCell key={month} className="text-right font-mono font-bold text-green-700">{formatCurrency(monthlyTotals[month]?.income || 0)}</TableCell>
+            ))}
+            <TableCell className="text-right font-bold font-mono text-green-700">{formatCurrency(reportData.totalInc)}</TableCell>
+          </TableRow>
+
+          <TableRow className="h-8"><TableCell colSpan={months.length + 2} /></TableRow>
+          
+          {/* EXPENSES */}
+          <TableRow className="bg-red-50 font-bold border-b-2 border-red-200">
+            <TableCell colSpan={months.length + 2} className="text-red-800 text-base">EXPENSES</TableCell>
+          </TableRow>
+          {Object.entries(expensesByCategory).map(([category, monthlyValues]) => (
+            <TableRow key={category}>
+              <TableCell className="pl-8 text-muted-foreground">{category}</TableCell>
+              {months.map(month => (
+                <TableCell key={month} className="text-right font-mono">({formatCurrency(monthlyValues[month] || 0)})</TableCell>
+              ))}
+              <TableCell className="text-right font-bold font-mono">({formatCurrency(Object.values(monthlyValues).reduce((a, b) => a + b, 0))})</TableCell>
+            </TableRow>
+          ))}
+          <TableRow className="bg-red-50/50 font-semibold">
+            <TableCell>Total Expenses</TableCell>
+            {months.map(month => (
+              <TableCell key={month} className="text-right font-mono font-bold text-red-700">({formatCurrency(monthlyTotals[month]?.expenses || 0)})</TableCell>
+            ))}
+            <TableCell className="text-right font-bold font-mono text-red-700">({formatCurrency(reportData.totalExp)})</TableCell>
+          </TableRow>
+
+          {/* NET INCOME */}
+           <TableRow className="border-t-4 border-double font-black text-lg bg-slate-100">
+            <TableCell>NET INCOME</TableCell>
+             {months.map(month => {
+                const net = (monthlyTotals[month]?.income || 0) - (monthlyTotals[month]?.expenses || 0);
+                return (
+                    <TableCell key={month} className={`text-right font-mono ${net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(net)}</TableCell>
+                )
+             })}
+             <TableCell className={`text-right font-mono ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(reportData.net)}</TableCell>
+          </TableRow>
+
+        </TableBody>
+      </Table>
+    );
+  }
+
+interface SummaryReportData {
+    income: { name: string; total: number; transactions: Transaction[] }[];
+    expenses: { name: string; total: number; transactions: Transaction[] }[];
+    totalInc: number;
+    totalExp: number;
+    net: number;
+}
+
+interface MonthlyReportData {
+    months: string[];
+    incomeByCategory: Record<string, Record<string, number>>;
+    expensesByCategory: Record<string, Record<string, number>>;
+    monthlyTotals: Record<string, { income: number; expenses: number }>;
+    totalInc: number;
+    totalExp: number;
+    net: number;
+}
 
 export function ProfitAndLossReport() {
   const { user } = useUser();
@@ -45,16 +131,13 @@ export function ProfitAndLossReport() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // State for the drawer
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<{ name: string; transactions: Transaction[] } | null>(null);
 
   useEffect(() => {
-    // This effect runs once on mount to set the initial date range client-side
     const today = new Date();
-    const from = new Date(today.getFullYear(), 0, 1); // Jan 1st of current year
-    const to = new Date(today.getFullYear(), 11, 31); // Dec 31st of current year
-
+    const from = new Date(today.getFullYear(), 0, 1);
+    const to = new Date(today.getFullYear(), 11, 31);
     const initialDates = {
       from: from.toISOString().split('T')[0],
       to: to.toISOString().split('T')[0]
@@ -67,218 +150,169 @@ export function ProfitAndLossReport() {
     if (!user || !firestore) return;
     setIsLoading(true);
     setError(null);
-    
     try {
         const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
-        if (accountsSnap.empty) {
-            setAllTransactions([]);
-            setIsLoading(false);
-            return;
-        }
-
-        const transactionPromises = accountsSnap.docs.map(accountDoc => 
-            getDocs(collection(accountDoc.ref, 'transactions'))
-        );
-
-        const transactionSnapshots = await Promise.all(transactionPromises);
-        const fetchedTransactions = transactionSnapshots.flatMap(snap => 
-            snap.docs.map(d => ({...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }))
-        );
-        
-        setAllTransactions(fetchedTransactions);
-
+        const promises = accountsSnap.docs.map(doc => getDocs(collection(doc.ref, 'transactions')));
+        const transactionSnapshots = await Promise.all(promises);
+        const fetched = transactionSnapshots.flatMap(snap => snap.docs.map(d => ({ ...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id })));
+        setAllTransactions(fetched);
     } catch (e: any) {
-        console.error(e);
-        setError(e.message);
+        console.error(e); setError(e.message);
     } finally {
         setIsLoading(false);
     }
   }, [user, firestore]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-
-  const reportData = useMemo(() => {
-    const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0, rows: 0, filteredRows: 0 };
+  const summaryReportData: SummaryReportData = useMemo(() => {
+    const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
     if (!allTransactions || allTransactions.length === 0 || !activeRange.from || !activeRange.to) return empty;
-  
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
-  
     const incMap = new Map<string, { total: number; transactions: Transaction[] }>();
     const expMap = new Map<string, { total: number; transactions: Transaction[] }>();
-    let totalInc = 0;
-    let totalExp = 0;
-  
-    let filteredRows = 0;
-  
-    const userTransactions = allTransactions.filter(tx => tx.userId === user?.uid);
-
-    for (const tx of userTransactions) {
+    let totalInc = 0, totalExp = 0;
+    
+    allTransactions.forEach(tx => {
       const d = toDate(tx.date);
-      if (!d) continue;
-  
-      const inRange = isWithinInterval(d, { start: fromD, end: toD });
-      if (!inRange) continue;
-      filteredRows++;
-  
-      const h = tx.categoryHierarchy || {};
-      const primaryCategory = (h.l0 || tx.primaryCategory || '').toLowerCase();
-
-      // --- FIX: Ensure we only include Income or Expense categories ---
-      const isIncome = primaryCategory.includes('income');
-      const isExpense = primaryCategory.includes('expense');
+      if (!d || !isWithinInterval(d, { start: fromD, end: toD })) return;
       
-      if (!isIncome && !isExpense) {
-          continue; // Skip Assets, Liabilities, and Equity
-      }
+      const h = tx.categoryHierarchy || {};
+      const primaryCategory = (h.l0 || '').toLowerCase();
+      if (!['income', 'expense'].includes(primaryCategory)) return;
 
       const rawAmount = Number(tx.amount) || 0;
-      const label = h.l2 || tx.subcategory || tx.secondaryCategory || 'Other';
-      const normalizedLabel = label.trim();
-  
-      if (isIncome) {
-        totalInc += rawAmount; // Use raw amount to handle negative income
-        const current = incMap.get(normalizedLabel) || { total: 0, transactions: [] };
-        current.total += rawAmount; // Use raw amount
+      const label = h.l2 || h.l1 || 'Other';
+      
+      if (primaryCategory === 'income') {
+        totalInc += rawAmount;
+        const current = incMap.get(label) || { total: 0, transactions: [] };
+        current.total += rawAmount;
         current.transactions.push(tx);
-        incMap.set(normalizedLabel, current);
-      } else if (isExpense) {
-        totalExp += Math.abs(rawAmount); // Expenses are negative, so use absolute value for summation
-        const current = expMap.get(normalizedLabel) || { total: 0, transactions: [] };
+        incMap.set(label, current);
+      } else {
+        totalExp += Math.abs(rawAmount);
+        const current = expMap.get(label) || { total: 0, transactions: [] };
         current.total += Math.abs(rawAmount);
         current.transactions.push(tx);
-        expMap.set(normalizedLabel, current);
+        expMap.set(label, current);
       }
-    }
-  
-    const income = Array.from(incMap.entries())
-        .map(([name, data]) => ({ name, ...data }))
-        .sort((a, b) => b.total - a.total);
-    const expenses = Array.from(expMap.entries())
-        .map(([name, data]) => ({ name, ...data }))
-        .sort((a, b) => b.total - a.total);
-  
+    });
+
     return {
-      income,
-      expenses,
+      income: Array.from(incMap.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total),
+      expenses: Array.from(expMap.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total),
       totalInc,
       totalExp,
-      net: totalInc - totalExp,
-      rows: userTransactions.length,
-      filteredRows,
+      net: totalInc - totalExp
     };
-  }, [allTransactions, user, activeRange]);
+  }, [allTransactions, activeRange]);
+
+  const monthlyReportData: MonthlyReportData = useMemo(() => {
+    const empty = { months: [], incomeByCategory: {}, expensesByCategory: {}, monthlyTotals: {}, totalInc: 0, totalExp: 0, net: 0 };
+    if (!allTransactions.length || !activeRange.from || !activeRange.to) return empty;
+
+    const fromD = parseISO(activeRange.from);
+    const toD = parseISO(activeRange.to);
+    const months = eachMonthOfInterval({ start: fromD, end: toD }).map(d => format(d, 'yyyy-MM'));
+
+    const incomeByCategory: Record<string, Record<string, number>> = {};
+    const expensesByCategory: Record<string, Record<string, number>> = {};
+    const monthlyTotals: Record<string, { income: number; expenses: number }> = {};
+    months.forEach(m => monthlyTotals[m] = { income: 0, expenses: 0 });
+
+    allTransactions.forEach(tx => {
+        const d = toDate(tx.date);
+        if (!d || !isWithinInterval(d, { start: fromD, end: toD })) return;
+        
+        const monthKey = format(d, 'yyyy-MM');
+        const h = tx.categoryHierarchy || {};
+        const primaryCategory = (h.l0 || '').toLowerCase();
+        if (!['income', 'expense'].includes(primaryCategory)) return;
+
+        const rawAmount = Number(tx.amount) || 0;
+        const label = h.l2 || h.l1 || 'Other';
+
+        if (primaryCategory === 'income') {
+            monthlyTotals[monthKey].income += rawAmount;
+            if (!incomeByCategory[label]) incomeByCategory[label] = {};
+            incomeByCategory[label][monthKey] = (incomeByCategory[label][monthKey] || 0) + rawAmount;
+        } else {
+            monthlyTotals[monthKey].expenses += Math.abs(rawAmount);
+            if (!expensesByCategory[label]) expensesByCategory[label] = {};
+            expensesByCategory[label][monthKey] = (expensesByCategory[label][monthKey] || 0) + Math.abs(rawAmount);
+        }
+    });
+
+    const totalInc = Object.values(monthlyTotals).reduce((sum, m) => sum + m.income, 0);
+    const totalExp = Object.values(monthlyTotals).reduce((sum, m) => sum + m.expenses, 0);
+
+    return { months, incomeByCategory, expensesByCategory, monthlyTotals, totalInc, totalExp, net: totalInc - totalExp };
+  }, [allTransactions, activeRange]);
+
 
   const handleRowClick = (name: string, transactions: Transaction[]) => {
     setSelectedCategory({ name, transactions });
     setIsDrawerOpen(true);
   };
-  
 
-  if (error) {
-    return (
-        <Alert variant="destructive" className="m-8">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Firestore Error</AlertTitle>
-            <AlertDescription>
-                <code className="mt-2 block text-xs font-mono">{error}</code>
-            </AlertDescription>
-        </Alert>
-    );
-  }
+  if (error) return <Alert variant="destructive" className="m-8"><AlertCircle className="h-4 w-4" /><AlertTitle>Firestore Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>;
 
   return (
     <>
-    <div className="p-8 space-y-6 max-w-5xl mx-auto">
-      <div className="flex justify-between items-end bg-muted/50 p-6 rounded-xl border">
-        <div className="flex gap-4">
-          <div className="grid gap-2">
-            <Label>Start Date</Label>
-            <Input type="date" value={dates.from} onChange={e => setDates(d => ({...d, from: e.target.value}))} />
+      <div className="p-8 space-y-6 max-w-7xl mx-auto">
+        <div className="flex justify-between items-end bg-muted/50 p-6 rounded-xl border">
+          <div className="flex gap-4">
+            <div className="grid gap-2"><Label>Start Date</Label><Input type="date" value={dates.from} onChange={e => setDates(d => ({ ...d, from: e.target.value }))} /></div>
+            <div className="grid gap-2"><Label>End Date</Label><Input type="date" value={dates.to} onChange={e => setDates(d => ({ ...d, to: e.target.value }))} /></div>
           </div>
-          <div className="grid gap-2">
-            <Label>End Date</Label>
-            <Input type="date" value={dates.to} onChange={e => setDates(d => ({...d, to: e.target.value}))} />
-          </div>
+          <Button onClick={() => setActiveRange({ ...dates })} disabled={isLoading}>{isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}Run Report</Button>
         </div>
-        <Button onClick={() => setActiveRange({...dates})} disabled={isLoading}>
-          {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-          Run Report
-        </Button>
+
+        <Tabs defaultValue="summary">
+            <TabsList>
+                <TabsTrigger value="summary">Summary</TabsTrigger>
+                <TabsTrigger value="monthly">Monthly Breakdown</TabsTrigger>
+            </TabsList>
+            <TabsContent value="summary" className="mt-4">
+                <Card className="shadow-lg border-t-4 border-t-primary">
+                <CardHeader className="border-b bg-slate-50/50 text-center">
+                    <CardTitle className="text-3xl font-bold">Profit &amp; Loss Statement</CardTitle>
+                    <CardDescription className="font-mono text-sm uppercase tracking-widest">{activeRange.from} TO {activeRange.to}</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                    {isLoading ? <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> : (
+                    <Table>
+                        <TableBody>
+                        <TableRow className="bg-green-50 font-bold border-b-2 border-green-200"><TableCell className="text-green-800 text-lg">TOTAL INCOME</TableCell><TableCell className="text-right text-green-800 text-lg">{formatCurrency(summaryReportData.totalInc)}</TableCell></TableRow>
+                        {summaryReportData.income.length ? summaryReportData.income.map(i => <TableRow key={i.name} onClick={() => handleRowClick(i.name, i.transactions)} className="cursor-pointer hover:bg-slate-50"><TableCell className="pl-8 text-muted-foreground">{i.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(i.total)} <ChevronsRight className="h-4 w-4 text-slate-300" /></TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income found.</TableCell></TableRow>}
+                        <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
+                        <TableRow className="bg-red-50 font-bold border-b-2 border-red-200"><TableCell className="text-red-800 text-lg">TOTAL EXPENSES</TableCell><TableCell className="text-right text-red-800 text-lg">({formatCurrency(summaryReportData.totalExp)})</TableCell></TableRow>
+                        {summaryReportData.expenses.length ? summaryReportData.expenses.map(e => <TableRow key={e.name} onClick={() => handleRowClick(e.name, e.transactions)} className="cursor-pointer hover:bg-slate-50"><TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} <ChevronsRight className="h-4 w-4 text-slate-300" /></TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expenses found.</TableCell></TableRow>}
+                        <TableRow className="border-t-4 border-double font-black text-2xl bg-slate-100"><TableCell>NET OPERATING INCOME</TableCell><TableCell className={`text-right ${summaryReportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(summaryReportData.net)}</TableCell></TableRow>
+                        </TableBody>
+                    </Table>
+                    )}
+                </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="monthly" className="mt-4">
+                <Card className="shadow-lg border-t-4 border-t-primary">
+                    <CardHeader className="border-b bg-slate-50/50 text-center">
+                        <CardTitle className="text-3xl font-bold">Monthly Profit &amp; Loss</CardTitle>
+                        <CardDescription className="font-mono text-sm uppercase tracking-widest">{activeRange.from} TO {activeRange.to}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {isLoading ? <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div> : (
+                            <MonthlyBreakdownReport reportData={monthlyReportData} />
+                        )}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
       </div>
-
-      <Card className="shadow-lg border-t-4 border-t-primary">
-        <CardHeader className="border-b bg-slate-50/50 text-center">
-          <CardTitle className="text-3xl font-bold">Profit & Loss Statement</CardTitle>
-          <CardDescription className="font-mono text-sm uppercase tracking-widest">
-             {activeRange.from} TO {activeRange.to}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-           <div className="text-xs text-muted-foreground text-center mb-4 font-mono">
-             Auth UID: {user?.uid} • Loaded: {reportData.rows} total tx • In range: {reportData.filteredRows} rows
-           </div>
-          {isLoading ? (
-             <div className="flex flex-col items-center justify-center p-12 space-y-4">
-               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-               <p className="text-sm text-muted-foreground italic">Fetching ledger data...</p>
-             </div>
-          ) : (
-            <Table>
-              <TableBody>
-                {/* INCOME SECTION */}
-                <TableRow className="bg-green-50 font-bold border-b-2 border-green-200">
-                  <TableCell className="text-green-800 text-lg">TOTAL INCOME</TableCell>
-                  <TableCell className="text-right text-green-800 text-lg">{formatCurrency(reportData.totalInc)}</TableCell>
-                </TableRow>
-                {reportData.income.length > 0 ? reportData.income.map(i => (
-                  <TableRow key={i.name} onClick={() => handleRowClick(i.name, i.transactions)} className="cursor-pointer hover:bg-slate-50">
-                    <TableCell className="pl-8 text-muted-foreground group-hover:text-primary">{i.name}</TableCell>
-                    <TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(i.total)} <ChevronsRight className="h-4 w-4 text-slate-300"/></TableCell>
-                  </TableRow>
-                )) : (
-                  <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income transactions found.</TableCell></TableRow>
-                )}
-                
-                <TableRow className="h-8"><TableCell colSpan={2}/></TableRow>
-
-                {/* EXPENSE SECTION */}
-                <TableRow className="bg-red-50 font-bold border-b-2 border-red-200">
-                  <TableCell className="text-red-800 text-lg">TOTAL EXPENSES</TableCell>
-                  <TableCell className="text-right text-red-800 text-lg">({formatCurrency(reportData.totalExp)})</TableCell>
-                </TableRow>
-                {reportData.expenses.length > 0 ? reportData.expenses.map(e => (
-                  <TableRow key={e.name} onClick={() => handleRowClick(e.name, e.transactions)} className="cursor-pointer hover:bg-slate-50">
-                    <TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell>
-                     <TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} <ChevronsRight className="h-4 w-4 text-slate-300"/></TableCell>
-                  </TableRow>
-                )) : (
-                  <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expense transactions found.</TableCell></TableRow>
-                )}
-                
-                <TableRow className="border-t-4 border-double font-black text-2xl bg-slate-50">
-                  <TableCell>NET OPERATING INCOME</TableCell>
-                  <TableCell className={`text-right ${reportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {formatCurrency(reportData.net)}
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-    {selectedCategory && (
-      <ProfitAndLossDrawer 
-        isOpen={isDrawerOpen} 
-        onOpenChange={setIsDrawerOpen}
-        category={selectedCategory}
-        onUpdate={fetchData}
-      />
-    )}
+      {selectedCategory && <ProfitAndLossDrawer isOpen={isDrawerOpen} onOpenChange={setIsDrawerOpen} category={selectedCategory} onUpdate={fetchData} />}
     </>
   );
 }
