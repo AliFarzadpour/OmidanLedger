@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
-import type { Transaction } from '../transactions-table';
+import type { Transaction } from '../reports/audit/types'; // Updated import
 
 interface BatchEditDialogProps {
   isOpen: boolean;
@@ -58,12 +57,17 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
     try {
       const batch = writeBatch(firestore);
       transactions.forEach(tx => {
+        if (!tx.bankAccountId) {
+            console.warn(`Skipping transaction with missing bankAccountId: ${tx.id}`);
+            return; // Skip if bankAccountId is missing
+        }
         const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
         batch.update(txRef, {
           categoryHierarchy: { l0, l1, l2, l3 },
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
-          reviewStatus: 'approved'
+          reviewStatus: 'approved',
+          auditStatus: 'audited' // Also mark as audited
         });
       });
       await batch.commit();
@@ -133,7 +137,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, dataSource
                 id="ruleName" 
                 value={ruleName} 
                 onChange={(e) => setRuleName(e.target.value)} 
-                placeholder="Confirm by re-typing the vendor name" 
+                placeholder="Confirm by re-typing a common vendor name" 
             />
              <p className="text-xs text-muted-foreground">
                 If a vendor name is provided, a new Smart Rule will be created for it.

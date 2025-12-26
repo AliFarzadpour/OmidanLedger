@@ -11,6 +11,7 @@ import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
 
 
 export function FinancialIntegrityReport({ transactions, onRefresh }: { transactions: Transaction[], onRefresh: () => void }) {
@@ -20,6 +21,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<'needs_audit' | 'audited' | 'all'>('needs_audit');
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
@@ -41,7 +43,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       // 2. Income/Expense Sign Mismatch Check
       const isIncomeL0 = cats?.l0?.toLowerCase().includes('income');
       const isExpenseL0 = cats?.l0?.toLowerCase().includes('expense');
-      if ((isIncomeL0 && tx.amount < 0) || (isExpenseL0 && tx.amount > 0)) {
+      if ((isIncomeL0 && tx.amount < 0) || (isExpenseLО && tx.amount > 0)) {
         foundIssues.push({ type: 'mismatch', message: `Amount is ${tx.amount < 0 ? 'negative' : 'positive'} but category is ${cats.l0}.`, transaction: tx });
       }
 
@@ -89,6 +91,10 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         return Array.from(newSet);
     });
   }, []);
+
+  const selectedTransactions = useMemo(() => {
+    return transactions.filter(tx => selectedIds.includes(tx.id));
+  }, [transactions, selectedIds]);
 
   const handleBatchApprove = async () => {
     if (!user || !firestore || selectedIds.length === 0) return;
@@ -159,6 +165,15 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                  <Button
                     variant="outline"
                     size="sm"
+                    className="bg-white hover:bg-slate-50"
+                    onClick={() => setBatchEditDialogOpen(true)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Batch Edit Category
+                </Button>
+                 <Button
+                    variant="outline"
+                    size="sm"
                     className="bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
                     onClick={handleBatchApprove}
                   >
@@ -219,6 +234,18 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         </Accordion>
       )}
     </div>
+    {isBatchEditDialogOpen && (
+        <BatchEditDialog
+          isOpen={isBatchEditDialogOpen}
+          onOpenChange={setBatchEditDialogOpen}
+          transactions={selectedTransactions}
+          dataSource={{ id: '', accountName: 'Multiple' }}
+          onSuccess={() => {
+            setSelectedIds([]);
+            onRefresh();
+          }}
+        />
+      )}
     </>
   );
 }
