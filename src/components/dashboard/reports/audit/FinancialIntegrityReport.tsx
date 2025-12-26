@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion } from '@/components/ui/accordion';
-import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle, Filter } from 'lucide-react';
+import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle, Filter, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
 import { AuditIssueSection } from './AuditIssueSection';
@@ -34,6 +34,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       }
       
       const cats = tx.categoryHierarchy;
+      const descLower = tx.description.toLowerCase();
       
       // 1. Missing or Incomplete Hierarchy Check
       if (!cats || !cats.l0 || !cats.l2) {
@@ -60,12 +61,20 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       }
       seenTransactions.add(uniqueTxString);
 
-      // 5. Transfer Miscategorization Check
-      const descLower = tx.description.toLowerCase();
-      const transferKeywords = ['transfer', 'zelle', 'venmo', 'payment - thank you', 'online payment', 'payment received'];
+      // 5. Transfer & CC Payment Miscategorization Check
+      const paymentKeywords = ['payment - thank you', 'online payment', 'creditcard', 'card payment', 'autopay', 'bill payment'];
+      const transferKeywords = ['transfer', 'zelle', 'venmo', ...paymentKeywords];
+      
       if (transferKeywords.some(k => descLower.includes(k)) && (isIncomeL0 || isExpenseL0)) {
-        foundIssues.push({ type: 'transfer_error', message: 'Likely a transfer, but categorized as Income/Expense.', transaction: tx });
+        foundIssues.push({ type: 'transfer_error', message: 'Likely a transfer/payment, but categorized as Income/Expense.', transaction: tx });
       }
+
+      // Rule 2 Check - CC Payment as Owner's Draw
+      if (descLower.includes('creditcard') && cats?.l0 === 'Equity' && cats?.l1 === "Owner's Draw") {
+          foundIssues.push({ type: 'credit_card_payment', message: "CC payment misclassified as Owner's Draw", transaction: tx });
+      }
+
+
     });
     return foundIssues;
   }, [transactions, filter]);
@@ -202,8 +211,16 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             <AuditIssueSection 
                 type="transfer_error" 
                 icon={ArrowRightLeft}
-                title="Transfer Categorization Errors" 
+                title="Transfer & Payment Errors" 
                 issues={groupedIssues.transfer_error} 
+                selectedIds={selectedIds}
+                onSelectionChange={handleSelectionChange}
+            />
+            <AuditIssueSection 
+                type="credit_card_payment" 
+                icon={CreditCard}
+                title="Credit Card Payment Errors" 
+                issues={groupedIssues.credit_card_payment} 
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
             />
@@ -239,7 +256,6 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
-          dataSource={{ id: '', accountName: 'Multiple' }}
           onSuccess={() => {
             setSelectedIds([]);
             onRefresh();

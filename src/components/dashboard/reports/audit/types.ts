@@ -15,7 +15,7 @@ export interface Transaction {
 }
 
 export interface AuditIssue {
-  type: 'mismatch' | 'uncategorized' | 'missing_hierarchy' | 'duplicate' | 'transfer_error';
+  type: 'mismatch' | 'uncategorized' | 'missing_hierarchy' | 'duplicate' | 'transfer_error' | 'credit_card_payment';
   message: string;
   transaction: Transaction;
 }
