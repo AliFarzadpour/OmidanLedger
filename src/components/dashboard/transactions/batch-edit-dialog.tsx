@@ -99,7 +99,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
           aiExplanation: 'Manually updated in batch.',
           reviewStatus: 'approved',
           auditStatus: 'audited',
-          costCenter: costCenter,
+          costCenter: costCenter === 'none' ? null : costCenter,
         };
 
         batch.update(txRef, updateData);
@@ -115,7 +115,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
             subcategory: l2,
             details: l3,
             userId: user.uid,
-            propertyId: costCenter || undefined
+            propertyId: costCenter !== 'none' ? costCenter : undefined
         });
         toast({
           title: 'Update & Rule Created',
@@ -140,12 +140,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
   };
   
   const handleCostCenterChange = (value: string) => {
-    // If user selects the placeholder 'none' value, set state to empty string
-    if (value === 'none') {
-      setCostCenter('');
-    } else {
       setCostCenter(value);
-    }
   };
 
   return (
