@@ -22,6 +22,7 @@ const LearnCategoryMappingInputSchema = z.object({
     subcategory: z.string().describe('The user-corrected l2 category.'),
     details: z.string().optional().describe('The user-corrected l3 category.'),
     userId: z.string().describe('The Firebase UID of the user.'),
+    propertyId: z.string().optional().describe('The cost center ID (property or unit) to associate this rule with.'),
 });
 
 export type LearnCategoryMappingInput = z.infer<typeof LearnCategoryMappingInputSchema>;
@@ -41,7 +42,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
     try {
       // 1. Initialize Server-Side Admin Firestore
       const { firestore } = initializeServerFirebase();
-      const { transactionDescription, primaryCategory, secondaryCategory, subcategory, details, userId } = input;
+      const { transactionDescription, primaryCategory, secondaryCategory, subcategory, details, userId, propertyId } = input;
       
       const keywordForMatching = transactionDescription;
 
@@ -63,6 +64,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
             l2: subcategory,
             l3: details || '',
           },
+          ...(propertyId && { propertyId: propertyId }), // Conditionally add propertyId
           source: 'User Manual',
           updatedAt: new Date(), 
       }, { merge: true });

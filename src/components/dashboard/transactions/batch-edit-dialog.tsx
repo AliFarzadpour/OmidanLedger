@@ -118,6 +118,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
             subcategory: l2,
             details: l3,
             userId: user.uid,
+            propertyId: costCenter || undefined
         });
         toast({
           title: 'Update & Rule Created',

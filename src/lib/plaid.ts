@@ -110,6 +110,7 @@ export async function getCategoryFromDatabase(
           const data = matchedGlobalRule;
           return { 
               categoryHierarchy: data.categoryHierarchy,
+              propertyId: data.propertyId || null, // Also get propertyId from global rules
               confidence: 0.95, 
               source: 'Global DB' 
           };
@@ -370,7 +371,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                     if (ruleResult) {
                         finalCategory = {
                             categoryHierarchy: ruleResult.categoryHierarchy,
-                            propertyId: ruleResult.propertyId || null,
+                            costCenter: ruleResult.propertyId || null, // Apply cost center from rule
                             confidence: 1.0,
                             aiExplanation: `Matched Rule: ${ruleResult.source}`,
                             merchantName: originalTx.merchant_name || originalTx.name,
@@ -392,7 +393,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                                 aiExplanation: deepResult.reasoning,
                                 merchantName: deepResult.merchantName,
                                 status: 'posted',
-                                propertyId: null // AI doesn't know property
+                                costCenter: null // AI doesn't know property
                             };
                         } else {
                             // 3. HEURISTICS LAST RESORT
@@ -408,7 +409,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                                 aiExplanation: 'Deep AI failed, used standard Rules',
                                 merchantName: originalTx.merchant_name || originalTx.name,
                                 status: 'review',
-                                propertyId: null
+                                costCenter: null
                             };
                         }
                     }
@@ -434,16 +435,15 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                         userId: userId,
                         createdAt: FieldValue.serverTimestamp(),
                         ...enforcedCategory,
-                        propertyId: enforcedCategory.propertyId || null,
                         reviewStatus: 'needs-review',
                     };
 
                     batch.set(docRef, txData, { merge: true });
 
                     // Increment stats only if a property is linked
-                    if (txData.propertyId) {
+                    if (txData.costCenter) { // Use costCenter from the final data
                         incrementPropertyStats({
-                            propertyId: txData.propertyId,
+                            propertyId: txData.costCenter,
                             date: txData.date,
                             amount: txData.amount,
                             userId: userId,
@@ -574,4 +574,3 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
-
