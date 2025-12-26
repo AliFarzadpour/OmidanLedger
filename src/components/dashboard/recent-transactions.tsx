@@ -22,19 +22,19 @@ import { Skeleton } from '../ui/skeleton';
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
   'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'Operating Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Other Expenses': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  'Balance Sheet Categories': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  'Uncategorized': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200'
+  'Expense': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Balance Sheet': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'Uncategorized': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 interface Transaction {
     id: string;
     date: string;
     description: string;
-    primaryCategory: string;
+    categoryHierarchy?: { l0: string };
+    primaryCategory: string; // Fallback
     amount: number;
-    bankAccountId?: string; // Add bankAccountId for a more unique key
+    bankAccountId?: string; 
 }
 
 interface RecentTransactionsProps {
@@ -72,7 +72,9 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                     </TableRow>
                  ))
             ) : recentTransactions.length > 0 ? (
-              recentTransactions.map((transaction, index) => (
+              recentTransactions.map((transaction, index) => {
+                const category = transaction.categoryHierarchy?.l0 || transaction.primaryCategory || 'Uncategorized';
+                return (
                 <TableRow key={`${transaction.id}-${transaction.bankAccountId}-${index}`}>
                   <TableCell>
                     <div className="font-medium">{transaction.description}</div>
@@ -83,10 +85,10 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                       variant="outline"
                       className={cn(
                         'border-0',
-                        primaryCategoryColors[transaction.primaryCategory] || primaryCategoryColors['Uncategorized']
+                        primaryCategoryColors[category] || primaryCategoryColors['Uncategorized']
                       )}
                     >
-                      {transaction.primaryCategory}
+                      {category}
                     </Badge>
                   </TableCell>
                   <TableCell
@@ -102,7 +104,7 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                     }).format(transaction.amount)}
                   </TableCell>
                 </TableRow>
-              ))
+              )})
             ) : (
                 <TableRow>
                     <TableCell colSpan={3} className="text-center h-24">

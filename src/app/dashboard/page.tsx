@@ -24,7 +24,12 @@ type Transaction = {
   date: string;
   description: string;
   amount: number;
-  primaryCategory: string;
+  categoryHierarchy?: {
+    l0: string;
+    l1: string;
+    l2: string;
+  };
+  primaryCategory: string; // Keep for fallback
   secondaryCategory?: string;
   subcategory?: string;
   userId: string;
@@ -125,23 +130,27 @@ export default function DashboardPage() {
     filtered.forEach(tx => {
       const amount = Number(tx.amount);
       const dateKey = tx.date; // YYYY-MM-DD
+      const level0Category = tx.categoryHierarchy?.l0;
 
       // Initialize daily map
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
       if (amount > 0) {
-        income += amount;
+        if (level0Category === 'Income') {
+            income += amount;
+        }
         dayStats.income += amount;
       } else {
-        expenses += amount;
+        // This is the CRITICAL FIX: Only add to "expenses" if it's a true expense.
+        if (level0Category === 'Expense') {
+            expenses += amount; // Add the negative amount
+            const categoryForBreakdown = tx.categoryHierarchy?.l1 || 'Uncategorized';
+            breakdownMap.set(categoryForBreakdown, (breakdownMap.get(categoryForBreakdown) || 0) + Math.abs(amount));
+        }
+
         dayStats.expense += Math.abs(amount);
         
-        // Category Logic
-        const category = tx.primaryCategory || 'Uncategorized';
-        breakdownMap.set(category, (breakdownMap.get(category) || 0) + Math.abs(amount));
-
-        // Vendor Logic (Clean the description string slightly for grouping)
         const vendor = tx.description?.trim() || 'Unknown';
         vendorMap.set(vendor, (vendorMap.get(vendor) || 0) + Math.abs(amount));
       }
