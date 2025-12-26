@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion } from '@/components/ui/accordion';
-import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft } from 'lucide-react';
+import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
 import { AuditIssueSection } from './AuditIssueSection';
@@ -146,6 +147,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             />
             <AuditIssueSection 
                 type="mismatch" 
+                icon={AlertTriangle}
                 title="Income/Expense Mismatches" 
                 issues={groupedIssues.mismatch} 
                 selectedIds={selectedIds}
@@ -153,6 +155,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             />
             <AuditIssueSection 
                 type="uncategorized" 
+                icon={AlertTriangle}
                 title="Uncategorized Items" 
                 issues={groupedIssues.uncategorized}
                 selectedIds={selectedIds}
@@ -160,6 +163,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             />
             <AuditIssueSection 
                 type="missing_hierarchy" 
+                icon={AlertTriangle}
                 title="Missing Category Data" 
                 issues={groupedIssues.missing_hierarchy}
                 selectedIds={selectedIds}
