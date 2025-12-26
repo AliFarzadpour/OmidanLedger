@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -9,9 +8,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, setDoc, updateDoc } from 'firebase/firestore';
-import { UploadTransactionsDialog } from './upload-transactions-dialog';
+import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
+import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
+import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,9 +25,10 @@ import { BatchEditDialog } from './batch-edit-dialog';
 
 const primaryCategoryColors: Record<string, string> = {
   'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'Expenses': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Balance Sheet': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'Expense': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'Equity': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  'Liability': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'Asset': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 interface DataSource {
@@ -42,11 +42,14 @@ export interface Transaction {
   id: string;
   date: string;
   description: string;
-  primaryCategory: string;
-  secondaryCategory: string;
-  subcategory: string;
-  details?: string;
   amount: number;
+  categoryHierarchy: {
+    l0: string;
+    l1: string;
+    l2: string;
+    l3: string;
+  };
+  costCenter?: string;
   confidence?: number;
   accountId?: string;
   accountName?: string; 
@@ -55,7 +58,7 @@ export interface Transaction {
   bankAccountId?: string;
 }
 
-type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus';
+type SortKey = 'date' | 'description' | 'category' | 'amount' | 'reviewStatus' | 'costCenter';
 type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
@@ -86,7 +89,23 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     return collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
   }, [firestore, user, dataSource]);
 
-  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+  const { data: transactions, isLoading, refetch } = useCollection<Transaction>(transactionsQuery);
+
+  const propertiesQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  }, [user, firestore]);
+
+  const { data: properties, isLoading: isLoadingProperties } = useCollection(propertiesQuery);
+  
+  const propertyMap = useMemo(() => {
+    if (!properties) return {};
+    return properties.reduce((acc, prop: any) => {
+        acc[prop.id] = prop.name;
+        return acc;
+    }, {} as Record<string, string>);
+  }, [properties]);
+
 
   const handleClearTransactions = async () => {
     if (!firestore || !user || !dataSource || !transactionsQuery) return;
@@ -104,6 +123,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         await batch.commit();
         
         toast({ title: "Transactions Cleared", description: "History reset. You can now re-sync from scratch." });
+        refetch();
     } catch (error: any) {
          console.error("Error clearing transactions:", error);
         toast({ variant: "destructive", title: "Error", description: `Could not clear transactions. ${error.message}` });
@@ -118,28 +138,31 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     try {
         const result = await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
         toast({ title: 'Sync Complete', description: `${result.count} new transactions imported.` });
+        refetch();
     } catch (error: any) {
         toast({ variant: "destructive", title: "Sync Failed", description: error.message });
     } finally { setIsSyncing(false); }
   };
 
-  const handleCategoryChange = async (transaction: Transaction, newCategories: { primaryCategory: string; secondaryCategory: string; subcategory: string; details: string; }) => {
-    if (!firestore || !user) return;
+  const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
+    if (!user || !firestore) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
     
-    await updateDoc(transactionRef, { 
-        ...newCategories,
+    const updateData = { 
+        categoryHierarchy: newCategories,
         confidence: 1.0, 
         status: 'posted',
         reviewStatus: 'approved'
-    });
+    };
+    
+    updateDocumentNonBlocking(transactionRef, updateData);
 
-    await learnCategoryMapping({
+    learnCategoryMapping({
         transactionDescription: transaction.description,
-        primaryCategory: newCategories.primaryCategory,
-        secondaryCategory: newCategories.secondaryCategory,
-        subcategory: newCategories.subcategory,
-        details: newCategories.details,
+        primaryCategory: newCategories.l0,
+        secondaryCategory: newCategories.l1,
+        subcategory: newCategories.l2,
+        details: newCategories.l3,
         userId: user.uid,
     });
     toast({ title: "Updated", description: "Category saved and rule learned." });
@@ -175,6 +198,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         description: `${selectedIds.length} transactions have been marked as ${newStatus.replace('-', ' ')}.`,
       });
       setSelectedIds([]); // Clear selection after update
+      refetch();
     } catch (error: any) {
       console.error(error);
       toast({ variant: "destructive", title: "Batch Update Failed", description: error.message });
@@ -185,7 +209,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? t.primaryCategory === filterCategory : true;
+       const l0 = t.categoryHierarchy?.l0 || '';
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
@@ -206,8 +231,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       let bValue: any = b[sortConfig.key as keyof Transaction] || '';
       
       if (sortConfig.key === 'category') {
-        aValue = `${a.primaryCategory}${a.secondaryCategory}${a.subcategory}${a.details}`;
-        bValue = `${b.primaryCategory}${b.secondaryCategory}${b.subcategory}${b.details}`;
+        const aCats = a.categoryHierarchy || {l0:'',l1:'',l2:'',l3:''};
+        const bCats = b.categoryHierarchy || {l0:'',l1:'',l2:'',l3:''};
+        aValue = `${aCats.l0}${aCats.l1}${aCats.l2}${aCats.l3}`;
+        bValue = `${bCats.l0}${bCats.l1}${bCats.l2}${bCats.l3}`;
       } else if (sortConfig.key === 'date') {
         return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
@@ -249,23 +276,27 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         </CardHeader>
         
         <CardContent>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col gap-4">
             <TransactionToolbar 
                 onSearch={setFilterTerm}
                 onDateChange={setFilterDate}
                 onCategoryFilter={setFilterCategory}
                 onStatusFilterChange={setStatusFilter}
-                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); setStatusFilter([]); }}
+                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory('all'); setStatusFilter([]); }}
+                onRefresh={refetch}
             />
             {selectedIds.length > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-50">
+                <div className="flex-grow">
+                    <span className="font-semibold text-blue-800">{selectedIds.length}</span> items selected.
+                </div>
                  <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setBatchEditDialogOpen(true)}
                   >
                     <Edit className="mr-2 h-4 w-4" />
-                    Batch Edit ({selectedIds.length})
+                    Batch Edit
                   </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -302,6 +333,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
+                <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('costCenter')}>Cost Center {getSortIcon('costCenter')}</Button></TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
                 <TableHead className="text-right p-2 w-[80px]">
                     <Button variant="ghost" size="icon" onClick={() => requestSort('reviewStatus')}>
@@ -312,10 +344,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {isLoading ? (
+              {isLoading || isLoadingProperties ? (
                 [...Array(5)].map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={7}><Skeleton className="h-8 w-full" /></TableCell>
                   </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
@@ -327,12 +359,15 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                             onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
                         />
                     </TableCell>
-                    <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date).toLocaleDateString()}</div></TableCell>
+                    <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div></TableCell>
                     <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
                     <TableCell className="align-top py-4">
                       <div className="flex flex-col gap-1">
                           <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                       </div>
+                    </TableCell>
+                     <TableCell className="align-top py-4 text-xs text-muted-foreground">
+                        {transaction.costCenter ? (propertyMap[transaction.costCenter] || transaction.costCenter) : 'N/A'}
                     </TableCell>
                     <TableCell className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}>
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
@@ -343,7 +378,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                   </TableRow>
                 ))
               ) : (
-                <TableRow><TableCell colSpan={6} className="h-24 text-center">No transactions found.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="h-24 text-center">No transactions found.</TableCell></TableRow>
               )}
             </TableBody>
           </Table>
@@ -356,8 +391,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
-          dataSource={dataSource}
-          onSuccess={() => setSelectedIds([])}
+          onSuccess={() => {setSelectedIds([]); refetch();}}
         />
       )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>
@@ -420,61 +454,55 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
 }
 
 
-function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => void }) {
+function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { l0: string, l1: string, l2: string, l3: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
-    const [primary, setPrimary] = useState(transaction.primaryCategory);
-    const [secondary, setSecondary] = useState(transaction.secondaryCategory);
-    const [sub, setSub] = useState(transaction.subcategory);
-    const [details, setDetails] = useState(transaction.details || '');
-
-    const [alertState, setAlertState] = useState<{ type: 'none' | 'negativeIncome' | 'securityDeposit' | 'thankYouPayment', isOpen: boolean }>({ type: 'none', isOpen: false });
-
-    const finalizeSave = (cats: { primaryCategory: string, secondaryCategory: string, subcategory: string, details: string }) => {
-        onSave(transaction, cats);
-        setIsOpen(false);
-    };
+    const cats = transaction.categoryHierarchy || { l0: '', l1: '', l2: '', l3: '' };
+    
+    const [l0, setL0] = useState(cats.l0);
+    const [l1, setL1] = useState(cats.l1);
+    const [l2, setL2] = useState(cats.l2);
+    const [l3, setL3] = useState(cats.l3);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const cats = { primaryCategory: primary, secondaryCategory: secondary, subcategory: sub, details: details };
-        finalizeSave(cats);
+        const newCats = { l0, l1, l2, l3 };
+        onSave(transaction, newCats);
+        setIsOpen(false);
     };
 
     return (
-        <>
-            <Popover open={isOpen} onOpenChange={setIsOpen}>
-                <PopoverTrigger asChild>
-                    <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                        <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[transaction.primaryCategory] || 'bg-slate-100')}>
-                            {transaction.primaryCategory}
-                            <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
-                        </Badge>
-                        <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                            {transaction.secondaryCategory} {'>'} {transaction.subcategory}
+        <Popover open={isOpen} onOpenChange={setIsOpen}>
+            <PopoverTrigger asChild>
+                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
+                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0] || 'bg-slate-100')}>
+                        {cats.l0}
+                        <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                    </Badge>
+                    <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                        {cats.l1} {'>'} {cats.l2}
+                    </span>
+                    {cats.l3 && (
+                         <span className="text-xs text-muted-foreground pl-1 font-medium">
+                            {cats.l3}
                         </span>
-                        {transaction.details && (
-                             <span className="text-xs text-muted-foreground pl-1 font-medium">
-                                {transaction.details}
-                            </span>
-                        )}
+                    )}
+                </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-80">
+                <form onSubmit={handleSubmit} className="grid gap-4">
+                    <div className="space-y-2">
+                        <h4 className="font-medium leading-none">Edit Category</h4>
+                        <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
                     </div>
-                </PopoverTrigger>
-                <PopoverContent className="w-80">
-                    <form onSubmit={handleSubmit} className="grid gap-4">
-                        <div className="space-y-2">
-                            <h4 className="font-medium leading-none">Edit Category</h4>
-                            <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
-                        </div>
-                        <div className="grid gap-2">
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="primary">Primary</Label><Input id="primary" value={primary} onChange={(e) => setPrimary(e.target.value)} className="col-span-2 h-8" /></div>
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="secondary">Secondary</Label><Input id="secondary" value={secondary} onChange={(e) => setSecondary(e.target.value)} className="col-span-2 h-8" /></div>
-                            <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="sub">Sub</Label><Input id="sub" value={sub} onChange={(e) => setSub(e.target.value)} className="col-span-2 h-8" /></div>
-                             <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="details">Details</Label><Input id="details" value={details} onChange={(e) => setDetails(e.target.value)} className="col-span-2 h-8" /></div>
-                        </div>
-                        <Button type="submit">Confirm & Save</Button>
-                    </form>
-                </PopoverContent>
-            </Popover>
-        </>
+                    <div className="grid gap-2">
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l0">L0</Label><Input id="l0" value={l0} onChange={(e) => setL0(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l1">L1</Label><Input id="l1" value={l1} onChange={(e) => setL1(e.target.value)} className="col-span-2 h-8" /></div>
+                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l2">L2</Label><Input id="l2" value={l2} onChange={(e) => setL2(e.target.value)} className="col-span-2 h-8" /></div>
+                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l3">L3</Label><Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} className="col-span-2 h-8" /></div>
+                    </div>
+                    <Button type="submit">Confirm & Save</Button>
+                </form>
+            </PopoverContent>
+        </Popover>
     );
 }
