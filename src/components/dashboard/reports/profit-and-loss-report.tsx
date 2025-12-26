@@ -138,18 +138,17 @@ export function ProfitAndLossReport() {
       const rawAmount = Number(tx.amount) || 0;
       const label = h.l2 || tx.subcategory || tx.secondaryCategory || 'Other';
       const normalizedLabel = label.trim();
-      const amountAbs = Math.abs(rawAmount);
   
       if (isIncome) {
-        totalInc += amountAbs;
+        totalInc += rawAmount; // Use raw amount to handle negative income
         const current = incMap.get(normalizedLabel) || { total: 0, transactions: [] };
-        current.total += amountAbs;
+        current.total += rawAmount; // Use raw amount
         current.transactions.push(tx);
         incMap.set(normalizedLabel, current);
       } else if (isExpense) {
-        totalExp += amountAbs;
+        totalExp += Math.abs(rawAmount); // Expenses are negative, so use absolute value for summation
         const current = expMap.get(normalizedLabel) || { total: 0, transactions: [] };
-        current.total += amountAbs;
+        current.total += Math.abs(rawAmount);
         current.transactions.push(tx);
         expMap.set(normalizedLabel, current);
       }
