@@ -1,4 +1,3 @@
-
 export interface Transaction {
   id: string;
   description: string;
@@ -10,7 +9,8 @@ export interface Transaction {
     l2: string;
     l3: string;
   };
-  bankAccountId: string; // This is crucial for updating the doc
+  bankAccountId?: string; // This is crucial for updating the doc
+  reviewStatus?: 'needs-review' | 'approved' | 'incorrect'; // NEW FIELD
 }
 
 export interface AuditIssue {

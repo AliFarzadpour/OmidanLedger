@@ -1,26 +1,36 @@
-
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion } from '@/components/ui/accordion';
-import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
 import { AuditIssueSection } from './AuditIssueSection';
-import { BatchEditDialog } from '../../transactions/batch-edit-dialog';
-import { isSameDay, subDays, addDays } from 'date-fns';
+import { useUser, useFirestore } from '@/firebase';
+import { doc, writeBatch } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
 
 export function FinancialIntegrityReport({ transactions, onRefresh }: { transactions: Transaction[], onRefresh: () => void }) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
-
+  const [filter, setFilter] = useState<'needs-review' | 'approved' | 'all'>('needs-review');
+  
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
     const seenTransactions = new Set<string>();
 
-    transactions.forEach((tx, index) => {
+    transactions.forEach((tx) => {
+      // Apply filter first
+      if (filter !== 'all' && (tx.reviewStatus || 'needs-review') !== filter) {
+        return;
+      }
+      
       const cats = tx.categoryHierarchy;
       
       // 1. Missing or Incomplete Hierarchy Check
@@ -56,7 +66,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       }
     });
     return foundIssues;
-  }, [transactions]);
+  }, [transactions, filter]);
 
   const groupedIssues = useMemo(() => {
     return issues.reduce((acc, issue) => {
@@ -68,7 +78,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
     }, {} as Record<string, AuditIssue[]>);
   }, [issues]);
   
-  const handleSelectionChange = (id: string, checked: boolean) => {
+  const handleSelectionChange = useCallback((id: string, checked: boolean) => {
     setSelectedIds(prev => {
         const newSet = new Set(prev);
         if (checked) {
@@ -78,16 +88,37 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         }
         return Array.from(newSet);
     });
+  }, []);
+
+  const handleBatchApprove = async () => {
+    if (!user || !firestore || selectedIds.length === 0) return;
+
+    const batch = writeBatch(firestore);
+    selectedIds.forEach(txId => {
+      // We need to find the full transaction object to get its bankAccountId
+      const tx = transactions.find(t => t.id === txId);
+      if (tx && tx.bankAccountId) {
+        const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
+        batch.update(txRef, { reviewStatus: 'approved' });
+      }
+    });
+
+    try {
+      await batch.commit();
+      toast({
+        title: 'Transactions Approved',
+        description: `${selectedIds.length} items have been marked as approved.`
+      });
+      setSelectedIds([]);
+      onRefresh(); // Refetch data to update the view
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to approve transactions.'
+      });
+    }
   };
-
-  const selectedTransactions = useMemo(() => {
-    return transactions.filter(tx => selectedIds.includes(tx.id));
-  }, [transactions, selectedIds]);
-
-  const handleBatchEditSuccess = () => {
-    onRefresh();
-    setSelectedIds([]);
-  }
 
   return (
     <>
@@ -97,12 +128,27 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             <ShieldAlert className="h-8 w-8 text-primary" />
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Financial Integrity Report</h1>
-                <p className="text-muted-foreground">Found {issues.length} potential issues across all accounts.</p>
+                <p className="text-muted-foreground">Found {issues.length} potential issues matching your filter.</p>
             </div>
         </div>
-        <Button onClick={onRefresh} variant="outline">
-            Re-run Audit
-        </Button>
+         <div className="flex items-center gap-4">
+            <Select onValueChange={(val: any) => setFilter(val)} defaultValue="needs-review">
+                <SelectTrigger className="w-[180px]">
+                    <div className="flex items-center gap-2">
+                        <Filter className="h-4 w-4 text-muted-foreground" />
+                        <SelectValue />
+                    </div>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="needs-review">Needs Review</SelectItem>
+                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+            </Select>
+            <Button onClick={onRefresh} variant="outline">
+                Re-run Audit
+            </Button>
+         </div>
       </div>
 
        {selectedIds.length > 0 && (
@@ -113,10 +159,11 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                  <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setBatchEditDialogOpen(true)}
+                    className="bg-green-100 text-green-800 border-green-200 hover:bg-green-200"
+                    onClick={handleBatchApprove}
                   >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Batch Edit
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Mark as Approved
                 </Button>
             </div>
         )}
@@ -125,7 +172,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         <Card className="text-center py-20 bg-green-50/50 border-green-200">
             <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <CardTitle className="text-xl text-green-800">No Issues Found!</CardTitle>
-            <CardDescription className="text-green-700">Your transaction data appears to be consistent.</CardDescription>
+            <CardDescription className="text-green-700">Your transaction data appears to be consistent based on the current filter.</CardDescription>
         </Card>
       ) : (
         <Accordion type="multiple" defaultValue={Object.keys(groupedIssues)} className="w-full space-y-4">
@@ -172,16 +219,6 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
         </Accordion>
       )}
     </div>
-    
-    {isBatchEditDialogOpen && (
-        <BatchEditDialog
-          isOpen={isBatchEditDialogOpen}
-          onOpenChange={setBatchEditDialogOpen}
-          transactions={selectedTransactions}
-          dataSource={{ id: '', accountName: '' }} // Not needed for this context, but prop is required
-          onSuccess={handleBatchEditSuccess}
-        />
-    )}
     </>
   );
 }

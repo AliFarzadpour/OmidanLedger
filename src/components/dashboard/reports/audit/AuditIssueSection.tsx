@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card } from '@/components/ui/card';
@@ -32,6 +31,13 @@ const primaryCategoryColors: Record<string, string> = {
 export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds, onSelectionChange }: AuditIssueSectionProps) {
     if (!issues || issues.length === 0) return null;
 
+    const handleSelectAll = (checked: boolean) => {
+        issues.forEach(issue => onSelectionChange(issue.transaction.id, checked));
+    };
+
+    const areAllSelected = issues.every(issue => selectedIds.includes(issue.transaction.id));
+
+
     return (
         <AccordionItem value={type}>
             <Card className="shadow-md">
@@ -47,8 +53,8 @@ export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-12"><Checkbox 
-                                    checked={issues.every(issue => selectedIds.includes(issue.transaction.id))}
-                                    onCheckedChange={(checked) => issues.forEach(issue => onSelectionChange(issue.transaction.id, !!checked))}
+                                    checked={areAllSelected}
+                                    onCheckedChange={handleSelectAll}
                                 /></TableHead>
                                 <TableHead>Date</TableHead>
                                 <TableHead>Description</TableHead>
