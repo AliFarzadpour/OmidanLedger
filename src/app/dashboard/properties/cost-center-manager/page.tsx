@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Edit, Search, ArrowUpDown, FolderTree, DollarSign } from 'lucide-react';
+import { ArrowLeft, Edit, Search, ArrowUpDown, FolderTree, DollarSign, Palette } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
@@ -43,7 +43,7 @@ export default function CostCenterManagerPage() {
   
   // --- DATA & SELECTION STATE ---
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [isBatchEditDialogOpen, setIsBatchEditDialogOpen] = useState(false);
   const [allTransactions, setAllTransactions] = useState<Tx[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
 
