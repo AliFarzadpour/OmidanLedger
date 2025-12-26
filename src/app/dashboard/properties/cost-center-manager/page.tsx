@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -71,7 +71,7 @@ export default function CostCenterManagerPage() {
     refetchTransactions();
   }, [refetchTransactions]);
   
-  const propertiesQuery = useMemo(() => {
+  const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user, firestore]);
