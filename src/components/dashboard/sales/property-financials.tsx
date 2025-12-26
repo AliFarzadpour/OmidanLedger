@@ -1,13 +1,13 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, getDocs, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, TrendingDown, ArrowUpDown } from 'lucide-react';
+import { Wrench, TrendingDown, ArrowUpDown, TrendingUp } from 'lucide-react';
 import { format, getYear, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
