@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Edit, Search, ArrowUpDown, FolderTree } from 'lucide-react';
+import { ArrowLeft, Edit, Search, ArrowUpDown, FolderTree, DollarSign } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
@@ -38,6 +38,7 @@ export default function CostCenterManagerPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [assignmentFilter, setAssignmentFilter] = useState<'unassigned' | 'assigned' | 'all'>('unassigned');
   const [l0Filter, setL0Filter] = useState('all');
+  const [amountFilter, setAmountFilter] = useState<{ min: string; max: string }>({ min: '', max: '' });
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'desc' });
   
   // --- DATA & SELECTION STATE ---
@@ -111,6 +112,16 @@ export default function CostCenterManagerPage() {
         filtered = filtered.filter(tx => tx.description.toLowerCase().includes(searchTerm.toLowerCase()));
     }
 
+    // Filter by amount
+    const minAmount = parseFloat(amountFilter.min);
+    const maxAmount = parseFloat(amountFilter.max);
+    if (!isNaN(minAmount)) {
+        filtered = filtered.filter(tx => tx.amount >= minAmount);
+    }
+    if (!isNaN(maxAmount)) {
+        filtered = filtered.filter(tx => tx.amount <= maxAmount);
+    }
+
     // Sort
     filtered.sort((a, b) => {
         const aVal = (a as any)[sortConfig.key] || '';
@@ -130,7 +141,7 @@ export default function CostCenterManagerPage() {
     });
 
     return filtered;
-  }, [allTransactions, assignmentFilter, l0Filter, searchTerm, sortConfig]);
+  }, [allTransactions, assignmentFilter, l0Filter, searchTerm, amountFilter, sortConfig]);
   
   const selectedTransactions = useMemo(() => {
     return filteredAndSortedTransactions.filter(tx => selectedIds.includes(tx.id));
@@ -191,8 +202,8 @@ export default function CostCenterManagerPage() {
       </header>
 
       {/* Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-4 p-4 bg-slate-50 border rounded-lg">
-        <div className="relative flex-grow">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 bg-slate-50 border rounded-lg">
+        <div className="relative flex-grow md:col-span-2">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input 
                 placeholder="Filter by description..."
@@ -201,30 +212,53 @@ export default function CostCenterManagerPage() {
                 onChange={(e) => setSearchTerm(e.target.value)}
             />
         </div>
-        <Select value={assignmentFilter} onValueChange={(val: any) => setAssignmentFilter(val)}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by status..." />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-                <SelectItem value="assigned">Assigned</SelectItem>
-                <SelectItem value="all">All</SelectItem>
-            </SelectContent>
-        </Select>
-        {/* L0 Category Filter */}
-        <Select value={l0Filter} onValueChange={setL0Filter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by category..." />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
-                <SelectItem value="expense">Expense</SelectItem>
-                <SelectItem value="asset">Asset</SelectItem>
-                <SelectItem value="liability">Liability</SelectItem>
-                <SelectItem value="equity">Equity</SelectItem>
-            </SelectContent>
-        </Select>
+        <div className="grid grid-cols-2 gap-2">
+             <div className="relative">
+                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    type="number"
+                    placeholder="Min amount"
+                    className="pl-9"
+                    value={amountFilter.min}
+                    onChange={(e) => setAmountFilter(prev => ({...prev, min: e.target.value}))}
+                />
+            </div>
+             <div className="relative">
+                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    type="number"
+                    placeholder="Max amount"
+                    className="pl-9"
+                    value={amountFilter.max}
+                    onChange={(e) => setAmountFilter(prev => ({...prev, max: e.target.value}))}
+                />
+            </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+            <Select value={assignmentFilter} onValueChange={(val: any) => setAssignmentFilter(val)}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Filter by status..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="unassigned">Unassigned</SelectItem>
+                    <SelectItem value="assigned">Assigned</SelectItem>
+                    <SelectItem value="all">All</SelectItem>
+                </SelectContent>
+            </Select>
+            <Select value={l0Filter} onValueChange={setL0Filter}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Filter by category..." />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    <SelectItem value="income">Income</SelectItem>
+                    <SelectItem value="expense">Expense</SelectItem>
+                    <SelectItem value="asset">Asset</SelectItem>
+                    <SelectItem value="liability">Liability</SelectItem>
+                    <SelectItem value="equity">Equity</SelectItem>
+                </SelectContent>
+            </Select>
+        </div>
       </div>
       
       {selectedIds.length > 0 && (
