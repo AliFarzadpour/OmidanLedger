@@ -6,9 +6,11 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { FileText, Car, Home, User, ShoppingCart, Banknote, Landmark, Gift, Building, AlertTriangle } from 'lucide-react';
+import { FileText, Car, Home, User, ShoppingCart, Landmark, Gift, Building, AlertTriangle } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import type { Transaction } from './types';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { format } from 'date-fns';
 
 // Keywords for different audit rules
 const MEALS_TRAVEL_KEYWORDS = ['meal', 'restaurant', 'travel', 'airline', 'hotel', 'lyft', 'uber'];
@@ -42,7 +44,7 @@ const getContractorPayments = (transactions: Transaction[]) => {
     });
     return Array.from(vendorTotals.entries())
         .filter(([_, total]) => total > 600)
-        .map(([name, total]) => ({ name, total }));
+        .map(([name, total]) => ({ name, total, id: name })); // Add id for key prop
 };
 
 const getLargePurchases = (transactions: Transaction[], threshold: number) => {
@@ -77,14 +79,14 @@ export function TaxReadinessReport({ transactions }: { transactions: Transaction
             </Alert>
             
             <Accordion type="multiple" className="w-full space-y-4">
-                <TaxAuditSection icon={FileText} title="Schedule C / Business Expenses" count={flagged.scheduleC.length + flagged.office.length} recommendation="Add business purpose notes for meals/travel and confirm business use % for office expenses."/>
-                <TaxAuditSection icon={Car} title="Vehicle & Mileage Readiness" count={flagged.vehicle.length} recommendation="Enable a mileage log to properly deduct vehicle expenses."/>
-                <TaxAuditSection icon={Home} title="Home Office Indicators" count={flagged.homeOffice.length} recommendation="If you have a home office, track its square footage and ensure exclusive use for deductions."/>
-                <TaxAuditSection icon={User} title="1099 Contractor Watchlist" count={flagged.contractors.length} recommendation="Collect W-9s from vendors paid over $600/year."/>
-                <TaxAuditSection icon={ShoppingCart} title="Personal Expense Review" count={flagged.personal.length} recommendation="Reclassify personal expenses from business accounts to 'Owner's Draw'."/>
-                <TaxAuditSection icon={Building} title="Fixed Assets vs. Repairs" count={flagged.assets.length} recommendation="Consider categorizing large purchases over $2,500 as 'Fixed Assets' for depreciation."/>
-                <TaxAuditSection icon={Landmark} title="Loan & Debt Payments" count={flagged.loans.length} recommendation="Ensure you are splitting loan payments into deductible interest and non-deductible principal."/>
-                <TaxAuditSection icon={Gift} title="Charitable Contributions" count={flagged.charity.length} recommendation="Save receipts and confirm if contributions are personal or a business sponsorship."/>
+                <TaxAuditSection icon={FileText} title="Schedule C / Business Expenses" transactions={flagged.scheduleC.concat(flagged.office)} recommendation="Add business purpose notes for meals/travel and confirm business use % for office expenses."/>
+                <TaxAuditSection icon={Car} title="Vehicle & Mileage Readiness" transactions={flagged.vehicle} recommendation="Enable a mileage log to properly deduct vehicle expenses."/>
+                <TaxAuditSection icon={Home} title="Home Office Indicators" transactions={flagged.homeOffice} recommendation="If you have a home office, track its square footage and ensure exclusive use for deductions."/>
+                <TaxAuditSection icon={User} title="1099 Contractor Watchlist" vendors={flagged.contractors} recommendation="Collect W-9s from vendors paid over $600/year."/>
+                <TaxAuditSection icon={ShoppingCart} title="Personal Expense Review" transactions={flagged.personal} recommendation="Reclassify personal expenses from business accounts to 'Owner's Draw'."/>
+                <TaxAuditSection icon={Building} title="Fixed Assets vs. Repairs" transactions={flagged.assets} recommendation="Consider categorizing large purchases over $2,500 as 'Fixed Assets' for depreciation."/>
+                <TaxAuditSection icon={Landmark} title="Loan & Debt Payments" transactions={flagged.loans} recommendation="Ensure you are splitting loan payments into deductible interest and non-deductible principal."/>
+                <TaxAuditSection icon={Gift} title="Charitable Contributions" transactions={flagged.charity} recommendation="Save receipts and confirm if contributions are personal or a business sponsorship."/>
             </Accordion>
 
             <SummaryCard flagged={flagged} />
@@ -92,8 +94,10 @@ export function TaxReadinessReport({ transactions }: { transactions: Transaction
     );
 }
 
-const TaxAuditSection = ({ icon: Icon, title, count, recommendation }: { icon: React.ElementType, title: string, count: number, recommendation: string }) => {
+const TaxAuditSection = ({ icon: Icon, title, transactions, vendors, recommendation }: { icon: React.ElementType, title: string, transactions?: Transaction[], vendors?: {id: string, name: string, total: number}[], recommendation: string }) => {
+    const count = transactions?.length || vendors?.length || 0;
     if (count === 0) return null;
+
     return (
         <AccordionItem value={title}>
             <Card>
@@ -108,11 +112,38 @@ const TaxAuditSection = ({ icon: Icon, title, count, recommendation }: { icon: R
                         </div>
                     </div>
                 </AccordionTrigger>
-                <AccordionContent className="p-4 pt-0">
-                    <Alert>
+                <AccordionContent className="px-4 pb-4">
+                     <Alert className="mb-4">
                         <AlertTitle className="font-bold">Recommendation</AlertTitle>
                         <AlertDescription>{recommendation}</AlertDescription>
                     </Alert>
+                    {transactions && transactions.length > 0 && (
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Date</TableHead><TableHead>Description</TableHead><TableHead className="text-right">Amount</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {transactions.map(tx => (
+                                    <TableRow key={tx.id}>
+                                        <TableCell>{format(new Date(tx.date), 'MM/dd/yyyy')}</TableCell>
+                                        <TableCell>{tx.description}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatCurrency(tx.amount)}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
+                     {vendors && vendors.length > 0 && (
+                        <Table>
+                            <TableHeader><TableRow><TableHead>Vendor</TableHead><TableHead className="text-right">Total Paid</TableHead></TableRow></TableHeader>
+                            <TableBody>
+                                {vendors.map(v => (
+                                    <TableRow key={v.id}>
+                                        <TableCell>{v.name}</TableCell>
+                                        <TableCell className="text-right font-mono">{formatCurrency(v.total)}</TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
                 </AccordionContent>
             </Card>
         </AccordionItem>
