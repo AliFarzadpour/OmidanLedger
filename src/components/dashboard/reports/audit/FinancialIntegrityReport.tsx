@@ -62,7 +62,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
 
       // 5. Transfer Miscategorization Check
       const descLower = tx.description.toLowerCase();
-      const transferKeywords = ['transfer', 'zelle', 'venmo', 'payment to', 'payment from'];
+      const transferKeywords = ['transfer', 'zelle', 'venmo', 'payment - thank you', 'online payment', 'payment received'];
       if (transferKeywords.some(k => descLower.includes(k)) && (isIncomeL0 || isExpenseL0)) {
         foundIssues.push({ type: 'transfer_error', message: 'Likely a transfer, but categorized as Income/Expense.', transaction: tx });
       }
