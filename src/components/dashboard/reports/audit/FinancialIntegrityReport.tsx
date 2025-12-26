@@ -23,7 +23,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
     transactions.forEach((tx, index) => {
       const cats = tx.categoryHierarchy;
       
-      // 1. Missing Hierarchy Check
+      // 1. Missing or Incomplete Hierarchy Check
       if (!cats || !cats.l0 || !cats.l2) {
         foundIssues.push({ type: 'missing_hierarchy', message: 'Category hierarchy is missing or incomplete.', transaction: tx });
       }
