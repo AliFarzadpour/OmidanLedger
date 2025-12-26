@@ -10,7 +10,8 @@ export interface Transaction {
     l3: string;
   };
   bankAccountId?: string; // This is crucial for updating the doc
-  reviewStatus?: 'needs-review' | 'approved' | 'incorrect'; // NEW FIELD
+  reviewStatus?: 'needs-review' | 'approved' | 'incorrect';
+  auditStatus?: 'needs_audit' | 'audited'; // NEW, SEPARATE FIELD
 }
 
 export interface AuditIssue {

@@ -19,7 +19,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
   const { toast } = useToast();
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [filter, setFilter] = useState<'needs-review' | 'approved' | 'all'>('needs-review');
+  const [filter, setFilter] = useState<'needs_audit' | 'audited' | 'all'>('needs_audit');
   
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
@@ -27,7 +27,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
 
     transactions.forEach((tx) => {
       // Apply filter first
-      if (filter !== 'all' && (tx.reviewStatus || 'needs-review') !== filter) {
+      if (filter !== 'all' && (tx.auditStatus || 'needs_audit') !== filter) {
         return;
       }
       
@@ -99,15 +99,15 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
       const tx = transactions.find(t => t.id === txId);
       if (tx && tx.bankAccountId) {
         const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
-        batch.update(txRef, { reviewStatus: 'approved' });
+        batch.update(txRef, { auditStatus: 'audited' });
       }
     });
 
     try {
       await batch.commit();
       toast({
-        title: 'Transactions Approved',
-        description: `${selectedIds.length} items have been marked as approved.`
+        title: 'Transactions Audited',
+        description: `${selectedIds.length} items have been marked as audited.`
       });
       setSelectedIds([]);
       onRefresh(); // Refetch data to update the view
@@ -132,7 +132,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             </div>
         </div>
          <div className="flex items-center gap-4">
-            <Select onValueChange={(val: any) => setFilter(val)} defaultValue="needs-review">
+            <Select onValueChange={(val: any) => setFilter(val)} defaultValue="needs_audit">
                 <SelectTrigger className="w-[180px]">
                     <div className="flex items-center gap-2">
                         <Filter className="h-4 w-4 text-muted-foreground" />
@@ -140,8 +140,8 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                     </div>
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="needs-review">Needs Review</SelectItem>
-                    <SelectItem value="approved">Approved</SelectItem>
+                    <SelectItem value="needs_audit">Needs Audit</SelectItem>
+                    <SelectItem value="audited">Audited</SelectItem>
                     <SelectItem value="all">All</SelectItem>
                 </SelectContent>
             </Select>
@@ -163,7 +163,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                     onClick={handleBatchApprove}
                   >
                     <CheckCircle className="mr-2 h-4 w-4" />
-                    Mark as Approved
+                    Mark as Audited
                 </Button>
             </div>
         )}
