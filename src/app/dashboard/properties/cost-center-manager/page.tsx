@@ -33,7 +33,7 @@ export default function CostCenterManagerPage() {
   
   // --- DATA & SELECTION STATE ---
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [isBatchEditDialogOpen, setIsBatchEditDialogOpen] = useState(false);
   const [allTransactions, setAllTransactions] = useState<Tx[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
 
@@ -223,7 +223,7 @@ export default function CostCenterManagerPage() {
                  <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setBatchEditDialogOpen(true)}
+                    onClick={() => setIsBatchEditDialogOpen(true)}
                   >
                     <Edit className="mr-2 h-4 w-4" />
                     Assign to Cost Center...
@@ -280,7 +280,7 @@ export default function CostCenterManagerPage() {
     {isBatchEditDialogOpen && (
         <BatchEditDialog
           isOpen={isBatchEditDialogOpen}
-          onOpenChange={setBatchEditDialogOpen}
+          onOpenChange={setIsBatchEditDialogOpen}
           transactions={selectedTransactions}
           onSuccess={() => {
             setSelectedIds([]);
