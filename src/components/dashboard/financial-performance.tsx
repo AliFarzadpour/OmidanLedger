@@ -31,9 +31,9 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
       where('date', '<=', currentMonthEnd)
     );
     
-    // If a propertyId is provided, add it to the filter.
+    // If a propertyId is provided, filter by costCenter.
     if (propertyId) {
-      q = query(q, where('propertyId', '==', propertyId));
+      q = query(q, where('costCenter', '==', propertyId));
     }
     
     return q;
