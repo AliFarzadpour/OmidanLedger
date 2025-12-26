@@ -98,12 +98,9 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
           reviewStatus: 'approved',
-          auditStatus: 'audited'
+          auditStatus: 'audited',
+          costCenter: costCenter,
         };
-
-        if (costCenter) {
-            updateData.costCenter = costCenter;
-        }
 
         batch.update(txRef, updateData);
       });
@@ -168,7 +165,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
                     <SelectValue placeholder="Assign to a property or unit..." />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="none">No Cost Center</SelectItem>
                     {properties.map(prop => (
                         <SelectGroup key={prop.id}>
                              <SelectItem value={prop.id}>{prop.name} (Building)</SelectItem>
