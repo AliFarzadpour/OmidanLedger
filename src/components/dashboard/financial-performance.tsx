@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfYear, endOfYear } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
@@ -20,8 +20,9 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  const currentMonthStart = format(startOfMonth(new Date()), 'yyyy-MM-dd');
-  const currentMonthEnd = format(endOfMonth(new Date()), 'yyyy-MM-dd');
+  // FIX: Default date range to the full current year.
+  const currentYearStart = format(startOfYear(new Date()), 'yyyy-MM-dd');
+  const currentYearEnd = format(endOfYear(new Date()), 'yyyy-MM-dd');
 
   const fetchTransactions = useCallback(async () => {
     if (!db || !user) return;
@@ -35,8 +36,8 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
         for (const accountDoc of bankAccountsSnap.docs) {
             const txsQuery = query(
                 collection(db, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`),
-                where('date', '>=', currentMonthStart),
-                where('date', '<=', currentMonthEnd)
+                where('date', '>=', currentYearStart),
+                where('date', '<=', currentYearEnd)
             );
             const txsSnap = await getDocs(txsQuery);
             txsSnap.forEach(txDoc => {
@@ -51,7 +52,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     } finally {
         setIsLoading(false);
     }
-  }, [db, user, currentMonthStart, currentMonthEnd, isRefreshing]);
+  }, [db, user, currentYearStart, currentYearEnd]);
 
   useEffect(() => {
     fetchTransactions();
@@ -121,7 +122,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
               <CardTitle className="text-lg font-medium">
                   {propertyId ? "Financial Performance" : "Portfolio Performance"}
               </CardTitle>
-              <p className="text-xs text-muted-foreground">Live data for {format(new Date(), 'MMMM yyyy')}</p>
+              <p className="text-xs text-muted-foreground">Live data for {format(new Date(), 'yyyy')}</p>
           </div>
           <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={isRefreshing} className="gap-2">
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
