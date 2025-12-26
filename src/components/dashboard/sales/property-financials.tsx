@@ -90,6 +90,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
   }, [user, propertyId, view, firestore]);
 
   const availableYears = useMemo(() => {
+      if (allTransactions.length === 0) return [String(new Date().getFullYear())];
       const years = new Set(allTransactions.map(tx => format(parseISO(tx.date), 'yyyy')));
       return Array.from(years).sort((a, b) => b.localeCompare(a));
   }, [allTransactions]);
@@ -177,31 +178,38 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                 {loading ? (
                     <TableRow><TableCell colSpan={4} className="h-24 text-center">Loading financial data...</TableCell></TableRow>
                 ) : sortedMonths.length > 0 ? (
-                    sortedMonths.map(month => (
-                       <React.Fragment key={month}>
-                            <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                <TableCell colSpan={3} className="font-bold">{format(parseISO(month), 'MMMM yyyy')}</TableCell>
-                                <TableCell className="text-right font-bold">{formatCurrency(groupedAndSortedTransactions[month].total)}</TableCell>
-                            </TableRow>
-                            {groupedAndSortedTransactions[month].transactions.map((tx) => (
-                                <TableRow key={tx.id}>
-                                    <TableCell className="pl-8">{format(parseISO(tx.date), 'MMM dd, yyyy')}</TableCell>
-                                    <TableCell className="font-medium max-w-[200px] truncate" title={tx.description}>
-                                        {tx.description}
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className="font-normal">
-                                            {tx.categoryHierarchy?.l2 || 'N/A'}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className={`text-right font-medium ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
-                                        {isIncome ? '+' : ''}
-                                        {formatCurrency(tx.amount)}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                       </React.Fragment>
-                    ))
+                    sortedMonths.map(month => {
+                        const monthData = groupedAndSortedTransactions[month];
+                        const showTotal = monthData.transactions.length > 1;
+
+                        return (
+                           <React.Fragment key={month}>
+                                {showTotal && (
+                                    <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                        <TableCell colSpan={3} className="font-bold">{format(parseISO(month), 'MMMM yyyy')}</TableCell>
+                                        <TableCell className="text-right font-bold">{formatCurrency(monthData.total)}</TableCell>
+                                    </TableRow>
+                                )}
+                                {monthData.transactions.map((tx) => (
+                                    <TableRow key={tx.id}>
+                                        <TableCell className={showTotal ? "pl-8" : ""}>{format(parseISO(tx.date), 'MMM dd, yyyy')}</TableCell>
+                                        <TableCell className="font-medium max-w-[200px] truncate" title={tx.description}>
+                                            {tx.description}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className="font-normal">
+                                                {tx.categoryHierarchy?.l2 || 'N/A'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className={`text-right font-medium ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                                            {isIncome ? '+' : ''}
+                                            {formatCurrency(tx.amount)}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                           </React.Fragment>
+                        )
+                    })
                 ) : (
                     <TableRow>
                         <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
