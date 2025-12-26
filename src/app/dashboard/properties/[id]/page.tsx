@@ -313,11 +313,6 @@ export default function PropertyDetailPage() {
                 </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button asChild variant="outline">
-                  <Link href={`/dashboard/properties/${id}/transactions`}>
-                      <BookOpen className="mr-2 h-4 w-4" /> Cost Center Manager
-                  </Link>
-              </Button>
               <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
               {units && <BulkOperationsDialog propertyId={id} units={units} />}
               <AddUnitDialog propertyId={id} onUnitAdded={handleUnitUpdate} />

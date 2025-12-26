@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Home, MapPin, ArrowRight, Loader2, AlertCircle, ArrowLeft, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -148,7 +149,7 @@ export default function PropertiesListPage() {
                  </div>
               </CardContent>
 
-              <CardFooter className="pt-3 border-t bg-slate-50/50">
+              <CardFooter className="pt-3 border-t bg-slate-50/50 flex flex-col items-stretch gap-2">
                 <Link href={`/dashboard/properties/${property.id}`} className="w-full">
                   <Button 
                       variant="ghost" 
@@ -156,6 +157,14 @@ export default function PropertiesListPage() {
                   >
                     Manage Property <ArrowRight className="h-4 w-4" />
                   </Button>
+                </Link>
+                <Link href={`/dashboard/properties/${property.id}/transactions`} className="w-full">
+                    <Button
+                        variant="ghost"
+                        className="w-full justify-between text-slate-600 hover:text-slate-700 hover:bg-slate-100"
+                    >
+                        Cost Center Manager <BookOpen className="h-4 w-4" />
+                    </Button>
                 </Link>
               </CardFooter>
             </Card>
