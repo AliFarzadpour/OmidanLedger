@@ -43,9 +43,16 @@ export default function CostCenterManagerPage() {
   
   // --- DATA & SELECTION STATE ---
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isBatchEditDialogOpen, setIsBatchEditDialogOpen] = useState(false);
+  const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   const [allTransactions, setAllTransactions] = useState<Tx[]>([]);
   const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
+
+  // --- Client-side rendering fix ---
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
 
   // --- DATA FETCHING ---
   const refetchTransactions = useCallback(async () => {
@@ -173,6 +180,24 @@ export default function CostCenterManagerPage() {
   );
 
   const isLoading = isLoadingTransactions || isLoadingProperties;
+
+  if (!isClient) {
+    return (
+        <div className="space-y-6 p-8">
+            <header className="flex justify-between items-start">
+                <div className="flex items-center gap-4">
+                    <Skeleton className="h-10 w-10" />
+                    <div>
+                        <Skeleton className="h-8 w-64 mb-2"/>
+                        <Skeleton className="h-4 w-80"/>
+                    </div>
+                </div>
+            </header>
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-96 w-full" />
+        </div>
+    );
+  }
 
   return (
     <>
