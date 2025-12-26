@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -10,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, BookOpen, Edit, Search } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import { TransactionsTable } from '@/components/dashboard/transactions-table'; // Reusing this for display
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Transaction } from '@/components/dashboard/transactions-table';
