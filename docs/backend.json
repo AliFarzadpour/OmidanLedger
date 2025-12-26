@@ -219,6 +219,7 @@
         "date": { "type": "string", "description": "The date of the transaction.", "format": "date-time" },
         "description": { "type": "string", "description": "Description of the transaction." },
         "amount": { "type": "number", "description": "The amount of the transaction." },
+        "costCenter": { "type": "string", "description": "An optional tag to associate the transaction with a specific business unit, project, or location." },
         "auditStatus": { "type": "string", "enum": ["audited", "needs_audit"], "description": "The status of the transaction in the financial audit workflow."},
         "categoryHierarchy": {
             "type": "object",
@@ -716,5 +717,3 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
-
-    
