@@ -112,12 +112,29 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
         for (const month in grouped) {
             grouped[month].transactions.sort((a, b) => {
                 const key = sortConfig.key as keyof Transaction;
-                const aVal = a[key];
-                const bVal = b[key];
+                let aVal, bVal;
 
-                if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
+                // Handle nested category property
+                if (key === 'categoryHierarchy') {
+                    aVal = a.categoryHierarchy?.l2 || '';
+                    bVal = b.categoryHierarchy?.l2 || '';
+                } else {
+                    aVal = a[key];
+                    bVal = b[key];
+                }
+                
+                let result = 0;
+                if (typeof aVal === 'string' && typeof bVal === 'string') {
+                    if (key === 'date') {
+                        result = new Date(aVal).getTime() - new Date(bVal).getTime();
+                    } else {
+                        result = aVal.localeCompare(bVal, undefined, { numeric: true });
+                    }
+                } else {
+                    result = (aVal as number) - (bVal as number);
+                }
+
+                return sortConfig.direction === 'asc' ? result : -result;
             });
         }
     }
