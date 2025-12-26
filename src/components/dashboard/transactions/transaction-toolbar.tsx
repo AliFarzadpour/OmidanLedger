@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import * as React from 'react';
@@ -174,7 +172,7 @@ export function TransactionToolbar({
         )}
       </div>
     </div>
-    <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} onSuccess={onRefresh} />
+    {isMergeToolOpen && <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} onSuccess={onRefresh} />}
     </>
   );
 }

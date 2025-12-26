@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -99,13 +98,13 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
           status: 'posted',
           aiExplanation: 'Manually updated in batch.',
           reviewStatus: 'approved',
-          auditStatus: 'audited',
-          costCenter: costCenter, // costCenter will be the selected value ('', propertyId, or 'No Cost Center')
+          auditStatus: 'audited'
         };
         
-        // If the user didn't make a selection, don't update the costCenter
-        if (costCenter === '') {
-            delete updateData.costCenter;
+        // If a cost center was selected, update it.
+        // This includes "No Cost Center" which is a valid string.
+        if (costCenter) {
+           updateData.costCenter = costCenter;
         }
 
 
@@ -122,7 +121,7 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
             subcategory: l2,
             details: l3,
             userId: user.uid,
-            propertyId: costCenter !== '' ? costCenter : undefined
+            propertyId: costCenter && costCenter !== 'No Cost Center' ? costCenter : undefined
         });
         toast({
           title: 'Update & Rule Created',

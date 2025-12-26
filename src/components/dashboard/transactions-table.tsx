@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -90,7 +89,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     return collection(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`);
   }, [firestore, user, dataSource]);
 
-  const { data: transactions, isLoading } = useCollection<Transaction>(transactionsQuery);
+  const { data: transactions, isLoading, refetch } = useCollection<Transaction>(transactionsQuery);
 
   const handleClearTransactions = async () => {
     if (!firestore || !user || !dataSource || !transactionsQuery) return;
@@ -108,6 +107,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         await batch.commit();
         
         toast({ title: "Transactions Cleared", description: "History reset. You can now re-sync from scratch." });
+        refetch();
     } catch (error: any) {
          console.error("Error clearing transactions:", error);
         toast({ variant: "destructive", title: "Error", description: `Could not clear transactions. ${error.message}` });
@@ -122,6 +122,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     try {
         const result = await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
         toast({ title: 'Sync Complete', description: `${result.count} new transactions imported.` });
+        refetch();
     } catch (error: any) {
         toast({ variant: "destructive", title: "Sync Failed", description: error.message });
     } finally { setIsSyncing(false); }
@@ -181,6 +182,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         description: `${selectedIds.length} transactions have been marked as ${newStatus.replace('-', ' ')}.`,
       });
       setSelectedIds([]); // Clear selection after update
+      refetch();
     } catch (error: any) {
       console.error(error);
       toast({ variant: "destructive", title: "Batch Update Failed", description: error.message });
@@ -191,7 +193,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? (t.categoryHierarchy?.l0) === filterCategory : true;
+       const l0 = t.categoryHierarchy?.l0 || '';
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
@@ -220,7 +223,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         return sortConfig.direction === 'ascending' ? new Date(a.date).getTime() - new Date(b.date).getTime() : new Date(b.date).getTime() - new Date(a.date).getTime();
       }
       
-      if (typeof aValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(aValue) : bValue.localeCompare(aValue);
+      if (typeof aValue === 'string') return sortConfig.direction === 'ascending' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
@@ -263,7 +266,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 onDateChange={setFilterDate}
                 onCategoryFilter={setFilterCategory}
                 onStatusFilterChange={setStatusFilter}
-                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory(''); setStatusFilter([]); }}
+                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory('all'); setStatusFilter([]); }}
+                onRefresh={refetch}
             />
             {selectedIds.length > 0 && (
               <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-50">
@@ -371,7 +375,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
-          onSuccess={() => setSelectedIds([])}
+          onSuccess={() => {setSelectedIds([]); refetch();}}
         />
       )}
       <AlertDialog open={isClearAlertOpen} onOpenChange={setClearAlertOpen}>

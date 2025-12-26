@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
-import { parseISO, isWithinInterval, startOfMonth, endOfMonth, eachMonthOfInterval, format } from 'date-fns';
+import { parseISO, isWithinInterval, startOfYear, endOfYear, eachMonthOfInterval, format } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';

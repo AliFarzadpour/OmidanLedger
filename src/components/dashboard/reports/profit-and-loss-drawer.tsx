@@ -229,7 +229,6 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
           isOpen={isBatchEditDialogOpen}
           onOpenChange={setBatchEditDialogOpen}
           transactions={selectedTransactions}
-          dataSource={{ id: '', accountName: '' }} 
           onSuccess={() => {
             setSelectedIds([]);
             onUpdate();
