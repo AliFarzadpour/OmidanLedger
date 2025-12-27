@@ -24,7 +24,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useStorage } from '@/firebase/storage/use-storage';
 import { getAuth } from "firebase/auth";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
-import { Building2, Upload, Loader2, Link as LinkIcon } from 'lucide-react';
+import { Building2, Upload, Loader2, Link as LinkIcon, CheckCircle2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
@@ -71,11 +71,10 @@ export function BusinessProfileForm() {
     return doc(firestore, 'users', user.uid);
   }, [firestore, user]);
 
-  const { data: userData, isLoading: isLoadingUser } = useDoc<{ businessProfile?: BusinessProfileFormValues, stripeAccountId?: string }>(userDocRef);
+  const { data: userData, isLoading: isLoadingUser } = useDoc<{ businessProfile?: BusinessProfileFormValues, stripeAccountId?: string, billing?: { stripeStatus?: string } }>(userDocRef);
 
   const form = useForm<BusinessProfileFormValues>({
     resolver: zodResolver(businessProfileSchema),
-    // FIX: Provide default empty strings to prevent uncontrolled -> controlled error.
     defaultValues: {
       businessName: '',
       businessType: '',
@@ -92,8 +91,6 @@ export function BusinessProfileForm() {
 
   useEffect(() => {
     if (userData?.businessProfile) {
-      // When data loads, reset the form with the fetched values.
-      // This is safe because the form is already controlled.
       form.reset(userData.businessProfile);
     }
   }, [userData, form]);
@@ -153,8 +150,6 @@ export function BusinessProfileForm() {
     try {
         const { origin } = window.location;
         const result = await createStripeAccountLink({
-            userId: user.uid,
-            userEmail: user.email,
             returnUrl: `${origin}/dashboard/stripe/return`,
             refreshUrl: `${origin}/dashboard/settings`,
         });
@@ -175,7 +170,7 @@ export function BusinessProfileForm() {
   }
   
   const logoUrl = form.watch('logoUrl');
-  const stripeAccountId = userData?.stripeAccountId;
+  const stripeStatus = userData?.billing?.stripeStatus;
 
   return (
     <Form {...form}>
@@ -189,16 +184,18 @@ export function BusinessProfileForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {stripeAccountId ? (
-                 <div className="bg-green-50 text-green-800 p-4 rounded-md border border-green-200 text-sm font-medium">
+            {stripeStatus === 'active' ? (
+                 <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-md border border-green-200 text-sm font-medium">
+                    <CheckCircle2 className="h-5 w-5" />
                     Your account is connected and ready to receive payments.
                 </div>
             ) : (
                 <Button type="button" onClick={handleStripeConnect} disabled={isConnectingStripe}>
                     {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
-                    Connect with Stripe
+                    {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
                 </Button>
             )}
+             {stripeStatus === 'incomplete' && <p className="text-sm text-destructive mt-2">Your Stripe account setup is incomplete. Please re-connect to finish.</p>}
           </CardContent>
         </Card>
 
