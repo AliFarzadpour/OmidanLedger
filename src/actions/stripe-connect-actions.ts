@@ -72,34 +72,30 @@ export async function createStripeAccountLink({
  * Checks the status of a user's Stripe account to verify onboarding is complete.
  */
 export async function checkStripeAccountStatus(userId: string) {
-    if (!userId) {
-        throw new Error('User ID is required.');
+    const userDoc = await db.collection('users').doc(userId).get();
+    const data = userDoc.data();
+    
+    // MATCH YOUR DATABASE: stripeAccountId is a root field
+    const stripeAccountId = data?.stripeAccountId; 
+
+    if (!stripeAccountId) {
+        throw new Error("No Stripe Account ID found in your profile.");
     }
 
-    try {
-        const userDoc = await db.collection('users').doc(userId).get();
-        if (!userDoc.exists) throw new Error('User not found.');
-        
-        const stripeAccountId = userDoc.data()?.stripeAccountId;
-        if (!stripeAccountId) throw new Error('Stripe account not linked.');
-        
-        const account = await stripe.accounts.retrieve(stripeAccountId);
-        
-        const isReady = account.charges_enabled && account.payouts_enabled;
+    const account = await stripe.accounts.retrieve(stripeAccountId);
+    const isReady = account.details_submitted && account.charges_enabled && account.payouts_enabled;
 
-        // Persist the verified status in Firestore
+    if (isReady) {
+        // This update will trigger your frontend to show 'Success'
         await db.collection('users').doc(userId).update({
-            'billing.stripeStatus': isReady ? 'active' : 'incomplete',
+            'billing.stripeStatus': 'active' 
         });
-        
-        return {
-            isReady,
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted
-        };
-    } catch (error: any) {
-        console.error('Error checking Stripe account status:', error);
-        throw new Error(error.message || 'Failed to verify Stripe account status.');
     }
+
+    return { 
+        isReady,
+        detailsSubmitted: account.details_submitted,
+        payoutsEnabled: account.payouts_enabled,
+        chargesEnabled: account.charges_enabled
+    };
 }
