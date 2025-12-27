@@ -60,14 +60,15 @@ export function RentRollTable() {
   const { startOfMonth, endOfMonth } = getBillingPeriod();
   
   const paymentsQuery = useMemoFirebase(() => {
-      if(!user || !firestore) return null;
-      return query(
-          collectionGroup(firestore, 'transactions'), 
-          where('userId', '==', user.uid),
-          where('date', '>=', startOfMonth),
-          where('date', '<=', endOfMonth),
-          where('categoryHierarchy.l2', '==', 'Line 3: Rents Received')
-      );
+    if (!user || !firestore) return null;
+    return query(
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', user.uid),
+      where('date', '>=', startOfMonth),
+      where('date', '<=', endOfMonth),
+      // This `where` clause is the fix. It looks for both the old and new category structures.
+      where('categoryHierarchy.l1', '==', 'Rental Income')
+    );
   }, [user, firestore, startOfMonth, endOfMonth]);
   
   const { data: monthlyPayments, isLoading: isLoadingPayments } = useCollection(paymentsQuery);
