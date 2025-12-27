@@ -61,7 +61,6 @@ export function RentRollTable() {
   
   const paymentsQuery = useMemoFirebase(() => {
       if(!user || !firestore) return null;
-      // CORRECTED: Use a collectionGroup query to scan across all 'transactions' collections for the user.
       return query(
           collectionGroup(firestore, 'transactions'), 
           where('userId', '==', user.uid),
@@ -86,10 +85,12 @@ export function RentRollTable() {
 
     return properties.flatMap(p => {
         const activeTenant = p.tenants?.find(t => t.status === 'active');
-        if (!activeTenant || !activeTenant.id) return [];
+        // FIX: Use email as a fallback identifier if id is missing.
+        if (!activeTenant || !(activeTenant.id || activeTenant.email)) return [];
 
+        const tenantIdentifier = activeTenant.id || activeTenant.email;
         const rentDue = activeTenant.rentAmount || 0;
-        const rentPaid = paymentsByTenant[activeTenant.id] || 0;
+        const rentPaid = paymentsByTenant[tenantIdentifier] || 0;
         const balance = rentDue - rentPaid;
 
         let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
@@ -103,11 +104,10 @@ export function RentRollTable() {
             paymentStatus = 'overpaid';
         }
 
-
         return {
             propertyId: p.id,
             propertyName: p.name,
-            tenantId: activeTenant.id,
+            tenantId: tenantIdentifier,
             tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
             tenantEmail: activeTenant.email,
             rentAmount: rentDue,
@@ -195,4 +195,3 @@ export function RentRollTable() {
     </Card>
   );
 }
-
