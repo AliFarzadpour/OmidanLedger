@@ -33,19 +33,8 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   l1: string; setL1: (val: string) => void;
   l2: string; setL2: (val: string) => void;
 }) {
-  const [customL1, setCustomL1] = useState('');
-  const [customL2, setCustomL2] = useState('');
-  
-  const l1Options = l0 ? Object.keys(CATEGORY_MAP[l0 as L0Category] || {}) : [];
-  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category] && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
-
-  useEffect(() => {
-    if (customL1) setL1(customL1);
-  }, [customL1, setL1]);
-
-  useEffect(() => {
-    if (customL2) setL2(customL2);
-  }, [customL2, setL2]);
+  const l1Options = (l0 && CATEGORY_MAP[l0 as L0Category]) ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
+  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category]?.[l1 as keyof typeof CATEGORY_MAP[L0Category]]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
 
 
   return (
@@ -62,27 +51,27 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
         <div className="grid gap-2">
             <Label htmlFor="l1">Financial Category (L1)</Label>
             <div className="flex gap-2">
-                <Select value={l1} onValueChange={val => { setL1(val); setL2(''); setCustomL1(''); }} disabled={!l0}>
+                <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0}>
                     <SelectTrigger id="l1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
                         <SelectItem value="--add-new--">...Add New L1</SelectItem>
                     </SelectContent>
                 </Select>
-                {l1 === '--add-new--' && <Input placeholder="New L1 Category" value={customL1} onChange={e => setCustomL1(e.target.value)} />}
+                {l1 === '--add-new--' && <Input placeholder="New L1 Category" onChange={e => setL1(e.target.value)} />}
             </div>
         </div>
         <div className="grid gap-2">
             <Label htmlFor="l2">Tax Category (L2)</Label>
             <div className="flex gap-2">
-                <Select value={l2} onValueChange={val => { setL2(val); setCustomL2(''); }} disabled={!l1 || l1 === '--add-new--'}>
+                <Select value={l2} onValueChange={val => { setL2(val); }} disabled={!l1 || l1 === '--add-new--'}>
                     <SelectTrigger id="l2"><SelectValue /></SelectTrigger>
                     <SelectContent>
                         {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                          <SelectItem value="--add-new--">...Add New L2</SelectItem>
                     </SelectContent>
                 </Select>
-                 {l2 === '--add-new--' && <Input placeholder="New L2 Category" value={customL2} onChange={e => setCustomL2(e.target.value)} />}
+                 {l2 === '--add-new--' && <Input placeholder="New L2 Category" onChange={e => setL2(e.target.value)} />}
             </div>
         </div>
     </div>
