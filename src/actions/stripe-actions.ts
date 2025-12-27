@@ -1,0 +1,69 @@
+'use server';
+
+import Stripe from 'stripe';
+
+// Initialize Stripe with the secret key from environment variables
+// Ensure STRIPE_SECRET_KEY is set in your .env file
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2024-06-20',
+});
+
+interface CreateTenantInvoiceData {
+  landlordAccountId: string;
+  tenantEmail: string;
+  amount: number;
+  description: string;
+}
+
+/**
+ * This server action creates and sends a Stripe invoice to a tenant
+ * on behalf of a connected landlord account.
+ */
+export async function createTenantInvoice(data: CreateTenantInvoiceData) {
+  const { landlordAccountId, tenantEmail, amount, description } = data;
+
+  if (!landlordAccountId || !tenantEmail || !amount || !description) {
+    throw new Error('Missing required invoice data.');
+  }
+
+  try {
+    // 1. Create or retrieve the Tenant as a Stripe Customer on the Landlord's account
+    const customer = await stripe.customers.create({
+      email: tenantEmail,
+    }, { stripeAccount: landlordAccountId });
+
+    // 2. Create an Invoice Item (the actual "line item" for rent/utilities)
+    await stripe.invoiceItems.create({
+      customer: customer.id,
+      amount: Math.round(amount * 100), // Stripe uses cents, ensure it's an integer
+      currency: 'usd',
+      description: description,
+    }, { stripeAccount: landlordAccountId });
+
+    // 3. Generate the Invoice and prepare it for sending
+    const invoice = await stripe.invoices.create({
+      customer: customer.id,
+      collection_method: 'send_invoice', // Sends an email with a payment link
+      days_until_due: 7,
+      on_behalf_of: landlordAccountId, // Makes the invoice look like it's from the landlord
+    }, { stripeAccount: landlordAccountId });
+
+    // 4. Finalize the invoice so it can be paid
+    await stripe.invoices.finalizeInvoice(invoice.id, { stripeAccount: landlordAccountId });
+    
+    const finalizedInvoice = await stripe.invoices.retrieve(invoice.id, {
+        stripeAccount: landlordAccountId,
+    });
+
+    if (!finalizedInvoice.hosted_invoice_url) {
+        throw new Error("Failed to retrieve the hosted invoice URL after finalization.");
+    }
+
+    return { success: true, invoiceUrl: finalizedInvoice.hosted_invoice_url };
+    
+  } catch (error: any) {
+    console.error("Stripe Invoicing Error:", error);
+    // Re-throw a more user-friendly error to be caught by the client
+    throw new Error(error.message || 'An internal error occurred while creating the invoice.');
+  }
+}
