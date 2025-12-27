@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
@@ -45,74 +46,75 @@ function StatusCard({ status, message, children }: { status: 'loading' | 'succes
     );
 }
 
-
 export default function StripeReturnPage() {
-    const { user, isUserLoading } = useUser();
+    const { user, isUserLoading: isAuthLoading } = useUser(); 
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [message, setMessage] = useState('Waiting for user session...');
+    const [message, setMessage] = useState('Initializing session...');
     const [isPending, startTransition] = useTransition();
 
-    const handleVerify = () => {
-        if (!user?.uid) {
+    // AUTO-VERIFY: This triggers the moment the user session is finally ready
+    useEffect(() => {
+        if (user?.uid && status === 'idle') {
+            handleVerify();
+        } else if (!isAuthLoading && !user) {
             setStatus('error');
-            setMessage('User session not found. Please log in again.');
-            return;
-        };
+            setMessage('No active session found. Please log in again.');
+        }
+    }, [user, isAuthLoading, status]);
+
+    const handleVerify = () => {
+        if (!user?.uid) return; // Guard clause
 
         setStatus('loading');
-        setMessage('Please wait while we confirm your Stripe account status. Do not close this page.');
-        
+        setMessage('Confirming your setup with Stripe...');
+
         startTransition(async () => {
             try {
                 const result = await checkStripeAccountStatus(user.uid);
                 
                 if (result.isReady) {
                     setStatus('success');
-                    setMessage('Your account is connected and ready to receive payments.');
+                    setMessage('Setup complete! You can now collect rent and manage property expenses.');
                 } else {
                     setStatus('error');
                     let reason = 'Onboarding was not completed.';
-                    if (!result.detailsSubmitted) reason = "Required details were not submitted to Stripe.";
-                    else if (!result.payoutsEnabled) reason = "Payouts are not yet enabled by Stripe.";
-                    setMessage(`Verification failed. ${reason} Please return to your settings and try again.`);
+                    if (!result.detailsSubmitted) reason = "Identity verification is still required.";
+                    else if (!result.payoutsEnabled) reason = "Stripe is still processing your payout details.";
+                    setMessage(`Verification failed: ${reason}`);
                 }
             } catch (error: any) {
-                console.error("Verification Error:", error);
+                console.error("Stripe Verify Error:", error);
                 setStatus('error');
-                setMessage(error.message || "An unexpected error occurred during verification.");
+                setMessage(error.message || "An unexpected error occurred.");
             }
         });
     }
 
-    // Automatically trigger verification once the user is available.
-    useEffect(() => {
-        if (user?.uid && status === 'idle') {
-            handleVerify();
-        }
-    }, [user, status]);
-
-
-    if (isUserLoading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-slate-50">
-                <StatusCard status="loading" message="Loading user profile..." />
-            </div>
-        );
-    }
-
     return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50">
-            <StatusCard status={status} message={message}>
+            <StatusCard 
+                status={isAuthLoading ? 'loading' : status} 
+                message={isAuthLoading ? 'Waiting for user session...' : message}
+            >
+                {/* Only show button if NOT loading and NOT success */}
+                {status === 'idle' && !isAuthLoading && (
+                    <Button onClick={handleVerify} disabled={isPending}>
+                        {isPending ? <Loader2 className="animate-spin mr-2" /> : null}
+                        Verify Status
+                    </Button>
+                )}
+                
                 {status === 'success' && (
                     <Link href="/dashboard/settings">
-                        <Button>Return to Settings</Button>
+                        <Button className="w-full">Return to Dashboard</Button>
                     </Link>
                 )}
+
                 {status === 'error' && (
-                    <div className="flex gap-2 justify-center">
+                    <div className="flex flex-col gap-3">
                         <Button onClick={handleVerify} variant="default">Try Again</Button>
                         <Link href="/dashboard/settings">
-                            <Button variant="outline">Return to Settings</Button>
+                            <Button variant="outline" className="w-full">Back to Settings</Button>
                         </Link>
                     </div>
                 )}
