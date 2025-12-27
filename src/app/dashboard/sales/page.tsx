@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 import { EnterBillDialog } from '@/components/dashboard/sales/enter-bill-dialog';
+import { CreateChargeDialog } from '@/components/dashboard/sales/CreateChargeDialog';
 
 export default function SalesHubPage() {
   const router = useRouter();
@@ -66,9 +67,7 @@ export default function SalesHubPage() {
             <CardDescription>Charge for repairs, utilities, or late fees.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" asChild>
-              <Link href="/dashboard/sales/services">Create Charge</Link>
-            </Button>
+            <CreateChargeDialog />
           </CardContent>
         </Card>
 
