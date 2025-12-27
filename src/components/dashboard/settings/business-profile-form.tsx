@@ -4,7 +4,7 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   Form,
   FormControl,
@@ -75,11 +75,25 @@ export function BusinessProfileForm() {
 
   const form = useForm<BusinessProfileFormValues>({
     resolver: zodResolver(businessProfileSchema),
-    defaultValues: {},
+    // FIX: Provide default empty strings to prevent uncontrolled -> controlled error.
+    defaultValues: {
+      businessName: '',
+      businessType: '',
+      industry: '',
+      taxId: '',
+      address: '',
+      city: '',
+      state: '',
+      zip: '',
+      country: '',
+      logoUrl: '',
+    },
   });
 
   useEffect(() => {
     if (userData?.businessProfile) {
+      // When data loads, reset the form with the fetched values.
+      // This is safe because the form is already controlled.
       form.reset(userData.businessProfile);
     }
   }, [userData, form]);
