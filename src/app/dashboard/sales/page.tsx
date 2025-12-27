@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -16,6 +17,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 import { EnterBillDialog } from '@/components/dashboard/sales/enter-bill-dialog';
 import { CreateChargeDialog } from '@/components/dashboard/sales/CreateChargeDialog';
+import { useEffect, useState } from 'react';
+
+// Client-side-only wrapper to prevent hydration errors
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [hasMounted, setHasMounted] = useState(false);
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  if (!hasMounted) {
+    return null;
+  }
+
+  return <>{children}</>;
+}
+
 
 export default function SalesHubPage() {
   const router = useRouter();
@@ -49,11 +67,13 @@ export default function SalesHubPage() {
             <CardDescription>Log monthly rent payments from tenants.</CardDescription>
           </CardHeader>
           <CardContent>
+            <ClientOnly>
              <EnterBillDialog 
                 triggerButton={
                     <Button className="w-full bg-green-600 hover:bg-green-700">Record Payment</Button>
                 } 
              />
+            </ClientOnly>
           </CardContent>
         </Card>
 
@@ -67,7 +87,9 @@ export default function SalesHubPage() {
             <CardDescription>Charge for repairs, utilities, or late fees.</CardDescription>
           </CardHeader>
           <CardContent>
-            <CreateChargeDialog />
+            <ClientOnly>
+              <CreateChargeDialog />
+            </ClientOnly>
           </CardContent>
         </Card>
 
