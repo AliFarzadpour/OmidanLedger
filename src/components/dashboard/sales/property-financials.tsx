@@ -7,7 +7,7 @@ import { collection, query, getDocs, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Wrench, TrendingUp } from 'lucide-react';
+import { Wrench, TrendingUp, HandCoins } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatCurrency } from '@/lib/format';
@@ -15,7 +15,7 @@ import { formatCurrency } from '@/lib/format';
 interface PropertyFinancialsProps {
   propertyId: string;
   propertyName: string;
-  view: 'income' | 'expenses';
+  view: 'income' | 'expenses' | 'deposits';
 }
 
 type Transaction = {
@@ -61,13 +61,17 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                 const data = txDoc.data();
                 const isForProperty = data.costCenter === propertyId;
                 const categoryL0 = data.categoryHierarchy?.l0 || '';
+                const categoryL1 = data.categoryHierarchy?.l1 || '';
 
                 let include = false;
                 if (view === 'income' && isForProperty && categoryL0 === 'Income') {
                     include = true;
                 } else if (view === 'expenses' && isForProperty && categoryL0 === 'Expense') {
                     include = true;
+                } else if (view === 'deposits' && isForProperty && categoryL0 === 'Liability' && categoryL1 === 'Tenant Deposits') {
+                    include = true;
                 }
+
 
                 if (include) {
                     fetchedTxs.push({ id: txDoc.id, ...data } as Transaction);
@@ -120,14 +124,23 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
   }, [groupedTransactions]);
 
   const isIncome = view === 'income';
+  const isDeposit = view === 'deposits';
+
+  const viewConfig = {
+      income: { title: 'Income Ledger', desc: 'Rent and fees collected', color: 'text-green-600', icon: <TrendingUp className="h-8 w-8 text-slate-200" /> },
+      expenses: { title: 'Expense Ledger', desc: 'Maintenance, utilities, and tax', color: 'text-red-600', icon: <Wrench className="h-8 w-8 text-slate-200" /> },
+      deposits: { title: 'Deposit Ledger', desc: 'Security deposits held and returned', color: 'text-blue-600', icon: <HandCoins className="h-8 w-8 text-slate-200" /> },
+  }
+
+  const currentView = viewConfig[view];
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-            <CardTitle>{isIncome ? "Income Ledger" : "Expense Ledger"}</CardTitle>
+            <CardTitle>{currentView.title}</CardTitle>
             <CardDescription>
-                {isIncome ? "Rent and fees collected" : "Maintenance, utilities, and tax"} for {propertyName}.
+                {currentView.desc} for {propertyName}.
             </CardDescription>
         </div>
         <div className="flex items-center gap-4">
@@ -139,7 +152,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
             </Select>
             <div className="text-right">
                 <p className="text-sm text-muted-foreground">Total for {selectedYear}</p>
-                <p className={`text-2xl font-bold ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
+                <p className={`text-2xl font-bold ${currentView.color}`}>
                     {formatCurrency(Math.abs(totalAmount))}
                 </p>
             </div>
@@ -182,8 +195,8 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                                                 {tx.categoryHierarchy?.l2 || 'N/A'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className={`text-right font-medium ${isIncome ? 'text-green-600' : 'text-red-600'}`}>
-                                            {isIncome ? '+' : ''}
+                                        <TableCell className={`text-right font-medium ${tx.amount > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                            {tx.amount > 0 ? '+' : ''}
                                             {formatCurrency(tx.amount)}
                                         </TableCell>
                                     </TableRow>
@@ -195,8 +208,8 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
                     <TableRow>
                         <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                             <div className="flex flex-col items-center justify-center gap-2">
-                                {isIncome ? <TrendingUp className="h-8 w-8 text-slate-200" /> : <Wrench className="h-8 w-8 text-slate-200" />}
-                                <p>No {isIncome ? "income" : "expenses"} found for this property in {selectedYear}.</p>
+                                {currentView.icon}
+                                <p>No {view} found for this property in {selectedYear}.</p>
                             </div>
                         </TableCell>
                     </TableRow>
