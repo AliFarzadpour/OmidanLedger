@@ -467,8 +467,9 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   const [customL1, setCustomL1] = useState('');
   const [customL2, setCustomL2] = useState('');
   
-  const l1Options = l0 ? Object.keys(CATEGORY_MAP[l0 as L0Category] || {}) : [];
-  const l2Options = (l0 && l1 && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
+  const l1Options = (l0 && CATEGORY_MAP[l0 as L0Category]) ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
+  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category] && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
+
 
   useEffect(() => {
     if (customL1) setL1(customL1);
