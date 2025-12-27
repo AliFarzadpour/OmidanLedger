@@ -4,7 +4,7 @@
 import { db } from '@/lib/admin-db';
 import Stripe from 'stripe';
 import { getAuth } from 'firebase-admin/auth';
-import { adminApp } from '@/lib/firebase-admin';
+import { admin } from '@/lib/firebase-admin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
@@ -24,7 +24,7 @@ export async function createStripeAccountLink({
   returnUrl,
   refreshUrl,
 }: CreateAccountLinkArgs) {
-  const auth = getAuth(adminApp);
+  const auth = getAuth(admin);
   // This would typically come from an authenticated session managed by your Next.js auth solution
   // For this example, we'll assume a placeholder or a way to get the current user's ID server-side.
   // In a real app, you'd replace 'HARDCODED_USER_ID' with the actual authenticated user's ID.
