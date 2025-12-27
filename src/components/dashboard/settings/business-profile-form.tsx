@@ -155,16 +155,19 @@ export function BusinessProfileForm() {
         returnUrl: `${origin}/dashboard/stripe/return`,
         refreshUrl: `${origin}/dashboard/settings`,
       });
-
+  
       if (result.success && result.url) {
-        // Direct assignment is usually more reliable than link.click()
-        window.location.href = result.url;
+        // FIX: Open in a new tab to bypass Firebase Studio's iframe restrictions
+        window.open(result.url, '_blank', 'noopener,noreferrer');
+        
+        // Optional: Reset spinner after a delay since the user is in a new tab
+        setTimeout(() => setIsConnectingStripe(false), 2000);
       } else {
         throw new Error("Failed to get Stripe redirect URL.");
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Stripe Connection Failed", description: error.message });
-      setIsConnectingStripe(false); // Reset state so they can try again
+      setIsConnectingStripe(false);
     }
   };
 
