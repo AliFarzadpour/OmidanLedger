@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { CheckCircle2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { checkStripeAccountStatus } from '@/actions/stripe-connect-actions';
+import DashboardLayout from '../../layout';
 
 function StatusCard({ status, message, children }: { status: 'loading' | 'success' | 'error' | 'idle', message: string, children?: React.ReactNode }) {
     const icons = {
@@ -79,25 +80,27 @@ export default function StripeReturnPage() {
 
 
     return (
-        <div className="flex items-center justify-center min-h-[60vh]">
-            <StatusCard status={status} message={message}>
-                {status === 'idle' && (
-                    <Button onClick={handleVerify}>Verify Status</Button>
-                )}
-                 {status === 'success' && (
-                    <Link href="/dashboard/settings">
-                        <Button>Return to Settings</Button>
-                    </Link>
-                )}
-                 {status === 'error' && (
-                    <div className="flex gap-2 justify-center">
-                        <Button onClick={handleVerify} variant="default">Try Again</Button>
+        <DashboardLayout>
+            <div className="flex items-center justify-center min-h-[60vh]">
+                <StatusCard status={status} message={message}>
+                    {status === 'idle' && (
+                        <Button onClick={handleVerify}>Verify Status</Button>
+                    )}
+                    {status === 'success' && (
                         <Link href="/dashboard/settings">
-                            <Button variant="outline">Return to Settings</Button>
+                            <Button>Return to Settings</Button>
                         </Link>
-                    </div>
-                )}
-            </StatusCard>
-        </div>
+                    )}
+                    {status === 'error' && (
+                        <div className="flex gap-2 justify-center">
+                            <Button onClick={handleVerify} variant="default">Try Again</Button>
+                            <Link href="/dashboard/settings">
+                                <Button variant="outline">Return to Settings</Button>
+                            </Link>
+                        </div>
+                    )}
+                </StatusCard>
+            </div>
+        </DashboardLayout>
     );
 }
