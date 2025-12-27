@@ -54,11 +54,14 @@ export default function StripeReturnPage() {
 
     // AUTO-VERIFY: This triggers the moment the user session is finally ready
     useEffect(() => {
-        if (user?.uid && status === 'idle') {
+        // Only run if auth is definitely finished loading AND we have a user
+        if (!isAuthLoading && user?.uid && status === 'idle') {
             handleVerify();
-        } else if (!isAuthLoading && !user) {
+        } 
+        // If auth is finished and NO user is found, then show the error
+        else if (!isAuthLoading && !user && status === 'idle') {
             setStatus('error');
-            setMessage('No active session found. Please log in again.');
+            setMessage('Establishing secure session... Please wait a moment.');
         }
     }, [user, isAuthLoading, status]);
 
