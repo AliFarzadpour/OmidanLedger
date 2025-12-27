@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
@@ -48,43 +47,62 @@ function StatusCard({ status, message, children }: { status: 'loading' | 'succes
 
 
 export default function StripeReturnPage() {
-    const { user } = useUser();
+    const { user, isUserLoading } = useUser();
     const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-    const [message, setMessage] = useState('Click the button below to confirm your Stripe account status.');
+    const [message, setMessage] = useState('Waiting for user session...');
     const [isPending, startTransition] = useTransition();
 
     const handleVerify = () => {
-        if (user?.uid) {
-            setStatus('loading');
-            setMessage('Please wait while we confirm your Stripe account status. Do not close this page.');
-            startTransition(async () => {
-                try {
-                    const result = await checkStripeAccountStatus(user.uid);
-                    if (result.isReady) {
-                        setStatus('success');
-                        setMessage('Your account is connected and ready to receive payments.');
-                    } else {
-                        setStatus('error');
-                        let reason = 'Onboarding was not completed.';
-                        if (!result.detailsSubmitted) reason = "Required details were not submitted to Stripe.";
-                        else if (!result.payoutsEnabled) reason = "Payouts are not yet enabled by Stripe.";
-                        setMessage(`Verification failed. ${reason} Please return to your settings and try again.`);
-                    }
-                } catch (error: any) {
+        if (!user?.uid) {
+            setStatus('error');
+            setMessage('User session not found. Please log in again.');
+            return;
+        };
+
+        setStatus('loading');
+        setMessage('Please wait while we confirm your Stripe account status. Do not close this page.');
+        
+        startTransition(async () => {
+            try {
+                const result = await checkStripeAccountStatus(user.uid);
+                
+                if (result.isReady) {
+                    setStatus('success');
+                    setMessage('Your account is connected and ready to receive payments.');
+                } else {
                     setStatus('error');
-                    setMessage(error.message);
+                    let reason = 'Onboarding was not completed.';
+                    if (!result.detailsSubmitted) reason = "Required details were not submitted to Stripe.";
+                    else if (!result.payoutsEnabled) reason = "Payouts are not yet enabled by Stripe.";
+                    setMessage(`Verification failed. ${reason} Please return to your settings and try again.`);
                 }
-            });
-        }
+            } catch (error: any) {
+                console.error("Verification Error:", error);
+                setStatus('error');
+                setMessage(error.message || "An unexpected error occurred during verification.");
+            }
+        });
     }
 
+    // Automatically trigger verification once the user is available.
+    useEffect(() => {
+        if (user?.uid && status === 'idle') {
+            handleVerify();
+        }
+    }, [user, status]);
+
+
+    if (isUserLoading) {
+        return (
+            <div className="flex items-center justify-center min-h-screen bg-slate-50">
+                <StatusCard status="loading" message="Loading user profile..." />
+            </div>
+        );
+    }
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-slate-50">
             <StatusCard status={status} message={message}>
-                {status === 'idle' && (
-                    <Button onClick={handleVerify}>Verify Status</Button>
-                )}
                 {status === 'success' && (
                     <Link href="/dashboard/settings">
                         <Button>Return to Settings</Button>
