@@ -31,6 +31,20 @@ import Image from 'next/image';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { createStripeAccountLink } from '@/actions/stripe-connect-actions';
 
+// This wrapper ensures the component only renders on the client side.
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  if (!hasMounted) {
+    return null;
+  }
+  return <>{children}</>;
+}
+
+
 const businessProfileSchema = z.object({
   businessName: z.string().optional(),
   businessType: z.string().optional(),
@@ -191,18 +205,20 @@ export function BusinessProfileForm() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {stripeStatus === 'active' ? (
-                 <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-md border border-green-200 text-sm font-medium">
-                    <CheckCircle2 className="h-5 w-5" />
-                    Your account is connected and ready to receive payments.
-                </div>
-            ) : (
-                <Button type="button" onClick={handleStripeConnect} disabled={isConnectingStripe}>
-                    {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
-                    {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
-                </Button>
-            )}
-             {stripeStatus === 'incomplete' && <p className="text-sm text-destructive mt-2">Your Stripe account setup is incomplete. Please re-connect to finish.</p>}
+            <ClientOnly>
+                {stripeStatus === 'active' ? (
+                     <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-md border border-green-200 text-sm font-medium">
+                        <CheckCircle2 className="h-5 w-5" />
+                        Your account is connected and ready to receive payments.
+                    </div>
+                ) : (
+                    <Button type="button" onClick={handleStripeConnect} disabled={isConnectingStripe}>
+                        {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+                        {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
+                    </Button>
+                )}
+                 {stripeStatus === 'incomplete' && <p className="text-sm text-destructive mt-2">Your Stripe account setup is incomplete. Please re-connect to finish.</p>}
+            </ClientOnly>
           </CardContent>
         </Card>
 
@@ -213,9 +229,11 @@ export function BusinessProfileForm() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-6">
-              <div className="w-24 h-24 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
-                {logoUrl ? <Image src={logoUrl} alt="Logo" width={96} height={96} className="object-contain" /> : <Building2 className="h-10 w-10 text-muted-foreground" />}
-              </div>
+              <ClientOnly>
+                <div className="w-24 h-24 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
+                  {logoUrl ? <Image src={logoUrl} alt="Logo" width={96} height={96} className="object-contain" /> : <Building2 className="h-10 w-10 text-muted-foreground" />}
+                </div>
+              </ClientOnly>
               <div className="flex-1 space-y-2">
                   <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
                       <Upload className="mr-2 h-4 w-4" />
