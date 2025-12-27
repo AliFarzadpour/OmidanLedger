@@ -43,6 +43,11 @@ service cloud.firestore {
             allow read, write, delete: if isOwner(userId);
         }
     }
+    
+    // NEW RULE: Allow users to list their own transactions across all bank accounts
+    match /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId} {
+        allow list: if isOwner(userId);
+    }
 
     match /properties/{propertyId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
