@@ -157,12 +157,13 @@ export function BusinessProfileForm() {
         });
 
         if (result.success && result.url) {
-            // FIX: Use window.top.location.href to break out of the iframe
-            if (window.top) {
-                window.top.location.href = result.url;
-            } else {
-                window.location.href = result.url;
-            }
+            // FIX: Use a dynamically created link to navigate, ensuring it breaks out of iframes.
+            const link = document.createElement('a');
+            link.href = result.url;
+            link.target = '_top'; // This is crucial for breaking out of the iframe.
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         } else {
             throw new Error("Failed to get Stripe redirect URL.");
         }
@@ -171,6 +172,7 @@ export function BusinessProfileForm() {
         setIsConnectingStripe(false);
     }
   };
+
 
   if (isLoadingUser) {
     return <Card><CardHeader><Skeleton className="h-7 w-1/4" /></CardHeader><CardContent><Skeleton className="h-40 w-full" /></CardContent></Card>;
@@ -237,7 +239,7 @@ export function BusinessProfileForm() {
           <CardContent className="space-y-8">
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
               <FormField control={form.control} name="businessName" render={({ field }) => (
-                <FormItem><FormLabel>Business Name</FormLabel><FormControl><Input placeholder="e.g., Acme Inc." {...field} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Business Name</FormLabel><FormControl><Input placeholder="e.g., Acme Inc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="businessType" render={({ field }) => (
                 <FormItem><FormLabel>Business Type</FormLabel><RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2">
@@ -247,24 +249,24 @@ export function BusinessProfileForm() {
             </div>
             <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
                 <FormField control={form.control} name="industry" render={({ field }) => (
-                  <FormItem><FormLabel>Industry</FormLabel><FormControl><Input placeholder="e.g., Real Estate" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Industry</FormLabel><FormControl><Input placeholder="e.g., Real Estate" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="taxId" render={({ field }) => (
-                  <FormItem><FormLabel>Tax ID / EIN</FormLabel><FormControl><Input placeholder="XX-XXXXXXX" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>Tax ID / EIN</FormLabel><FormControl><Input placeholder="XX-XXXXXXX" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                 )} />
             </div>
             <FormField control={form.control} name="address" render={({ field }) => (
-              <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input placeholder="123 Main St" {...field} /></FormControl><FormMessage /></FormItem>
+              <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input placeholder="123 Main St" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
             )} />
             <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
                  <FormField control={form.control} name="city" render={({ field }) => (
-                  <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="San Francisco" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="San Francisco" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="state" render={({ field }) => (
-                  <FormItem><FormLabel>State / Province</FormLabel><FormControl><Input placeholder="CA" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>State / Province</FormLabel><FormControl><Input placeholder="CA" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                 )} />
                 <FormField control={form.control} name="zip" render={({ field }) => (
-                  <FormItem><FormLabel>ZIP / Postal Code</FormLabel><FormControl><Input placeholder="94103" {...field} /></FormControl><FormMessage /></FormItem>
+                  <FormItem><FormLabel>ZIP / Postal Code</FormLabel><FormControl><Input placeholder="94103" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                 )} />
             </div>
 
@@ -279,3 +281,5 @@ export function BusinessProfileForm() {
     </Form>
   );
 }
+
+    
