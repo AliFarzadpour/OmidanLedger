@@ -1,21 +1,22 @@
-
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { CheckCircle2, Loader2, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { useUser } from '@/firebase';
 import { checkStripeAccountStatus } from '@/actions/stripe-connect-actions';
 
-function StatusCard({ status, message, children }: { status: 'loading' | 'success' | 'error', message: string, children?: React.ReactNode }) {
+function StatusCard({ status, message, children }: { status: 'loading' | 'success' | 'error' | 'idle', message: string, children?: React.ReactNode }) {
     const icons = {
+        idle: <RefreshCw className="h-10 w-10 text-primary" />,
         loading: <Loader2 className="h-10 w-10 text-primary animate-spin" />,
         success: <CheckCircle2 className="h-10 w-10 text-green-600" />,
         error: <AlertCircle className="h-10 w-10 text-destructive" />,
     };
     const colors = {
+        idle: "bg-primary/10",
         loading: "bg-primary/10",
         success: "bg-green-100",
         error: "bg-destructive/10",
@@ -28,6 +29,7 @@ function StatusCard({ status, message, children }: { status: 'loading' | 'succes
                     {icons[status]}
                 </div>
                 <CardTitle className="mt-4 text-2xl">
+                    {status === 'idle' && 'Ready to Verify'}
                     {status === 'loading' && 'Verifying Your Account...'}
                     {status === 'success' && 'Setup Complete!'}
                     {status === 'error' && 'Verification Failed'}
@@ -46,12 +48,14 @@ function StatusCard({ status, message, children }: { status: 'loading' | 'succes
 
 export default function StripeReturnPage() {
     const { user } = useUser();
-    const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
-    const [message, setMessage] = useState('Please wait while we confirm your Stripe account status. Do not close this page.');
+    const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+    const [message, setMessage] = useState('Click the button below to confirm your Stripe account status.');
     const [isPending, startTransition] = useTransition();
 
-    useEffect(() => {
+    const handleVerify = () => {
         if (user?.uid) {
+            setStatus('loading');
+            setMessage('Please wait while we confirm your Stripe account status. Do not close this page.');
             startTransition(async () => {
                 try {
                     const result = await checkStripeAccountStatus(user.uid);
@@ -71,16 +75,29 @@ export default function StripeReturnPage() {
                 }
             });
         }
-    }, [user]);
+    }
+
 
     return (
         <div className="flex items-center justify-center min-h-[60vh]">
             <StatusCard status={status} message={message}>
-                <Link href="/dashboard/settings">
-                    <Button>Return to Settings</Button>
-                </Link>
+                {status === 'idle' && (
+                    <Button onClick={handleVerify}>Verify Status</Button>
+                )}
+                 {status === 'success' && (
+                    <Link href="/dashboard/settings">
+                        <Button>Return to Settings</Button>
+                    </Link>
+                )}
+                 {status === 'error' && (
+                    <div className="flex gap-2 justify-center">
+                        <Button onClick={handleVerify} variant="default">Try Again</Button>
+                        <Link href="/dashboard/settings">
+                            <Button variant="outline">Return to Settings</Button>
+                        </Link>
+                    </div>
+                )}
             </StatusCard>
         </div>
     );
 }
-
