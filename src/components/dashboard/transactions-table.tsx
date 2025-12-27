@@ -28,11 +28,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'OPERATING EXPENSE': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'EXPENSE': 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300',
-  'EQUITY': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  'OPERATING EXPENSE': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+  'EXPENSE': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+  'ASSET': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
   'LIABILITY': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'ASSET': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'EQUITY': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
 };
 
 interface DataSource {
@@ -468,7 +468,7 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   const [customL2, setCustomL2] = useState('');
   
   const l1Options = (l0 && CATEGORY_MAP[l0 as L0Category]) ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
-  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category] && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
+  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category]?.[l1 as keyof typeof CATEGORY_MAP[L0Category]]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
 
 
   useEffect(() => {
@@ -550,7 +550,7 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         <Popover open={isOpen} onOpenChange={setIsOpen}>
             <PopoverTrigger asChild>
                 <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0] || 'bg-slate-100')}>
+                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0?.toUpperCase()] || 'bg-slate-100')}>
                         {cats.l0}
                         <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
                     </Badge>
