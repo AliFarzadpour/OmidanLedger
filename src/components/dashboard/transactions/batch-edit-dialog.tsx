@@ -13,7 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Loader2, PlusCircle } from 'lucide-react';
 import type { Transaction } from '../reports/audit/types';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CATEGORY_MAP, L0Category, L1Category, L2Category } from '@/lib/categories';
+import { CATEGORY_MAP, L0Category } from '@/lib/categories';
 
 interface BatchEditDialogProps {
   isOpen: boolean;
@@ -33,9 +33,8 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   l1: string; setL1: (val: string) => void;
   l2: string; setL2: (val: string) => void;
 }) {
-  const l1Options = (l0 && CATEGORY_MAP[l0 as L0Category]) ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
-  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category]?.[l1 as keyof typeof CATEGORY_MAP[L0Category]]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
-
+  const l1Options = l0 && CATEGORY_MAP[l0 as L0Category] ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
+  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category] && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
 
   return (
     <div className="space-y-4 p-4 border bg-muted/50 rounded-lg">
@@ -52,7 +51,7 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
             <Label htmlFor="l1">Financial Category (L1)</Label>
             <div className="flex gap-2">
                 <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0}>
-                    <SelectTrigger id="l1"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="l1"><SelectValue placeholder="Select L1..." /></SelectTrigger>
                     <SelectContent>
                         {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
                         <SelectItem value="--add-new--">...Add New L1</SelectItem>
@@ -65,7 +64,7 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
             <Label htmlFor="l2">Tax Category (L2)</Label>
             <div className="flex gap-2">
                 <Select value={l2} onValueChange={val => { setL2(val); }} disabled={!l1 || l1 === '--add-new--'}>
-                    <SelectTrigger id="l2"><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="l2"><SelectValue placeholder="Select L2..." /></SelectTrigger>
                     <SelectContent>
                         {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
                          <SelectItem value="--add-new--">...Add New L2</SelectItem>
