@@ -150,6 +150,8 @@ export function BusinessProfileForm() {
     try {
         const { origin } = window.location;
         const result = await createStripeAccountLink({
+            userId: user.uid,
+            userEmail: user.email,
             returnUrl: `${origin}/dashboard/stripe/return`,
             refreshUrl: `${origin}/dashboard/settings`,
         });

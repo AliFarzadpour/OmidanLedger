@@ -3,14 +3,14 @@
 
 import { db } from '@/lib/admin-db';
 import Stripe from 'stripe';
-import { getAuth } from 'firebase-admin/auth';
-import { admin } from '@/lib/firebase-admin';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-06-20',
 });
 
 interface CreateAccountLinkArgs {
+  userId: string;
+  userEmail: string;
   returnUrl: string;
   refreshUrl: string;
 }
@@ -18,18 +18,16 @@ interface CreateAccountLinkArgs {
 /**
  * Creates a Stripe Express account for a user if they don't have one,
  * and then generates a one-time link for them to complete the onboarding process.
- * This function now uses the authenticated user from the server context.
  */
 export async function createStripeAccountLink({
+  userId,
+  userEmail,
   returnUrl,
   refreshUrl,
 }: CreateAccountLinkArgs) {
-  const auth = getAuth(admin);
-  // This would typically come from an authenticated session managed by your Next.js auth solution
-  // For this example, we'll assume a placeholder or a way to get the current user's ID server-side.
-  // In a real app, you'd replace 'HARDCODED_USER_ID' with the actual authenticated user's ID.
-  const userId = 'HARDCODED_USER_ID_NEEDS_REPLACEMENT'; // This needs a real auth system to work.
-  const userEmail = 'placeholder@example.com'; // Same here.
+  if (!userId || !userEmail) {
+    throw new Error('User ID and email are required.');
+  }
 
   try {
     const userDocRef = db.collection('users').doc(userId);
