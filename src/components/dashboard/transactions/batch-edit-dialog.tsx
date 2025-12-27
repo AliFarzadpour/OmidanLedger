@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PlusCircle } from 'lucide-react';
 import type { Transaction } from '../reports/audit/types';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CATEGORY_MAP, L0Category, L1Category, L2Category } from '@/lib/categories';
 
 interface BatchEditDialogProps {
   isOpen: boolean;
@@ -26,18 +27,82 @@ interface Property {
     units: { id: string; unitNumber: string; }[]
 }
 
+function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
+  l0: string; setL0: (val: string) => void;
+  l1: string; setL1: (val: string) => void;
+  l2: string; setL2: (val: string) => void;
+}) {
+  const [customL1, setCustomL1] = useState('');
+  const [customL2, setCustomL2] = useState('');
+  
+  const l1Options = l0 ? Object.keys(CATEGORY_MAP[l0 as L0Category] || {}) : [];
+  const l2Options = (l0 && l1 && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
+
+  useEffect(() => {
+    if (customL1) setL1(customL1);
+  }, [customL1, setL1]);
+
+  useEffect(() => {
+    if (customL2) setL2(customL2);
+  }, [customL2, setL2]);
+
+
+  return (
+    <div className="space-y-4 p-4 border bg-muted/50 rounded-lg">
+        <div className="grid gap-2">
+            <Label htmlFor="l0">Primary Category (L0)</Label>
+            <Select value={l0} onValueChange={val => { setL0(val); setL1(''); setL2(''); }}>
+                <SelectTrigger id="l0"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    {Object.keys(CATEGORY_MAP).map(key => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+                </SelectContent>
+            </Select>
+        </div>
+        <div className="grid gap-2">
+            <Label htmlFor="l1">Financial Category (L1)</Label>
+            <div className="flex gap-2">
+                <Select value={l1} onValueChange={val => { setL1(val); setL2(''); setCustomL1(''); }} disabled={!l0}>
+                    <SelectTrigger id="l1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+                        <SelectItem value="--add-new--">...Add New L1</SelectItem>
+                    </SelectContent>
+                </Select>
+                {l1 === '--add-new--' && <Input placeholder="New L1 Category" value={customL1} onChange={e => setCustomL1(e.target.value)} />}
+            </div>
+        </div>
+        <div className="grid gap-2">
+            <Label htmlFor="l2">Tax Category (L2)</Label>
+            <div className="flex gap-2">
+                <Select value={l2} onValueChange={val => { setL2(val); setCustomL2(''); }} disabled={!l1 || l1 === '--add-new--'}>
+                    <SelectTrigger id="l2"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                        {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                         <SelectItem value="--add-new--">...Add New L2</SelectItem>
+                    </SelectContent>
+                </Select>
+                 {l2 === '--add-new--' && <Input placeholder="New L2 Category" value={customL2} onChange={e => setCustomL2(e.target.value)} />}
+            </div>
+        </div>
+    </div>
+  );
+}
+
+
 export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess }: BatchEditDialogProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
 
+  // Category State
   const [l0, setL0] = useState('');
   const [l1, setL1] = useState('');
   const [l2, setL2] = useState('');
   const [l3, setL3] = useState('');
+
   const [ruleName, setRuleName] = useState('');
-  const [costCenter, setCostCenter] = useState(''); // Default to empty
+  const [costCenter, setCostCenter] = useState('');
   const [properties, setProperties] = useState<Property[]>([]);
 
   useEffect(() => {
@@ -64,12 +129,11 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
   useEffect(() => {
     if (isOpen && transactions.length > 0) {
       const firstTx = transactions[0];
-      const cats = firstTx.categoryHierarchy || { l0: 'Expense', l1: '', l2: '', l3: '' };
+      const cats = firstTx.categoryHierarchy || { l0: 'EXPENSE', l1: '', l2: '', l3: '' };
       setL0(cats.l0);
       setL1(cats.l1);
       setL2(cats.l2);
       setL3(cats.l3);
-      // Reset costCenter to empty when dialog opens
       setCostCenter(''); 
       setRuleName(''); 
     }
@@ -101,12 +165,9 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
           auditStatus: 'audited'
         };
         
-        // If a cost center was selected, update it.
-        // This includes "No Cost Center" which is a valid string.
         if (costCenter) {
-           updateData.costCenter = costCenter;
+           updateData.costCenter = costCenter === 'No Cost Center' ? null : costCenter;
         }
-
 
         batch.update(txRef, updateData);
       });
@@ -178,20 +239,11 @@ export function BatchEditDialog({ isOpen, onOpenChange, transactions, onSuccess 
                 </SelectContent>
              </Select>
           </div>
-          <div className="grid gap-2">
-            <Label htmlFor="l0">Primary Category (l0)</Label>
-            <Input id="l0" value={l0} onChange={(e) => setL0(e.target.value)} placeholder="e.g., Expense" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="l1">Financial Category (l1)</Label>
-            <Input id="l1" value={l1} onChange={(e) => setL1(e.target.value)} placeholder="e.g., Repairs" />
-          </div>
-          <div className="grid gap-2">
-            <Label htmlFor="l2">Tax Category (l2)</Label>
-            <Input id="l2" value={l2} onChange={(e) => setL2(e.target.value)} placeholder="e.g., Line 14 Repairs" />
-          </div>
+
+          <HierarchicalCategorySelector l0={l0} setL0={setL0} l1={l1} setL1={setL1} l2={l2} setL2={setL2} />
+
            <div className="grid gap-2">
-            <Label htmlFor="l3">Details (l3 - Optional)</Label>
+            <Label htmlFor="l3">Details / Memo (L3 - Optional)</Label>
             <Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} placeholder="e.g., Adelyn - HVAC Repair" />
           </div>
 

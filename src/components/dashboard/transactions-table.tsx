@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, DivideSquare } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -22,13 +22,16 @@ import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
+import { CATEGORY_MAP, L0Category } from '@/lib/categories';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 const primaryCategoryColors: Record<string, string> = {
-  'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'Expense': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Equity': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-  'Liability': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'Asset': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'INCOME': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  'OPERATING EXPENSE': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'EXPENSE': 'bg-sky-100 text-sky-800 dark:bg-sky-900 dark:text-sky-300',
+  'EQUITY': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  'LIABILITY': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'ASSET': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 interface DataSource {
@@ -321,7 +324,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             )}
           </div>
 
-
           <Table>
             <TableHeader>
               <TableRow>
@@ -337,7 +339,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                 <TableHead className="p-2"><Button variant="ghost" onClick={() => requestSort('costCenter')}>Cost Center {getSortIcon('costCenter')}</Button></TableHead>
                 <TableHead className="text-right p-2"><Button variant="ghost" onClick={() => requestSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
                 <TableHead className="text-right p-2 w-[80px]">
-                    Actions
+                  <div className="flex items-center justify-end">
+                    <Button variant="ghost" size="icon" onClick={() => requestSort('reviewStatus')}>
+                        <Flag className="h-4 w-4" />
+                        {getSortIcon('reviewStatus')}
+                    </Button>
+                  </div>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -451,6 +458,67 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
   );
 }
 
+function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
+  l0: string; setL0: (val: string) => void;
+  l1: string; setL1: (val: string) => void;
+  l2: string; setL2: (val: string) => void;
+}) {
+  const [customL1, setCustomL1] = useState('');
+  const [customL2, setCustomL2] = useState('');
+  
+  const l1Options = l0 ? Object.keys(CATEGORY_MAP[l0 as L0Category] || {}) : [];
+  const l2Options = (l0 && l1 && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
+
+  useEffect(() => {
+    if (customL1) setL1(customL1);
+  }, [customL1, setL1]);
+
+  useEffect(() => {
+    if (customL2) setL2(customL2);
+  }, [customL2, setL2]);
+
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 items-center gap-4">
+        <Label htmlFor="l0">L0</Label>
+        <Select value={l0} onValueChange={val => { setL0(val); setL1(''); setL2(''); }}>
+            <SelectTrigger id="l0" className="col-span-2 h-8"><SelectValue /></SelectTrigger>
+            <SelectContent>
+                {Object.keys(CATEGORY_MAP).map(key => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+            </SelectContent>
+        </Select>
+      </div>
+       <div className="grid grid-cols-3 items-center gap-4">
+        <Label htmlFor="l1">L1</Label>
+        <div className="col-span-2 flex gap-1">
+            <Select value={l1} onValueChange={val => { setL1(val); setL2(''); setCustomL1(''); }} disabled={!l0}>
+                <SelectTrigger id="l1" className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
+                </SelectContent>
+            </Select>
+            {l1 === '--add-new--' && <Input placeholder="New L1 Category" value={customL1} onChange={e => setCustomL1(e.target.value)} className="h-8"/>}
+        </div>
+      </div>
+       <div className="grid grid-cols-3 items-center gap-4">
+        <Label htmlFor="l2">L2</Label>
+         <div className="col-span-2 flex gap-1">
+            <Select value={l2} onValueChange={val => { setL2(val); setCustomL2(''); }} disabled={!l1 || l1 === '--add-new--'}>
+                <SelectTrigger id="l2" className="h-8"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                    {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
+                </SelectContent>
+            </Select>
+            {l2 === '--add-new--' && <Input placeholder="New L2 Category" value={customL2} onChange={e => setCustomL2(e.target.value)} className="h-8"/>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { l0: string, l1: string, l2: string, l3: string }) => void }) {
     const [isOpen, setIsOpen] = useState(false);
@@ -460,6 +528,14 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     const [l1, setL1] = useState(cats.l1);
     const [l2, setL2] = useState(cats.l2);
     const [l3, setL3] = useState(cats.l3);
+
+    useEffect(() => {
+      setL0(cats.l0);
+      setL1(cats.l1);
+      setL2(cats.l2);
+      setL3(cats.l3);
+    }, [cats, isOpen]);
+
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -486,18 +562,20 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
                     )}
                 </div>
             </PopoverTrigger>
-            <PopoverContent className="w-80">
+            <PopoverContent className="w-96">
                 <form onSubmit={handleSubmit} className="grid gap-4">
                     <div className="space-y-2">
                         <h4 className="font-medium leading-none">Edit Category</h4>
                         <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
                     </div>
+                    
+                    <HierarchicalCategorySelector l0={l0} setL0={setL0} l1={l1} setL1={setL1} l2={l2} setL2={setL2} />
+
                     <div className="grid gap-2">
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l0">L0</Label><Input id="l0" value={l0} onChange={(e) => setL0(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l1">L1</Label><Input id="l1" value={l1} onChange={(e) => setL1(e.target.value)} className="col-span-2 h-8" /></div>
-                        <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l2">L2</Label><Input id="l2" value={l2} onChange={(e) => setL2(e.target.value)} className="col-span-2 h-8" /></div>
-                         <div className="grid grid-cols-3 items-center gap-4"><Label htmlFor="l3">L3</Label><Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} className="col-span-2 h-8" /></div>
+                        <Label htmlFor="l3">Details (L3)</Label>
+                        <Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} className="h-8" />
                     </div>
+
                     <Button type="submit">Confirm & Save</Button>
                 </form>
             </PopoverContent>
