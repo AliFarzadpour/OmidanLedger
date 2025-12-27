@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useMemo, useState } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, collectionGroup } from 'firebase/firestore';
 import {
   Table,
   TableBody,
@@ -60,8 +61,10 @@ export function RentRollTable() {
   
   const paymentsQuery = useMemoFirebase(() => {
       if(!user || !firestore) return null;
+      // CORRECTED: Use a collectionGroup query to scan across all 'transactions' collections for the user.
       return query(
-          collection(firestore, `users/${user.uid}/transactions`),
+          collectionGroup(firestore, 'transactions'), 
+          where('userId', '==', user.uid),
           where('date', '>=', startOfMonth),
           where('date', '<=', endOfMonth),
           where('categoryHierarchy.l2', '==', 'Line 3: Rents Received')
@@ -192,3 +195,4 @@ export function RentRollTable() {
     </Card>
   );
 }
+
