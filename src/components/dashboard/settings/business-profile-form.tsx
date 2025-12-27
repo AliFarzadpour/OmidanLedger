@@ -148,28 +148,23 @@ export function BusinessProfileForm() {
     if (!user?.email) return;
     setIsConnectingStripe(true);
     try {
-        const { origin } = window.location;
-        const result = await createStripeAccountLink({
-            userId: user.uid,
-            userEmail: user.email,
-            returnUrl: `${origin}/dashboard/stripe/return`,
-            refreshUrl: `${origin}/dashboard/settings`,
-        });
+      const { origin } = window.location;
+      const result = await createStripeAccountLink({
+        userId: user.uid,
+        userEmail: user.email,
+        returnUrl: `${origin}/dashboard/stripe/return`,
+        refreshUrl: `${origin}/dashboard/settings`,
+      });
 
-        if (result.success && result.url) {
-            // FIX: Use a dynamically created link to navigate, ensuring it breaks out of iframes.
-            const link = document.createElement('a');
-            link.href = result.url;
-            link.target = '_top'; // This is crucial for breaking out of the iframe.
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        } else {
-            throw new Error("Failed to get Stripe redirect URL.");
-        }
+      if (result.success && result.url) {
+        // Direct assignment is usually more reliable than link.click()
+        window.location.href = result.url;
+      } else {
+        throw new Error("Failed to get Stripe redirect URL.");
+      }
     } catch (error: any) {
-        toast({ variant: "destructive", title: "Stripe Connection Failed", description: error.message });
-        setIsConnectingStripe(false);
+      toast({ variant: "destructive", title: "Stripe Connection Failed", description: error.message });
+      setIsConnectingStripe(false); // Reset state so they can try again
     }
   };
 
@@ -281,5 +276,3 @@ export function BusinessProfileForm() {
     </Form>
   );
 }
-
-    
