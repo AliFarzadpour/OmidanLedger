@@ -84,3 +84,4 @@ export async function POST(req: Request) {
   // Acknowledge receipt of the event to Stripe
   return NextResponse.json({ received: true });
 }
+
