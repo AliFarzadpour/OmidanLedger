@@ -157,7 +157,12 @@ export function BusinessProfileForm() {
         });
 
         if (result.success && result.url) {
-            window.location.href = result.url;
+            // FIX: Use window.top.location.href to break out of the iframe
+            if (window.top) {
+                window.top.location.href = result.url;
+            } else {
+                window.location.href = result.url;
+            }
         } else {
             throw new Error("Failed to get Stripe redirect URL.");
         }
