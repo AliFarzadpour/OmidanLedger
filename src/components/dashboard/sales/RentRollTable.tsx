@@ -22,7 +22,6 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
-import { RecordPaymentModal } from './RecordPaymentModal';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getDocs, collection, query, limit, where } from 'firebase/firestore';
@@ -254,12 +253,8 @@ export function RentRollTable() {
                     {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-right space-x-2">
-                    <CreateChargeDialog 
-                        // @ts-ignore
-                        defaultTenantEmail={item.tenantEmail}
-                        defaultAmount={item.balance > 0 ? item.balance : undefined}
-                    />
+                <TableCell className="text-right">
+                  <CreateChargeDialog />
                 </TableCell>
               </TableRow>
             )))}
