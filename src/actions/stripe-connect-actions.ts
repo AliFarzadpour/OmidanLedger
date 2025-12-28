@@ -37,9 +37,14 @@ export async function createStripeAccountLink({
       throw new Error('User not found.');
     }
     
-    let stripeAccountId = userDoc.data()?.stripeAccountId;
+    const userData = userDoc.data();
+    let stripeAccountId = userData?.stripeAccountId;
 
+    // If the user doesn't have a Stripe account ID yet, create one.
     if (!stripeAccountId) {
+      // Get the business name from the user's profile to pass to Stripe.
+      const businessName = userData?.businessProfile?.businessName;
+
       const account = await stripe.accounts.create({
         type: 'express',
         email: userEmail,
@@ -48,6 +53,8 @@ export async function createStripeAccountLink({
           transfers: { requested: true },
         },
         business_type: 'individual',
+        // Set the business profile name on the Stripe account
+        ...(businessName && { business_profile: { name: businessName } }),
       });
       stripeAccountId = account.id;
 
