@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -256,14 +255,6 @@ export function RentRollTable() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right space-x-2">
-                    {user && (
-                      <RecordPaymentModal 
-                        tenant={{id: item.tenantId, firstName: item.tenantName, rentAmount: item.rentAmount}}
-                        propertyId={item.propertyId}
-                        landlordId={user.uid}
-                        onSuccess={refetch}
-                      />
-                    )}
                     <CreateChargeDialog 
                         // @ts-ignore
                         defaultTenantEmail={item.tenantEmail}
