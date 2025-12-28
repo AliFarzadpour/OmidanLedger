@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { useUser, useFirestore } from '@/firebase';
-import { collection, query, getDocs, FirestoreError } from 'firebase/firestore'; 
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collectionGroup, query, where, FirestoreError } from 'firebase/firestore'; 
 import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
@@ -17,7 +17,6 @@ import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FirestorePermissionError, errorEmitter } from '@/firebase/errors';
 
 type Transaction = {
   id: string;
@@ -65,58 +64,24 @@ export default function DashboardPage() {
   const firestore = useFirestore();
   const [filter, setFilter] = useState<FilterOption>('this-month');
   
-  const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
-  const fetchData = useCallback(async () => {
-    if (!user || !firestore) return;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const bankAccountsQuery = query(collection(firestore, `users/${user.uid}/bankAccounts`));
-      const bankAccountsSnap = await getDocs(bankAccountsQuery);
-      
-      const allTxPromises = bankAccountsSnap.docs.map(async (accountDoc) => {
-        const transactionsQuery = query(collection(firestore, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`));
-        const transactionsSnap = await getDocs(transactionsQuery);
-        return transactionsSnap.docs.map(txDoc => ({ 
-            id: txDoc.id, 
-            ...txDoc.data(),
-            bankAccountId: accountDoc.id 
-        })) as Transaction[];
-      });
-
-      const allTxArrays = await Promise.all(allTxPromises);
-      const combinedTransactions = allTxArrays.flat();
-      
-      combinedTransactions.sort((a, b) => (new Date(b.date + 'T00:00:00').getTime() - new Date(a.date + 'T00:00:00').getTime()));
-      setAllTransactions(combinedTransactions);
-
-    } catch (err: any) {
-        console.error("Fetch Error:", err);
-        let message = 'An unknown error occurred while fetching data.';
-        if (err instanceof FirestoreError) {
-          message = err.message;
-        } else if (err.message) {
-          message = err.message;
-        }
-        setError(message);
-    } finally {
-        setIsLoading(false);
-    }
+  // CORRECTED: Use collectionGroup to get ALL transactions for the user
+  const transactionsQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', user.uid)
+    );
   }, [user, firestore]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  const { data: allTransactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
 
   // 2. CALCULATIONS (Added New KPIs)
   const stats = useMemo(() => {
-    const filtered = allTransactions.filter(tx => {
+    const transactionList = allTransactions || [];
+    
+    const filtered = transactionList.filter(tx => {
         const txDate = new Date(tx.date + 'T00:00:00');
         return txDate >= new Date(startDate + 'T00:00:00') && txDate <= new Date(endDate + 'T00:00:00');
     });
@@ -250,7 +215,7 @@ export default function DashboardPage() {
             <AlertCircle className="h-4 w-4 text-blue-800" />
             <AlertTitle>No Data for {startDate} to {endDate}</AlertTitle>
             <AlertDescription className="mt-1 text-xs">
-                We found {allTransactions.length} total transactions, but none in this period. 
+                We found {allTransactions?.length || 0} total transactions, but none in this period. 
             </AlertDescription>
         </Alert>
       )}
@@ -320,4 +285,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-    
