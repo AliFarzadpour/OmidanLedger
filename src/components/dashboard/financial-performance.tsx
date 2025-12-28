@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,6 +11,19 @@ import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+
+function normalizeL0(tx: any): string {
+    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase();
+    if (raw === 'INCOME') return 'INCOME';
+    if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
+    if (raw === 'EXPENSE') return 'EXPENSE';
+    if (raw === 'ASSET') return 'ASSET';
+    if (raw === 'LIABILITY') return 'LIABILITY';
+    if (raw === 'EQUITY') return 'EQUITY';
+    if (raw.includes('INCOME')) return 'INCOME';
+    if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
+    return 'OPERATING EXPENSE';
+}
 
 export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const { user } = useUser();
@@ -53,22 +67,20 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
 
 
   const stats = useMemo(() => {
-    let filteredTxs = transactions;
-
-    if (propertyId) {
-      filteredTxs = transactions.filter(tx => tx.costCenter === propertyId);
-    }
+    const filteredTxs = propertyId
+      ? transactions.filter(tx => tx.costCenter === propertyId)
+      : transactions;
 
     let income = 0;
     let expenses = 0;
 
     filteredTxs.forEach(tx => {
       const amount = Number(tx.amount) || 0;
-      const category = tx.categoryHierarchy?.l0 || '';
+      const l0 = normalizeL0(tx);
       
-      if (category === 'Income') {
+      if (l0 === 'INCOME') {
         income += amount;
-      } else if (category === 'Expense') {
+      } else if (l0 === 'OPERATING EXPENSE' || l0 === 'EXPENSE') {
         expenses += amount; // expenses are negative
       }
     });

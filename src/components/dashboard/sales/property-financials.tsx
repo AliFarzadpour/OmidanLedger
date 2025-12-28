@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -21,7 +22,8 @@ type Transaction = {
     id: string;
     date: string;
     description: string;
-    categoryHierarchy: { l2: string };
+    categoryHierarchy: { l0: string; l2: string };
+    costCenter?: string;
     amount: number;
 };
 
@@ -31,6 +33,20 @@ type GroupedTransactions = {
         total: number;
     };
 };
+
+// Normalize category to handle both old and new schemas
+function normalizeL0(tx: any): string {
+    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase();
+    if (raw === 'INCOME') return 'INCOME';
+    if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
+    if (raw === 'EXPENSE') return 'EXPENSE';
+    if (raw === 'ASSET') return 'ASSET';
+    if (raw === 'LIABILITY') return 'LIABILITY';
+    if (raw === 'EQUITY') return 'EQUITY';
+    if (raw.includes('INCOME')) return 'INCOME';
+    if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
+    return 'OPERATING EXPENSE';
+}
 
 export function PropertyFinancials({ propertyId, propertyName, view }: PropertyFinancialsProps) {
   const { user } = useUser();
@@ -49,20 +65,19 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
         const txsQuery = query(
             collectionGroup(firestore, 'transactions'),
             where('userId', '==', user.uid),
-            where('costCenter', '==', propertyId)
+            where('costCenter', '==', propertyId) // Correctly filter by costCenter
         );
         const txsSnap = await getDocs(txsQuery);
         let fetchedTxs: Transaction[] = txsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
         
-        // Client-side filtering based on view
+        // Client-side filtering based on view using normalized category
         fetchedTxs = fetchedTxs.filter(tx => {
-            const data: any = tx;
-            const categoryL0 = data.categoryHierarchy?.l0 || '';
-            const categoryL1 = data.categoryHierarchy?.l1 || '';
+            const l0 = normalizeL0(tx);
+            const categoryL1 = (tx as any).categoryHierarchy?.l1 || '';
 
-            if (view === 'income' && categoryL0 === 'Income') return true;
-            if (view === 'expenses' && categoryL0 === 'Expense') return true;
-            if (view === 'deposits' && categoryL0 === 'Liability' && categoryL1 === 'Tenant Deposits') return true;
+            if (view === 'income' && l0 === 'INCOME') return true;
+            if (view === 'expenses' && (l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE')) return true;
+            if (view === 'deposits' && l0 === 'LIABILITY' && categoryL1 === 'Tenant Deposits') return true;
             return false;
         });
         
