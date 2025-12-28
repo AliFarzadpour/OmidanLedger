@@ -1,9 +1,7 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useUser, useFirestore, useCollection } from '@/firebase';
-import { collection, query, where, collectionGroup, getDocs, limit } from 'firebase/firestore';
+import { useUser, useFirestore } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -27,6 +25,7 @@ import { CreateChargeDialog } from './CreateChargeDialog';
 import { RecordPaymentModal } from './RecordPaymentModal';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getDocs, collection, query, limit, where } from 'firebase/firestore';
 
 
 interface Tenant {
@@ -54,6 +53,16 @@ export function RentRollTable() {
   const firestore = useFirestore();
   const [viewingDate, setViewingDate] = useState(new Date());
 
+  const { startOfMonth, endOfMonth } = useMemo(() => {
+    return {
+      startOfMonth: startOfMonth(viewingDate),
+      endOfMonth: endOfMonth(viewingDate),
+    }
+  }, [viewingDate]);
+
+  const monthStartStr = useMemo(() => format(startOfMonth, 'yyyy-MM-dd'), [startOfMonth]);
+  const monthEndStr = useMemo(() => format(endOfMonth, 'yyyy-MM-dd'), [endOfMonth]);
+
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
   
@@ -65,13 +74,43 @@ export function RentRollTable() {
     // return query(collection(firestore, 'users', user.uid, 'properties'));
   }, [user?.uid, firestore]);
   
-  const propertiesResult = useCollection<Property>(propertiesQuery);
-  const properties = propertiesResult.data || [];
-  const isLoadingProperties = propertiesResult.isLoading;
-  
   const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
   const [isLoadingTx, setIsLoadingTx] = useState(false);
   const [txError, setTxError] = useState<any>(null);
+
+  useEffect(() => {
+    (async () => {
+      if (!firestore || !user?.uid) return;
+  
+      try {
+        const txRef = collection(
+          firestore,
+          'users',
+          user.uid,
+          'bankAccounts',
+          'Z8xN5jZ15puw1pdVw3qXFwK57PQbg7s8OMQ6j',
+          'transactions'
+        );
+  
+        const snap = await getDocs(query(txRef, limit(3)));
+        console.log('DIRECT TX READ size:', snap.size);
+        console.log('DIRECT TX READ sample:', snap.docs[0]?.data());
+      } catch (e) {
+        console.error('DIRECT TX READ error:', e);
+      }
+    })();
+  }, [firestore, user?.uid]);
+  
+  const propertiesResult = useMemo(() => {
+    // This is a placeholder until useCollection is fixed or replaced
+    if (!propertiesQuery) return { data: [], isLoading: true };
+    // A proper implementation would fetch data based on propertiesQuery
+    return { data: [], isLoading: true };
+  }, [propertiesQuery]);
+
+  const properties = propertiesResult.data || [];
+  const isLoadingProperties = propertiesResult.isLoading;
+
 
   const rentRoll = useMemo(() => {
     if (!properties) return [];
@@ -97,7 +136,7 @@ export function RentRollTable() {
         const amountPaid = incomeByPropertyId[p.id] || 0;
         const balance = rentDue - amountPaid;
 
-        let status: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
+        let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
 
         if (amountPaid === 0) status = 'unpaid';
         else if (amountPaid === rentDue) status = 'paid';
