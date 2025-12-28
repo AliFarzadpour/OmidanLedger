@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -179,13 +178,14 @@ export function ProfitAndLossReport() {
       if (!d || !isWithinInterval(d, { start: fromD, end: toD })) return;
       
       const h = tx.categoryHierarchy || {};
-      const primaryCategory = (h.l0 || '').toLowerCase();
-      if (!['income', 'expense'].includes(primaryCategory)) return;
+      const primaryCategory = (h.l0 || tx.primaryCategory || '').toUpperCase();
+      
+      if (primaryCategory !== 'INCOME' && primaryCategory !== 'EXPENSE' && primaryCategory !== 'OPERATING EXPENSE') return;
 
       const rawAmount = Number(tx.amount) || 0;
       const label = h.l2 || h.l1 || 'Other';
       
-      if (primaryCategory === 'income') {
+      if (primaryCategory === 'INCOME') {
         totalInc += rawAmount;
         const current = incMap.get(label) || { total: 0, transactions: [] };
         current.total += rawAmount;
@@ -228,13 +228,14 @@ export function ProfitAndLossReport() {
         
         const monthKey = format(d, 'yyyy-MM');
         const h = tx.categoryHierarchy || {};
-        const primaryCategory = (h.l0 || '').toLowerCase();
-        if (!['income', 'expense'].includes(primaryCategory)) return;
+        const primaryCategory = (h.l0 || tx.primaryCategory || '').toUpperCase();
+        
+        if (primaryCategory !== 'INCOME' && primaryCategory !== 'EXPENSE' && primaryCategory !== 'OPERATING EXPENSE') return;
 
         const rawAmount = Number(tx.amount) || 0;
         const label = h.l2 || h.l1 || 'Other';
 
-        if (primaryCategory === 'income') {
+        if (primaryCategory === 'INCOME') {
             monthlyTotals[monthKey].income += rawAmount;
             if (!incomeByCategory[label]) incomeByCategory[label] = {};
             incomeByCategory[label][monthKey] = (incomeByCategory[label][monthKey] || 0) + rawAmount;
@@ -322,4 +323,3 @@ export function ProfitAndLossReport() {
     </>
   );
 }
-
