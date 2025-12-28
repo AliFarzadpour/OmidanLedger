@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getDocs, collection, query, limit, where, doc } from 'firebase/firestore';
 
@@ -58,6 +58,14 @@ export function RentRollTable() {
   const [isLoadingTx, setIsLoadingTx] = useState(false);
   const [txError, setTxError] = useState<any>(null);
 
+  // Fetch the landlord's user document to get their Stripe Account ID
+  const userDocRef = useMemo(() => {
+    if (!user || !firestore) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+  const { data: landlordUserDoc } = useDoc(userDocRef);
+  const landlordStripeId = landlordUserDoc?.stripeAccountId;
+
   const { startOfMonth: startOfMonthDate, endOfMonth: endOfMonthDate } = useMemo(() => {
     return {
       startOfMonth: startOfMonth(viewingDate),
@@ -67,14 +75,6 @@ export function RentRollTable() {
 
   const monthStartStr = useMemo(() => format(startOfMonthDate, 'yyyy-MM-dd'), [startOfMonthDate]);
   const monthEndStr = useMemo(() => format(endOfMonthDate, 'yyyy-MM-dd'), [endOfMonthDate]);
-
-  // Fetch the landlord's user document to get their Stripe Account ID
-  const userDocRef = useMemo(() => {
-    if (!user || !firestore) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [user, firestore]);
-  const { data: landlordUserDoc } = useDoc(userDocRef);
-  const landlordStripeId = landlordUserDoc?.stripeAccountId;
   
   useEffect(() => {
     (async () => {
@@ -164,22 +164,19 @@ export function RentRollTable() {
         const balance = rentDue - amountPaid;
 
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
-        let statusVariant: 'red' | 'green' | 'orange' = 'red';
 
-        if (amountPaid === 0) {
+        if (amountPaid === 0 && rentDue > 0) {
             status = 'unpaid';
-            statusVariant = 'red';
         } else if (amountPaid >= rentDue) {
             status = 'paid';
-            statusVariant = 'green';
-        } else if (amountPaid < rentDue) {
+        } else if (amountPaid < rentDue && amountPaid > 0) {
             status = 'partial';
-            statusVariant = 'orange';
+        } else if (rentDue === 0) {
+            status = 'paid'; // If no rent is due, consider it paid
         }
 
-        if (amountPaid > rentDue) {
+        if (amountPaid > rentDue && rentDue > 0) {
             status = 'overpaid';
-            statusVariant = 'green'; // Still green, just noted
         }
 
         return {
@@ -194,7 +191,7 @@ export function RentRollTable() {
             balance: balance,
             status: status
         };
-    });
+    }).filter(item => item !== undefined && item.rentAmount > 0); // Only show tenants with rent due > 0
   }, [properties, incomeByPropertyId]);
   
   const isLoading = isLoadingProperties || isLoadingTx;
@@ -241,8 +238,8 @@ export function RentRollTable() {
             ) : rentRoll.length === 0 ? (
                  <TableRow>
                     <TableCell colSpan={6} className="text-center p-8">
-                        <p className="font-semibold">No Active Leases Found</p>
-                        <p className="text-sm text-muted-foreground">Add tenants to your properties to see them here.</p>
+                        <p className="font-semibold">No Active Leases with Rent Due Found</p>
+                        <p className="text-sm text-muted-foreground">Add tenants with rent amounts to your properties to see them here.</p>
                     </TableCell>
                 </TableRow>
             ) : (
@@ -292,7 +289,11 @@ function useCollection<T>(query: any) {
     const [error, setError] = useState<any>(null);
 
     const refetch = useCallback(() => {
-        if (!query) return;
+        if (!query) {
+            setData([]);
+            setIsLoading(false);
+            return;
+        };
         setIsLoading(true);
         getDocs(query)
             .then(snapshot => {
