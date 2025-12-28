@@ -66,7 +66,6 @@ export default function DashboardPage() {
   
   const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
 
-  // CORRECTED: Use collectionGroup to get ALL transactions for the user
   const transactionsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return query(
@@ -77,7 +76,6 @@ export default function DashboardPage() {
 
   const { data: allTransactions, isLoading, error } = useCollection<Transaction>(transactionsQuery);
 
-  // 2. CALCULATIONS (Added New KPIs)
   const stats = useMemo(() => {
     const transactionList = allTransactions || [];
     
@@ -97,7 +95,6 @@ export default function DashboardPage() {
       const dateKey = tx.date; // YYYY-MM-DD
       const level0Category = tx.categoryHierarchy?.l0;
 
-      // Initialize daily map
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
@@ -110,30 +107,24 @@ export default function DashboardPage() {
         breakdownMap.set(categoryForBreakdown, (breakdownMap.get(categoryForBreakdown) || 0) + Math.abs(amount));
         dayStats.expense += Math.abs(amount);
         
-        const vendor = tx.description?.trim() || 'Unknown';
+        const vendor = tx.categoryHierarchy?.l3 || tx.description?.trim() || 'Unknown';
         vendorMap.set(vendor, (vendorMap.get(vendor) || 0) + Math.abs(amount));
       }
     });
 
-    // KPI 1: Profit Margin
     const margin = income > 0 ? (income + expenses) / income * 100 : 0;
-
-    // KPI 2: Burn Rate (Avg Daily Spend)
     const days = Math.max(1, differenceInDays(new Date(endDate), new Date(startDate)) + 1);
     const burnRate = Math.abs(expenses) / days;
 
-    // KPI 3: Top Vendors
     const topVendors = Array.from(vendorMap.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 5); // Top 5
+        .slice(0, 5); 
 
-    // Chart Data Preparation
     const expenseBreakdown = Array.from(breakdownMap.entries())
         .map(([name, value]) => ({ name, value }))
         .sort((a, b) => b.value - a.value);
 
-    // Cash Flow Chart Data (Sorted by date)
     const cashFlowData = Array.from(cashFlowMap.entries())
         .map(([date, val]) => ({ date, ...val }))
         .sort((a, b) => (a.date > b.date ? 1 : -1));
@@ -157,9 +148,6 @@ export default function DashboardPage() {
       { label: 'This Year', value: 'this-year' },
   ]
 
-  // ------------------------------------------------------------------
-  // RENDER
-  // ------------------------------------------------------------------
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -220,25 +208,20 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* CHARTS ROW */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
-        {/* NEW: Cash Flow Bar Chart */}
         <div className="lg:col-span-3">
           <CashFlowChart data={stats.cashFlowData} isLoading={isLoading} />
         </div>
-        {/* EXISTING: Expense Pie Chart */}
         <div className="lg:col-span-2">
           <ExpenseChart data={stats.expenseBreakdown} isLoading={isLoading} />
         </div>
       </div>
 
-      {/* BOTTOM ROW: Recent Tx + Top Vendors */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
         <div className="lg:col-span-3">
           <RecentTransactions transactions={stats.filteredTransactions} isLoading={isLoading} />
         </div>
         
-        {/* NEW: Top Vendors Card */}
         <div className="lg:col-span-2">
             <Card className="h-full">
                 <CardHeader>

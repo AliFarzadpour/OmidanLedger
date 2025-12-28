@@ -2,7 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
 import { format, startOfYear, endOfYear } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,6 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  // FIX: Default date range to the full current year.
   const currentYearStart = format(startOfYear(new Date()), 'yyyy-MM-dd');
   const currentYearEnd = format(endOfYear(new Date()), 'yyyy-MM-dd');
 
@@ -30,20 +29,14 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     setError(null);
     
     try {
-        const bankAccountsSnap = await getDocs(collection(db, `users/${user.uid}/bankAccounts`));
-        let allTxs: any[] = [];
-        
-        for (const accountDoc of bankAccountsSnap.docs) {
-            const txsQuery = query(
-                collection(db, `users/${user.uid}/bankAccounts/${accountDoc.id}/transactions`),
-                where('date', '>=', currentYearStart),
-                where('date', '<=', currentYearEnd)
-            );
-            const txsSnap = await getDocs(txsQuery);
-            txsSnap.forEach(txDoc => {
-                allTxs.push({ id: txDoc.id, ...txDoc.data() });
-            });
-        }
+        const txsQuery = query(
+            collectionGroup(db, `transactions`),
+            where('userId', '==', user.uid),
+            where('date', '>=', currentYearStart),
+            where('date', '<=', currentYearEnd)
+        );
+        const txsSnap = await getDocs(txsQuery);
+        const allTxs = txsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTransactions(allTxs);
 
     } catch (e: any) {
@@ -62,7 +55,6 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const stats = useMemo(() => {
     let filteredTxs = transactions;
 
-    // If a propertyId is provided, filter by costCenter.
     if (propertyId) {
       filteredTxs = transactions.filter(tx => tx.costCenter === propertyId);
     }
@@ -91,7 +83,6 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     try {
         const res = await recalculateAllStats(user.uid);
         toast({ title: "Financials Updated", description: `Scanned and updated ${res.count} monthly records.` });
-        // After recalculating, refetch the latest data for the current view
         await fetchTransactions();
     } catch(e: any) {
         toast({ variant: 'destructive', title: "Error", description: e.message });

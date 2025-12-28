@@ -88,7 +88,7 @@ function MonthlyBreakdownReport({ reportData }: { reportData: MonthlyReportData 
 
           {/* NET INCOME */}
            <TableRow className="border-t-4 border-double font-black text-lg bg-slate-100">
-            <TableCell>NET INCOME</TableCell>
+            <TableCell>NET OPERATING INCOME</TableCell>
              {months.map(month => {
                 const net = (monthlyTotals[month]?.income || 0) - (monthlyTotals[month]?.expenses || 0);
                 return (
@@ -151,10 +151,9 @@ export function ProfitAndLossReport() {
     setIsLoading(true);
     setError(null);
     try {
-        const accountsSnap = await getDocs(query(collection(firestore, `users/${user.uid}/bankAccounts`)));
-        const promises = accountsSnap.docs.map(doc => getDocs(collection(doc.ref, 'transactions')));
-        const transactionSnapshots = await Promise.all(promises);
-        const fetched = transactionSnapshots.flatMap(snap => snap.docs.map(d => ({ ...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id })));
+        const txsQuery = query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
+        const transactionSnapshots = await getDocs(txsQuery);
+        const fetched = transactionSnapshots.docs.map(d => ({ ...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }));
         setAllTransactions(fetched);
     } catch (e: any) {
         console.error(e); setError(e.message);
@@ -259,18 +258,14 @@ export function ProfitAndLossReport() {
 
   const handleUpdate = () => {
     fetchData(); // Refetch all data
-    // The drawer will receive new `category` prop and re-render
-    // We need to update the `selectedCategory` with the fresh data
     if (selectedCategory) {
-      // Find the updated category from the new data
       const updatedIncomeCat = summaryReportData.income.find(c => c.name === selectedCategory.name);
       const updatedExpenseCat = summaryReportData.expenses.find(c => c.name === selectedCategory.name);
       const updatedCategory = updatedIncomeCat || updatedExpenseCat;
       if (updatedCategory) {
         setSelectedCategory(updatedCategory);
       } else {
-        // The category might not exist anymore (e.g., all tx moved out of it)
-        setIsDrawerOpen(false); // Close drawer if category is gone
+        setIsDrawerOpen(false); 
       }
     }
   };

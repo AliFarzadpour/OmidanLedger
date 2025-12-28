@@ -1,9 +1,8 @@
-
 'use client';
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useFirestore, useUser } from '@/firebase';
-import { collection, query, getDocs, where } from 'firebase/firestore';
+import { collection, query, getDocs, where, collectionGroup } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -47,37 +46,25 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
       setLoading(true);
 
       try {
-        const accountsSnap = await getDocs(collection(firestore, `users/${user.uid}/bankAccounts`));
-        if (accountsSnap.empty) {
-            setAllTransactions([]);
-            setLoading(false);
-            return;
-        }
+        const txsQuery = query(
+            collectionGroup(firestore, 'transactions'),
+            where('userId', '==', user.uid),
+            where('costCenter', '==', propertyId)
+        );
+        const txsSnap = await getDocs(txsQuery);
+        let fetchedTxs: Transaction[] = txsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+        
+        // Client-side filtering based on view
+        fetchedTxs = fetchedTxs.filter(tx => {
+            const data: any = tx;
+            const categoryL0 = data.categoryHierarchy?.l0 || '';
+            const categoryL1 = data.categoryHierarchy?.l1 || '';
 
-        let fetchedTxs: Transaction[] = [];
-        for (const accountDoc of accountsSnap.docs) {
-            const txsSnap = await getDocs(collection(accountDoc.ref, 'transactions'));
-            txsSnap.forEach(txDoc => {
-                const data = txDoc.data();
-                const isForProperty = data.costCenter === propertyId;
-                const categoryL0 = data.categoryHierarchy?.l0 || '';
-                const categoryL1 = data.categoryHierarchy?.l1 || '';
-
-                let include = false;
-                if (view === 'income' && isForProperty && categoryL0 === 'Income') {
-                    include = true;
-                } else if (view === 'expenses' && isForProperty && categoryL0 === 'Expense') {
-                    include = true;
-                } else if (view === 'deposits' && isForProperty && categoryL0 === 'Liability' && categoryL1 === 'Tenant Deposits') {
-                    include = true;
-                }
-
-
-                if (include) {
-                    fetchedTxs.push({ id: txDoc.id, ...data } as Transaction);
-                }
-            });
-        }
+            if (view === 'income' && categoryL0 === 'Income') return true;
+            if (view === 'expenses' && categoryL0 === 'Expense') return true;
+            if (view === 'deposits' && categoryL0 === 'Liability' && categoryL1 === 'Tenant Deposits') return true;
+            return false;
+        });
         
         fetchedTxs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setAllTransactions(fetchedTxs);
@@ -122,9 +109,6 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
   const totalAmount = useMemo(() => {
     return Object.values(groupedTransactions).reduce((sum, group) => sum + group.total, 0);
   }, [groupedTransactions]);
-
-  const isIncome = view === 'income';
-  const isDeposit = view === 'deposits';
 
   const viewConfig = {
       income: { title: 'Income Ledger', desc: 'Rent and fees collected', color: 'text-green-600', icon: <TrendingUp className="h-8 w-8 text-slate-200" /> },
