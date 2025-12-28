@@ -67,7 +67,7 @@ export function RentRollTable() {
       where('userId', '==', user.uid),
       where('date', '>=', startOfMonth),
       where('date', '<=', endOfMonth),
-      where('categoryHierarchy.l1', 'in', ['Rental Income', 'Uncategorized'])
+      where('categoryHierarchy.l1', '==', 'Rental Income')
     );
   }, [user, firestore, startOfMonth, endOfMonth]);
   
