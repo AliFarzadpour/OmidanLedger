@@ -38,19 +38,21 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
       email: tenantEmail,
     }, { stripeAccount: landlordAccountId });
 
-    // 2. Create an Invoice Item (the actual "line item" for rent/utilities)
+    // 2. Create the Invoice in a draft state first
+    const invoice = await stripe.invoices.create({
+      customer: customer.id,
+      collection_method: 'send_invoice',
+      description: description, // Add the description to the invoice itself
+      auto_advance: false, // Keep it as a draft
+    }, { stripeAccount: landlordAccountId });
+
+    // 3. Create an Invoice Item and link it to the draft invoice
     await stripe.invoiceItems.create({
       customer: customer.id,
+      invoice: invoice.id,
       amount: Math.round(amount * 100), // Stripe uses cents, ensure it's an integer
       currency: 'usd',
       description: description,
-    }, { stripeAccount: landlordAccountId });
-
-    // 3. Generate the Invoice and prepare it for sending
-    const invoice = await stripe.invoices.create({
-      customer: customer.id,
-      collection_method: 'send_invoice', // Sends an email with a payment link
-      days_until_due: 7,
     }, { stripeAccount: landlordAccountId });
 
     // 4. Finalize the invoice so it can be paid
