@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useUser, useFirestore, useCollection } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, collectionGroup, query, where } from 'firebase/firestore';
 import {
   Table,
@@ -27,6 +27,7 @@ import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns
 import { cn } from '@/lib/utils';
 
 type Tenant = {
+  id?: string;
   firstName: string;
   lastName: string;
   email?: string;
@@ -50,10 +51,8 @@ type TxnDoc = {
   amount: number; // income should be positive
   date: any; // Timestamp
   userId: string;
-
-  // MUST be the property name per your design
-  costCenter?: string;
-
+  propertyId?: string; // a direct ID reference is best
+  costCenter?: string; // fallback if propertyId is missing
   categoryHierarchy?: { l0?: string };
 };
 
@@ -62,13 +61,14 @@ export function RentRollTable() {
   const firestore = useFirestore();
   const [viewingDate, setViewingDate] = useState(new Date());
 
-  const { startOfMonth: billingPeriodStart, endOfMonth: billingPeriodEnd } = getBillingPeriod(viewingDate);
+  const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
+  const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
 
   // 1) Load properties (with embedded tenants array)
   const propertiesQuery = useMemo(() => {
-    if (!user || !firestore) return null;
+    if (!user?.uid || !firestore) return null;
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
-  }, [user, firestore]);
+  }, [user?.uid, firestore]);
 
   const propertiesResult = useCollection<Property>(propertiesQuery);
   const properties = propertiesResult.data || [];
@@ -76,9 +76,6 @@ export function RentRollTable() {
 
 
   // 2) Load all INCOME transactions for the month
-  const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
-  const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
-
   const paymentsQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
 
@@ -91,7 +88,7 @@ export function RentRollTable() {
     );
   }, [user?.uid, firestore, monthStartStr, monthEndStr]);
 
-  const paymentsResult = useCollection<any>(paymentsQuery);
+  const paymentsResult = useCollection<TxnDoc>(paymentsQuery);
   const monthlyPayments = paymentsResult.data || [];
   const isLoadingPayments = paymentsResult.isLoading;
 
@@ -99,15 +96,15 @@ export function RentRollTable() {
   const rows = useMemo(() => {
     if (!properties || !monthlyPayments) return [];
 
-    // Sum income by costCenter (property name)
-    const incomeByCostCenter = (monthlyPayments || []).reduce((acc: any, tx: any) => {
-      const cc = (tx.costCenter || tx.costCenterName || tx.propertyName || '').trim();
-      if (!cc) return acc;
-    
+    // Build map: income by propertyId
+    const incomeByPropertyId = (monthlyPayments || []).reduce((acc: any, tx: any) => {
+      const pid = String(tx.propertyId || tx.costCenter || '').trim();
+      if (!pid) return acc;
+
       const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
-      if (!Number.isFinite(amt) || amt <= 0) return acc; // only positive income
-    
-      acc[cc] = (acc[cc] || 0) + amt;
+      if (!Number.isFinite(amt) || amt <= 0) return acc;
+
+      acc[pid] = (acc[pid] || 0) + amt;
       return acc;
     }, {});
 
@@ -123,27 +120,20 @@ export function RentRollTable() {
 
     for (const p of properties) {
       const tenants = Array.isArray(p.tenants) ? p.tenants : [];
-      const activeTenants = tenants.filter((t) => (t?.status || '').toLowerCase() === 'active');
+      const activeTenants = tenants.filter(
+        (t) => (t?.status || '').toLowerCase() === 'active'
+      );
 
       for (const t of activeTenants) {
         const rentDue = Number(t.rentAmount || 0);
-
-        // per your rule: sum all income for that property name in that month
-        const amountPaid = Number(incomeByCostCenter[p.name] || 0);
+        const amountPaid = incomeByPropertyId[p.id] || 0;
 
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
-        if (rentDue > 0 && amountPaid === 0) {
-          status = 'unpaid';
-        } else if (rentDue > 0 && amountPaid >= rentDue) {
-          status = 'paid';
-        } else if (rentDue > amountPaid && amountPaid > 0) {
-          status = 'partial';
-        } else if (amountPaid > rentDue && rentDue > 0) {
-          status = 'overpaid';
-        } else if (rentDue === 0 && amountPaid === 0) {
-            status = 'paid'; // Case where rent is $0, it's considered paid.
-        }
 
+        if (amountPaid === 0) status = 'unpaid';
+        else if (amountPaid === rentDue) status = 'paid';
+        else if (amountPaid < rentDue) status = 'partial';
+        else status = 'overpaid';
 
         out.push({
           propertyName: p.name,
@@ -234,13 +224,7 @@ export function RentRollTable() {
                         r.status === 'overpaid' && 'bg-blue-100 text-blue-800 border-blue-200'
                       )}
                     >
-                      {r.status === 'unpaid'
-                        ? 'Unpaid'
-                        : r.status === 'paid'
-                        ? 'Paid'
-                        : r.status === 'partial'
-                        ? 'Partial'
-                        : 'Overpaid'}
+                      {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                     </Badge>
                   </TableCell>
                 </TableRow>
