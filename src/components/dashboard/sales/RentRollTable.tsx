@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore, useCollection } from '@/firebase';
 import { collection, collectionGroup, query, where } from 'firebase/firestore';
 import {
   Table,
@@ -22,7 +22,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
-import { getBillingPeriod } from '@/lib/dates';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -69,7 +68,7 @@ export function RentRollTable() {
     if (!user?.uid || !firestore) return null;
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user?.uid, firestore]);
-
+  
   const propertiesResult = useCollection<Property>(propertiesQuery);
   const properties = propertiesResult.data || [];
   const isLoadingProperties = propertiesResult.isLoading;
@@ -91,6 +90,7 @@ export function RentRollTable() {
   const paymentsResult = useCollection<TxnDoc>(paymentsQuery);
   const monthlyPayments = paymentsResult.data || [];
   const isLoadingPayments = paymentsResult.isLoading;
+
 
   // 3) Build Rent Roll rows
   const rows = useMemo(() => {
