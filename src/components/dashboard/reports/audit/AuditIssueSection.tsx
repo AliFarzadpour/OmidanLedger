@@ -26,6 +26,7 @@ interface AuditIssueSectionProps {
   onSelectionChange: (id: string, checked: boolean) => void;
   sortConfig: SortConfig;
   onSort: (key: SortConfig['key']) => void;
+  bankAccountMap: Map<string, string>;
 }
 
 const primaryCategoryColors: Record<string, string> = {
@@ -36,7 +37,7 @@ const primaryCategoryColors: Record<string, string> = {
   'Asset': 'bg-gray-200 text-gray-800',
 };
 
-export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds, onSelectionChange, sortConfig, onSort }: AuditIssueSectionProps) {
+export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds, onSelectionChange, sortConfig, onSort, bankAccountMap }: AuditIssueSectionProps) {
     if (!issues || issues.length === 0) return null;
 
     const handleSelectAll = (checked: boolean) => {
@@ -69,6 +70,7 @@ export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds
                                 /></TableHead>
                                 <TableHead><Button variant="ghost" size="sm" onClick={() => onSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
                                 <TableHead><Button variant="ghost" size="sm" onClick={() => onSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
+                                <TableHead>Source</TableHead>
                                 <TableHead><Button variant="ghost" size="sm" onClick={() => onSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
                                 <TableHead>Reason</TableHead>
                                 <TableHead className="text-right"><Button variant="ghost" size="sm" onClick={() => onSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
@@ -78,6 +80,7 @@ export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds
                             {issues.map(issue => {
                                 const tx = issue.transaction;
                                 const cats = tx.categoryHierarchy || { l0: 'N/A', l1: 'N/A', l2: 'N/A' };
+                                const accountName = tx.bankAccountId ? bankAccountMap.get(tx.bankAccountId) : 'N/A';
                                 return (
                                     <TableRow key={tx.id}>
                                         <TableCell><Checkbox 
@@ -86,6 +89,7 @@ export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds
                                         /></TableCell>
                                         <TableCell>{tx.date}</TableCell>
                                         <TableCell>{tx.description}</TableCell>
+                                        <TableCell className="text-xs text-muted-foreground">{accountName}</TableCell>
                                         <TableCell>
                                             <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0] || 'bg-slate-100')}>
                                                 {cats.l0}

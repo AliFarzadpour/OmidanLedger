@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Accordion } from '@/components/ui/accordion';
 import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle, Filter, CreditCard } from 'lucide-react';
@@ -9,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
 import { AuditIssueSection, type SortConfig } from './AuditIssueSection';
 import { useUser, useFirestore } from '@/firebase';
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, writeBatch, getDocs, collection } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BatchEditDialog } from '@/components/dashboard/transactions/batch-edit-dialog';
@@ -24,6 +23,20 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
   const [filter, setFilter] = useState<'needs_audit' | 'audited' | 'all'>('needs_audit');
   const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'desc' });
+  const [bankAccountMap, setBankAccountMap] = useState<Map<string, string>>(new Map());
+
+  useEffect(() => {
+    async function fetchBankAccounts() {
+      if (!user || !firestore) return;
+      const accountsSnap = await getDocs(collection(firestore, `users/${user.uid}/bankAccounts`));
+      const map = new Map<string, string>();
+      accountsSnap.forEach(doc => {
+        map.set(doc.id, doc.data().accountName || 'Unknown Account');
+      });
+      setBankAccountMap(map);
+    }
+    fetchBankAccounts();
+  }, [user, firestore]);
   
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
@@ -241,6 +254,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                 onSelectionChange={handleSelectionChange}
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                bankAccountMap={bankAccountMap}
             />
             <AuditIssueSection 
                 type="transfer_error" 
@@ -251,6 +265,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                 onSelectionChange={handleSelectionChange}
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                bankAccountMap={bankAccountMap}
             />
             <AuditIssueSection 
                 type="credit_card_payment" 
@@ -261,6 +276,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                 onSelectionChange={handleSelectionChange}
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                bankAccountMap={bankAccountMap}
             />
             <AuditIssueSection 
                 type="mismatch" 
@@ -271,6 +287,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                 onSelectionChange={handleSelectionChange}
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                bankAccountMap={bankAccountMap}
             />
             <AuditIssueSection 
                 type="uncategorized" 
@@ -281,6 +298,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                 onSelectionChange={handleSelectionChange}
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                bankAccountMap={bankAccountMap}
             />
             <AuditIssueSection 
                 type="missing_hierarchy" 
@@ -291,6 +309,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
                 onSelectionChange={handleSelectionChange}
                 sortConfig={sortConfig}
                 onSort={handleSort}
+                bankAccountMap={bankAccountMap}
             />
         </Accordion>
       )}
