@@ -65,16 +65,23 @@ export function RentRollTable() {
 
   const { startOfMonth, endOfMonth } = getBillingPeriod(viewingDate);
 
+  // 1) Load properties (with embedded tenants array)
   console.log('firestore?', !!firestore);
-  
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
+  
+    // Use whichever one matches your real location:
+    // OPTION A: top-level properties
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  
+    // OPTION B (if properties are under users/{uid}/properties):
+    // return query(collection(firestore, 'users', user.uid, 'properties'));
   }, [user?.uid, firestore]);
-
-  const paymentsQuery = useMemo(() => {
+  
+  // 2) Load all INCOME transactions for the month
+  const incomeTxQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
-
+  
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
@@ -83,20 +90,24 @@ export function RentRollTable() {
       where('categoryHierarchy.l0', '==', 'Income')
     );
   }, [user?.uid, firestore, startOfMonth, endOfMonth]);
-  
+
   console.log('propertiesQuery:', propertiesQuery);
-  console.log('paymentsQuery:', paymentsQuery);
+  console.log('paymentsQuery:', incomeTxQuery);
 
   const propertiesResult = useCollection<Property>(propertiesQuery);
-  const paymentsResult = useCollection<any>(paymentsQuery);
+  const paymentsResult = useCollection<any>(incomeTxQuery);
 
   console.log('propertiesResult:', propertiesResult);
   console.log('paymentsResult:', paymentsResult);
 
-  const properties = (propertiesResult as any)?.data;
-  const isLoadingProperties = (propertiesResult as any)?.isLoading;
-  const monthlyPayments = (paymentsResult as any)?.data;
-  const isLoadingPayments = (paymentsResult as any)?.isLoading;
+  const properties = propertiesResult.data || [];
+  const isLoadingProperties = propertiesResult.isLoading;
+
+  const monthlyPayments = paymentsResult.data || [];
+  const isLoadingPayments = paymentsResult.isLoading;
+
+  console.log('PROPERTIES COUNT:', properties.length);
+  console.log('MONTHLY PAYMENTS COUNT:', monthlyPayments.length);
 
 
   // 3) Build Rent Roll rows
@@ -139,7 +150,7 @@ export function RentRollTable() {
         const amountPaid = Number(incomeByCostCenter[p.name] || 0);
 
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
-        if (amountPaid <= 0 && rentDue > 0) {
+        if (amountPaid === 0 && rentDue > 0) {
             status = 'unpaid';
         } else if (rentDue > 0 && amountPaid >= rentDue) {
             status = 'paid';
@@ -148,7 +159,7 @@ export function RentRollTable() {
         } else if (amountPaid > rentDue) {
             status = 'overpaid';
         } else if (rentDue === 0 && amountPaid === 0) {
-            status = 'paid';
+            status = 'paid'; // Case where rent is $0, it's considered paid.
         }
 
 
