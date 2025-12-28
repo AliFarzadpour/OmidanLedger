@@ -51,7 +51,6 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
       customer: customer.id,
       collection_method: 'send_invoice', // Sends an email with a payment link
       days_until_due: 7,
-      on_behalf_of: landlordAccountId, // Makes the invoice look like it's from the landlord
     }, { stripeAccount: landlordAccountId });
 
     // 4. Finalize the invoice so it can be paid
