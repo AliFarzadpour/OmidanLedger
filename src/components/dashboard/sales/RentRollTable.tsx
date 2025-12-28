@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -52,20 +53,20 @@ export function RentRollTable() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [viewingDate, setViewingDate] = useState(new Date());
+  
+  const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+  const [txError, setTxError] = useState<any>(null);
 
-  const { startOfMonth, endOfMonth } = useMemo(() => {
+  const { startOfMonth: startOfMonthDate, endOfMonth: endOfMonthDate } = useMemo(() => {
     return {
       startOfMonth: startOfMonth(viewingDate),
       endOfMonth: endOfMonth(viewingDate),
     }
   }, [viewingDate]);
 
-  const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
-  const [isLoadingTx, setIsLoadingTx] = useState(false);
-  const [txError, setTxError] = useState<any>(null);
-
-  const monthStartStr = useMemo(() => format(startOfMonth, 'yyyy-MM-dd'), [startOfMonth]);
-  const monthEndStr = useMemo(() => format(endOfMonth, 'yyyy-MM-dd'), [endOfMonth]);
+  const monthStartStr = useMemo(() => format(startOfMonthDate, 'yyyy-MM-dd'), [startOfMonthDate]);
+  const monthEndStr = useMemo(() => format(endOfMonthDate, 'yyyy-MM-dd'), [endOfMonthDate]);
   
   useEffect(() => {
     (async () => {
@@ -81,7 +82,7 @@ export function RentRollTable() {
             collection(firestore, 'users', user.uid, 'bankAccounts')
           )
         );
-  
+
         const bankAccountIds = baSnap.docs.map(d => d.id);
   
         // 2) for each bank account, query its transactions for the month
@@ -112,6 +113,7 @@ export function RentRollTable() {
         }
   
         setMonthlyIncomeTx(allTx);
+
       } catch (e) {
         console.error('Monthly tx fetch failed:', e);
         setTxError(e);
@@ -127,8 +129,7 @@ export function RentRollTable() {
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user?.uid, firestore]);
   
-  const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
-
+  const { data: properties, isLoading: isLoadingProperties, refetch } = useCollection<Property>(propertiesQuery);
 
   const incomeByPropertyId = useMemo(() => {
     const map: Record<string, number> = {};
@@ -260,6 +261,7 @@ export function RentRollTable() {
                         tenant={{id: item.tenantId, firstName: item.tenantName, rentAmount: item.rentAmount}}
                         propertyId={item.propertyId}
                         landlordId={user.uid}
+                        onSuccess={refetch}
                       />
                     )}
                     <CreateChargeDialog 
@@ -275,4 +277,29 @@ export function RentRollTable() {
       </CardContent>
     </Card>
   );
+}
+
+// Added this to fix the ReferenceError, as useCollection was not imported
+function useCollection<T>(query: any) {
+    const [data, setData] = useState<T[] | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<any>(null);
+
+    const refetch = useCallback(() => {
+        if (!query) return;
+        setIsLoading(true);
+        getDocs(query)
+            .then(snapshot => {
+                const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
+                setData(results);
+            })
+            .catch(err => setError(err))
+            .finally(() => setIsLoading(false));
+    }, [query]);
+
+    useEffect(() => {
+        refetch();
+    }, [refetch]);
+
+    return { data, isLoading, error, refetch };
 }
