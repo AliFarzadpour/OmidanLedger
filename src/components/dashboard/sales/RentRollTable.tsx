@@ -112,9 +112,6 @@ export function RentRollTable() {
         }
   
         setMonthlyIncomeTx(allTx);
-  
-        console.log('BANKACCT TX COUNT:', allTx.length);
-        console.log('BANKACCT TX SAMPLE:', allTx[0]);
       } catch (e) {
         console.error('Monthly tx fetch failed:', e);
         setTxError(e);
@@ -127,13 +124,7 @@ export function RentRollTable() {
 
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
-  
-    // Use whichever one matches your real location:
-    // OPTION A: top-level properties
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
-  
-    // OPTION B (if properties are under users/{uid}/properties):
-    // return query(collection(firestore, 'users', user.uid, 'properties'));
   }, [user?.uid, firestore]);
   
   const propertiesResult = useCollection<Property>(propertiesQuery);
@@ -141,20 +132,22 @@ export function RentRollTable() {
   const isLoadingProperties = propertiesResult.isLoading;
 
 
+  const incomeByPropertyId = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const tx of monthlyIncomeTx) {
+      const pid = String(tx.propertyId || tx.costCenter || '').trim();
+      if (!pid) continue;
+  
+      const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
+      if (!Number.isFinite(amt) || amt <= 0) continue;
+  
+      map[pid] = (map[pid] || 0) + amt;
+    }
+    return map;
+  }, [monthlyIncomeTx]);
+
   const rentRoll = useMemo(() => {
     if (!properties) return [];
-
-    const incomeByPropertyId = (monthlyIncomeTx || []).reduce((acc: any, tx: any) => {
-      const pid = String(tx.propertyId || tx.costCenter || '').trim();
-      if (!pid) return acc;
-    
-      const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
-      if (!Number.isFinite(amt) || amt <= 0) return acc;
-    
-      acc[pid] = (acc[pid] || 0) + amt;
-      return acc;
-    }, {});
-
 
     return properties.flatMap(p => {
         const activeTenant = p.tenants?.find((t: any) => (t.status || '').toLowerCase() === 'active');
@@ -162,6 +155,7 @@ export function RentRollTable() {
 
         const tenantIdentifier = activeTenant.id || activeTenant.email;
         const rentDue = activeTenant.rentAmount || 0;
+        
         const amountPaid = incomeByPropertyId[p.id] || 0;
         const balance = rentDue - amountPaid;
 
@@ -184,7 +178,7 @@ export function RentRollTable() {
             status: status
         };
     });
-  }, [properties, monthlyIncomeTx]);
+  }, [properties, incomeByPropertyId]);
   
   const isLoading = isLoadingProperties || isLoadingTx;
 
