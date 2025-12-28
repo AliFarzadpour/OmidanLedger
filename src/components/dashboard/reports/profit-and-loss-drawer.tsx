@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Pencil, Edit, Search, ArrowDown, ArrowUp } from 'lucide-react';
+import { Pencil, Edit, Search, ArrowUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Transaction } from '../transactions-table';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -80,6 +80,8 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     );
 }
 
+type SortKey = 'date' | 'description' | 'category' | 'amount';
+
 export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }: { isOpen: boolean, onOpenChange: (open: boolean) => void, category: { name: string; transactions: Transaction[] }, onUpdate: () => void }) {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -88,7 +90,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortConfig, setSortConfig] = useState<{ key: 'date' | 'amount'; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
   const filteredAndSortedTransactions = useMemo(() => {
     let filtered = category.transactions.filter(tx => 
@@ -96,13 +98,26 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
     );
 
     filtered.sort((a, b) => {
-      let aValue, bValue;
+      let aValue: any, bValue: any;
       if (sortConfig.key === 'date') {
         aValue = new Date(a.date).getTime();
         bValue = new Date(b.date).getTime();
-      } else { // amount
+      } else if (sortConfig.key === 'amount') {
         aValue = a.amount;
         bValue = b.amount;
+      } else if (sortConfig.key === 'description') {
+        aValue = a.description;
+        bValue = b.description;
+      } else if (sortConfig.key === 'category') {
+          aValue = `${a.categoryHierarchy?.l0 || ''}${a.categoryHierarchy?.l1 || ''}${a.categoryHierarchy?.l2 || ''}`;
+          bValue = `${b.categoryHierarchy?.l0 || ''}${b.categoryHierarchy?.l1 || ''}${b.categoryHierarchy?.l2 || ''}`;
+      } else {
+        aValue = a[sortConfig.key];
+        bValue = b[sortConfig.key];
+      }
+      
+      if (typeof aValue === 'string') {
+        return sortConfig.direction === 'asc' ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
       }
       return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
     });
@@ -112,12 +127,18 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
 
   const selectedTransactions = filteredAndSortedTransactions.filter(tx => selectedIds.includes(tx.id));
 
-  const handleSort = (key: 'date' | 'amount') => {
+  const handleSort = (key: SortKey) => {
     setSortConfig(prev => ({
       key,
       direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
     }));
   };
+
+  const getSortIcon = (key: SortKey) => {
+      return sortConfig.key === key 
+        ? <ArrowUpDown className="h-4 w-4 inline ml-2" />
+        : <ArrowUpDown className="h-4 w-4 inline ml-2 opacity-30" />
+  }
 
   const handleSelectionChange = (id: string, checked: boolean) => {
     setSelectedIds(prev => 
@@ -160,7 +181,7 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
   return (
     <>
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="w-[600px] sm:max-w-none flex flex-col">
+      <SheetContent className="w-[800px] sm:max-w-none flex flex-col">
         <SheetHeader>
           <SheetTitle>Transactions for: {category.name}</SheetTitle>
           <SheetDescription>
@@ -178,12 +199,6 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Button variant="outline" size="sm" onClick={() => handleSort('date')}>
-            Date {sortConfig.key === 'date' && (sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />)}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => handleSort('amount')}>
-            Amount {sortConfig.key === 'amount' && (sortConfig.direction === 'asc' ? <ArrowUp className="ml-2 h-4 w-4" /> : <ArrowDown className="ml-2 h-4 w-4" />)}
-          </Button>
         </div>
 
         {selectedIds.length > 0 && (
@@ -214,9 +229,21 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
                       aria-label="Select all"
                     />
                   </TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>
+                    <Button variant="ghost" className="px-0" onClick={() => handleSort('description')}>
+                        Details {getSortIcon('description')}
+                    </Button>
+                  </TableHead>
+                  <TableHead>
+                    <Button variant="ghost" className="px-0" onClick={() => handleSort('category')}>
+                        Category {getSortIcon('category')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right">
+                    <Button variant="ghost" className="px-0" onClick={() => handleSort('amount')}>
+                        Amount {getSortIcon('amount')}
+                    </Button>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
