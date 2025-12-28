@@ -7,7 +7,7 @@ import { Accordion } from '@/components/ui/accordion';
 import { CheckCircle, ShieldAlert, Edit, Repeat, ArrowRightLeft, AlertTriangle, Filter, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Transaction, AuditIssue } from './types';
-import { AuditIssueSection } from './AuditIssueSection';
+import { AuditIssueSection, type SortConfig } from './AuditIssueSection';
 import { useUser, useFirestore } from '@/firebase';
 import { doc, writeBatch } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +23,7 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [filter, setFilter] = useState<'needs_audit' | 'audited' | 'all'>('needs_audit');
   const [isBatchEditDialogOpen, setBatchEditDialogOpen] = useState(false);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'date', direction: 'desc' });
   
   const issues = useMemo(() => {
     const foundIssues: AuditIssue[] = [];
@@ -80,16 +81,45 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
     });
     return foundIssues;
   }, [transactions, filter]);
+  
+  const handleSort = (key: SortConfig['key']) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
 
-  const groupedIssues = useMemo(() => {
-    return issues.reduce((acc, issue) => {
+  const groupedAndSortedIssues = useMemo(() => {
+    const grouped = issues.reduce((acc, issue) => {
       if (!acc[issue.type]) {
         acc[issue.type] = [];
       }
       acc[issue.type].push(issue);
       return acc;
     }, {} as Record<string, AuditIssue[]>);
-  }, [issues]);
+    
+    // Sort transactions within each group
+    for (const type in grouped) {
+      grouped[type].sort((a, b) => {
+        const aVal = (a.transaction as any)[sortConfig.key];
+        const bVal = (b.transaction as any)[sortConfig.key];
+        const directionMultiplier = sortConfig.direction === 'asc' ? 1 : -1;
+        
+        if (sortConfig.key === 'date') {
+          return (new Date(aVal).getTime() - new Date(bVal).getTime()) * directionMultiplier;
+        }
+        if (typeof aVal === 'string') {
+          return aVal.localeCompare(bVal) * directionMultiplier;
+        }
+        if (typeof aVal === 'number') {
+          return (aVal - bVal) * directionMultiplier;
+        }
+        return 0;
+      });
+    }
+
+    return grouped;
+  }, [issues, sortConfig]);
   
   const handleSelectionChange = useCallback((id: string, checked: boolean) => {
     setSelectedIds(prev => {
@@ -201,54 +231,66 @@ export function FinancialIntegrityReport({ transactions, onRefresh }: { transact
             <CardDescription className="text-green-700">Your transaction data appears to be consistent based on the current filter.</CardDescription>
         </Card>
       ) : (
-        <Accordion type="multiple" defaultValue={Object.keys(groupedIssues)} className="w-full space-y-4">
+        <Accordion type="multiple" defaultValue={Object.keys(groupedAndSortedIssues)} className="w-full space-y-4">
             <AuditIssueSection 
                 type="duplicate" 
                 icon={Repeat}
                 title="Duplicate Transactions" 
-                issues={groupedIssues.duplicate} 
+                issues={groupedAndSortedIssues.duplicate} 
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
+                sortConfig={sortConfig}
+                onSort={handleSort}
             />
             <AuditIssueSection 
                 type="transfer_error" 
                 icon={ArrowRightLeft}
                 title="Transfer & Payment Errors" 
-                issues={groupedIssues.transfer_error} 
+                issues={groupedAndSortedIssues.transfer_error} 
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
+                sortConfig={sortConfig}
+                onSort={handleSort}
             />
             <AuditIssueSection 
                 type="credit_card_payment" 
                 icon={CreditCard}
                 title="Credit Card Payment Errors" 
-                issues={groupedIssues.credit_card_payment} 
+                issues={groupedAndSortedIssues.credit_card_payment} 
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
+                sortConfig={sortConfig}
+                onSort={handleSort}
             />
             <AuditIssueSection 
                 type="mismatch" 
                 icon={AlertTriangle}
                 title="Income/Expense Mismatches" 
-                issues={groupedIssues.mismatch} 
+                issues={groupedAndSortedIssues.mismatch} 
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
+                sortConfig={sortConfig}
+                onSort={handleSort}
             />
             <AuditIssueSection 
                 type="uncategorized" 
                 icon={AlertTriangle}
                 title="Uncategorized Items" 
-                issues={groupedIssues.uncategorized}
+                issues={groupedAndSortedIssues.uncategorized}
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
+                sortConfig={sortConfig}
+                onSort={handleSort}
             />
             <AuditIssueSection 
                 type="missing_hierarchy" 
                 icon={AlertTriangle}
                 title="Missing Category Data" 
-                issues={groupedIssues.missing_hierarchy}
+                issues={groupedAndSortedIssues.missing_hierarchy}
                 selectedIds={selectedIds}
                 onSelectionChange={handleSelectionChange}
+                sortConfig={sortConfig}
+                onSort={handleSort}
             />
         </Accordion>
       )}

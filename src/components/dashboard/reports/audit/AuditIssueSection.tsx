@@ -5,11 +5,17 @@ import { AccordionContent, AccordionItem, AccordionTrigger } from '@/components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, ArrowUpDown } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { AuditIssue } from './types';
 import { cn } from '@/lib/utils';
 import React from 'react';
+import { Button } from '@/components/ui/button';
+
+export type SortConfig = {
+  key: 'date' | 'description' | 'category' | 'amount';
+  direction: 'asc' | 'desc';
+};
 
 interface AuditIssueSectionProps {
   type: string;
@@ -18,6 +24,8 @@ interface AuditIssueSectionProps {
   issues?: AuditIssue[];
   selectedIds: string[];
   onSelectionChange: (id: string, checked: boolean) => void;
+  sortConfig: SortConfig;
+  onSort: (key: SortConfig['key']) => void;
 }
 
 const primaryCategoryColors: Record<string, string> = {
@@ -28,7 +36,7 @@ const primaryCategoryColors: Record<string, string> = {
   'Asset': 'bg-gray-200 text-gray-800',
 };
 
-export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds, onSelectionChange }: AuditIssueSectionProps) {
+export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds, onSelectionChange, sortConfig, onSort }: AuditIssueSectionProps) {
     if (!issues || issues.length === 0) return null;
 
     const handleSelectAll = (checked: boolean) => {
@@ -36,7 +44,10 @@ export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds
     };
 
     const areAllSelected = issues.every(issue => selectedIds.includes(issue.transaction.id));
-
+    
+    const getSortIcon = (key: SortConfig['key']) => (
+        sortConfig.key === key ? <ArrowUpDown className="h-4 w-4 inline" /> : <ArrowUpDown className="h-4 w-4 inline opacity-30" />
+    );
 
     return (
         <AccordionItem value={type}>
@@ -56,11 +67,11 @@ export function AuditIssueSection({ type, title, icon: Icon, issues, selectedIds
                                     checked={areAllSelected}
                                     onCheckedChange={handleSelectAll}
                                 /></TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Category</TableHead>
+                                <TableHead><Button variant="ghost" size="sm" onClick={() => onSort('date')}>Date {getSortIcon('date')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" size="sm" onClick={() => onSort('description')}>Description {getSortIcon('description')}</Button></TableHead>
+                                <TableHead><Button variant="ghost" size="sm" onClick={() => onSort('category')}>Category {getSortIcon('category')}</Button></TableHead>
                                 <TableHead>Reason</TableHead>
-                                <TableHead className="text-right">Amount</TableHead>
+                                <TableHead className="text-right"><Button variant="ghost" size="sm" onClick={() => onSort('amount')}>Amount {getSortIcon('amount')}</Button></TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
