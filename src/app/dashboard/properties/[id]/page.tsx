@@ -323,12 +323,20 @@ export default function PropertyDetailPage() {
             <TabsList>
                 <TabsTrigger value="units">Unit Matrix</TabsTrigger>
                 <TabsTrigger value="documents">Building Documents</TabsTrigger>
+                <TabsTrigger value="ledger">Property Ledger</TabsTrigger>
             </TabsList>
             <TabsContent value="units" className="mt-6">
                 <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
             </TabsContent>
             <TabsContent value="documents" className="mt-6">
                  <PropertyDocuments propertyId={id} landlordId={user.uid} />
+            </TabsContent>
+            <TabsContent value="ledger" className="mt-6">
+                 <Link href={`/dashboard/properties/${id}/transactions`}>
+                    <Button>
+                        <BookOpen className="mr-2 h-4 w-4" /> Go to Full Ledger
+                    </Button>
+                 </Link>
             </TabsContent>
         </Tabs>
 
