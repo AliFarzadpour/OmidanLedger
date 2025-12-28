@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -19,17 +18,33 @@ import { useToast } from '@/hooks/use-toast';
 import { createTenantInvoice } from '@/actions/stripe-actions';
 import { Loader2, FileText } from 'lucide-react';
 
-export function CreateChargeDialog() {
+interface CreateChargeDialogProps {
+  landlordAccountId?: string;
+  tenantEmail?: string;
+  rentAmount?: number;
+}
+
+export function CreateChargeDialog({ landlordAccountId, tenantEmail, rentAmount }: CreateChargeDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    landlordAccountId: 'acct_1PgB1k2eZvKYlo2C', // Replace with dynamic ID
     tenantEmail: '',
     amount: '',
     description: '',
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        tenantEmail: tenantEmail || '',
+        amount: rentAmount ? String(rentAmount) : '',
+        description: rentAmount ? 'Monthly Rent' : '',
+      });
+    }
+  }, [isOpen, tenantEmail, rentAmount]);
+  
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -37,11 +52,21 @@ export function CreateChargeDialog() {
   };
 
   const handleSubmit = async () => {
+    if (!landlordAccountId) {
+        toast({
+            variant: 'destructive',
+            title: 'Stripe Account Not Connected',
+            description: 'The landlord has not connected a Stripe account for payouts.',
+        });
+        return;
+    }
     setIsLoading(true);
     try {
       const result = await createTenantInvoice({
-        ...formData,
+        landlordAccountId,
+        tenantEmail: formData.tenantEmail,
         amount: Number(formData.amount),
+        description: formData.description,
       });
 
       if (result.success) {
@@ -55,7 +80,7 @@ export function CreateChargeDialog() {
           ),
         });
         setIsOpen(false);
-        setFormData({ landlordAccountId: 'acct_1PgB1k2eZvKYlo2C', tenantEmail: '', amount: '', description: '' });
+        // Form is reset by useEffect on next open
       }
     } catch (error: any) {
       toast({
@@ -121,7 +146,7 @@ export function CreateChargeDialog() {
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsOpen(false)}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={isLoading}>
+          <Button onClick={handleSubmit} disabled={isLoading || !landlordAccountId}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Send Invoice
           </Button>

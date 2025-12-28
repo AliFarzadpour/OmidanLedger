@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, useDoc } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -25,7 +24,7 @@ import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { getDocs, collection, query, limit, where } from 'firebase/firestore';
+import { getDocs, collection, query, limit, where, doc } from 'firebase/firestore';
 
 
 interface Tenant {
@@ -66,6 +65,14 @@ export function RentRollTable() {
 
   const monthStartStr = useMemo(() => format(startOfMonthDate, 'yyyy-MM-dd'), [startOfMonthDate]);
   const monthEndStr = useMemo(() => format(endOfMonthDate, 'yyyy-MM-dd'), [endOfMonthDate]);
+
+  // Fetch the landlord's user document to get their Stripe Account ID
+  const userDocRef = useMemo(() => {
+    if (!user || !firestore) return null;
+    return doc(firestore, 'users', user.uid);
+  }, [user, firestore]);
+  const { data: landlordUserDoc } = useDoc(userDocRef);
+  const landlordStripeId = landlordUserDoc?.stripeAccountId;
   
   useEffect(() => {
     (async () => {
@@ -75,7 +82,6 @@ export function RentRollTable() {
       setTxError(null);
   
       try {
-        // 1) get user's bank accounts
         const baSnap = await getDocs(
           query(
             collection(firestore, 'users', user.uid, 'bankAccounts')
@@ -83,8 +89,6 @@ export function RentRollTable() {
         );
 
         const bankAccountIds = baSnap.docs.map(d => d.id);
-  
-        // 2) for each bank account, query its transactions for the month
         const allTx: Tx[] = [];
   
         for (const bankId of bankAccountIds) {
@@ -153,20 +157,27 @@ export function RentRollTable() {
 
         const tenantIdentifier = activeTenant.id || activeTenant.email;
         const rentDue = activeTenant.rentAmount || 0;
-        
-        const amountPaid = incomeByPropertyId[p.id] || 0;
+        const propertyId = String(p.id || '').trim();
+        const amountPaid = incomeByPropertyId[propertyId] || 0;
         const balance = rentDue - amountPaid;
 
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+        let statusVariant: 'red' | 'green' | 'orange' = 'red';
 
         if (amountPaid === 0) {
             status = 'unpaid';
-        } else if (amountPaid === rentDue) {
+            statusVariant = 'red';
+        } else if (amountPaid >= rentDue) {
             status = 'paid';
+            statusVariant = 'green';
         } else if (amountPaid < rentDue) {
             status = 'partial';
-        } else {
+            statusVariant = 'orange';
+        }
+
+        if (amountPaid > rentDue) {
             status = 'overpaid';
+            statusVariant = 'green'; // Still green, just noted
         }
 
         return {
@@ -255,7 +266,11 @@ export function RentRollTable() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <CreateChargeDialog />
+                  <CreateChargeDialog 
+                    landlordAccountId={landlordStripeId}
+                    tenantEmail={item.tenantEmail}
+                    rentAmount={item.rentAmount}
+                  />
                 </TableCell>
               </TableRow>
             )))}
