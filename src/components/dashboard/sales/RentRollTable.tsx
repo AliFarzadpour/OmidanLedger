@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import { collection, query, where, collectionGroup } from 'firebase/firestore';
 import {
@@ -21,12 +20,12 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { getBillingPeriod } from '@/lib/dates';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { RecordPaymentModal } from './RecordPaymentModal';
-import { format } from 'date-fns';
+import { format, addMonths, subMonths } from 'date-fns';
 
 
 interface Tenant {
@@ -50,6 +49,7 @@ interface Property {
 export function RentRollTable() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const [viewingDate, setViewingDate] = useState(new Date());
 
   const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -58,7 +58,7 @@ export function RentRollTable() {
 
   const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
   
-  const { startOfMonth, endOfMonth } = getBillingPeriod();
+  const { startOfMonth, endOfMonth } = getBillingPeriod(viewingDate);
   
   const paymentsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -94,7 +94,9 @@ export function RentRollTable() {
         const balance = rentDue - rentPaid;
 
         let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
-        if (rentPaid >= rentDue && rentDue > 0) {
+        if (rentDue <= 0) { // If no rent is due, it's considered paid.
+            paymentStatus = 'paid';
+        } else if (rentPaid >= rentDue) {
             paymentStatus = 'paid';
         } else if (rentPaid > 0) {
             paymentStatus = 'partial';
@@ -123,10 +125,22 @@ export function RentRollTable() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Current Rent Roll</CardTitle>
-        <CardDescription>
-          Payment status for the billing period of {format(new Date(), 'MMMM yyyy')}.
-        </CardDescription>
+        <div className="flex justify-between items-center">
+            <div>
+                <CardTitle>Rent Roll</CardTitle>
+                <CardDescription>
+                    Payment status for the billing period of {format(viewingDate, 'MMMM yyyy')}.
+                </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+                <Button variant="outline" size="icon" onClick={() => setViewingDate(d => subMonths(d, 1))}>
+                    <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={() => setViewingDate(d => addMonths(d, 1))}>
+                    <ChevronRight className="h-4 w-4" />
+                </Button>
+            </div>
+        </div>
       </CardHeader>
       <CardContent>
         <Table>
