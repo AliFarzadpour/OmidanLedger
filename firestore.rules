@@ -23,12 +23,12 @@ service cloud.firestore {
 
     // Allow the "transactions" Collection Group queries defined in your index
     match /{path=**}/transactions/{transactionId} {
-        allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     // Allow the "monthlyStats" Collection Group queries defined in your index
     match /{path=**}/monthlyStats/{statsId} {
-        allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+        allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
     
     match /users/{userId} {
