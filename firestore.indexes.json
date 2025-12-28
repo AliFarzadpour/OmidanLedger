@@ -108,11 +108,11 @@
       "queryScope": "COLLECTION_GROUP",
       "fields": [
         {
-          "fieldPath": "userId",
+          "fieldPath": "costCenter",
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "costCenter",
+          "fieldPath": "userId",
           "order": "ASCENDING"
         }
       ]
@@ -120,3 +120,4 @@
   ],
   "fieldOverrides": []
 }
+
