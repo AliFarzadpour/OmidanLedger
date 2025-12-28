@@ -67,14 +67,8 @@ export function RentRollTable() {
   // 1) Load properties (with embedded tenants array)
   const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    return query(collectionGroup(firestore, 'properties'), where('userId', '==', user.uid));
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user, firestore]);
-
-  const propertiesResult = useCollection<Property>(propertiesQuery);
-  console.log('propertiesResult:', propertiesResult);
-  const properties = (propertiesResult as any)?.data;
-  const isLoadingProperties = (propertiesResult as any)?.isLoading;
-
 
   // 2) Load all INCOME transactions for the month
   const incomeTxQuery = useMemoFirebase(() => {
@@ -88,36 +82,44 @@ export function RentRollTable() {
     );
   }, [user, firestore, startOfMonth, endOfMonth]);
   
-  const paymentsResult = useCollection<TxnDoc>(incomeTxQuery);
+  console.log('firestore?', !!firestore);
+  console.log('propertiesQuery:', propertiesQuery);
+  console.log('paymentsQuery:', incomeTxQuery);
+
+  const propertiesResult = useCollection<Property>(propertiesQuery);
+  const paymentsResult = useCollection<any>(incomeTxQuery);
+
+  console.log('propertiesResult:', propertiesResult);
   console.log('paymentsResult:', paymentsResult);
-  const incomeTxns = (paymentsResult as any)?.data;
-  const isLoadingIncome = (paymentsResult as any)?.isLoading;
+
+  const properties = (propertiesResult as any)?.data;
+  const isLoadingProperties = (propertiesResult as any)?.isLoading;
+  const monthlyPayments = (paymentsResult as any)?.data;
+  const isLoadingPayments = (paymentsResult as any)?.isLoading;
 
   // DEBUG SNAPSHOT
   console.log('AUTH UID:', user?.uid);
   console.log('PROPERTIES COUNT:', properties?.length);
   console.log('FIRST PROPERTY:', properties?.[0]);
   console.log('FIRST PROPERTY TENANTS:', properties?.[0]?.tenants);
-  console.log('MONTHLY PAYMENTS COUNT:', incomeTxns?.length);
-  console.log('FIRST PAYMENT:', incomeTxns?.[0]);
+  console.log('MONTHLY PAYMENTS COUNT:', monthlyPayments?.length);
+  console.log('FIRST PAYMENT:', monthlyPayments?.[0]);
 
   // 3) Build Rent Roll rows
   const rows = useMemo(() => {
-    if (!properties || !incomeTxns) return [];
+    if (!properties || !monthlyPayments) return [];
 
     // Sum income by costCenter (property name)
-    const incomeByCostCenter = (incomeTxns || []).reduce((acc: any, tx: any) => {
-        // IMPORTANT: change this field name to whatever your transaction uses:
-        // costCenter / costCenterName / propertyName / entityName etc.
-        const cc = (tx.costCenter || tx.costCenterName || tx.propertyName || '').trim();
-        if (!cc) return acc;
-      
-        const amt = typeof tx.amount === 'number' ? tx.amount : 0;
-        if (amt <= 0) return acc; // only positive income
-      
-        acc[cc] = (acc[cc] || 0) + amt;
-        return acc;
-      }, {});
+    const incomeByCostCenter = new Map<string, number>();
+    for (const tx of monthlyPayments) {
+      const cc = (tx.costCenter || '').trim();
+      if (!cc) continue;
+
+      const amt = typeof tx.amount === 'number' ? tx.amount : 0;
+      if (amt <= 0) continue;
+
+      incomeByCostCenter.set(cc, (incomeByCostCenter.get(cc) || 0) + amt);
+    }
 
     // One row per ACTIVE tenant
     const out: Array<{
@@ -136,7 +138,7 @@ export function RentRollTable() {
         const rentDue = Number(t.rentAmount || 0);
 
         // per your rule: sum all income for that property name in that month
-        const amountPaid = Number(incomeByCostCenter[p.name] || 0);
+        const amountPaid = Number(incomeByCostCenter.get(p.name) || 0);
 
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
         if (amountPaid === 0 && rentDue > 0) status = 'unpaid';
@@ -157,9 +159,9 @@ export function RentRollTable() {
     }
 
     return out;
-  }, [properties, incomeTxns]);
+  }, [properties, monthlyPayments]);
 
-  const isLoading = isLoadingProperties || isLoadingIncome;
+  const isLoading = isLoadingProperties || isLoadingPayments;
 
   return (
     <Card>
