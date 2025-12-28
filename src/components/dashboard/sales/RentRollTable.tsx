@@ -60,8 +60,70 @@ export function RentRollTable() {
     }
   }, [viewingDate]);
 
+  const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+  const [txError, setTxError] = useState<any>(null);
+
   const monthStartStr = useMemo(() => format(startOfMonth, 'yyyy-MM-dd'), [startOfMonth]);
   const monthEndStr = useMemo(() => format(endOfMonth, 'yyyy-MM-dd'), [endOfMonth]);
+  
+  useEffect(() => {
+    (async () => {
+      if (!firestore || !user?.uid) return;
+  
+      setIsLoadingTx(true);
+      setTxError(null);
+  
+      try {
+        // 1) get user's bank accounts
+        const baSnap = await getDocs(
+          query(
+            collection(firestore, 'users', user.uid, 'bankAccounts')
+          )
+        );
+  
+        const bankAccountIds = baSnap.docs.map(d => d.id);
+  
+        // 2) for each bank account, query its transactions for the month
+        const allTx: Tx[] = [];
+  
+        for (const bankId of bankAccountIds) {
+          const txRef = collection(
+            firestore,
+            'users',
+            user.uid,
+            'bankAccounts',
+            bankId,
+            'transactions'
+          );
+  
+          const txSnap = await getDocs(
+            query(
+              txRef,
+              where('categoryHierarchy.l0', '==', 'INCOME'),
+              where('date', '>=', monthStartStr),
+              where('date', '<=', monthEndStr)
+            )
+          );
+  
+          txSnap.docs.forEach(doc => {
+            allTx.push({ id: doc.id, ...doc.data() });
+          });
+        }
+  
+        setMonthlyIncomeTx(allTx);
+  
+        console.log('BANKACCT TX COUNT:', allTx.length);
+        console.log('BANKACCT TX SAMPLE:', allTx[0]);
+      } catch (e) {
+        console.error('Monthly tx fetch failed:', e);
+        setTxError(e);
+        setMonthlyIncomeTx([]);
+      } finally {
+        setIsLoadingTx(false);
+      }
+    })();
+  }, [firestore, user?.uid, monthStartStr, monthEndStr]);
 
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
@@ -74,40 +136,7 @@ export function RentRollTable() {
     // return query(collection(firestore, 'users', user.uid, 'properties'));
   }, [user?.uid, firestore]);
   
-  const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
-  const [isLoadingTx, setIsLoadingTx] = useState(false);
-  const [txError, setTxError] = useState<any>(null);
-
-  useEffect(() => {
-    (async () => {
-      if (!firestore || !user?.uid) return;
-  
-      try {
-        const txRef = collection(
-          firestore,
-          'users',
-          user.uid,
-          'bankAccounts',
-          'Z8xN5jZ15puw1pdVw3qXFwK57PQbg7s8OMQ6j',
-          'transactions'
-        );
-  
-        const snap = await getDocs(query(txRef, limit(3)));
-        console.log('DIRECT TX READ size:', snap.size);
-        console.log('DIRECT TX READ sample:', snap.docs[0]?.data());
-      } catch (e) {
-        console.error('DIRECT TX READ error:', e);
-      }
-    })();
-  }, [firestore, user?.uid]);
-  
-  const propertiesResult = useMemo(() => {
-    // This is a placeholder until useCollection is fixed or replaced
-    if (!propertiesQuery) return { data: [], isLoading: true };
-    // A proper implementation would fetch data based on propertiesQuery
-    return { data: [], isLoading: true };
-  }, [propertiesQuery]);
-
+  const propertiesResult = useCollection<Property>(propertiesQuery);
   const properties = propertiesResult.data || [];
   const isLoadingProperties = propertiesResult.isLoading;
 
