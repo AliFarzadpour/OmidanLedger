@@ -127,9 +127,7 @@ export function RentRollTable() {
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user?.uid, firestore]);
   
-  const propertiesResult = useCollection<Property>(propertiesQuery);
-  const properties = propertiesResult.data || [];
-  const isLoadingProperties = propertiesResult.isLoading;
+  const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
 
 
   const incomeByPropertyId = useMemo(() => {
@@ -161,10 +159,15 @@ export function RentRollTable() {
 
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
 
-        if (amountPaid === 0) status = 'unpaid';
-        else if (amountPaid === rentDue) status = 'paid';
-        else if (amountPaid < rentDue) status = 'partial';
-        else status = 'overpaid';
+        if (amountPaid === 0) {
+            status = 'unpaid';
+        } else if (amountPaid === rentDue) {
+            status = 'paid';
+        } else if (amountPaid < rentDue) {
+            status = 'partial';
+        } else {
+            status = 'overpaid';
+        }
 
         return {
             propertyId: p.id,
