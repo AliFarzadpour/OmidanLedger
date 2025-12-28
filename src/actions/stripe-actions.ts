@@ -23,6 +23,9 @@ interface CreateTenantInvoiceData {
 export async function createTenantInvoice(data: CreateTenantInvoiceData) {
   const { landlordAccountId, tenantEmail, amount, description } = data;
 
+  const currentMonthYear = new Date().toLocaleString('default', { month: 'long', year: 'year' });
+  const fullDescription = `${description} for ${currentMonthYear}`;
+
   // DEBUG LOG
   console.log("?? STRIPE INVOICE DEBUG", {
     stripeAccountIdUsed: landlordAccountId,
@@ -42,7 +45,7 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     const invoice = await stripe.invoices.create({
       customer: customer.id,
       collection_method: 'send_invoice',
-      description: description, // Add the description to the invoice itself
+      description: fullDescription, // Add the description to the invoice itself
       auto_advance: false, // Keep it as a draft
     }, { stripeAccount: landlordAccountId });
 
@@ -52,7 +55,7 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
       invoice: invoice.id,
       amount: Math.round(amount * 100), // Stripe uses cents, ensure it's an integer
       currency: 'usd',
-      description: description,
+      description: fullDescription,
     }, { stripeAccount: landlordAccountId });
 
     // 4. Finalize the invoice so it can be paid
