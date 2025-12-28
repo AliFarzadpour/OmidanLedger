@@ -86,24 +86,34 @@ const getDateRange = (filter: FilterOption) => {
 function normalizeCategory(tx: Transaction): Required<CategoryHierarchy> {
   const ch = tx.categoryHierarchy ?? {};
 
-  // If new schema is present, trust it
-  const l0 = ch.l0 ?? tx.primaryCategory ?? '';
-  const l1 = ch.l1 ?? tx.secondaryCategory ?? '';
-  const l2 = ch.l2 ?? tx.subcategory ?? '';
-  const l3 = ch.l3 ?? ''; // optional
+  const rawL0 = (ch.l0 ?? tx.primaryCategory ?? '').toString().trim();
+  const rawL1 = (ch.l1 ?? tx.secondaryCategory ?? '').toString().trim();
+  const rawL2 = (ch.l2 ?? tx.subcategory ?? '').toString().trim();
+  const rawL3 = (ch.l3 ?? '').toString().trim();
 
-  // Some older data might store Expense/Income as part of primaryCategory differently.
-  // Add small normalization here if needed.
-  const normL0 =
-    l0?.toLowerCase() === 'expenses' ? 'Expense'
-    : l0?.toLowerCase() === 'income' ? 'Income'
-    : l0;
+  // Canonicalize L0 to your official 6-value set
+  const l0Upper = rawL0.toUpperCase();
+
+  let l0: string;
+  if (l0Upper === 'INCOME') l0 = 'INCOME';
+  else if (l0Upper === 'OPERATING EXPENSE') l0 = 'OPERATING EXPENSE';
+  else if (l0Upper === 'EXPENSE') l0 = 'EXPENSE';
+  else if (l0Upper === 'ASSET') l0 = 'ASSET';
+  else if (l0Upper === 'LIABILITY') l0 = 'LIABILITY';
+  else if (l0Upper === 'EQUITY') l0 = 'EQUITY';
+  else {
+    // Legacy / fallback mappings
+    const low = rawL0.toLowerCase();
+    if (low.includes('income')) l0 = 'INCOME';
+    else if (low.includes('expense')) l0 = 'OPERATING EXPENSE'; // default you chose
+    else l0 = 'EXPENSE'; // safe fallback for uncategorized/other
+  }
 
   return {
-    l0: normL0 || 'Uncategorized',
-    l1: l1 || 'Uncategorized',
-    l2: l2 || 'Uncategorized',
-    l3: l3 || '',
+    l0: l0 || 'EXPENSE',
+    l1: rawL1 || 'Uncategorized',
+    l2: rawL2 || 'Uncategorized',
+    l3: rawL3 || '',
   };
 }
 
@@ -199,13 +209,10 @@ export default function DashboardPage() {
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
-      if (cat.l0 === 'Income') {
-        // If your income amounts are positive, keep as-is.
-        // If some are negative, you can Math.abs() them.
+      if (cat.l0 === 'INCOME') {
         income += amount;
         dayStats.income += amount;
-      } else if (cat.l0 === 'Expense') {
-        // Most expense transactions are negative amounts. Normalize to absolute for charts.
+      } else if (cat.l0 === 'OPERATING EXPENSE' || cat.l0 === 'EXPENSE') {
         const abs = Math.abs(amount);
         expensesAbs += abs;
 
@@ -216,7 +223,7 @@ export default function DashboardPage() {
         const vendor = cat.l3 || tx.description?.trim() || 'Unknown';
         vendorMap.set(vendor, (vendorMap.get(vendor) || 0) + abs);
       } else {
-        // Transfers or uncategorized: ignore for P&L, or handle separately if you want.
+        // ASSET/LIABILITY/EQUITY ignored for P&L charts
       }
     }
 
