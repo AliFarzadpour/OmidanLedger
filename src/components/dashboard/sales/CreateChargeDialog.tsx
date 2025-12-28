@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -21,16 +22,18 @@ import { Loader2, FileText } from 'lucide-react';
 interface CreateChargeDialogProps {
   landlordAccountId?: string;
   tenantEmail?: string;
+  tenantPhone?: string;
   rentAmount?: number;
 }
 
-export function CreateChargeDialog({ landlordAccountId, tenantEmail, rentAmount }: CreateChargeDialogProps) {
+export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone, rentAmount }: CreateChargeDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
     tenantEmail: '',
+    tenantPhone: '',
     amount: '',
     description: '',
   });
@@ -39,11 +42,12 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, rentAmount 
     if (isOpen) {
       setFormData({
         tenantEmail: tenantEmail || '',
+        tenantPhone: tenantPhone || '',
         amount: rentAmount ? String(rentAmount) : '',
         description: rentAmount ? 'Monthly Rent' : '',
       });
     }
-  }, [isOpen, tenantEmail, rentAmount]);
+  }, [isOpen, tenantEmail, tenantPhone, rentAmount]);
   
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -65,6 +69,7 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, rentAmount 
       const result = await createTenantInvoice({
         landlordAccountId,
         tenantEmail: formData.tenantEmail,
+        tenantPhone: formData.tenantPhone,
         amount: Number(formData.amount),
         description: formData.description,
       });
@@ -119,6 +124,17 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, rentAmount 
               type="email"
               placeholder="tenant@example.com"
               value={formData.tenantEmail}
+              onChange={handleChange}
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="tenantPhone">Tenant Phone (for SMS)</Label>
+            <Input
+              id="tenantPhone"
+              name="tenantPhone"
+              type="tel"
+              placeholder="+15551234567"
+              value={formData.tenantPhone}
               onChange={handleChange}
             />
           </div>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -32,6 +33,7 @@ interface Tenant {
     firstName: string;
     lastName: string;
     email: string;
+    phone?: string;
     status: 'active' | 'past';
     rentAmount: number;
 }
@@ -186,6 +188,7 @@ export function RentRollTable() {
             tenantId: tenantIdentifier,
             tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
             tenantEmail: activeTenant.email,
+            tenantPhone: activeTenant.phone,
             rentAmount: rentDue,
             amountPaid: amountPaid,
             balance: balance,
@@ -266,9 +269,10 @@ export function RentRollTable() {
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right">
-                  <CreateChargeDialog 
+                  <CreateChargeDialog
                     landlordAccountId={landlordStripeId}
                     tenantEmail={item.tenantEmail}
+                    tenantPhone={item.tenantPhone}
                     rentAmount={item.rentAmount}
                   />
                 </TableCell>

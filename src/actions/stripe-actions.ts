@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import Stripe from 'stripe';
@@ -12,6 +13,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 interface CreateTenantInvoiceData {
   landlordAccountId: string;
   tenantEmail: string;
+  tenantPhone?: string;
   amount: number;
   description: string;
 }
@@ -21,7 +23,7 @@ interface CreateTenantInvoiceData {
  * on behalf of a connected landlord account.
  */
 export async function createTenantInvoice(data: CreateTenantInvoiceData) {
-  const { landlordAccountId, tenantEmail, amount, description } = data;
+  const { landlordAccountId, tenantEmail, tenantPhone, amount, description } = data;
 
   const now = new Date();
   const month = now.toLocaleString('default', { month: 'long' });
@@ -41,6 +43,7 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     // 1. Create or retrieve the Tenant as a Stripe Customer on the Landlord's account
     const customer = await stripe.customers.create({
       email: tenantEmail,
+      phone: tenantPhone,
     }, { stripeAccount: landlordAccountId });
 
     // 2. Create the Invoice in a draft state first
@@ -82,4 +85,5 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     throw new Error(error.message || 'An internal error occurred while creating the invoice.');
   }
 }
+
 
