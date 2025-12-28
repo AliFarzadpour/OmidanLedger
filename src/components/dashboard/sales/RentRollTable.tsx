@@ -64,12 +64,13 @@ export function RentRollTable() {
   
   const paymentsQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
+    // CORRECTED QUERY: Look for L0 = INCOME and a valid tenantId.
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
       where('date', '>=', startOfMonth),
       where('date', '<=', endOfMonth),
-      where('categoryHierarchy.l1', '==', 'Rental Income')
+      where('categoryHierarchy.l0', '==', 'Income')
     );
   }, [user, firestore, startOfMonth, endOfMonth]);
   
@@ -96,8 +97,8 @@ export function RentRollTable() {
         const balance = rentDue - rentPaid;
 
         let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
-        if (rentDue <= 0) {
-            paymentStatus = 'paid';
+        if (rentDue <= 0 && rentPaid <= 0) {
+            paymentStatus = 'paid'; // Handles cases where rent is 0
         } else if (rentPaid >= rentDue) {
             paymentStatus = 'paid';
         } else if (rentPaid > 0) {
