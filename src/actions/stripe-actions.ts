@@ -23,8 +23,10 @@ interface CreateTenantInvoiceData {
 export async function createTenantInvoice(data: CreateTenantInvoiceData) {
   const { landlordAccountId, tenantEmail, amount, description } = data;
 
-  const currentMonthYear = new Date().toLocaleString('default', { month: 'long', year: 'year' });
-  const fullDescription = `${description} for ${currentMonthYear}`;
+  const now = new Date();
+  const month = now.toLocaleString('default', { month: 'long' });
+  const year = now.getFullYear();
+  const fullDescription = `${description} for ${month} ${year}`;
 
   // DEBUG LOG
   console.log("?? STRIPE INVOICE DEBUG", {
