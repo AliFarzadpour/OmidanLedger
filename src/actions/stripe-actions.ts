@@ -64,13 +64,14 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     // 4. Finalize the invoice so it can be paid
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id, { stripeAccount: landlordAccountId });
     
-    // CRITICAL: Retrieve the invoice again after finalization to get the hosted_invoice_url
-    const sentInvoice = await stripe.invoices.retrieve(finalizedInvoice.id, {
+    // 5. CRITICAL: Send the finalized invoice to the customer
+    const sentInvoice = await stripe.invoices.sendInvoice(finalizedInvoice.id, {
         stripeAccount: landlordAccountId,
     });
 
+
     if (!sentInvoice.hosted_invoice_url) {
-        throw new Error("Failed to retrieve the hosted invoice URL after finalization.");
+        throw new Error("Failed to retrieve the hosted invoice URL after sending.");
     }
 
     return { success: true, invoiceUrl: sentInvoice.hosted_invoice_url };
@@ -81,3 +82,4 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     throw new Error(error.message || 'An internal error occurred while creating the invoice.');
   }
 }
+
