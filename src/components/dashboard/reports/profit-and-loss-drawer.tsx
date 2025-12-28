@@ -6,7 +6,7 @@ import { doc } from 'firebase/firestore';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { useToast } from '@/hooks/use-toast';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -125,6 +125,14 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
     );
   };
   
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(filteredAndSortedTransactions.map(t => t.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string }) => {
     if (!user || !firestore || !transaction.bankAccountId) return;
     
@@ -197,15 +205,29 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
         <div className="mt-4 flex-1 min-h-0">
           <ScrollArea className="h-full">
             <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={filteredAndSortedTransactions.length > 0 && selectedIds.length === filteredAndSortedTransactions.length}
+                      onCheckedChange={(checked) => handleSelectAll(!!checked)}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
+                  <TableHead>Details</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
               <TableBody>
                 {filteredAndSortedTransactions.map((transaction) => (
                   <TableRow key={transaction.id}>
-                      <TableCell className="w-[50px]">
-                          <Checkbox 
-                              checked={selectedIds.includes(transaction.id)}
-                              onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
-                          />
-                      </TableCell>
+                    <TableCell>
+                      <Checkbox 
+                        checked={selectedIds.includes(transaction.id)}
+                        onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div>
                       <div className="font-medium max-w-[200px] truncate">{transaction.description}</div>
