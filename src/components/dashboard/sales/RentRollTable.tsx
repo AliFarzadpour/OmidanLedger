@@ -55,7 +55,7 @@ export function RentRollTable() {
 
   const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+    return query(collectionGroup(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user, firestore]);
 
   const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
@@ -78,45 +78,52 @@ export function RentRollTable() {
 
 
   const rentRoll = useMemo(() => {
-    if (!properties) return [];
+    if (!properties || !monthlyPayments) return [];
 
-    const paymentsByTenant = (monthlyPayments || []).reduce((acc: any, p: any) => {
-        if(p.tenantId) {
-            acc[p.tenantId] = (acc[p.tenantId] || 0) + p.amount;
-        }
-        return acc;
+    const incomeByCostCenter = (monthlyPayments || []).reduce((acc: any, tx: any) => {
+      // IMPORTANT: change this field name to whatever your transaction uses:
+      // costCenter / costCenterName / propertyName / entityName etc.
+      const cc = (tx.costCenter || tx.costCenterName || tx.propertyName || '').trim();
+      if (!cc) return acc;
+
+      const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
+      if (!Number.isFinite(amt) || amt <= 0) return acc; // only positive income
+
+      acc[cc] = (acc[cc] || 0) + amt;
+      return acc;
     }, {});
 
-    return properties.flatMap(p => {
-        const activeTenant = p.tenants?.find((t: any) => t.status === 'active');
-        if (!activeTenant || !(activeTenant.id || activeTenant.email)) return [];
 
-        const tenantIdentifier = activeTenant.id || activeTenant.email;
+    return properties.flatMap(p => {
+        const activeTenant = p.tenants?.find((t: any) => (t?.status || '').toLowerCase() === 'active');
+        if (!activeTenant) return [];
+
         const rentDue = activeTenant.rentAmount || 0;
-        const rentPaid = paymentsByTenant[tenantIdentifier] || 0;
-        const balance = rentDue - rentPaid;
+        const amountPaid = Number(incomeByCostCenter[p.name] || 0);
+        const balance = rentDue - amountPaid;
 
         let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
-        if (rentDue <= 0 && rentPaid <= 0) {
-            paymentStatus = 'paid'; // Handles cases where rent is 0
-        } else if (rentPaid >= rentDue) {
+        if (rentDue <= 0 && amountPaid <= 0) {
             paymentStatus = 'paid';
-        } else if (rentPaid > 0) {
+        } else if (amountPaid === 0) {
+            paymentStatus = 'unpaid';
+        } else if (amountPaid >= rentDue) {
+            paymentStatus = 'paid';
+        } else if (amountPaid > 0) {
             paymentStatus = 'partial';
         }
-        
-        if (rentPaid > rentDue && rentDue > 0) {
+
+        if (amountPaid > rentDue && rentDue > 0) {
             paymentStatus = 'overpaid';
         }
+
 
         return {
             propertyId: p.id,
             propertyName: p.name,
-            tenantId: tenantIdentifier,
             tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
-            tenantEmail: activeTenant.email,
             rentAmount: rentDue,
-            amountPaid: rentPaid,
+            amountPaid: amountPaid,
             balance: balance,
             status: paymentStatus
         };
@@ -154,26 +161,25 @@ export function RentRollTable() {
               <TableHead>Rent Due</TableHead>
               <TableHead>Amount Paid</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
                 <TableRow>
-                    <TableCell colSpan={6} className="text-center p-8">
+                    <TableCell colSpan={5} className="text-center p-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/>
                     </TableCell>
                 </TableRow>
             ) : rentRoll.length === 0 ? (
                  <TableRow>
-                    <TableCell colSpan={6} className="text-center p-8">
+                    <TableCell colSpan={5} className="text-center p-8">
                         <p className="font-semibold">No Active Leases Found</p>
-                        <p className="text-sm text-muted-foreground">Add tenants to your properties to see them here.</p>
+                        <p className="text-sm text-muted-foreground">Add tenants with status 'active' to your properties.</p>
                     </TableCell>
                 </TableRow>
             ) : (
-                rentRoll.map((item) => (
-              <TableRow key={item.propertyId}>
+                rentRoll.map((item, index) => (
+              <TableRow key={`${item.propertyId}-${index}`}>
                 <TableCell className="font-medium">{item.propertyName}</TableCell>
                 <TableCell>{item.tenantName}</TableCell>
                 <TableCell>{formatCurrency(item.rentAmount)}</TableCell>
@@ -187,26 +193,12 @@ export function RentRollTable() {
                     }
                     className={cn(
                         item.status === 'paid' && 'bg-green-100 text-green-800 border-green-200',
-                        item.status === 'partial' && 'bg-yellow-100 text-yellow-800 border-yellow-200',
+                        item.status === 'partial' && 'bg-orange-100 text-orange-800 border-orange-200',
                         item.status === 'overpaid' && 'bg-blue-100 text-blue-800 border-blue-200',
                     )}
                   >
                     {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                   </Badge>
-                </TableCell>
-                <TableCell className="text-right space-x-2">
-                    {user && (
-                      <RecordPaymentModal 
-                        tenant={{id: item.tenantId, firstName: item.tenantName, rentAmount: item.rentAmount}}
-                        propertyId={item.propertyId}
-                        landlordId={user.uid}
-                      />
-                    )}
-                    <CreateChargeDialog 
-                        // @ts-ignore
-                        defaultTenantEmail={item.tenantEmail}
-                        defaultAmount={item.balance > 0 ? item.balance : undefined}
-                    />
                 </TableCell>
               </TableRow>
             )))}
