@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -112,8 +113,8 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
           aValue = `${a.categoryHierarchy?.l0 || ''}${a.categoryHierarchy?.l1 || ''}${a.categoryHierarchy?.l2 || ''}`;
           bValue = `${b.categoryHierarchy?.l0 || ''}${b.categoryHierarchy?.l1 || ''}${b.categoryHierarchy?.l2 || ''}`;
       } else {
-        aValue = a[sortConfig.key];
-        bValue = b[sortConfig.key];
+        aValue = a[sortConfig.key as keyof typeof a];
+        bValue = b[sortConfig.key as keyof typeof b];
       }
       
       if (typeof aValue === 'string') {
@@ -287,3 +288,5 @@ export function ProfitAndLossDrawer({ isOpen, onOpenChange, category, onUpdate }
     </>
   );
 }
+
+    
