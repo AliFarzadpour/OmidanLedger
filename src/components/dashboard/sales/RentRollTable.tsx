@@ -26,6 +26,7 @@ import { formatCurrency } from '@/lib/format';
 import { getBillingPeriod } from '@/lib/dates';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { RecordPaymentModal } from './RecordPaymentModal';
+import { format } from 'date-fns';
 
 
 interface Tenant {
@@ -66,8 +67,7 @@ export function RentRollTable() {
       where('userId', '==', user.uid),
       where('date', '>=', startOfMonth),
       where('date', '<=', endOfMonth),
-      // This `where` clause is the fix. It looks for both the old and new category structures.
-      where('categoryHierarchy.l1', '==', 'Rental Income')
+      where('categoryHierarchy.l1', 'in', ['Rental Income', 'Uncategorized'])
     );
   }, [user, firestore, startOfMonth, endOfMonth]);
   
@@ -125,7 +125,7 @@ export function RentRollTable() {
       <CardHeader>
         <CardTitle>Current Rent Roll</CardTitle>
         <CardDescription>
-          A summary of active leases and their payment status for the current billing period.
+          Payment status for the billing period of {format(new Date(), 'MMMM yyyy')}.
         </CardDescription>
       </CardHeader>
       <CardContent>
