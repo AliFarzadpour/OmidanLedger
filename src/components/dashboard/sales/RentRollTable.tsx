@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, useCollection } from '@/firebase';
 import { collection, query, where, collectionGroup } from 'firebase/firestore';
 import {
   Table,
@@ -84,14 +85,14 @@ export function RentRollTable() {
     if (!properties) return [];
 
     const incomeByPropertyId = (monthlyPayments || []).reduce((acc: any, tx: any) => {
-        const pid = String(tx.propertyId || tx.costCenter || '').trim();
-        if (!pid) return acc;
+      const pid = String(tx.propertyId || tx.costCenter || '').trim();
+      if (!pid) return acc;
 
-        const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
-        if (!Number.isFinite(amt) || amt <= 0) return acc;
+      const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
+      if (!Number.isFinite(amt) || amt <= 0) return acc;
 
-        acc[pid] = (acc[pid] || 0) + amt;
-        return acc;
+      acc[pid] = (acc[pid] || 0) + amt;
+      return acc;
     }, {});
 
 
