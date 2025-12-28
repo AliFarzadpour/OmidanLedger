@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
@@ -26,6 +27,7 @@ import { getBillingPeriod } from '@/lib/dates';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { RecordPaymentModal } from './RecordPaymentModal';
 import { format, addMonths, subMonths } from 'date-fns';
+import { cn } from '@/lib/utils';
 
 
 interface Tenant {
@@ -94,7 +96,7 @@ export function RentRollTable() {
         const balance = rentDue - rentPaid;
 
         let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
-        if (rentDue <= 0) { // If no rent is due, it's considered paid.
+        if (rentDue <= 0) {
             paymentStatus = 'paid';
         } else if (rentPaid >= rentDue) {
             paymentStatus = 'paid';
@@ -149,6 +151,7 @@ export function RentRollTable() {
               <TableHead>Property</TableHead>
               <TableHead>Tenant</TableHead>
               <TableHead>Rent Due</TableHead>
+              <TableHead>Amount Paid</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -156,13 +159,13 @@ export function RentRollTable() {
           <TableBody>
             {isLoading ? (
                 <TableRow>
-                    <TableCell colSpan={5} className="text-center p-8">
+                    <TableCell colSpan={6} className="text-center p-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/>
                     </TableCell>
                 </TableRow>
             ) : rentRoll.length === 0 ? (
                  <TableRow>
-                    <TableCell colSpan={5} className="text-center p-8">
+                    <TableCell colSpan={6} className="text-center p-8">
                         <p className="font-semibold">No Active Leases Found</p>
                         <p className="text-sm text-muted-foreground">Add tenants to your properties to see them here.</p>
                     </TableCell>
@@ -173,17 +176,19 @@ export function RentRollTable() {
                 <TableCell className="font-medium">{item.propertyName}</TableCell>
                 <TableCell>{item.tenantName}</TableCell>
                 <TableCell>{formatCurrency(item.rentAmount)}</TableCell>
+                <TableCell className="font-medium text-green-700">{formatCurrency(item.amountPaid)}</TableCell>
                 <TableCell>
                   <Badge
                     variant={
-                        item.status === 'paid' ? 'secondary' :
+                        item.status === 'paid' ? 'default' :
                         item.status === 'unpaid' ? 'destructive' :
                         'outline'
                     }
-                     className={
-                        item.status === 'paid' ? 'bg-green-100 text-green-800' :
-                        item.status === 'partial' ? 'bg-yellow-100 text-yellow-800' : ''
-                     }
+                    className={cn(
+                        item.status === 'paid' && 'bg-green-100 text-green-800 border-green-200',
+                        item.status === 'partial' && 'bg-yellow-100 text-yellow-800 border-yellow-200',
+                        item.status === 'overpaid' && 'bg-blue-100 text-blue-800 border-blue-200',
+                    )}
                   >
                     {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
                   </Badge>
