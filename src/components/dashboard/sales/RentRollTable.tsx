@@ -47,13 +47,13 @@ interface Property {
     tenants: Tenant[];
 }
 
+type Tx = any;
+
 export function RentRollTable() {
   const { user } = useUser();
   const firestore = useFirestore();
   const [viewingDate, setViewingDate] = useState(new Date());
 
-  console.log('firestore?', !!firestore);
-  
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
   
@@ -65,66 +65,18 @@ export function RentRollTable() {
     // return query(collection(firestore, 'users', user.uid, 'properties'));
   }, [user?.uid, firestore]);
   
-  const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
-  const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
-  
-  const paymentsQuery = useMemo(() => {
-    if (!user?.uid || !firestore) return null;
-  
-    return query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid)
-    );
-  }, [user?.uid, firestore]);
-
-  console.log('propertiesQuery:', propertiesQuery);
-  console.log('paymentsQuery:', paymentsQuery);
-  
   const propertiesResult = useCollection<Property>(propertiesQuery);
-  const paymentsResult = useCollection<any>(paymentsQuery);
-
-  console.log('propertiesResult:', propertiesResult);
-  console.log('paymentsResult:', paymentsResult);
-
   const properties = propertiesResult.data || [];
   const isLoadingProperties = propertiesResult.isLoading;
-  const monthlyPayments = paymentsResult.data || [];
-  const isLoadingPayments = paymentsResult.isLoading;
-
-  console.log('PROPERTIES COUNT:', properties.length);
-  console.log('FIRST PROPERTY:', properties?.[0]);
-  console.log('FIRST PROPERTY TENANTS:', properties?.[0]?.tenants);
-  console.log('ALL TX COUNT:', monthlyPayments.length);
-  console.log('SAMPLE TX:', monthlyPayments[0]);
   
-  useEffect(() => {
-    (async () => {
-      if (!firestore || !user?.uid) return;
-  
-      try {
-        const txRef = collection(
-          firestore,
-          'users',
-          user.uid,
-          'bankAccounts',
-          'Z8xN5jZ15puw1pdVw3qXFwK57PQbg7s8OMQ6j',
-          'transactions'
-        );
-  
-        const snap = await getDocs(query(txRef, limit(3)));
-        console.log('DIRECT TX READ size:', snap.size);
-        console.log('DIRECT TX READ sample:', snap.docs[0]?.data());
-      } catch (e) {
-        console.error('DIRECT TX READ error:', e);
-      }
-    })();
-  }, [firestore, user?.uid]);
-
+  const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
+  const [isLoadingTx, setIsLoadingTx] = useState(false);
+  const [txError, setTxError] = useState<any>(null);
 
   const rentRoll = useMemo(() => {
     if (!properties) return [];
 
-    const incomeByPropertyId = (monthlyPayments || []).reduce((acc: any, tx: any) => {
+    const incomeByPropertyId = (monthlyIncomeTx || []).reduce((acc: any, tx: any) => {
       const pid = String(tx.propertyId || tx.costCenter || '').trim();
       if (!pid) return acc;
     
@@ -145,7 +97,7 @@ export function RentRollTable() {
         const amountPaid = incomeByPropertyId[p.id] || 0;
         const balance = rentDue - amountPaid;
 
-        let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
+        let status: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
 
         if (amountPaid === 0) status = 'unpaid';
         else if (amountPaid === rentDue) status = 'paid';
@@ -161,12 +113,12 @@ export function RentRollTable() {
             rentAmount: rentDue,
             amountPaid: amountPaid,
             balance: balance,
-            status: paymentStatus
+            status: status
         };
     });
-  }, [properties, monthlyPayments]);
+  }, [properties, monthlyIncomeTx]);
   
-  const isLoading = isLoadingProperties || isLoadingPayments;
+  const isLoading = isLoadingProperties || isLoadingTx;
 
   return (
     <Card>
