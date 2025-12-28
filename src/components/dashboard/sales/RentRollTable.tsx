@@ -1,8 +1,7 @@
-
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { useUser, useFirestore } from '@/firebase';
 import { collection, query, where, collectionGroup } from 'firebase/firestore';
 import {
   Table,
@@ -52,10 +51,6 @@ export function RentRollTable() {
   const firestore = useFirestore();
   const [viewingDate, setViewingDate] = useState(new Date());
 
-  const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
-  const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
-
-  // 1) Load properties (with embedded tenants array)
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
@@ -64,37 +59,37 @@ export function RentRollTable() {
   const propertiesResult = useCollection<Property>(propertiesQuery);
   const properties = propertiesResult.data || [];
   const isLoadingProperties = propertiesResult.isLoading;
+  
+  const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
+  const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
 
-
-  // 2) Load all INCOME transactions for the month
   const paymentsQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
   
     return query(
       collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid)
+      where('userId', '==', user.uid),
+      where('categoryHierarchy.l0', '==', 'INCOME'),
+      where('date', '>=', monthStartStr),
+      where('date', '<=', monthEndStr)
     );
-  }, [user?.uid, firestore]);
+  }, [user?.uid, firestore, monthStartStr, monthEndStr]);
   
-  const paymentsResult = useCollection(paymentsQuery);
+  const paymentsResult = useCollection<any>(paymentsQuery);
   const monthlyPayments = paymentsResult.data || [];
   const isLoadingPayments = paymentsResult.isLoading;
 
-  console.log('ALL TX COUNT:', monthlyPayments.length);
-  console.log('SAMPLE TX:', monthlyPayments[0]);
 
-
-  // 3) Build Rent Roll rows
   const rentRoll = useMemo(() => {
     if (!properties) return [];
 
     const incomeByPropertyId = (monthlyPayments || []).reduce((acc: any, tx: any) => {
         const pid = String(tx.propertyId || tx.costCenter || '').trim();
         if (!pid) return acc;
-      
+
         const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
         if (!Number.isFinite(amt) || amt <= 0) return acc;
-      
+
         acc[pid] = (acc[pid] || 0) + amt;
         return acc;
     }, {});
