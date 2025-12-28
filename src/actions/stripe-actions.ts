@@ -49,6 +49,7 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
       collection_method: 'send_invoice',
       description: fullDescription, // Add the description to the invoice itself
       auto_advance: false, // Keep it as a draft
+      days_until_due: 7, // Specify a due date
     }, { stripeAccount: landlordAccountId });
 
     // 3. Create an Invoice Item and link it to the draft invoice
