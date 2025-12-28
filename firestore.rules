@@ -20,6 +20,16 @@ service cloud.firestore {
     function isLandlordOfTenant(tenantUserId) {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(tenantUserId)).data.landlordId == request.auth.uid;
     }
+
+    // Allow the "transactions" Collection Group queries defined in your index
+    match /{path=**}/transactions/{transactionId} {
+        allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // Allow the "monthlyStats" Collection Group queries defined in your index
+    match /{path=**}/monthlyStats/{statsId} {
+        allow read, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
     
     match /users/{userId} {
       allow get: if isOwner(userId);
@@ -44,11 +54,6 @@ service cloud.firestore {
         }
     }
     
-    // NEW RULE: Allow users to list their own transactions across all bank accounts
-    match /users/{userId}/bankAccounts/{bankAccountId}/transactions/{transactionId} {
-        allow list: if isOwner(userId);
-    }
-
     match /properties/{propertyId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
       allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
@@ -82,10 +87,6 @@ service cloud.firestore {
         allow get, list, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
         // Use request.resource.data for create/update
         allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-    }
-
-    match /{path=**}/monthlyStats/{monthId} {
-        allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
     match /vendors/{vendorId} {
