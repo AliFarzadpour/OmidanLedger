@@ -23,6 +23,11 @@ interface CreateTenantInvoiceData {
 export async function createTenantInvoice(data: CreateTenantInvoiceData) {
   const { landlordAccountId, tenantEmail, amount, description } = data;
 
+  // DEBUG LOG
+  console.log("?? STRIPE INVOICE DEBUG", {
+    stripeAccountIdUsed: landlordAccountId,
+  });
+
   if (!landlordAccountId || !tenantEmail || !amount || !description) {
     throw new Error('Missing required invoice data.');
   }
