@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import { useUser, useFirestore, useCollection } from '@/firebase';
-import { collection, query, where, collectionGroup } from 'firebase/firestore';
+import { collection, query, where, collectionGroup, getDocs, limit } from 'firebase/firestore';
 import {
   Table,
   TableBody,
@@ -53,6 +53,7 @@ export function RentRollTable() {
   const [viewingDate, setViewingDate] = useState(new Date());
 
   console.log('firestore?', !!firestore);
+  
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
   
@@ -90,22 +91,48 @@ export function RentRollTable() {
   const monthlyPayments = paymentsResult.data || [];
   const isLoadingPayments = paymentsResult.isLoading;
 
+  console.log('PROPERTIES COUNT:', properties.length);
+  console.log('FIRST PROPERTY:', properties?.[0]);
+  console.log('FIRST PROPERTY TENANTS:', properties?.[0]?.tenants);
   console.log('ALL TX COUNT:', monthlyPayments.length);
   console.log('SAMPLE TX:', monthlyPayments[0]);
+  
+  useEffect(() => {
+    (async () => {
+      if (!firestore || !user?.uid) return;
+  
+      try {
+        const txRef = collection(
+          firestore,
+          'users',
+          user.uid,
+          'bankAccounts',
+          'Z8xN5jZ15puw1pdVw3qXFwK57PQbg7s8OMQ6j',
+          'transactions'
+        );
+  
+        const snap = await getDocs(query(txRef, limit(3)));
+        console.log('DIRECT TX READ size:', snap.size);
+        console.log('DIRECT TX READ sample:', snap.docs[0]?.data());
+      } catch (e) {
+        console.error('DIRECT TX READ error:', e);
+      }
+    })();
+  }, [firestore, user?.uid]);
 
 
   const rentRoll = useMemo(() => {
     if (!properties) return [];
 
     const incomeByPropertyId = (monthlyPayments || []).reduce((acc: any, tx: any) => {
-        const pid = String(tx.propertyId || tx.costCenter || '').trim();
-        if (!pid) return acc;
-      
-        const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
-        if (!Number.isFinite(amt) || amt <= 0) return acc;
-      
-        acc[pid] = (acc[pid] || 0) + amt;
-        return acc;
+      const pid = String(tx.propertyId || tx.costCenter || '').trim();
+      if (!pid) return acc;
+    
+      const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
+      if (!Number.isFinite(amt) || amt <= 0) return acc;
+    
+      acc[pid] = (acc[pid] || 0) + amt;
+      return acc;
     }, {});
 
 
@@ -116,8 +143,9 @@ export function RentRollTable() {
         const tenantIdentifier = activeTenant.id || activeTenant.email;
         const rentDue = activeTenant.rentAmount || 0;
         const amountPaid = incomeByPropertyId[p.id] || 0;
-        
-        let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+        const balance = rentDue - amountPaid;
+
+        let paymentStatus: 'paid' | 'unpaid' | 'partial' | 'overpaid' = 'unpaid';
 
         if (amountPaid === 0) status = 'unpaid';
         else if (amountPaid === rentDue) status = 'paid';
@@ -132,8 +160,8 @@ export function RentRollTable() {
             tenantEmail: activeTenant.email,
             rentAmount: rentDue,
             amountPaid: amountPaid,
-            balance: rentDue - amountPaid,
-            status: status
+            balance: balance,
+            status: paymentStatus
         };
     });
   }, [properties, monthlyPayments]);
