@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -258,16 +259,7 @@ export function ProfitAndLossReport() {
 
   const handleUpdate = () => {
     fetchData(); // Refetch all data
-    if (selectedCategory) {
-      const updatedIncomeCat = summaryReportData.income.find(c => c.name === selectedCategory.name);
-      const updatedExpenseCat = summaryReportData.expenses.find(c => c.name === selectedCategory.name);
-      const updatedCategory = updatedIncomeCat || updatedExpenseCat;
-      if (updatedCategory) {
-        setSelectedCategory(updatedCategory);
-      } else {
-        setIsDrawerOpen(false); 
-      }
-    }
+    setIsDrawerOpen(false); // Close the drawer
   };
 
 
@@ -330,3 +322,4 @@ export function ProfitAndLossReport() {
     </>
   );
 }
+
