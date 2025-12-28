@@ -52,47 +52,60 @@ export function RentRollTable() {
   const firestore = useFirestore();
   const [viewingDate, setViewingDate] = useState(new Date());
 
+  console.log('firestore?', !!firestore);
   const propertiesQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
-    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
-  }, [user?.uid, firestore]);
   
-  const propertiesResult = useCollection<Property>(propertiesQuery);
-  const properties = propertiesResult.data || [];
-  const isLoadingProperties = propertiesResult.isLoading;
+    // Use whichever one matches your real location:
+    // OPTION A: top-level properties
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  
+    // OPTION B (if properties are under users/{uid}/properties):
+    // return query(collection(firestore, 'users', user.uid, 'properties'));
+  }, [user?.uid, firestore]);
   
   const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
   const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
-
+  
   const paymentsQuery = useMemo(() => {
     if (!user?.uid || !firestore) return null;
   
     return query(
       collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
-      where('categoryHierarchy.l0', '==', 'INCOME'),
-      where('date', '>=', monthStartStr),
-      where('date', '<=', monthEndStr)
+      where('userId', '==', user.uid)
     );
-  }, [user?.uid, firestore, monthStartStr, monthEndStr]);
+  }, [user?.uid, firestore]);
+
+  console.log('propertiesQuery:', propertiesQuery);
+  console.log('paymentsQuery:', paymentsQuery);
   
+  const propertiesResult = useCollection<Property>(propertiesQuery);
   const paymentsResult = useCollection<any>(paymentsQuery);
+
+  console.log('propertiesResult:', propertiesResult);
+  console.log('paymentsResult:', paymentsResult);
+
+  const properties = propertiesResult.data || [];
+  const isLoadingProperties = propertiesResult.isLoading;
   const monthlyPayments = paymentsResult.data || [];
   const isLoadingPayments = paymentsResult.isLoading;
+
+  console.log('ALL TX COUNT:', monthlyPayments.length);
+  console.log('SAMPLE TX:', monthlyPayments[0]);
 
 
   const rentRoll = useMemo(() => {
     if (!properties) return [];
 
     const incomeByPropertyId = (monthlyPayments || []).reduce((acc: any, tx: any) => {
-      const pid = String(tx.propertyId || tx.costCenter || '').trim();
-      if (!pid) return acc;
-
-      const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
-      if (!Number.isFinite(amt) || amt <= 0) return acc;
-
-      acc[pid] = (acc[pid] || 0) + amt;
-      return acc;
+        const pid = String(tx.propertyId || tx.costCenter || '').trim();
+        if (!pid) return acc;
+      
+        const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
+        if (!Number.isFinite(amt) || amt <= 0) return acc;
+      
+        acc[pid] = (acc[pid] || 0) + amt;
+        return acc;
     }, {});
 
 
@@ -103,7 +116,7 @@ export function RentRollTable() {
         const tenantIdentifier = activeTenant.id || activeTenant.email;
         const rentDue = activeTenant.rentAmount || 0;
         const amountPaid = incomeByPropertyId[p.id] || 0;
-
+        
         let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
 
         if (amountPaid === 0) status = 'unpaid';
