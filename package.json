@@ -12,7 +12,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:seed": "tsc --project tsconfig.scripts.json && node dist/seedGlobalRules.js",
-    "db:migrate": "tsc --project tsconfig.scripts.json && node dist/migrate-account-data.js",
+    "db:migrate": "tsc --project tsconfig.scripts.json && node dist/migrate_transactions_schema_v2.js",
     "db:analyze": "tsc --project tsconfig.scripts.json && node dist/analyze-categories.js"
   },
   "dependencies": {
