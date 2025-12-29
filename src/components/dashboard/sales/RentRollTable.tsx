@@ -419,6 +419,7 @@ export function RentRollTable() {
                     tenantEmail={item.tenantEmail}
                     tenantPhone={item.tenantPhone}
                     rentAmount={item.rentDue}
+                    propertyName={item.propertyName}
                   />
                 </TableCell>
               </TableRow>

@@ -24,9 +24,10 @@ interface CreateChargeDialogProps {
   tenantEmail?: string;
   tenantPhone?: string;
   rentAmount?: number;
+  propertyName?: string;
 }
 
-export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone, rentAmount }: CreateChargeDialogProps) {
+export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone, rentAmount, propertyName }: CreateChargeDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -36,6 +37,7 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone
     tenantPhone: '',
     amount: '',
     description: '',
+    propertyName: '',
   });
 
   useEffect(() => {
@@ -45,9 +47,10 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone
         tenantPhone: tenantPhone || '',
         amount: rentAmount ? String(rentAmount) : '',
         description: rentAmount ? 'Monthly Rent' : '',
+        propertyName: propertyName || '',
       });
     }
-  }, [isOpen, tenantEmail, tenantPhone, rentAmount]);
+  }, [isOpen, tenantEmail, tenantPhone, rentAmount, propertyName]);
   
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -72,6 +75,7 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone
         tenantPhone: formData.tenantPhone,
         amount: Number(formData.amount),
         description: formData.description,
+        propertyName: formData.propertyName,
       });
 
       if (result.success) {

@@ -1,3 +1,4 @@
+
 'use server';
 
 import Stripe from 'stripe';
@@ -14,6 +15,7 @@ interface CreateTenantInvoiceData {
   tenantPhone?: string;
   amount: number;
   description: string;
+  propertyName?: string; // NEW
 }
 
 /**
@@ -21,12 +23,18 @@ interface CreateTenantInvoiceData {
  * on behalf of a connected landlord account.
  */
 export async function createTenantInvoice(data: CreateTenantInvoiceData) {
-  const { landlordAccountId, tenantEmail, tenantPhone, amount, description } = data;
+  const { landlordAccountId, tenantEmail, tenantPhone, amount, description, propertyName } = data;
   
   const now = new Date();
   const month = now.toLocaleString('default', { month: 'long' });
   const year = now.getFullYear();
-  const fullDescription = `${description} for ${month} ${year}`;
+  
+  // Construct a more detailed description
+  let fullDescription = `${description} for ${month} ${year}`;
+  if (propertyName) {
+    fullDescription += ` at ${propertyName}`;
+  }
+
 
   // DEBUG LOG
   console.log("?? STRIPE INVOICE DEBUG", {
@@ -42,6 +50,9 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     const customer = await stripe.customers.create({
       email: tenantEmail,
       phone: tenantPhone,
+      metadata: {
+          property: propertyName || 'N/A'
+      }
     }, { stripeAccount: landlordAccountId });
 
     // 2. Create the Invoice in a draft state first
