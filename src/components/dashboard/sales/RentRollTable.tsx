@@ -49,8 +49,8 @@ interface Unit {
         targetRent?: number;
     };
     targetRent?: number;
-    propertyId: string; // Ensure this exists for linking back
-    userId: string; // Ensure this exists for the query
+    propertyId: string; 
+    userId: string; 
 }
 
 interface Property {
@@ -77,6 +77,31 @@ const toNum = (v: any): number => {
 };
 
 
+// Helper function to fetch units in chunks
+function chunk<T>(arr: T[], size = 10) {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+  
+async function fetchUnitsForProperties(firestore: any, propertyIds: string[]) {
+    if (propertyIds.length === 0) return [];
+    const chunks = chunk(propertyIds, 10);
+    const all: any[] = [];
+  
+    for (const ids of chunks) {
+      const qUnits = query(
+        collectionGroup(firestore, "units"),
+        where("propertyId", "in", ids)
+      );
+      const snap = await getDocs(qUnits);
+      snap.forEach((d) => all.push({ id: d.id, path: d.ref.path, ...d.data() }));
+    }
+  
+    return all;
+}
+
+
 export function RentRollTable() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -84,6 +109,9 @@ export function RentRollTable() {
   const [viewingDate, setViewingDate] = useState(new Date());
   const [isBatching, setIsBatching] = useState(false);
   
+  const [allUnits, setAllUnits] = useState<Unit[]>([]);
+  const [isLoadingUnits, setIsLoadingUnits] = useState(true);
+
   const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
   const [isLoadingTx, setIsLoadingTx] = useState(false);
   const [txError, setTxError] = useState<any>(null);
@@ -147,12 +175,22 @@ export function RentRollTable() {
   
   const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
 
-  const unitsQuery = useMemoFirebase(() => {
-    if (!user?.uid || !firestore) return null;
-    return query(collectionGroup(firestore, 'units'), where('userId', '==', user.uid));
-  }, [user?.uid, firestore]);
-  const { data: allUnits, isLoading: isLoadingUnits } = useCollection<Unit>(unitsQuery);
-  
+  useEffect(() => {
+    if (!properties || !firestore) return;
+    setIsLoadingUnits(true);
+    const propertyIds = properties.map(p => p.id);
+    fetchUnitsForProperties(firestore, propertyIds)
+        .then(units => {
+            setAllUnits(units);
+        })
+        .catch(err => {
+            console.error("Failed to fetch units:", err);
+        })
+        .finally(() => {
+            setIsLoadingUnits(false);
+        })
+  }, [properties, firestore]);
+
   const incomeByPropertyOrUnit = useMemo(() => {
     const map: Record<string, number> = {};
     for (const tx of monthlyIncomeTx) {
@@ -192,44 +230,43 @@ export function RentRollTable() {
   
     // 2. Process multi-family properties by iterating through all units
     const multiFamilyRows = (allUnits || []).flatMap(unit => {
-      const parentProperty = propertyMap.get(unit.propertyId);
-      if (!parentProperty) return [];
+        const parentProperty = propertyMap.get(unit.propertyId);
+        if (!parentProperty) return [];
+    
+        const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
+        if (activeTenants.length === 0) return [];
+        
+        return activeTenants.map(t => {
+          const rentDue =
+              toNum(t.rentAmount) ||
+              toNum(unit.financials?.rent) ||
+              toNum(unit.financials?.targetRent) ||
+              toNum(unit.targetRent) ||
+              0;
   
-      const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
-      if (activeTenants.length === 0) return [];
-      
-      return activeTenants.map(t => {
-        const rentDue =
-            toNum(t.rentAmount) ||
-            toNum(unit.financials?.rent) ||
-            toNum(unit.financials?.targetRent) ||
-            toNum(unit.targetRent) ||
-            0;
-
-        return {
-            propertyId: unit.propertyId,
-            unitId: unit.id,
-            propertyName: `${parentProperty.name} #${unit.unitNumber}`,
-            tenantId: t.id || t.email,
-            tenantName: `${t.firstName} ${t.lastName}`,
-            tenantEmail: t.email,
-            tenantPhone: t.phone,
-            rentDue,
-        };
+          return {
+              propertyId: unit.propertyId,
+              unitId: unit.id,
+              propertyName: `${parentProperty.name} #${unit.unitNumber}`,
+              tenantId: t.id || t.email,
+              tenantName: `${t.firstName} ${t.lastName}`,
+              tenantEmail: t.email,
+              tenantPhone: t.phone,
+              rentDue,
+          };
+        });
       });
-    });
   
-    const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
-
     console.log("SF rows (pre-filter):", singleFamilyRows.length, singleFamilyRows[0]);
     console.log("MF rows (pre-filter):", multiFamilyRows.length, multiFamilyRows[0]);
+    const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
     console.log("ALL rows (pre-filter):", combinedRows.length, combinedRows[0]);
     
     const visibleRows = combinedRows;
 
     return visibleRows.map(row => {
       // Prioritize unit-level income, then fall back to property-level
-      const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
+      const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : incomeByPropertyOrUnit[row.propertyId]) || 0;
       const balance = row.rentDue - amountPaid;
   
       let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';

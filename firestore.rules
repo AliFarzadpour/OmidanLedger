@@ -81,6 +81,12 @@ service cloud.firestore {
         allow list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
     }
+    
+    // Rule for querying 'units' collection group.
+    // This allows a landlord to fetch all units across all their properties in one go.
+    match /{path=**}/units/{unitId} {
+       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
 
     match /accounts/{accountId} {
         // CORRECTED RULE: Use resource.data for read/delete
