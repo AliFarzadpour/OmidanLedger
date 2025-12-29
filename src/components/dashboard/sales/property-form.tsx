@@ -230,6 +230,12 @@ export function PropertyForm({
     if (!user || !firestore || !currentPropertyId) return;
     setIsSaving(true);
     
+    // FIX: Sanitize data before sending to Firestore
+    const sanitizedData = { ...data };
+    if (sanitizedData.mortgage && sanitizedData.mortgage.hasMortgage === undefined) {
+      sanitizedData.mortgage.hasMortgage = null as any; // Convert undefined to null
+    }
+
     try {
         const propertyRef = doc(firestore, 'properties', currentPropertyId);
         
@@ -250,13 +256,13 @@ export function PropertyForm({
         });
 
         const fullPropertyData = {
-          ...data,
+          ...sanitizedData,
           id: currentPropertyId,
-          isMultiUnit: data.type === 'multi-family' || data.type === 'commercial' || data.type === 'office',
+          isMultiUnit: sanitizedData.type === 'multi-family' || sanitizedData.type === 'commercial' || sanitizedData.type === 'office',
           units: units,
         };
 
-        await updateDoc(propertyRef, data);
+        await updateDoc(propertyRef, sanitizedData);
         toast({ title: "Property Updated", description: "Building-level details have been saved." });
         
         await generateRulesForProperty(currentPropertyId, fullPropertyData, user.uid);
@@ -695,3 +701,4 @@ export function PropertyForm({
     </div>
   );
 }
+
