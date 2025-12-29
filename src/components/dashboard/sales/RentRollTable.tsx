@@ -46,7 +46,9 @@ interface Unit {
     tenants: Tenant[];
     financials?: {
         rent: number;
+        targetRent?: number;
     };
+    targetRent?: number;
     propertyId: string; // Ensure this exists for linking back
     userId: string; // Ensure this exists for the query
 }
@@ -115,7 +117,7 @@ export function RentRollTable() {
           query(
             collectionGroup(firestore, 'transactions'),
             where('userId', '==', user.uid),
-            where('categoryHierarchy.l0', '==', 'Income'),
+            where('categoryHierarchy.l0', '==', 'INCOME'),
             where('date', '>=', monthStartStr),
             where('date', '<=', monthEndStr)
           )
@@ -196,21 +198,29 @@ export function RentRollTable() {
       const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
       if (activeTenants.length === 0) return [];
       
-      return activeTenants.map(t => ({
-        propertyId: unit.propertyId,
-        unitId: unit.id,
-        propertyName: `${parentProperty.name} #${unit.unitNumber}`,
-        tenantId: t.id || t.email,
-        tenantName: `${t.firstName} ${t.lastName}`,
-        tenantEmail: t.email,
-        tenantPhone: t.phone,
-        rentDue: toNum(t.rentAmount) || toNum(unit.financials?.rent),
-      }));
+      return activeTenants.map(t => {
+        const rentDue =
+            toNum(t.rentAmount) ||
+            toNum(unit.financials?.rent) ||
+            toNum(unit.financials?.targetRent) ||
+            toNum(unit.targetRent) ||
+            0;
+
+        return {
+            propertyId: unit.propertyId,
+            unitId: unit.id,
+            propertyName: `${parentProperty.name} #${unit.unitNumber}`,
+            tenantId: t.id || t.email,
+            tenantName: `${t.firstName} ${t.lastName}`,
+            tenantEmail: t.email,
+            tenantPhone: t.phone,
+            rentDue,
+        };
+      });
     });
   
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
 
-    // DEBUGGING: Show all rows before final filtering
     console.log("SF rows (pre-filter):", singleFamilyRows.length, singleFamilyRows[0]);
     console.log("MF rows (pre-filter):", multiFamilyRows.length, multiFamilyRows[0]);
     console.log("ALL rows (pre-filter):", combinedRows.length, combinedRows[0]);
