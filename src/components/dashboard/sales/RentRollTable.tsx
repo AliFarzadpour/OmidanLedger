@@ -216,7 +216,8 @@ export function RentRollTable() {
       .filter(p => !p.isMultiUnit)
       .flatMap(p => {
         const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
-        return activeTenants.map(t => ({
+        return activeTenants.map((t, index) => ({
+          uniqueKey: `${p.id}-${t.id || t.email}-${index}`,
           propertyId: p.id,
           unitId: null,
           propertyName: p.name,
@@ -236,7 +237,7 @@ export function RentRollTable() {
         const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
         if (activeTenants.length === 0) return [];
         
-        return activeTenants.map(t => {
+        return activeTenants.map((t, index) => {
           const rentDue =
               toNum(t.rentAmount) ||
               toNum(unit.financials?.rent) ||
@@ -245,6 +246,7 @@ export function RentRollTable() {
               0;
   
           return {
+              uniqueKey: `${unit.propertyId}-${unit.id}-${t.id || t.email}-${index}`,
               propertyId: unit.propertyId,
               unitId: unit.id,
               propertyName: `${parentProperty.name} #${unit.unitNumber}`,
@@ -257,16 +259,12 @@ export function RentRollTable() {
         });
       });
   
-    console.log("SF rows (pre-filter):", singleFamilyRows.length, singleFamilyRows[0]);
-    console.log("MF rows (pre-filter):", multiFamilyRows.length, multiFamilyRows[0]);
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
-    console.log("ALL rows (pre-filter):", combinedRows.length, combinedRows[0]);
-    
     const visibleRows = combinedRows;
 
     return visibleRows.map(row => {
       // Prioritize unit-level income, then fall back to property-level
-      const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : incomeByPropertyOrUnit[row.propertyId]) || 0;
+      const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
       const balance = row.rentDue - amountPaid;
   
       let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
@@ -394,7 +392,7 @@ export function RentRollTable() {
             ) : (
                 rentRoll.map((item) => (
                   item &&
-              <TableRow key={item.propertyId + (item.tenantId || '')}>
+              <TableRow key={item.uniqueKey}>
                 <TableCell className="font-medium">{item.propertyName}</TableCell>
                 <TableCell>{item.tenantName}</TableCell>
                 <TableCell>{formatCurrency(item.rentDue)}</TableCell>
