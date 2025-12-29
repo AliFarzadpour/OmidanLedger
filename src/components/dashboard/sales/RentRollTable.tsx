@@ -37,7 +37,7 @@ interface Tenant {
     email: string;
     phone?: string;
     status: 'active' | 'past';
-    rentAmount: number;
+    rentAmount: number | string;
 }
 
 interface Unit {
@@ -61,6 +61,18 @@ interface Property {
 }
 
 type Tx = any;
+
+const toNum = (v: any): number => {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const cleaned = v.replace(/[^0-9.-]/g, ""); // strips $ and commas safely
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
 
 export function RentRollTable() {
   const { user } = useUser();
@@ -136,7 +148,7 @@ export function RentRollTable() {
     if (!user?.uid || !firestore) return null;
     return query(collectionGroup(firestore, 'units'), where('userId', '==', user.uid));
   }, [user?.uid, firestore]);
-  const { data: allUnits } = useCollection<Unit>(unitsQuery);
+  const { data: allUnits, isLoading: isLoadingUnits } = useCollection<Unit>(unitsQuery);
   
   const incomeByPropertyOrUnit = useMemo(() => {
     const map: Record<string, number> = {};
@@ -159,7 +171,7 @@ export function RentRollTable() {
     const propertyMap = new Map(properties.map(p => [p.id, p]));
   
     // 1. Process single-family properties
-    const singleFamilyRows = properties
+    const singleFamilyRows = (properties || [])
       .filter(p => !p.isMultiUnit)
       .flatMap(p => {
         const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
@@ -171,16 +183,17 @@ export function RentRollTable() {
           tenantName: `${t.firstName} ${t.lastName}`,
           tenantEmail: t.email,
           tenantPhone: t.phone,
-          rentAmount: Number(t.rentAmount) || 0,
+          rentDue: toNum(t.rentAmount),
         }));
       });
   
     // 2. Process multi-family properties by iterating through all units
-    const multiFamilyRows = allUnits.flatMap(unit => {
+    const multiFamilyRows = (allUnits || []).flatMap(unit => {
       const parentProperty = propertyMap.get(unit.propertyId);
       if (!parentProperty) return [];
   
-      const activeTenants = unit.tenants?.filter(t => t.status === 'active') || [];
+      const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
+      if (activeTenants.length === 0) return [];
       
       return activeTenants.map(t => ({
         propertyId: unit.propertyId,
@@ -190,25 +203,25 @@ export function RentRollTable() {
         tenantName: `${t.firstName} ${t.lastName}`,
         tenantEmail: t.email,
         tenantPhone: t.phone,
-        rentAmount: Number(t.rentAmount) || Number(unit.financials?.rent) || 0,
+        rentDue: toNum(t.rentAmount) || toNum(unit.financials?.rent),
       }));
     });
   
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
-  
-    // 3. Combine and add financial calculations
-    return combinedRows.map(row => {
+    const visibleRows = combinedRows;
+
+    return visibleRows.map(row => {
       // Prioritize unit-level income, then fall back to property-level
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
-      const balance = row.rentAmount - amountPaid;
+      const balance = row.rentDue - amountPaid;
   
       let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
-      if (row.rentAmount > 0) {
+      if (row.rentDue > 0) {
         if (amountPaid === 0) status = 'unpaid';
-        else if (amountPaid >= row.rentAmount) status = 'paid';
+        else if (amountPaid >= row.rentDue) status = 'paid';
         else if (amountPaid > 0) status = 'partial';
       }
-      if (amountPaid > row.rentAmount && row.rentAmount > 0) status = 'overpaid';
+      if (amountPaid > row.rentDue && row.rentDue > 0) status = 'overpaid';
   
       return {
         ...row,
@@ -243,7 +256,7 @@ export function RentRollTable() {
       landlordAccountId: landlordStripeId,
       tenantEmail: tenant!.tenantEmail,
       tenantPhone: tenant!.tenantPhone,
-      amount: tenant!.balance > 0 ? tenant!.balance : tenant!.rentAmount,
+      amount: tenant!.balance > 0 ? tenant!.balance : tenant!.rentDue,
       description: `Rent for ${format(viewingDate, 'MMMM yyyy')}`,
     }));
 
@@ -264,7 +277,7 @@ export function RentRollTable() {
     }
   };
 
-  const isLoading = isLoadingProperties || isLoadingTx;
+  const isLoading = isLoadingProperties || isLoadingTx || isLoadingUnits;
 
   return (
     <Card>
@@ -330,7 +343,7 @@ export function RentRollTable() {
               <TableRow key={item.propertyId + (item.tenantId || '')}>
                 <TableCell className="font-medium">{item.propertyName}</TableCell>
                 <TableCell>{item.tenantName}</TableCell>
-                <TableCell>{formatCurrency(item.rentAmount)}</TableCell>
+                <TableCell>{formatCurrency(item.rentDue)}</TableCell>
                 <TableCell className="font-medium text-green-700">{formatCurrency(item.amountPaid)}</TableCell>
                 <TableCell>
                   <Badge
@@ -353,7 +366,7 @@ export function RentRollTable() {
                     landlordAccountId={landlordStripeId}
                     tenantEmail={item.tenantEmail}
                     tenantPhone={item.tenantPhone}
-                    rentAmount={item.rentAmount}
+                    rentAmount={item.rentDue}
                   />
                 </TableCell>
               </TableRow>
