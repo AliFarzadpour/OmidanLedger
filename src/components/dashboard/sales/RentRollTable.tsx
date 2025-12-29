@@ -20,12 +20,14 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getDocs, collection, query, limit, where, doc } from 'firebase/firestore';
+import { batchCreateTenantInvoices } from '@/actions/batch-invoice-actions';
+import { useToast } from '@/hooks/use-toast';
 
 
 interface Tenant {
@@ -52,7 +54,9 @@ type Tx = any;
 export function RentRollTable() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const { toast } = useToast();
   const [viewingDate, setViewingDate] = useState(new Date());
+  const [isBatching, setIsBatching] = useState(false);
   
   const [monthlyIncomeTx, setMonthlyIncomeTx] = useState<Tx[]>([]);
   const [isLoadingTx, setIsLoadingTx] = useState(false);
@@ -194,6 +198,51 @@ export function RentRollTable() {
     }).filter(item => item !== undefined && item.rentAmount > 0); // Only show tenants with rent due > 0
   }, [properties, incomeByPropertyId]);
   
+  const unpaidTenants = useMemo(() => {
+    return rentRoll.filter(item => item.status === 'unpaid' || item.status === 'partial');
+  }, [rentRoll]);
+  
+  const handleBatchSend = async () => {
+    if (!landlordStripeId) {
+      toast({
+        variant: 'destructive',
+        title: 'Stripe Not Connected',
+        description: 'Please connect your Stripe account in Settings to send invoices.',
+      });
+      return;
+    }
+    if (unpaidTenants.length === 0) {
+      toast({ title: 'All Caught Up!', description: 'No outstanding invoices to send.' });
+      return;
+    }
+
+    setIsBatching(true);
+    const invoicesToSend = unpaidTenants.map(tenant => ({
+      landlordAccountId: landlordStripeId,
+      tenantEmail: tenant.tenantEmail,
+      tenantPhone: tenant.tenantPhone,
+      amount: tenant.balance > 0 ? tenant.balance : tenant.rentAmount, // Send balance or full rent
+      description: `Rent for ${format(viewingDate, 'MMMM yyyy')}`,
+    }));
+
+    try {
+      const result = await batchCreateTenantInvoices(invoicesToSend);
+      toast({
+        title: 'Batch Invoicing Complete',
+        description: `${result.success} invoices sent successfully. ${result.failed} failed.`,
+      });
+      // Optionally trigger a refetch of invoice statuses here
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Batch Send Failed',
+        description: e.message || 'An unexpected error occurred.',
+      });
+    } finally {
+      setIsBatching(false);
+    }
+  };
+
   const isLoading = isLoadingProperties || isLoadingTx;
 
   return (
@@ -207,6 +256,18 @@ export function RentRollTable() {
                 </CardDescription>
             </div>
             <div className="flex items-center gap-2">
+                <Button 
+                    variant="outline"
+                    onClick={handleBatchSend}
+                    disabled={isLoading || isBatching || unpaidTenants.length === 0}
+                >
+                    {isBatching ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                        <Send className="mr-2 h-4 w-4" />
+                    )}
+                    Send Invoices ({unpaidTenants.length})
+                </Button>
                 <Button variant="outline" size="icon" onClick={() => setViewingDate(d => subMonths(d, 1))}>
                     <ChevronLeft className="h-4 w-4" />
                 </Button>
