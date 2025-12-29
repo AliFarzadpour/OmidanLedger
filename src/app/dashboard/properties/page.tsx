@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -156,14 +155,15 @@ export default function PropertiesListPage() {
               </CardContent>
 
               <CardFooter className="pt-3 border-t bg-slate-50/50 flex flex-col items-stretch gap-2">
-                <Link href={`/dashboard/properties/${property.id}`} className="w-full">
-                  <Button 
-                      variant="ghost" 
-                      className="w-full justify-between text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                  >
+                <Button
+                  variant="ghost"
+                  className="w-full justify-between text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                  asChild 
+                >
+                  <Link href={`/dashboard/properties/${property.id}`}>
                     Manage Property <ArrowRight className="h-4 w-4" />
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </CardFooter>
             </Card>
           );
