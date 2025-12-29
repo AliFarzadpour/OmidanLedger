@@ -2,7 +2,7 @@
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
-import { useUser, useFirestore, useDoc } from '@/firebase';
+import { useUser, useFirestore, useDoc, useCollection, useMemoFirebase } from '@/firebase';
 import {
   Table,
   TableBody,
@@ -25,7 +25,7 @@ import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { getDocs, collection, query, limit, where, doc } from 'firebase/firestore';
+import { getDocs, collection, query, limit, where, doc, collectionGroup } from 'firebase/firestore';
 import { batchCreateTenantInvoices } from '@/actions/batch-invoice-actions';
 import { useToast } from '@/hooks/use-toast';
 
@@ -40,12 +40,22 @@ interface Tenant {
     rentAmount: number;
 }
 
+interface Unit {
+    id: string;
+    unitNumber: string;
+    tenants: Tenant[];
+    financials?: {
+        rent: number;
+    };
+}
+
 interface Property {
     id: string;
     name: string;
     address: {
         street: string;
     };
+    isMultiUnit?: boolean;
     tenants: Tenant[];
 }
 
@@ -63,7 +73,7 @@ export function RentRollTable() {
   const [txError, setTxError] = useState<any>(null);
 
   // Fetch the landlord's user document to get their Stripe Account ID
-  const userDocRef = useMemo(() => {
+  const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
   }, [user, firestore]);
@@ -133,12 +143,28 @@ export function RentRollTable() {
     })();
   }, [firestore, user?.uid, monthStartStr, monthEndStr]);
 
-  const propertiesQuery = useMemo(() => {
+  const propertiesQuery = useMemoFirebase(() => {
     if (!user?.uid || !firestore) return null;
     return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
   }, [user?.uid, firestore]);
   
-  const { data: properties, isLoading: isLoadingProperties, refetch } = useCollection<Property>(propertiesQuery);
+  const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
+
+  const unitsQuery = useMemoFirebase(() => {
+    if (!user?.uid || !firestore) return null;
+    return query(collectionGroup(firestore, 'units'), where('userId', '==', user.uid));
+  }, [user?.uid, firestore]);
+  const { data: allUnits } = useCollection<Unit>(unitsQuery);
+
+  const unitsByPropertyId = useMemo(() => {
+    if (!allUnits) return {};
+    return allUnits.reduce((acc, unit) => {
+      const propertyId = unit.id.split('_')[0]; // Assumes unit ID is part of property path
+      if (!acc[propertyId]) acc[propertyId] = [];
+      acc[propertyId].push(unit);
+      return acc;
+    }, {} as Record<string, Unit[]>);
+  }, [allUnits]);
 
   const incomeByPropertyId = useMemo(() => {
     const map: Record<string, number> = {};
@@ -158,48 +184,72 @@ export function RentRollTable() {
     if (!properties) return [];
 
     return properties.flatMap(p => {
-        const activeTenant = p.tenants?.find((t: any) => (t.status || '').toLowerCase() === 'active');
-        if (!activeTenant || !(activeTenant.id || activeTenant.email)) return [];
+        if (p.isMultiUnit) {
+            const propertyUnits = unitsByPropertyId[p.id] || [];
+            return propertyUnits.map(unit => {
+                const activeTenant = unit.tenants?.find(t => t.status === 'active');
+                if (!activeTenant) return undefined;
+                
+                const tenantIdentifier = activeTenant.id || activeTenant.email;
+                const rentDue = activeTenant.rentAmount || unit.financials?.rent || 0;
+                const amountPaid = incomeByPropertyId[unit.id] || 0; // Use unit ID for multi-family
+                const balance = rentDue - amountPaid;
 
-        const tenantIdentifier = activeTenant.id || activeTenant.email;
-        const rentDue = activeTenant.rentAmount || 0;
-        const propertyId = String(p.id || '').trim();
-        const amountPaid = incomeByPropertyId[propertyId] || 0;
-        const balance = rentDue - amountPaid;
+                let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+                if (amountPaid === 0 && rentDue > 0) status = 'unpaid';
+                else if (amountPaid >= rentDue) status = 'paid';
+                else if (amountPaid > 0) status = 'partial';
+                
+                if (amountPaid > rentDue && rentDue > 0) status = 'overpaid';
 
-        let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+                return {
+                    propertyId: p.id,
+                    propertyName: `${p.name} #${unit.unitNumber}`,
+                    tenantId: tenantIdentifier,
+                    tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
+                    tenantEmail: activeTenant.email,
+                    tenantPhone: activeTenant.phone,
+                    rentAmount: rentDue,
+                    amountPaid: amountPaid,
+                    balance: balance,
+                    status: status
+                };
+            }).filter(Boolean);
+        } else {
+            // Single-family logic
+            const activeTenant = p.tenants?.find(t => t.status === 'active');
+            if (!activeTenant) return [];
 
-        if (amountPaid === 0 && rentDue > 0) {
-            status = 'unpaid';
-        } else if (amountPaid >= rentDue) {
-            status = 'paid';
-        } else if (amountPaid < rentDue && amountPaid > 0) {
-            status = 'partial';
-        } else if (rentDue === 0) {
-            status = 'paid'; // If no rent is due, consider it paid
+            const tenantIdentifier = activeTenant.id || activeTenant.email;
+            const rentDue = activeTenant.rentAmount || 0;
+            const amountPaid = incomeByPropertyId[p.id] || 0; // Use property ID for SFH
+            const balance = rentDue - amountPaid;
+
+            let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+            if (amountPaid === 0 && rentDue > 0) status = 'unpaid';
+            else if (amountPaid >= rentDue) status = 'paid';
+            else if (amountPaid > 0) status = 'partial';
+            
+            if (amountPaid > rentDue && rentDue > 0) status = 'overpaid';
+
+            return [{
+                propertyId: p.id,
+                propertyName: p.name,
+                tenantId: tenantIdentifier,
+                tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
+                tenantEmail: activeTenant.email,
+                tenantPhone: activeTenant.phone,
+                rentAmount: rentDue,
+                amountPaid: amountPaid,
+                balance: balance,
+                status: status
+            }];
         }
-
-        if (amountPaid > rentDue && rentDue > 0) {
-            status = 'overpaid';
-        }
-
-        return {
-            propertyId: p.id,
-            propertyName: p.name,
-            tenantId: tenantIdentifier,
-            tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
-            tenantEmail: activeTenant.email,
-            tenantPhone: activeTenant.phone,
-            rentAmount: rentDue,
-            amountPaid: amountPaid,
-            balance: balance,
-            status: status
-        };
-    }).filter(item => item !== undefined && item.rentAmount > 0); // Only show tenants with rent due > 0
-  }, [properties, incomeByPropertyId]);
+    }).filter(item => item && item.rentAmount > 0);
+  }, [properties, unitsByPropertyId, incomeByPropertyId]);
   
   const unpaidTenants = useMemo(() => {
-    return rentRoll.filter(item => item.status === 'unpaid' || item.status === 'partial');
+    return rentRoll.filter(item => item?.status === 'unpaid' || item?.status === 'partial');
   }, [rentRoll]);
   
   const handleBatchSend = async () => {
@@ -219,9 +269,9 @@ export function RentRollTable() {
     setIsBatching(true);
     const invoicesToSend = unpaidTenants.map(tenant => ({
       landlordAccountId: landlordStripeId,
-      tenantEmail: tenant.tenantEmail,
-      tenantPhone: tenant.tenantPhone,
-      amount: tenant.balance > 0 ? tenant.balance : tenant.rentAmount, // Send balance or full rent
+      tenantEmail: tenant!.tenantEmail,
+      tenantPhone: tenant!.tenantPhone,
+      amount: tenant!.balance > 0 ? tenant!.balance : tenant!.rentAmount,
       description: `Rent for ${format(viewingDate, 'MMMM yyyy')}`,
     }));
 
@@ -231,7 +281,6 @@ export function RentRollTable() {
         title: 'Batch Invoicing Complete',
         description: `${result.success} invoices sent successfully. ${result.failed} failed.`,
       });
-      // Optionally trigger a refetch of invoice statuses here
     } catch (e: any) {
       toast({
         variant: 'destructive',
@@ -305,7 +354,8 @@ export function RentRollTable() {
                 </TableRow>
             ) : (
                 rentRoll.map((item) => (
-              <TableRow key={item.propertyId}>
+                  item &&
+              <TableRow key={item.propertyId + (item.tenantId || '')}>
                 <TableCell className="font-medium">{item.propertyName}</TableCell>
                 <TableCell>{item.tenantName}</TableCell>
                 <TableCell>{formatCurrency(item.rentAmount)}</TableCell>
@@ -341,33 +391,4 @@ export function RentRollTable() {
       </CardContent>
     </Card>
   );
-}
-
-// Added this to fix the ReferenceError, as useCollection was not imported
-function useCollection<T>(query: any) {
-    const [data, setData] = useState<T[] | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<any>(null);
-
-    const refetch = useCallback(() => {
-        if (!query) {
-            setData([]);
-            setIsLoading(false);
-            return;
-        };
-        setIsLoading(true);
-        getDocs(query)
-            .then(snapshot => {
-                const results = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as T));
-                setData(results);
-            })
-            .catch(err => setError(err))
-            .finally(() => setIsLoading(false));
-    }, [query]);
-
-    useEffect(() => {
-        refetch();
-    }, [refetch]);
-
-    return { data, isLoading, error, refetch };
 }
