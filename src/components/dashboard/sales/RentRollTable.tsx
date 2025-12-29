@@ -215,7 +215,7 @@ export function RentRollTable() {
         balance,
         status
       };
-    }).filter(item => item && item.rentAmount > 0);
+    });
   
   }, [properties, allUnits, incomeByPropertyOrUnit]);
   
