@@ -245,12 +245,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                           <p className="text-sm text-muted-foreground">{t.email}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-medium">${t.rentAmount}/mo</p>
+                          <p className="font-medium">${(t.rentAmount || 0).toLocaleString()}/mo</p>
                           <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
                         </div>
                         <div className="flex items-center gap-2">
                             <RecordPaymentModal
-                                tenant={{...t, id: t.email}} // Assuming tenant object has an id or email can be temp id
+                                tenant={{...t, id: t.email || `tenant_${i}`}} // Ensure a unique ID
                                 propertyId={property.id}
                                 landlordId={user.uid}
                                 onSuccess={onUpdate}
