@@ -47,6 +47,7 @@ export function AddUnitDialog({ propertyId, onUnitAdded }: AddUnitDialogProps) {
       const unitsCollection = collection(firestore, 'properties', propertyId, 'units');
       await addDoc(unitsCollection, {
         userId: user.uid,
+        propertyId: propertyId, // Denormalize propertyId
         unitNumber: unitName.trim(),
         status: 'vacant',
         createdAt: serverTimestamp(),

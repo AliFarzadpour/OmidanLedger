@@ -41,13 +41,13 @@ const generateUnitBatch = (firestore: any, propertyRef: any, count: number, user
       ref: unitRef,
       data: {
         userId,
+        propertyId: propertyRef.id, // Denormalize propertyId
         unitNumber: `${100 + i}`,
         status: 'vacant',
-        // Granular Fields
         bedrooms: baseData.bedrooms || 1, 
         bathrooms: baseData.bathrooms || 1,
         sqft: Math.floor(baseData.squareFootage / count) || 0,
-        amenities: [], // e.g., ["Balcony", "Updated Appliances"]
+        amenities: [],
         financials: {
           rent: baseData.targetRent / count || 0,
           deposit: baseData.securityDeposit / count || 0,
@@ -132,7 +132,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
       tenants: [], 
       createdAt: timestamp,
       accounting: accountingMap
-      // No default mortgage object
     };
 
     batch.set(propertyRef, propertyData);
@@ -147,7 +146,6 @@ export function QuickPropertyForm({ onSuccess }: { onSuccess: () => void }) {
   
     batch.commit()
       .then(async () => {
-        // --- FIX: Call rule generation after successful commit ---
         await generateRulesForProperty(propertyRef.id, propertyData, user.uid);
         
         toast({ 
