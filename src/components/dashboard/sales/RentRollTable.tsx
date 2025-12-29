@@ -211,6 +211,10 @@ export function RentRollTable() {
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
 
     // DEBUGGING: Show all rows before final filtering
+    console.log("SF rows (pre-filter):", singleFamilyRows.length, singleFamilyRows[0]);
+    console.log("MF rows (pre-filter):", multiFamilyRows.length, multiFamilyRows[0]);
+    console.log("ALL rows (pre-filter):", combinedRows.length, combinedRows[0]);
+    
     const visibleRows = combinedRows;
 
     return visibleRows.map(row => {
