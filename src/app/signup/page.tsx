@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/logo';
-import { useAuth, useUser, initiateEmailSignUp, useFirestore } from '@/firebase'; // Added useFirestore
+import { useAuth, useUser, useFirestore, initializeFirebase } from '@/firebase'; // Added useFirestore
 import { doc, updateDoc, setDoc } from 'firebase/firestore'; // Added firestore methods
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle } from 'lucide-react';
@@ -30,6 +30,27 @@ import {
   SelectTrigger, 
   SelectValue 
 } from '@/components/ui/select';
+import { createUserWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
+import { initializeUserSchema } from '@/actions/user-init';
+
+/** Initiate email/password sign-up (non-blocking). */
+export function initiateEmailSignUp(authInstance: Auth, email: string, password: string, trade: string, onError?: (error: AuthError) => void): void {
+  createUserWithEmailAndPassword(authInstance, email, password)
+    .then(async (userCredential) => {
+      // User is created in Auth, now create their full schema in Firestore.
+      // This is a server action that sets the role, billing, etc.
+      await initializeUserSchema(userCredential.user.uid, email, 'password');
+
+      // We can also update the 'trade' separately if it's collected at signup.
+      // This is a client-side update to the new user document.
+      const { getFirestore, doc, updateDoc } = await import('firebase/firestore');
+      const { firestore } = initializeFirebase();
+      const userDocRef = doc(firestore, 'users', userCredential.user.uid);
+      await updateDoc(userDocRef, { trade });
+    })
+    .catch(onError);
+}
+
 
 // --- INDUSTRY LIST FOR AI CONTEXT ---
 const TRADE_OPTIONS = [
