@@ -192,10 +192,15 @@ export function RentRollTable() {
         rentAmount: Number(t.rentAmount) || Number(unit.financials?.rent) || 0,
       }));
     });
+
+    const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
+
+    // DEBUGGING LOGS
+    console.log("SF rows (pre-filter):", singleFamilyRows.length, singleFamilyRows[0]);
+    console.log("MF rows (pre-filter):", multiFamilyRows.length, multiFamilyRows[0]);
+    console.log("ALL rows (pre-filter):", combinedRows.length, combinedRows[0]);
   
     // 3. Combine and add financial calculations
-    const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
-  
     return combinedRows.map(row => {
       // Prioritize unit-level income, then fall back to property-level
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
