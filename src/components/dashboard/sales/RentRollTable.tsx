@@ -192,7 +192,7 @@ export function RentRollTable() {
                 
                 return activeTenants.map(activeTenant => {
                     const tenantIdentifier = activeTenant.id || activeTenant.email;
-                    const rentDue = activeTenant.rentAmount || unit.financials?.rent || 0;
+                    const rentDue = Number(activeTenant.rentAmount) || unit.financials?.rent || 0;
                     const amountPaid = incomeByPropertyOrUnit[unit.id] || 0;
                     const balance = rentDue - amountPaid;
 
