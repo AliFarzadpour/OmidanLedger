@@ -137,17 +137,7 @@ export function RentRollTable() {
     return query(collectionGroup(firestore, 'units'), where('userId', '==', user.uid));
   }, [user?.uid, firestore]);
   const { data: allUnits } = useCollection<Unit>(unitsQuery);
-
-  const unitsByPropertyId = useMemo(() => {
-    if (!allUnits) return {};
-    return allUnits.reduce((acc, unit) => {
-      const propertyId = unit.propertyId;
-      if (!acc[propertyId]) acc[propertyId] = [];
-      acc[propertyId].push(unit);
-      return acc;
-    }, {} as Record<string, Unit[]>);
-  }, [allUnits]);
-
+  
   const incomeByPropertyOrUnit = useMemo(() => {
     const map: Record<string, number> = {};
     for (const tx of monthlyIncomeTx) {
@@ -164,78 +154,70 @@ export function RentRollTable() {
 
 
   const rentRoll = useMemo(() => {
-    if (!properties) return [];
-
-    return properties.flatMap(p => {
-        if (p.isMultiUnit) {
-            const propertyUnits = unitsByPropertyId[p.id] || [];
-            return propertyUnits.flatMap(unit => {
-                const activeTenants = unit.tenants?.filter(t => t.status === 'active') || [];
-                if (activeTenants.length === 0) return [];
-                
-                return activeTenants.map(activeTenant => {
-                    const tenantIdentifier = activeTenant.id || activeTenant.email;
-                    const rentDue = Number(activeTenant.rentAmount) || Number(unit.financials?.rent) || 0;
-                    
-                    // Check unit-specific income first, then fall back to property-level income
-                    const amountPaid = incomeByPropertyOrUnit[unit.id] || incomeByPropertyOrUnit[p.id] || 0;
-                    const balance = rentDue - amountPaid;
-
-                    let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
-                    if (amountPaid === 0 && rentDue > 0) status = 'unpaid';
-                    else if (amountPaid >= rentDue) status = 'paid';
-                    else if (amountPaid > 0) status = 'partial';
-                    
-                    if (amountPaid > rentDue && rentDue > 0) status = 'overpaid';
-
-                    return {
-                        propertyId: p.id,
-                        unitId: unit.id,
-                        propertyName: `${p.name} #${unit.unitNumber}`,
-                        tenantId: tenantIdentifier,
-                        tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
-                        tenantEmail: activeTenant.email,
-                        tenantPhone: activeTenant.phone,
-                        rentAmount: rentDue,
-                        amountPaid: amountPaid,
-                        balance: balance,
-                        status: status
-                    };
-                })
-            }).filter(Boolean);
-        } else {
-            const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
-            if (activeTenants.length === 0) return [];
-            
-            return activeTenants.map(activeTenant => {
-                const tenantIdentifier = activeTenant.id || activeTenant.email;
-                const rentDue = Number(activeTenant.rentAmount) || 0;
-                const amountPaid = incomeByPropertyOrUnit[p.id] || 0;
-                const balance = rentDue - amountPaid;
-
-                let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
-                if (amountPaid === 0 && rentDue > 0) status = 'unpaid';
-                else if (amountPaid >= rentDue) status = 'paid';
-                else if (amountPaid > 0) status = 'partial';
-                
-                if (amountPaid > rentDue && rentDue > 0) status = 'overpaid';
-
-                return {
-                    propertyId: p.id,
-                    propertyName: p.name,
-                    tenantId: tenantIdentifier,
-                    tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
-                    tenantEmail: activeTenant.email,
-                    tenantPhone: activeTenant.phone,
-                    rentAmount: rentDue,
-                    amountPaid: amountPaid,
-                    balance: balance,
-                    status: status
-                };
-            });
-        }
+    if (!properties || !allUnits) return [];
+  
+    const propertyMap = new Map(properties.map(p => [p.id, p]));
+  
+    // 1. Process single-family properties
+    const singleFamilyRows = properties
+      .filter(p => !p.isMultiUnit)
+      .flatMap(p => {
+        const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
+        return activeTenants.map(t => ({
+          propertyId: p.id,
+          unitId: null,
+          propertyName: p.name,
+          tenantId: t.id || t.email,
+          tenantName: `${t.firstName} ${t.lastName}`,
+          tenantEmail: t.email,
+          tenantPhone: t.phone,
+          rentAmount: Number(t.rentAmount) || 0,
+        }));
+      });
+  
+    // 2. Process multi-family properties by iterating through all units
+    const multiFamilyRows = allUnits.flatMap(unit => {
+      const parentProperty = propertyMap.get(unit.propertyId);
+      if (!parentProperty) return []; // Skip unit if parent property not found
+  
+      const activeTenants = unit.tenants?.filter(t => t.status === 'active') || [];
+      return activeTenants.map(t => ({
+        propertyId: unit.propertyId,
+        unitId: unit.id,
+        propertyName: `${parentProperty.name} #${unit.unitNumber}`,
+        tenantId: t.id || t.email,
+        tenantName: `${t.firstName} ${t.lastName}`,
+        tenantEmail: t.email,
+        tenantPhone: t.phone,
+        rentAmount: Number(t.rentAmount) || Number(unit.financials?.rent) || 0,
+      }));
+    });
+  
+    // 3. Combine and add financial calculations
+    const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
+  
+    return combinedRows.map(row => {
+      // Prioritize unit-level income, then fall back to property-level
+      const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
+      const balance = row.rentAmount - amountPaid;
+  
+      let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+      if (row.rentAmount > 0) {
+        if (amountPaid === 0) status = 'unpaid';
+        else if (amountPaid >= row.rentAmount) status = 'paid';
+        else if (amountPaid > 0) status = 'partial';
+      }
+      if (amountPaid > row.rentAmount && row.rentAmount > 0) status = 'overpaid';
+  
+      return {
+        ...row,
+        amountPaid,
+        balance,
+        status
+      };
     }).filter(item => item && item.rentAmount > 0);
-  }, [properties, unitsByPropertyId, incomeByPropertyOrUnit]);
+  
+  }, [properties, allUnits, incomeByPropertyOrUnit]);
   
   const unpaidTenants = useMemo(() => {
     return rentRoll.filter(item => item?.status === 'unpaid' || item?.status === 'partial');
