@@ -48,6 +48,7 @@ interface Unit {
         rent: number;
     };
     propertyId: string; // Ensure this exists for linking back
+    userId: string; // Ensure this exists for the query
 }
 
 interface Property {
@@ -166,9 +167,9 @@ export function RentRollTable() {
 
 
   const rentRoll = useMemo(() => {
-    if (!properties || !allUnits) return [];
-  
-    const propertyMap = new Map(properties.map(p => [p.id, p]));
+    if (!properties) return [];
+
+    const propertyMap = new Map((properties || []).map(p => [p.id, p]));
   
     // 1. Process single-family properties
     const singleFamilyRows = (properties || [])
@@ -208,6 +209,8 @@ export function RentRollTable() {
     });
   
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
+
+    // DEBUGGING: Show all rows before final filtering
     const visibleRows = combinedRows;
 
     return visibleRows.map(row => {
