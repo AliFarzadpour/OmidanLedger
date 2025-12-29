@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -97,38 +98,20 @@ export function RentRollTable() {
       setTxError(null);
   
       try {
-        const baSnap = await getDocs(
+        const txsSnap = await getDocs(
           query(
-            collection(firestore, 'users', user.uid, 'bankAccounts')
+            collectionGroup(firestore, 'transactions'),
+            where('userId', '==', user.uid),
+            where('categoryHierarchy.l0', '==', 'Income'),
+            where('date', '>=', monthStartStr),
+            where('date', '<=', monthEndStr)
           )
         );
-
-        const bankAccountIds = baSnap.docs.map(d => d.id);
+        
         const allTx: Tx[] = [];
-  
-        for (const bankId of bankAccountIds) {
-          const txRef = collection(
-            firestore,
-            'users',
-            user.uid,
-            'bankAccounts',
-            bankId,
-            'transactions'
-          );
-  
-          const txSnap = await getDocs(
-            query(
-              txRef,
-              where('categoryHierarchy.l0', '==', 'INCOME'),
-              where('date', '>=', monthStartStr),
-              where('date', '<=', monthEndStr)
-            )
-          );
-  
-          txSnap.docs.forEach(doc => {
+        txsSnap.docs.forEach(doc => {
             allTx.push({ id: doc.id, ...doc.data() });
-          });
-        }
+        });
   
         setMonthlyIncomeTx(allTx);
 
@@ -168,7 +151,7 @@ export function RentRollTable() {
   const incomeByPropertyOrUnit = useMemo(() => {
     const map: Record<string, number> = {};
     for (const tx of monthlyIncomeTx) {
-      const id = String(tx.unitId || tx.propertyId || tx.costCenter || '').trim();
+      const id = String(tx.costCenter || '').trim();
       if (!id) continue;
   
       const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
@@ -192,8 +175,10 @@ export function RentRollTable() {
                 
                 return activeTenants.map(activeTenant => {
                     const tenantIdentifier = activeTenant.id || activeTenant.email;
-                    const rentDue = Number(activeTenant.rentAmount) || unit.financials?.rent || 0;
-                    const amountPaid = incomeByPropertyOrUnit[unit.id] || 0;
+                    const rentDue = Number(activeTenant.rentAmount) || Number(unit.financials?.rent) || 0;
+                    
+                    // Check unit-specific income first, then fall back to property-level income
+                    const amountPaid = incomeByPropertyOrUnit[unit.id] || incomeByPropertyOrUnit[p.id] || 0;
                     const balance = rentDue - amountPaid;
 
                     let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
@@ -224,7 +209,7 @@ export function RentRollTable() {
             
             return activeTenants.map(activeTenant => {
                 const tenantIdentifier = activeTenant.id || activeTenant.email;
-                const rentDue = activeTenant.rentAmount || 0;
+                const rentDue = Number(activeTenant.rentAmount) || 0;
                 const amountPaid = incomeByPropertyOrUnit[p.id] || 0;
                 const balance = rentDue - amountPaid;
 
