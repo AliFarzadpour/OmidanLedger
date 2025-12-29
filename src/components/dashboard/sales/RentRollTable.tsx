@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getDocs, collection, query, limit, where, doc, collectionGroup } from 'firebase/firestore';
 import { batchCreateTenantInvoices } from '@/actions/batch-invoice-actions';
@@ -47,6 +47,7 @@ interface Unit {
     financials?: {
         rent: number;
     };
+    propertyId: string; // Ensure this exists for linking back
 }
 
 interface Property {
@@ -72,7 +73,6 @@ export function RentRollTable() {
   const [isLoadingTx, setIsLoadingTx] = useState(false);
   const [txError, setTxError] = useState<any>(null);
 
-  // Fetch the landlord's user document to get their Stripe Account ID
   const userDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
@@ -159,26 +159,27 @@ export function RentRollTable() {
   const unitsByPropertyId = useMemo(() => {
     if (!allUnits) return {};
     return allUnits.reduce((acc, unit) => {
-      const propertyId = unit.id.split('_')[0]; // Assumes unit ID is part of property path
+      const propertyId = unit.propertyId; // Use the stored propertyId field
       if (!acc[propertyId]) acc[propertyId] = [];
       acc[propertyId].push(unit);
       return acc;
     }, {} as Record<string, Unit[]>);
   }, [allUnits]);
 
-  const incomeByPropertyId = useMemo(() => {
+  const incomeByPropertyOrUnit = useMemo(() => {
     const map: Record<string, number> = {};
     for (const tx of monthlyIncomeTx) {
-      const pid = String(tx.propertyId || tx.costCenter || '').trim();
-      if (!pid) continue;
+      const id = String(tx.unitId || tx.propertyId || tx.costCenter || '').trim();
+      if (!id) continue;
   
       const amt = typeof tx.amount === 'number' ? tx.amount : Number(tx.amount || 0);
       if (!Number.isFinite(amt) || amt <= 0) continue;
   
-      map[pid] = (map[pid] || 0) + amt;
+      map[id] = (map[id] || 0) + amt;
     }
     return map;
   }, [monthlyIncomeTx]);
+
 
   const rentRoll = useMemo(() => {
     if (!properties) return [];
@@ -192,7 +193,7 @@ export function RentRollTable() {
                 
                 const tenantIdentifier = activeTenant.id || activeTenant.email;
                 const rentDue = activeTenant.rentAmount || unit.financials?.rent || 0;
-                const amountPaid = incomeByPropertyId[unit.id] || 0; // Use unit ID for multi-family
+                const amountPaid = incomeByPropertyOrUnit[unit.id] || 0; // Match by unit ID
                 const balance = rentDue - amountPaid;
 
                 let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
@@ -204,6 +205,7 @@ export function RentRollTable() {
 
                 return {
                     propertyId: p.id,
+                    unitId: unit.id,
                     propertyName: `${p.name} #${unit.unitNumber}`,
                     tenantId: tenantIdentifier,
                     tenantName: `${activeTenant.firstName} ${activeTenant.lastName}`,
@@ -222,7 +224,7 @@ export function RentRollTable() {
 
             const tenantIdentifier = activeTenant.id || activeTenant.email;
             const rentDue = activeTenant.rentAmount || 0;
-            const amountPaid = incomeByPropertyId[p.id] || 0; // Use property ID for SFH
+            const amountPaid = incomeByPropertyOrUnit[p.id] || 0; // Match by property ID
             const balance = rentDue - amountPaid;
 
             let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
@@ -246,7 +248,7 @@ export function RentRollTable() {
             }];
         }
     }).filter(item => item && item.rentAmount > 0);
-  }, [properties, unitsByPropertyId, incomeByPropertyId]);
+  }, [properties, unitsByPropertyId, incomeByPropertyOrUnit]);
   
   const unpaidTenants = useMemo(() => {
     return rentRoll.filter(item => item?.status === 'unpaid' || item?.status === 'partial');
