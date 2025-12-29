@@ -178,9 +178,10 @@ export function RentRollTable() {
     // 2. Process multi-family properties by iterating through all units
     const multiFamilyRows = allUnits.flatMap(unit => {
       const parentProperty = propertyMap.get(unit.propertyId);
-      if (!parentProperty) return []; // Skip unit if parent property not found
+      if (!parentProperty) return [];
   
       const activeTenants = unit.tenants?.filter(t => t.status === 'active') || [];
+      
       return activeTenants.map(t => ({
         propertyId: unit.propertyId,
         unitId: unit.id,
@@ -192,13 +193,8 @@ export function RentRollTable() {
         rentAmount: Number(t.rentAmount) || Number(unit.financials?.rent) || 0,
       }));
     });
-
+  
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
-
-    // DEBUGGING LOGS
-    console.log("SF rows (pre-filter):", singleFamilyRows.length, singleFamilyRows[0]);
-    console.log("MF rows (pre-filter):", multiFamilyRows.length, multiFamilyRows[0]);
-    console.log("ALL rows (pre-filter):", combinedRows.length, combinedRows[0]);
   
     // 3. Combine and add financial calculations
     return combinedRows.map(row => {
