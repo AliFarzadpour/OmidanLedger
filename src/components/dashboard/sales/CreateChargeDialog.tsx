@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { createTenantInvoice } from '@/actions/stripe-actions';
 import { Loader2, FileText } from 'lucide-react';
+import { useUser } from '@/firebase';
 
 interface CreateChargeDialogProps {
   landlordAccountId?: string;
@@ -28,6 +29,7 @@ interface CreateChargeDialogProps {
 }
 
 export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone, rentAmount, propertyName }: CreateChargeDialogProps) {
+  const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -67,9 +69,14 @@ export function CreateChargeDialog({ landlordAccountId, tenantEmail, tenantPhone
         });
         return;
     }
+     if (!user) {
+      toast({ variant: 'destructive', title: 'Error', description: 'You must be logged in.' });
+      return;
+    }
     setIsLoading(true);
     try {
       const result = await createTenantInvoice({
+        userId: user.uid,
         landlordAccountId,
         tenantEmail: formData.tenantEmail,
         tenantPhone: formData.tenantPhone,

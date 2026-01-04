@@ -2,6 +2,8 @@
 'use server';
 
 import Stripe from 'stripe';
+import { db } from '@/lib/admin-db';
+import { FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Stripe with the secret key from environment variables
 // Ensure STRIPE_SECRET_KEY is set in your .env file
@@ -10,12 +12,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 });
 
 interface CreateTenantInvoiceData {
+  userId: string; // NEW: Landlord's user ID
   landlordAccountId: string;
   tenantEmail: string;
   tenantPhone?: string;
   amount: number;
   description: string;
-  propertyName?: string; // NEW
+  propertyName?: string;
 }
 
 /**
@@ -23,7 +26,7 @@ interface CreateTenantInvoiceData {
  * on behalf of a connected landlord account.
  */
 export async function createTenantInvoice(data: CreateTenantInvoiceData) {
-  const { landlordAccountId, tenantEmail, tenantPhone, amount, description, propertyName } = data;
+  const { userId, landlordAccountId, tenantEmail, tenantPhone, amount, description, propertyName } = data;
   
   const now = new Date();
   const month = now.toLocaleString('default', { month: 'long' });
@@ -41,7 +44,7 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     stripeAccountIdUsed: landlordAccountId,
   });
 
-  if (!landlordAccountId || !tenantEmail || !amount || !description) {
+  if (!landlordAccountId || !tenantEmail || !amount || !description || !userId) {
     throw new Error('Missing required invoice data.');
   }
 
@@ -86,6 +89,20 @@ export async function createTenantInvoice(data: CreateTenantInvoiceData) {
     if (!sentInvoice.hosted_invoice_url) {
         throw new Error("Failed to retrieve the hosted invoice URL after sending.");
     }
+    
+    // 6. NEW: Log the charge in Firestore for tracking
+    const chargeRef = db.collection('users').doc(userId).collection('charges').doc();
+    await chargeRef.set({
+        id: chargeRef.id,
+        tenantEmail,
+        propertyName,
+        amount,
+        description: fullDescription,
+        sentAt: FieldValue.serverTimestamp(),
+        stripeInvoiceId: sentInvoice.id,
+        status: 'sent',
+    });
+
 
     return { success: true, invoiceUrl: sentInvoice.hosted_invoice_url };
       

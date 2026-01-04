@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
+import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Send, Check } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO, differenceInDays, isPast } from 'date-fns';
@@ -71,6 +71,17 @@ interface Property {
 }
 
 type Tx = any;
+
+interface Charge {
+    id: string;
+    tenantEmail: string;
+    sentAt: {
+        seconds: number;
+        nanoseconds: number;
+    } | Date;
+    [key: string]: any;
+}
+
 
 const toNum = (v: any): number => {
   if (v === null || v === undefined) return 0;
@@ -140,6 +151,34 @@ export function RentRollTable() {
   const monthStartStr = useMemo(() => format(startOfMonthDate, 'yyyy-MM-dd'), [startOfMonthDate]);
   const monthEndStr = useMemo(() => format(endOfMonthDate, 'yyyy-MM-dd'), [endOfMonthDate]);
   
+    // Fetch charges
+  const chargesQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return query(collection(firestore, `users/${user.uid}/charges`));
+  }, [user, firestore]);
+  const { data: charges, isLoading: isLoadingCharges } = useCollection<Charge>(chargesQuery);
+
+  const hasInvoiceBeenSent = useCallback((tenantEmail: string, currentMonth: Date) => {
+    if (!charges) return { sent: false, date: null };
+
+    const charge = charges.find(c => {
+        if (c.tenantEmail !== tenantEmail) return false;
+        
+        let sentAtDate;
+        if (c.sentAt instanceof Date) {
+            sentAtDate = c.sentAt;
+        } else if (c.sentAt && typeof c.sentAt.seconds === 'number') {
+            sentAtDate = new Date(c.sentAt.seconds * 1000);
+        } else {
+            return false;
+        }
+
+        return isSameMonth(sentAtDate, currentMonth);
+    });
+
+    return { sent: !!charge, date: charge ? (charge.sentAt instanceof Date ? charge.sentAt : new Date((charge.sentAt as any).seconds * 1000)) : null };
+  }, [charges]);
+
   useEffect(() => {
     (async () => {
       if (!firestore || !user?.uid) return;
@@ -303,8 +342,13 @@ export function RentRollTable() {
   }, [properties, allUnits, incomeByPropertyOrUnit]);
   
   const unpaidTenants = useMemo(() => {
-    return rentRoll.filter(item => item?.status === 'unpaid' || item?.status === 'partial');
-  }, [rentRoll]);
+    return rentRoll.filter(item => {
+      if (!item) return false;
+      const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
+      return (item.status === 'unpaid' || item.status === 'partial') && !invoiceStatus.sent;
+    });
+  }, [rentRoll, hasInvoiceBeenSent, viewingDate]);
+  
   
   const handleBatchSend = async () => {
     if (!landlordStripeId) {
@@ -319,14 +363,17 @@ export function RentRollTable() {
       toast({ title: 'All Caught Up!', description: 'No outstanding invoices to send.' });
       return;
     }
+    if (!user) return;
 
     setIsBatching(true);
     const invoicesToSend = unpaidTenants.map(tenant => ({
+      userId: user.uid,
       landlordAccountId: landlordStripeId,
       tenantEmail: tenant!.tenantEmail,
       tenantPhone: tenant!.tenantPhone,
       amount: tenant!.balance > 0 ? tenant!.balance : tenant!.rentDue,
       description: `Rent for ${format(viewingDate, 'MMMM yyyy')}`,
+      propertyName: tenant!.propertyName,
     }));
 
     try {
@@ -352,7 +399,7 @@ export function RentRollTable() {
       expired: { color: 'bg-red-500', label: 'Lease has expired.' },
   };
 
-  const isLoading = isLoadingProperties || isLoadingTx || isLoadingUnits;
+  const isLoading = isLoadingProperties || isLoadingTx || isLoadingUnits || isLoadingCharges;
 
   return (
     <Card>
@@ -414,56 +461,65 @@ export function RentRollTable() {
                     </TableCell>
                 </TableRow>
             ) : (
-                rentRoll.map((item) => (
-                  item &&
-              <TableRow key={item.uniqueKey}>
-                <TableCell>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <div className={cn("h-3 w-3 rounded-full", leaseStatusConfig[item.leaseStatus].color)} />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{leaseStatusConfig[item.leaseStatus].label}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </TableCell>
-                <TableCell className="font-medium">{item.propertyName}</TableCell>
-                <TableCell>{item.tenantName}</TableCell>
-                <TableCell>{formatCurrency(item.rentDue)}</TableCell>
-                <TableCell className="font-medium text-green-700">{formatCurrency(item.amountPaid)}</TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                        item.status === 'paid' ? 'default' :
-                        item.status === 'unpaid' ? 'destructive' :
-                        'outline'
-                    }
-                    className={cn(
-                        item.status === 'paid' && 'bg-green-100 text-green-800 border-green-200',
-                        item.status === 'partial' && 'bg-yellow-100 text-yellow-800 border-yellow-200',
-                        item.status === 'overpaid' && 'bg-blue-100 text-blue-800 border-blue-200',
-                    )}
-                  >
-                    {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <CreateChargeDialog
-                    landlordAccountId={landlordStripeId}
-                    tenantEmail={item.tenantEmail}
-                    tenantPhone={item.tenantPhone}
-                    rentAmount={item.rentDue}
-                    propertyName={item.propertyName}
-                  />
-                </TableCell>
-              </TableRow>
-            )))}
+                rentRoll.map((item) => {
+                    const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
+                    return item && (
+                        <TableRow key={item.uniqueKey}>
+                            <TableCell>
+                            <TooltipProvider>
+                                <Tooltip>
+                                <TooltipTrigger>
+                                    <div className={cn("h-3 w-3 rounded-full", leaseStatusConfig[item.leaseStatus].color)} />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{leaseStatusConfig[item.leaseStatus].label}</p>
+                                </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                            </TableCell>
+                            <TableCell className="font-medium">{item.propertyName}</TableCell>
+                            <TableCell>{item.tenantName}</TableCell>
+                            <TableCell>{formatCurrency(item.rentDue)}</TableCell>
+                            <TableCell className="font-medium text-green-700">{formatCurrency(item.amountPaid)}</TableCell>
+                            <TableCell>
+                            <Badge
+                                variant={
+                                    item.status === 'paid' ? 'default' :
+                                    item.status === 'unpaid' ? 'destructive' :
+                                    'outline'
+                                }
+                                className={cn(
+                                    item.status === 'paid' && 'bg-green-100 text-green-800 border-green-200',
+                                    item.status === 'partial' && 'bg-yellow-100 text-yellow-800 border-yellow-200',
+                                    item.status === 'overpaid' && 'bg-blue-100 text-blue-800 border-blue-200',
+                                )}
+                            >
+                                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                            </Badge>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                {invoiceStatus.sent ? (
+                                    <div className="flex items-center justify-end gap-2 text-sm text-muted-foreground">
+                                        <Check className="h-4 w-4 text-green-500" />
+                                        Sent {format(invoiceStatus.date!, 'MM/dd/yy')}
+                                    </div>
+                                ) : (
+                                    <CreateChargeDialog
+                                        landlordAccountId={landlordStripeId}
+                                        tenantEmail={item.tenantEmail}
+                                        tenantPhone={item.tenantPhone}
+                                        rentAmount={item.balance > 0 ? item.balance : item.rentDue}
+                                        propertyName={item.propertyName}
+                                    />
+                                )}
+                            </TableCell>
+                        </TableRow>
+                    )
+                })
+            )}
           </TableBody>
         </Table>
       </CardContent>
     </Card>
   );
 }
-
