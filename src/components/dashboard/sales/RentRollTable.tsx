@@ -23,11 +23,17 @@ import { Button } from '@/components/ui/button';
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
-import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO } from 'date-fns';
+import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO, differenceInDays, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { getDocs, collection, query, limit, where, doc, collectionGroup } from 'firebase/firestore';
 import { batchCreateTenantInvoices } from '@/actions/batch-invoice-actions';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 
 interface Tenant {
@@ -38,6 +44,7 @@ interface Tenant {
     phone?: string;
     status: 'active' | 'past';
     rentAmount: number | string;
+    leaseEnd?: string;
 }
 
 interface Unit {
@@ -211,13 +218,12 @@ export function RentRollTable() {
 
     const propertyMap = new Map((properties || []).map(p => [p.id, p]));
   
-    // 1. Process single-family properties
     const singleFamilyRows = (properties || [])
       .filter(p => !p.isMultiUnit)
-      .flatMap(p => {
+      .flatMap((p, propIndex) => {
         const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
-        return activeTenants.map((t, index) => ({
-          uniqueKey: `${p.id}-${t.id || t.email}-${index}`,
+        return activeTenants.map((t, tenantIndex) => ({
+          uniqueKey: `${p.id}-${t.email || tenantIndex}`,
           propertyId: p.id,
           unitId: null,
           propertyName: p.name,
@@ -226,18 +232,18 @@ export function RentRollTable() {
           tenantEmail: t.email,
           tenantPhone: t.phone,
           rentDue: toNum(t.rentAmount),
+          leaseEnd: t.leaseEnd,
         }));
       });
   
-    // 2. Process multi-family properties by iterating through all units
-    const multiFamilyRows = (allUnits || []).flatMap(unit => {
+    const multiFamilyRows = (allUnits || []).flatMap((unit, unitIndex) => {
         const parentProperty = propertyMap.get(unit.propertyId);
         if (!parentProperty) return [];
     
         const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
         if (activeTenants.length === 0) return [];
         
-        return activeTenants.map((t, index) => {
+        return activeTenants.map((t, tenantIndex) => {
           const rentDue =
               toNum(t.rentAmount) ||
               toNum(unit.financials?.rent) ||
@@ -246,7 +252,7 @@ export function RentRollTable() {
               0;
   
           return {
-              uniqueKey: `${unit.propertyId}-${unit.id}-${t.id || t.email}-${index}`,
+              uniqueKey: `${unit.propertyId}-${unit.id}-${t.email || tenantIndex}`,
               propertyId: unit.propertyId,
               unitId: unit.id,
               propertyName: `${parentProperty.name} #${unit.unitNumber}`,
@@ -255,6 +261,7 @@ export function RentRollTable() {
               tenantEmail: t.email,
               tenantPhone: t.phone,
               rentDue,
+              leaseEnd: t.leaseEnd,
           };
         });
       });
@@ -263,23 +270,33 @@ export function RentRollTable() {
     const visibleRows = combinedRows;
 
     return visibleRows.map(row => {
-      // Prioritize unit-level income, then fall back to property-level
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
       const balance = row.rentDue - amountPaid;
   
-      let status: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
+      let paymentStatus: 'unpaid' | 'paid' | 'partial' | 'overpaid' = 'unpaid';
       if (row.rentDue > 0) {
-        if (amountPaid === 0) status = 'unpaid';
-        else if (amountPaid >= row.rentDue) status = 'paid';
-        else if (amountPaid > 0) status = 'partial';
+        if (amountPaid === 0) paymentStatus = 'unpaid';
+        else if (amountPaid >= row.rentDue) paymentStatus = 'paid';
+        else if (amountPaid > 0) paymentStatus = 'partial';
       }
-      if (amountPaid > row.rentDue && row.rentDue > 0) status = 'overpaid';
+      if (amountPaid > row.rentDue && row.rentDue > 0) paymentStatus = 'overpaid';
+
+      let leaseStatus: 'safe' | 'expiring' | 'expired' = 'safe';
+      if (row.leaseEnd) {
+          const leaseEndDate = parseISO(row.leaseEnd);
+          if (isPast(leaseEndDate)) {
+              leaseStatus = 'expired';
+          } else if (differenceInDays(leaseEndDate, new Date()) <= 30) {
+              leaseStatus = 'expiring';
+          }
+      }
   
       return {
         ...row,
         amountPaid,
         balance,
-        status
+        status: paymentStatus,
+        leaseStatus
       };
     });
   
@@ -329,6 +346,12 @@ export function RentRollTable() {
     }
   };
 
+  const leaseStatusConfig = {
+      safe: { color: 'bg-green-500', label: 'Lease is active and not ending soon.' },
+      expiring: { color: 'bg-orange-500', label: 'Lease is expiring within 30 days.' },
+      expired: { color: 'bg-red-500', label: 'Lease has expired.' },
+  };
+
   const isLoading = isLoadingProperties || isLoadingTx || isLoadingUnits;
 
   return (
@@ -367,6 +390,7 @@ export function RentRollTable() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10"></TableHead>
               <TableHead>Property</TableHead>
               <TableHead>Tenant</TableHead>
               <TableHead>Rent Due</TableHead>
@@ -378,13 +402,13 @@ export function RentRollTable() {
           <TableBody>
             {isLoading ? (
                 <TableRow>
-                    <TableCell colSpan={6} className="text-center p-8">
+                    <TableCell colSpan={7} className="text-center p-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/>
                     </TableCell>
                 </TableRow>
             ) : rentRoll.length === 0 ? (
                  <TableRow>
-                    <TableCell colSpan={6} className="text-center p-8">
+                    <TableCell colSpan={7} className="text-center p-8">
                         <p className="font-semibold">No Active Leases with Rent Due Found</p>
                         <p className="text-sm text-muted-foreground">Add tenants with rent amounts to your properties to see them here.</p>
                     </TableCell>
@@ -393,6 +417,18 @@ export function RentRollTable() {
                 rentRoll.map((item) => (
                   item &&
               <TableRow key={item.uniqueKey}>
+                <TableCell>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <div className={cn("h-3 w-3 rounded-full", leaseStatusConfig[item.leaseStatus].color)} />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{leaseStatusConfig[item.leaseStatus].label}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </TableCell>
                 <TableCell className="font-medium">{item.propertyName}</TableCell>
                 <TableCell>{item.tenantName}</TableCell>
                 <TableCell>{formatCurrency(item.rentDue)}</TableCell>
@@ -430,3 +466,4 @@ export function RentRollTable() {
     </Card>
   );
 }
+
