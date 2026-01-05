@@ -1,10 +1,12 @@
 
 'use server';
 
+import { differenceInCalendarMonths } from 'date-fns';
+
 interface AmortizationInput {
     principal: number;
     annualRate: number;
-    termInYears: number;
+    principalAndInterest: number; // Use the actual P&I payment
     startDate: string;
 }
 
@@ -20,28 +22,22 @@ interface AmortizationResult {
 export async function calculateAmortization({
     principal,
     annualRate,
-    termInYears,
+    principalAndInterest,
     startDate
 }: AmortizationInput): Promise<AmortizationResult> {
 
-    if (!principal || !annualRate || !termInYears || !startDate) {
-        return { success: false, error: 'Missing required amortization parameters.' };
+    if (!principal || !annualRate || !principalAndInterest || !startDate) {
+        return { success: false, error: 'Missing required amortization parameters (Principal, Rate, P&I, Start Date).' };
     }
 
     try {
         const monthlyRate = annualRate / 100 / 12;
-        const numberOfPayments = termInYears * 12;
-
-        // Calculate monthly payment (M) using the loan amortization formula
-        const monthlyPayment = principal * (monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) / (Math.pow(1 + monthlyRate, numberOfPayments) - 1);
-
+        
         const start = new Date(startDate);
         const now = new Date();
         
-        // Calculate the number of full months passed
-        let monthsPassed = (now.getFullYear() - start.getFullYear()) * 12;
-        monthsPassed -= start.getMonth();
-        monthsPassed += now.getMonth();
+        // Use a more reliable method to count full months passed.
+        const monthsPassed = differenceInCalendarMonths(now, start);
         
         if (monthsPassed <= 0) {
             return { success: true, currentBalance: principal };
@@ -51,14 +47,27 @@ export async function calculateAmortization({
 
         for (let i = 0; i < monthsPassed; i++) {
             const interestPayment = currentBalance * monthlyRate;
-            const principalPayment = monthlyPayment - interestPayment;
+            const principalPayment = principalAndInterest - interestPayment;
             currentBalance -= principalPayment;
         }
+        
+        // Ensure balance is not negative and round to 2 decimal places
+        const finalBalance = Math.max(0, currentBalance);
 
-        return { success: true, currentBalance: Math.max(0, currentBalance) }; // Ensure balance doesn't go negative
+        return { success: true, currentBalance: parseFloat(finalBalance.toFixed(2)) };
 
     } catch (error: any) {
         console.error("Amortization calculation error:", error);
         return { success: false, error: error.message || 'Failed to calculate loan balance.' };
     }
 }
+
+// We also need to update the form to pass the correct data.
+const propertySchema = z.object({
+  // ... (rest of schema)
+  mortgage: z.object({
+    // ...
+    principalAndInterest: z.coerce.number().optional(), // Ensure this is present
+    // ...
+  }).optional(),
+});

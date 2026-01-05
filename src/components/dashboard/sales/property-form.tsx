@@ -234,11 +234,11 @@ export function PropertyForm({
   
   const handleRecalculateBalance = async () => {
     const mortgageData = form.getValues('mortgage');
-    if (!mortgageData?.originalLoanAmount || !mortgageData.interestRate || !mortgageData.loanTerm || !mortgageData.purchaseDate) {
+    if (!mortgageData?.originalLoanAmount || !mortgageData.interestRate || !mortgageData.principalAndInterest || !mortgageData.purchaseDate) {
         toast({
             variant: "destructive",
             title: "Missing Information",
-            description: "Please provide Original Loan Amount, Interest Rate, Loan Term, and Purchase Date to calculate.",
+            description: "Please provide Original Loan Amount, Interest Rate, P&I Payment, and Purchase Date to calculate.",
         });
         return;
     }
@@ -248,7 +248,7 @@ export function PropertyForm({
         const result = await calculateAmortization({
             principal: mortgageData.originalLoanAmount,
             annualRate: mortgageData.interestRate,
-            termInYears: mortgageData.loanTerm,
+            principalAndInterest: mortgageData.principalAndInterest,
             startDate: mortgageData.purchaseDate,
         });
 
