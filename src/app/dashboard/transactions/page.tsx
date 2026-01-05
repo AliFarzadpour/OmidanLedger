@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, setDoc } from 'firebase/firestore';
+import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, updateDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
@@ -56,7 +56,7 @@ export default function TransactionsPage() {
     if (!userDocRef) return;
     setAutoSyncEnabled(enabled); // Optimistic UI update
     try {
-      await setDoc(userDocRef, { plaidAutoSyncEnabled: enabled }, { merge: true });
+      await updateDoc(userDocRef, { plaidAutoSyncEnabled: enabled });
       toast({
         title: `Auto-Sync ${enabled ? 'Enabled' : 'Disabled'}`,
         description: `Your accounts will ${enabled ? 'now' : 'no longer'} sync automatically.`,
@@ -100,7 +100,7 @@ export default function TransactionsPage() {
             acc[accountId].incorrect++;
         }
         return acc;
-    }, {} as Record<string, { needsReview: number, incorrect: number }>);
+    }, {} as Record<string, { needsReview: number; incorrect: number }>);
   }, [allTransactions]);
 
   const handleAdd = () => {
