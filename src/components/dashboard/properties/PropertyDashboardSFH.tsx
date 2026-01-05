@@ -174,7 +174,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       <div className="space-y-6 p-6">
         {header}
 
-        <FinancialPerformance propertyId={property.id} />
+        <FinancialPerformance propertyId={property.id} viewingDate={new Date()} />
 
         <PropertySetupBanner
           propertyId={property.id}
