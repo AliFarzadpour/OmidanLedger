@@ -44,6 +44,11 @@ const data = {
       url: "/dashboard/properties",
       icon: Building2,
     },
+    {
+      title: "Debt Center",
+      url: "/dashboard/sales/debt-center",
+      icon: Landmark,
+    },
   ],
   
   // Zone 2: The "Money" World (Bookkeeping)
