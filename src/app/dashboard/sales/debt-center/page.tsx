@@ -60,7 +60,7 @@ function StatCard({ title, value, icon, isLoading, format = 'currency' }: { titl
     if (format === 'currency') {
         formattedValue = formatCurrency(value);
     } else if (format === 'percent') {
-        formattedValue = `${'value'.toFixed(2)}%`;
+        formattedValue = `${value.toFixed(2)}%`;
     } else {
         formattedValue = `${value.toFixed(0)} mos`;
     }
