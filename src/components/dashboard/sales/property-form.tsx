@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History, Calculator
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History, Calculator, Loader2
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
