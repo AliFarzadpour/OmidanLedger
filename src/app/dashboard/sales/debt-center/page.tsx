@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Landmark, HandCoins, Percent, CalendarDays, Pencil, FileWarning, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, ArrowLeft, Landmark, HandCoins, Percent, CalendarDays, FileWarning, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
@@ -55,7 +55,7 @@ interface Transaction {
     costCenter?: string;
 }
 
-function StatCard({ title, value, icon, isLoading, format = 'currency' }: { title: string, value: number, icon: React.ReactNode, isLoading: boolean, format?: 'currency' | 'percent' | 'months' }) {
+function StatCard({ title, value, icon, isLoading, format = 'currency', cardClassName }: { title: string, value: number, icon: React.ReactNode, isLoading: boolean, format?: 'currency' | 'percent' | 'months', cardClassName?: string }) {
     let formattedValue;
     if (format === 'currency') {
         formattedValue = formatCurrency(value);
@@ -66,7 +66,7 @@ function StatCard({ title, value, icon, isLoading, format = 'currency' }: { titl
     }
 
     return (
-        <Card className="shadow-sm">
+        <Card className={`shadow-sm ${cardClassName}`}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
                 {icon}
@@ -185,7 +185,7 @@ export default function DebtCenterPage() {
 
   return (
     <div className="space-y-8 p-8">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center p-4 border rounded-lg bg-slate-50/50">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard/sales')}>
             <ArrowLeft className="h-5 w-5" />
@@ -207,10 +207,10 @@ export default function DebtCenterPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
-        <StatCard title="Total Loan Balance" value={totalBalance} icon={<Landmark className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} />
-        <StatCard title="Total Interest Paid" value={totalInterestPaid} icon={<HandCoins className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} />
-        <StatCard title="Total Monthly Payments" value={totalMonthly} icon={<CalendarDays className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} />
-        <StatCard title="Avg. Interest Rate" value={avgInterestRate} icon={<Percent className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} format="percent" />
+        <StatCard title="Total Loan Balance" value={totalBalance} icon={<Landmark className="h-5 w-5 text-blue-500" />} isLoading={isLoading} cardClassName="bg-blue-50 border-blue-200" />
+        <StatCard title="Total Interest Paid" value={totalInterestPaid} icon={<HandCoins className="h-5 w-5 text-amber-500" />} isLoading={isLoading} cardClassName="bg-amber-50 border-amber-200" />
+        <StatCard title="Total Monthly Payments" value={totalMonthly} icon={<CalendarDays className="h-5 w-5 text-green-500" />} isLoading={isLoading} cardClassName="bg-green-50 border-green-200" />
+        <StatCard title="Avg. Interest Rate" value={avgInterestRate} icon={<Percent className="h-5 w-5 text-purple-500" />} isLoading={isLoading} format="percent" cardClassName="bg-purple-50 border-purple-200"/>
       </div>
 
       <Card>
@@ -237,12 +237,12 @@ export default function DebtCenterPage() {
               {isLoading ? (
                 <TableRow><TableCell colSpan={9} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
               ) : properties && properties.length > 0 ? (
-                properties.map((prop) => {
+                properties.map((prop, index) => {
                   const monthlyPayment = (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
                   const currentBalanceInfo = balances.find(b => b.propertyId === prop.id);
                   const actualPayment = getActualPayment(prop.id);
                   return (
-                    <TableRow key={prop.id}>
+                    <TableRow key={prop.id} className={index % 2 === 0 ? '' : 'bg-slate-50/50'}>
                       <TableCell className="font-medium">{prop.name}</TableCell>
                       <TableCell>{prop.mortgage?.lenderName || 'N/A'}</TableCell>
                       <TableCell>{formatCurrency(prop.mortgage?.originalLoanAmount || 0)}</TableCell>
