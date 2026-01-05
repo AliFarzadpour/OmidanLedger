@@ -14,7 +14,6 @@ import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction } from '@/components/dashboard/transactions-table';
-import { ChartOfAccountsDialog } from '@/components/dashboard/transactions/ChartOfAccountsDialog';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,7 +36,6 @@ export default function TransactionsPage() {
   const [isDialogOpen, setDialogOpen] = useState(false);
   const [editingDataSource, setEditingDataSource] = useState<DataSource | null>(null);
   const [selectedDataSource, setSelectedDataSource] = useState<DataSource | null>(null);
-  const [isCoaOpen, setIsCoaOpen] = useState(false);
   
   const [isDeleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [deletingDataSource, setDeletingDataSource] = useState<DataSource | null>(null);
@@ -196,9 +194,6 @@ export default function TransactionsPage() {
                 />
               </div>
             )}
-            <Button variant="outline" onClick={() => setIsCoaOpen(true)}>
-                <BookOpen className="mr-2 h-4 w-4" /> Chart of Accounts
-            </Button>
             <Button onClick={handleAdd}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Add Data Source
@@ -254,7 +249,6 @@ export default function TransactionsPage() {
         </AlertDialogContent>
       </AlertDialog>
       
-      <ChartOfAccountsDialog isOpen={isCoaOpen} onOpenChange={setIsCoaOpen} />
     </>
   );
 }

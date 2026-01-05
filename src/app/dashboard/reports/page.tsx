@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -54,12 +55,6 @@ export default function ReportsPage() {
       description: 'A summary of debits and credits for all accounts to verify balance.',
       href: '/dashboard/reports/trial-balance',
       icon: Scale,
-    },
-    {
-      title: 'Chart of Accounts',
-      description: 'Summary of total income and expenses by category.',
-      href: '/dashboard/reports/chart-of-accounts',
-      icon: BookUser,
     },
   ]
   return (
