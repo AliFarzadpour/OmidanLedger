@@ -146,7 +146,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               {data.realEstate.map((item) => {
-                const isActive = pathname.startsWith(item.url);
+                // FIX: Use exact match for parent route, and startsWith for others
+                const isActive = item.url === '/dashboard/sales'
+                  ? pathname === item.url
+                  : pathname.startsWith(item.url);
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
@@ -172,7 +175,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupContent>
             <SidebarMenu>
               {data.accounting.map((item) => {
-                const isActive = pathname === item.url || (item.url !== '/dashboard' && pathname.startsWith(item.url));
+                const isActive = item.url === '/dashboard' 
+                  ? pathname === item.url 
+                  : pathname.startsWith(item.url) && item.url !== '/dashboard/sales'; // Prevent matching sales again
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton 
