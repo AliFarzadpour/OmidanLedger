@@ -40,6 +40,7 @@ interface Property {
 interface CalculatedBalance {
     propertyId: string;
     balance: number;
+    interestForMonth: number;
     error?: string;
 }
 
@@ -83,18 +84,23 @@ export default function DebtCenterPage() {
   useEffect(() => {
     if (properties) {
         startTransition(() => {
-            const endOfMonthDate = endOfMonth(viewingDate).toISOString();
             const balancePromises = properties.map(async p => {
                 if (p.mortgage?.originalLoanAmount && p.mortgage.interestRate && p.mortgage.principalAndInterest && p.mortgage.purchaseDate) {
                     const result = await calculateAmortization({
                         principal: p.mortgage.originalLoanAmount,
                         annualRate: p.mortgage.interestRate,
                         principalAndInterest: p.mortgage.principalAndInterest,
-                        startDate: endOfMonthDate, // Calculate balance as of the end of the selected month
+                        loanStartDate: p.mortgage.purchaseDate,
+                        targetDate: viewingDate.toISOString(),
                     });
-                    return { propertyId: p.id, balance: result.currentBalance || 0, error: result.error };
+                    return { 
+                        propertyId: p.id, 
+                        balance: result.currentBalance || 0, 
+                        interestForMonth: result.interestPaidForMonth || 0,
+                        error: result.error 
+                    };
                 }
-                return { propertyId: p.id, balance: p.mortgage?.loanBalance || 0 };
+                return { propertyId: p.id, balance: p.mortgage?.loanBalance || 0, interestForMonth: 0 };
             });
             Promise.all(balancePromises).then(setBalances);
         });
@@ -102,23 +108,27 @@ export default function DebtCenterPage() {
   }, [properties, viewingDate]);
 
 
-  const { totalBalance, totalMonthly, avgInterestRate } = useMemo(() => {
-    if (!properties || balances.length === 0) return { totalBalance: 0, totalMonthly: 0, avgInterestRate: 0 };
+  const { totalBalance, totalMonthly, avgInterestRate, totalInterestPaid } = useMemo(() => {
+    if (!properties || balances.length === 0) return { totalBalance: 0, totalMonthly: 0, avgInterestRate: 0, totalInterestPaid: 0 };
     
     let balance = 0;
     let monthly = 0;
     let weightedRateSum = 0;
+    let interestPaid = 0;
 
     properties.forEach(p => {
-      const calculatedBalance = balances.find(b => b.propertyId === p.id)?.balance || 0;
-      balance += calculatedBalance;
+      const calculated = balances.find(b => b.propertyId === p.id);
+      const currentBalance = calculated?.balance || 0;
+      
+      balance += currentBalance;
       monthly += (p.mortgage?.principalAndInterest || 0) + (p.mortgage?.escrowAmount || 0);
-      weightedRateSum += (p.mortgage?.interestRate || 0) * calculatedBalance;
+      weightedRateSum += (p.mortgage?.interestRate || 0) * currentBalance;
+      interestPaid += calculated?.interestForMonth || 0;
     });
 
     const avgRate = balance > 0 ? weightedRateSum / balance : 0;
 
-    return { totalBalance: balance, totalMonthly: monthly, avgInterestRate: avgRate };
+    return { totalBalance: balance, totalMonthly: monthly, avgInterestRate: avgRate, totalInterestPaid: interestPaid };
   }, [properties, balances]);
 
   const handleEdit = (propertyId: string) => {
@@ -150,8 +160,9 @@ export default function DebtCenterPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <StatCard title="Total Loan Balance" value={totalBalance} icon={<Landmark className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} />
+        <StatCard title="Total Interest Paid" value={totalInterestPaid} icon={<HandCoins className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} />
         <StatCard title="Total Monthly Payments" value={totalMonthly} icon={<CalendarDays className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} />
         <StatCard title="Avg. Interest Rate" value={avgInterestRate} icon={<Percent className="h-5 w-5 text-muted-foreground" />} isLoading={isLoading} format="percent" />
       </div>
@@ -169,24 +180,26 @@ export default function DebtCenterPage() {
                 <TableHead>Lender</TableHead>
                 <TableHead>Original Loan</TableHead>
                 <TableHead>Loan Balance</TableHead>
+                <TableHead>Interest Paid</TableHead>
                 <TableHead>Monthly Payment</TableHead>
-                <TableHead>Interest Rate</TableHead>
+                <TableHead>Rate</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
               ) : properties && properties.length > 0 ? (
                 properties.map((prop) => {
                   const monthlyPayment = (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
-                  const currentBalance = balances.find(b => b.propertyId === prop.id)?.balance || 0;
+                  const currentBalanceInfo = balances.find(b => b.propertyId === prop.id);
                   return (
                     <TableRow key={prop.id}>
                       <TableCell className="font-medium">{prop.name}</TableCell>
                       <TableCell>{prop.mortgage?.lenderName || 'N/A'}</TableCell>
                       <TableCell>{formatCurrency(prop.mortgage?.originalLoanAmount || 0)}</TableCell>
-                      <TableCell>{formatCurrency(currentBalance)}</TableCell>
+                      <TableCell>{formatCurrency(currentBalanceInfo?.balance || 0)}</TableCell>
+                      <TableCell>{formatCurrency(currentBalanceInfo?.interestForMonth || 0)}</TableCell>
                       <TableCell>{formatCurrency(monthlyPayment)}</TableCell>
                       <TableCell>{(prop.mortgage?.interestRate || 0).toFixed(3)}%</TableCell>
                       <TableCell className="text-right">
@@ -199,7 +212,7 @@ export default function DebtCenterPage() {
                 })
               ) : (
                 <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center">
+                    <TableCell colSpan={8} className="h-24 text-center">
                         <FileWarning className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                         No properties with mortgage data found.
                     </TableCell>
