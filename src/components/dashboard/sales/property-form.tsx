@@ -9,7 +9,7 @@ import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History, Calculator
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PropertyFinancials } from './property-financials';
 import { generateRulesForProperty } from '@/lib/rule-engine';
+import { calculateAmortization } from '@/actions/amortization-actions';
 
 // --- SCHEMA DEFINITION (BUILDING-LEVEL) ---
 const propertySchema = z.object({
@@ -74,6 +75,8 @@ const propertySchema = z.object({
     hasMortgage: z.enum(['yes', 'no']).optional(),
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
+    originalLoanAmount: z.coerce.number().optional(), // NEW
+    loanTerm: z.coerce.number().optional(), // NEW (in years)
     lenderPhone: z.string().optional(),
     lenderEmail: z.string().optional(),
     principalAndInterest: z.coerce.number().optional(),
@@ -151,6 +154,8 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
     purchasePrice: 0,
     purchaseDate: '',
     hasMortgage: undefined,
+    originalLoanAmount: 0, // NEW
+    loanTerm: 30, // NEW
     escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
   },
   taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, policyStartDate: '', policyEndDate: '' },
@@ -179,6 +184,7 @@ export function PropertyForm({
   const { toast } = useToast();
   const [activeSection, setActiveSection] = useState(defaultTab);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
   const [showPastTenants, setShowPastTenants] = useState(false);
 
   const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
@@ -225,6 +231,42 @@ export function PropertyForm({
 
   const activeTenants = useMemo(() => tenantFields.fields.filter((_, index) => form.watch(`tenants.${index}.status`) === 'active'), [tenantFields.fields, form.watch]);
   const pastTenants = useMemo(() => tenantFields.fields.filter((_, index) => form.watch(`tenants.${index}.status`) === 'past'), [tenantFields.fields, form.watch]);
+  
+  const handleRecalculateBalance = async () => {
+    const mortgageData = form.getValues('mortgage');
+    if (!mortgageData?.originalLoanAmount || !mortgageData.interestRate || !mortgageData.loanTerm || !mortgageData.purchaseDate) {
+        toast({
+            variant: "destructive",
+            title: "Missing Information",
+            description: "Please provide Original Loan Amount, Interest Rate, Loan Term, and Purchase Date to calculate.",
+        });
+        return;
+    }
+
+    setIsCalculating(true);
+    try {
+        const result = await calculateAmortization({
+            principal: mortgageData.originalLoanAmount,
+            annualRate: mortgageData.interestRate,
+            termInYears: mortgageData.loanTerm,
+            startDate: mortgageData.purchaseDate,
+        });
+
+        if (result.success && result.currentBalance !== undefined) {
+            form.setValue('mortgage.loanBalance', result.currentBalance, { shouldDirty: true });
+            toast({
+                title: "Balance Calculated",
+                description: `Estimated current loan balance is ${result.currentBalance.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}.`,
+            });
+        } else {
+            throw new Error(result.error || "Unknown calculation error.");
+        }
+    } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Calculation Failed', description: error.message });
+    } finally {
+        setIsCalculating(false);
+    }
+  };
 
   const onSubmit = async (data: PropertyFormValues) => {
     if (!user || !firestore || !currentPropertyId) return;
@@ -556,6 +598,13 @@ export function PropertyForm({
               </div>
               {form.watch('mortgage.hasMortgage') === 'yes' && (
                 <>
+                  <div className="p-4 border rounded-lg bg-blue-50/20 space-y-4">
+                    <Label className="font-bold text-blue-800">Loan Origination Details</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-2"><Label>Original Loan Amount</Label><Input type="number" {...form.register('mortgage.originalLoanAmount')} placeholder="e.g., 250000" /></div>
+                        <div className="grid gap-2"><Label>Loan Term (Years)</Label><Input type="number" {...form.register('mortgage.loanTerm')} placeholder="e.g., 30" /></div>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Lender Name</Label><Input {...form.register('mortgage.lenderName')} /></div>
                     <div className="grid gap-2"><Label>Account Number</Label><Input {...form.register('mortgage.accountNumber')} /></div>
@@ -573,7 +622,15 @@ export function PropertyForm({
                    <p className="text-xs text-muted-foreground -mt-4">Your total payment to the lender is the sum of Principal/Interest and Escrow.</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" {...form.register('mortgage.interestRate')} /></div>
-                    <div className="grid gap-2"><Label>Loan Balance</Label><Input type="number" {...form.register('mortgage.loanBalance')} /></div>
+                    <div className="grid gap-2"><Label>Current Loan Balance</Label>
+                        <div className="flex items-center gap-2">
+                            <Input type="number" {...form.register('mortgage.loanBalance')} />
+                            <Button type="button" variant="secondary" onClick={handleRecalculateBalance} disabled={isCalculating} className="gap-2">
+                                {isCalculating ? <Loader2 className="h-4 w-4 animate-spin"/> : <Calculator className="h-4 w-4"/>}
+                                Calc
+                            </Button>
+                        </div>
+                    </div>
                   </div>
                   <div className="p-4 border rounded-md bg-slate-50">
                     <Label className="mb-2 block font-semibold text-slate-700">This escrow amount is for:</Label>
@@ -701,4 +758,3 @@ export function PropertyForm({
     </div>
   );
 }
-
