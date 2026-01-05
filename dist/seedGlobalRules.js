@@ -151,23 +151,24 @@ const VENDOR_CATEGORY_SEED = {
 };
 // 3. Helper function to map L2 tax lines back to L0/L1 structure
 function getCategoryHierarchy(l2String) {
+    const defaultL3 = l2String.split('—').pop()?.trim() || "General";
     if (l2String.startsWith("Schedule E")) {
-        return { l0: "OPERATING EXPENSE", l1: "Property Operations (Rentals)" };
+        return { l0: "OPERATING EXPENSE", l1: "Property Operations (Rentals)", l2: l2String };
     }
     if (l2String.includes("Car & Truck") || l2String.includes("Travel") || l2String.includes("Meals")) {
-        return { l0: "EXPENSE", l1: "Vehicle & Travel" };
+        return { l0: "EXPENSE", l1: "Vehicle & Travel", l2: l2String };
     }
     if (l2String.includes("Office Expense") || l2String.includes("Supplies") || l2String.includes("Utilities") || l2String.includes("Other Expenses")) {
-        return { l0: "OPERATING EXPENSE", l1: "Office & Administrative (Business)" };
+        return { l0: "OPERATING EXPENSE", l1: "Office & Administrative (Business)", l2: l2String };
     }
     if (l2String.includes("Taxes & Licenses")) {
-        return { l0: "OPERATING EXPENSE", l1: "Payroll & People" };
+        return { l0: "OPERATING EXPENSE", l1: "Payroll & People", l2: l2String };
     }
     if (l2String.includes("Advertising")) {
-        return { l0: "EXPENSE", l1: "Marketing & Sales" };
+        return { l0: "EXPENSE", l1: "Marketing & Sales", l2: l2String };
     }
     // Default fallback
-    return { l0: "EXPENSE", l1: "General" };
+    return { l0: "EXPENSE", l1: "General", l2: l2String };
 }
 async function seedDatabase() {
     const batch = db.batch();
@@ -176,17 +177,20 @@ async function seedDatabase() {
         const { l0, l1 } = getCategoryHierarchy(l2);
         // Use the keyword as the document ID for consistency and to prevent duplicates
         const docRef = db.collection('globalVendorMap').doc(keyword);
+        // This is the clean, new data structure. We no longer save `primary`, `secondary`, etc.
         const ruleData = {
-            originalKeyword: keyword, // Store the human-readable keyword
+            originalKeyword: keyword,
             categoryHierarchy: {
                 l0,
                 l1,
-                l2,
-                l3: keyword.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') // Auto-generate L3
+                l2, // The full tax line string
+                l3: keyword.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') // Auto-generate L3 from keyword
             },
             source: 'global_seed_v5_comprehensive'
         };
-        batch.set(docRef, ruleData, { merge: true });
+        // Use `set` with { merge: false } or just `set` on its own. 
+        // This will OVERWRITE the document completely, removing old fields.
+        batch.set(docRef, ruleData);
     }
     try {
         await batch.commit();
