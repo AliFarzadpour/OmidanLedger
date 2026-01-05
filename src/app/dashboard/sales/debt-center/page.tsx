@@ -176,8 +176,7 @@ export default function DebtCenterPage() {
   const getActualPayment = (propertyId: string) => {
     const paymentTx = transactions.find(tx => 
         tx.costCenter === propertyId &&
-        tx.categoryHierarchy?.l0 === 'Liability' &&
-        tx.categoryHierarchy?.l1 === 'Debt Service'
+        tx.categoryHierarchy?.l0?.toUpperCase() === 'LIABILITY'
     );
     return paymentTx?.amount || null;
   };
