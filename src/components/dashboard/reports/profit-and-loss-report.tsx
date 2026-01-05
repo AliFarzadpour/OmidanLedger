@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -303,8 +304,9 @@ export function ProfitAndLossReport() {
       const interestForMonth = calculatedInterest[monthKey] || 0;
       if (interestForMonth > 0) {
         monthlyTotals[monthKey].expenses += interestForMonth;
-        if (!expensesByCategory["Mortgage Interest (Calculated)"]) expensesByCategory["Mortgage Interest (Calculated)"] = {};
-        expensesByCategory["Mortgage Interest (Calculated)"][monthKey] = interestForMonth;
+        const categoryName = "Mortgage Interest (Calculated)";
+        if (!expensesByCategory[categoryName]) expensesByCategory[categoryName] = {};
+        expensesByCategory[categoryName][monthKey] = interestForMonth;
       }
     });
 
@@ -386,3 +388,4 @@ export function ProfitAndLossReport() {
     </>
   );
 }
+
