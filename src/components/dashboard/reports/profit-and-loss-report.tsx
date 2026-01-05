@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
-import { parseISO, isWithinInterval, startOfYear, endOfYear, eachMonthOfInterval, format } from 'date-fns';
+import { parseISO, isWithinInterval, startOfYear, endOfYear, eachMonthOfInterval, format, startOfQuarter, endOfQuarter, startOfMonth, endOfMonth, subYears, subQuarters, subMonths } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -320,6 +320,7 @@ export function ProfitAndLossReport() {
         if (monthlyTotals[item.month]) {
             monthlyTotals[item.month].expenses += item.interest;
         }
+        if(!expensesByCategory[interestCategoryName]) expensesByCategory[interestCategoryName] = {};
         expensesByCategory[interestCategoryName][item.month] = (expensesByCategory[interestCategoryName][item.month] || 0) + item.interest;
     });
 
@@ -344,6 +345,40 @@ export function ProfitAndLossReport() {
     setIsDrawerOpen(false); // Close the drawer
   };
 
+  const setDateRange = (range: 'thisMonth' | 'thisQuarter' | 'thisYear' | 'lastMonth' | 'lastQuarter' | 'lastYear') => {
+    const today = new Date();
+    let from, to;
+
+    switch (range) {
+        case 'thisMonth':
+            from = startOfMonth(today);
+            to = endOfMonth(today);
+            break;
+        case 'thisQuarter':
+            from = startOfQuarter(today);
+            to = endOfQuarter(today);
+            break;
+        case 'thisYear':
+            from = startOfYear(today);
+            to = endOfYear(today);
+            break;
+        case 'lastMonth':
+            from = startOfMonth(subMonths(today, 1));
+            to = endOfMonth(subMonths(today, 1));
+            break;
+        case 'lastQuarter':
+            from = startOfQuarter(subQuarters(today, 1));
+            to = endOfQuarter(subQuarters(today, 1));
+            break;
+        case 'lastYear':
+            from = startOfYear(subYears(today, 1));
+            to = endOfYear(subYears(today, 1));
+            break;
+    }
+    
+    setDates({ from: format(from, 'yyyy-MM-dd'), to: format(to, 'yyyy-MM-dd') });
+  };
+
 
   if (error) return <Alert variant="destructive" className="m-8"><AlertCircle className="h-4 w-4" /><AlertTitle>Firestore Error</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>;
 
@@ -351,9 +386,20 @@ export function ProfitAndLossReport() {
     <>
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
         <div className="flex justify-between items-end bg-muted/50 p-6 rounded-xl border">
-          <div className="flex gap-4">
-            <div className="grid gap-2"><Label>Start Date</Label><Input type="date" value={dates.from} onChange={e => setDates(d => ({ ...d, from: e.target.value }))} /></div>
-            <div className="grid gap-2"><Label>End Date</Label><Input type="date" value={dates.to} onChange={e => setDates(d => ({ ...d, to: e.target.value }))} /></div>
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-2">
+                <div className="grid gap-2"><Label>Start Date</Label><Input type="date" value={dates.from} onChange={e => setDates(d => ({ ...d, from: e.target.value }))} /></div>
+                <div className="grid gap-2"><Label>End Date</Label><Input type="date" value={dates.to} onChange={e => setDates(d => ({ ...d, to: e.target.value }))} /></div>
+            </div>
+             <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setDateRange('thisMonth')}>This Month</Button>
+                <Button variant="outline" size="sm" onClick={() => setDateRange('thisQuarter')}>This Quarter</Button>
+                <Button variant="outline" size="sm" onClick={() => setDateRange('thisYear')}>This Year</Button>
+                <div className="border-l mx-2"/>
+                <Button variant="outline" size="sm" onClick={() => setDateRange('lastMonth')}>Last Month</Button>
+                <Button variant="outline" size="sm" onClick={() => setDateRange('lastQuarter')}>Last Quarter</Button>
+                <Button variant="outline" size="sm" onClick={() => setDateRange('lastYear')}>Last Year</Button>
+            </div>
           </div>
           <Button onClick={() => setActiveRange({ ...dates })} disabled={isLoading}>{isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}Run Report</Button>
         </div>
