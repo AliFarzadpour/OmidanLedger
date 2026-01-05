@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, ChevronLeft, ChevronRight, Send, Check } from 'lucide-react';
+import { Loader2, AlertCircle, Send, Check } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO, differenceInDays, isPast } from 'date-fns';
@@ -120,11 +120,10 @@ async function fetchUnitsForProperties(firestore: any, propertyIds: string[]) {
 }
 
 
-export function RentRollTable() {
+export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
-  const [viewingDate, setViewingDate] = useState(new Date());
   const [isBatching, setIsBatching] = useState(false);
   
   const [allUnits, setAllUnits] = useState<Unit[]>([]);
@@ -423,12 +422,6 @@ export function RentRollTable() {
                         <Send className="mr-2 h-4 w-4" />
                     )}
                     Send Invoices ({unpaidTenants.length})
-                </Button>
-                <Button variant="outline" size="icon" onClick={() => setViewingDate(d => subMonths(d, 1))}>
-                    <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="outline" size="icon" onClick={() => setViewingDate(d => addMonths(d, 1))}>
-                    <ChevronRight className="h-4 w-4" />
                 </Button>
             </div>
         </div>

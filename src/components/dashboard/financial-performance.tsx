@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
-import { format, startOfYear, endOfYear } from 'date-fns';
+import { format, startOfYear, endOfYear, startOfMonth, endOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +25,7 @@ function normalizeL0(tx: any): string {
     return 'OPERATING EXPENSE';
 }
 
-export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
+export function FinancialPerformance({ propertyId, viewingDate }: { propertyId?: string, viewingDate: Date }) {
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
@@ -34,8 +34,8 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  const currentYearStart = format(startOfYear(new Date()), 'yyyy-MM-dd');
-  const currentYearEnd = format(endOfYear(new Date()), 'yyyy-MM-dd');
+  const currentMonthStart = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
+  const currentMonthEnd = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
 
   const fetchTransactions = useCallback(async () => {
     if (!db || !user) return;
@@ -46,8 +46,8 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
         const txsQuery = query(
             collectionGroup(db, `transactions`),
             where('userId', '==', user.uid),
-            where('date', '>=', currentYearStart),
-            where('date', '<=', currentYearEnd)
+            where('date', '>=', currentMonthStart),
+            where('date', '<=', currentMonthEnd)
         );
         const txsSnap = await getDocs(txsQuery);
         const allTxs = txsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -59,7 +59,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
     } finally {
         setIsLoading(false);
     }
-  }, [db, user, currentYearStart, currentYearEnd]);
+  }, [db, user, currentMonthStart, currentMonthEnd]);
 
   useEffect(() => {
     fetchTransactions();
@@ -125,7 +125,7 @@ export function FinancialPerformance({ propertyId }: { propertyId?: string }) {
               <CardTitle className="text-lg font-medium">
                   {propertyId ? "Financial Performance" : "Portfolio Performance"}
               </CardTitle>
-              <p className="text-xs text-muted-foreground">Live data for {format(new Date(), 'yyyy')}</p>
+              <p className="text-xs text-muted-foreground">Live data for {format(viewingDate, 'MMMM yyyy')}</p>
           </div>
           <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={isRefreshing} className="gap-2">
               <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
