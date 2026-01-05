@@ -300,13 +300,17 @@ export function ProfitAndLossReport() {
         }
     });
 
+    // Add calculated interest to the expenses breakdown
+    const interestCategoryName = "Mortgage Interest (Calculated)";
+    if (!expensesByCategory[interestCategoryName]) {
+        expensesByCategory[interestCategoryName] = {};
+    }
+    
     months.forEach(monthKey => {
       const interestForMonth = calculatedInterest[monthKey] || 0;
       if (interestForMonth > 0) {
         monthlyTotals[monthKey].expenses += interestForMonth;
-        const categoryName = "Mortgage Interest (Calculated)";
-        if (!expensesByCategory[categoryName]) expensesByCategory[categoryName] = {};
-        expensesByCategory[categoryName][monthKey] = interestForMonth;
+        expensesByCategory[interestCategoryName][monthKey] = (expensesByCategory[interestCategoryName][monthKey] || 0) + interestForMonth;
       }
     });
 
@@ -388,4 +392,3 @@ export function ProfitAndLossReport() {
     </>
   );
 }
-
