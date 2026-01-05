@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, collectionGroup } from 'firebase/firestore';
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, ArrowLeft, Landmark, HandCoins, Percent, CalendarDays, Pencil, FileWarning, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { calculateAmortization } from '@/actions/amortization-actions';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 
 interface Mortgage {
   hasMortgage?: 'yes' | 'no';
@@ -110,7 +110,8 @@ export default function DebtCenterPage() {
 
             // Fetch transactions for the current month
             const txQuery = query(
-                collection(firestore, `users/${user.uid}/transactions`), 
+                collectionGroup(firestore, 'transactions'), 
+                where('userId', '==', user.uid),
                 where('date', '>=', monthStart),
                 where('date', '<=', monthEnd)
             );
