@@ -1,14 +1,14 @@
 
 'use server';
 
-import { differenceInCalendarMonths, startOfMonth, endOfMonth, getDay } from 'date-fns';
+import { startOfMonth } from 'date-fns';
 
 interface AmortizationInput {
     principal: number;
     annualRate: number;
-    principalAndInterest: number; // Use the actual P&I payment
+    principalAndInterest: number;
     loanStartDate: string;
-    targetDate: string; // The date for which we want the balance and interest
+    targetDate: string;
 }
 
 interface AmortizationResult {
@@ -20,6 +20,7 @@ interface AmortizationResult {
 
 /**
  * Calculates the loan balance at the end of a specific month and the interest paid during that month.
+ * This version iterates month-by-month for higher accuracy.
  */
 export async function calculateAmortization({
     principal,
@@ -36,33 +37,37 @@ export async function calculateAmortization({
     try {
         const monthlyRate = annualRate / 100 / 12;
         
-        const loanStart = startOfMonth(new Date(loanStartDate));
+        let currentDate = startOfMonth(new Date(loanStartDate));
         const target = startOfMonth(new Date(targetDate));
-
-        // Calculate the number of full months passed *before* the target month
-        let monthsPassed = differenceInCalendarMonths(target, loanStart);
-
-        if (monthsPassed < 0) {
-            // If target date is before loan start, balance is the original principal
-            return { success: true, currentBalance: principal, interestPaidForMonth: 0 };
+        
+        if (target < currentDate) {
+             return { success: true, currentBalance: principal, interestPaidForMonth: 0 };
         }
 
-        let balanceAtStartOfMonth = principal;
+        let balance = principal;
 
-        // Loop to find the balance at the beginning of the target month
-        for (let i = 0; i < monthsPassed; i++) {
-            const interestPayment = balanceAtStartOfMonth * monthlyRate;
-            const principalPayment = principalAndInterest - interestPayment;
+        // Loop through each month from the start of the loan up to the month *before* the target month.
+        while (currentDate < target) {
+            const interest = balance * monthlyRate;
+            const principalPayment = principalAndInterest - interest;
             
-            if (principalPayment > 0) {
-              balanceAtStartOfMonth -= principalPayment;
+            if (balance - principalPayment < 0) {
+                balance = 0;
+                break;
             }
+            balance -= principalPayment;
+            
+            // Move to the next month
+            currentDate.setMonth(currentDate.getMonth() + 1);
         }
 
-        // Now, calculate the single month's interest and the end-of-month balance
-        const interestForMonth = balanceAtStartOfMonth * monthlyRate;
+        // Now, `balance` is the balance at the START of the target month.
+        // Calculate the interest for this specific month.
+        const interestForMonth = balance * monthlyRate;
         const principalForMonth = principalAndInterest - interestForMonth;
-        const balanceAtEndOfMonth = balanceAtStartOfMonth - (principalForMonth > 0 ? principalForMonth : 0);
+        
+        // The final balance at the END of the target month.
+        const balanceAtEndOfMonth = balance - (principalForMonth > 0 ? principalForMonth : 0);
 
         return {
             success: true,
