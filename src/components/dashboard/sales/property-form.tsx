@@ -75,8 +75,8 @@ const propertySchema = z.object({
     hasMortgage: z.enum(['yes', 'no']).optional(),
     lenderName: z.string().optional(),
     accountNumber: z.string().optional(),
-    originalLoanAmount: z.coerce.number().optional(), // NEW
-    loanTerm: z.coerce.number().optional(), // NEW (in years)
+    originalLoanAmount: z.coerce.number().optional(),
+    loanTerm: z.coerce.number().optional(),
     lenderPhone: z.string().optional(),
     lenderEmail: z.string().optional(),
     principalAndInterest: z.coerce.number().optional(),
@@ -154,8 +154,8 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
     purchasePrice: 0,
     purchaseDate: '',
     hasMortgage: undefined,
-    originalLoanAmount: 0, // NEW
-    loanTerm: 30, // NEW
+    originalLoanAmount: 0,
+    loanTerm: 30,
     escrow: { includesTax: false, includesInsurance: false, includesHoa: false } 
   },
   taxAndInsurance: { propertyTaxAmount: 0, taxParcelId: '', insuranceProvider: '', policyNumber: '', annualPremium: 0, policyStartDate: '', policyEndDate: '' },
@@ -234,11 +234,11 @@ export function PropertyForm({
   
   const handleRecalculateBalance = async () => {
     const mortgageData = form.getValues('mortgage');
-    if (!mortgageData?.originalLoanAmount || !mortgageData.interestRate || !mortgageData.principalAndInterest || !mortgageData.purchaseDate) {
+    if (!mortgageData?.originalLoanAmount || !mortgageData.interestRate || !mortgageData.principalAndInterest || !mortgageData.purchaseDate || !mortgageData.loanTerm) {
         toast({
             variant: "destructive",
             title: "Missing Information",
-            description: "Please provide Original Loan Amount, Interest Rate, P&I Payment, and Purchase Date to calculate.",
+            description: "Please provide Original Loan Amount, Interest Rate, P&I Payment, Loan Term, and Purchase Date to calculate.",
         });
         return;
     }
@@ -249,7 +249,9 @@ export function PropertyForm({
             principal: mortgageData.originalLoanAmount,
             annualRate: mortgageData.interestRate,
             principalAndInterest: mortgageData.principalAndInterest,
-            startDate: mortgageData.purchaseDate,
+            loanStartDate: mortgageData.purchaseDate,
+            loanTermInYears: mortgageData.loanTerm,
+            targetDate: new Date().toISOString(),
         });
 
         if (result.success && result.currentBalance !== undefined) {
@@ -284,8 +286,9 @@ export function PropertyForm({
         const unitsCollection = collection(firestore, `properties/${currentPropertyId}/units`);
         const unitsSnap = await getDocs(unitsCollection);
         
-        const units = unitsSnap.docs.map(d => {
-            const unitData = d.data();
+        // 3. IMPORTANT: Sanitize the data to remove any non-plain objects like Timestamps
+        const allUnitsData = unitsSnap.docs.map(doc => {
+            const unitData = doc.data();
             const sanitizedUnit: { [key: string]: any } = {};
             for (const key in unitData) {
                 if (unitData[key] instanceof Timestamp) {
@@ -294,14 +297,14 @@ export function PropertyForm({
                     sanitizedUnit[key] = unitData[key];
                 }
             }
-            return { id: d.id, ...sanitizedUnit };
+            return { id: doc.id, ...sanitizedUnit };
         });
 
         const fullPropertyData = {
           ...sanitizedData,
           id: currentPropertyId,
           isMultiUnit: sanitizedData.type === 'multi-family' || sanitizedData.type === 'commercial' || sanitizedData.type === 'office',
-          units: units,
+          units: allUnitsData,
         };
 
         await updateDoc(propertyRef, sanitizedData);
