@@ -15,6 +15,7 @@ import {
   BrainCircuit,
   ShieldCheck, // New Icon for Admin
   Activity, // New Icon for Health
+  BookOpenCheck, // Icon for Onboarding
 } from "lucide-react";
 
 import {
@@ -62,6 +63,11 @@ const data = {
       title: "Transactions",
       url: "/dashboard/transactions",
       icon: CreditCard,
+    },
+    {
+      title: "Onboarding",
+      url: "/dashboard/onboarding/opening-balances",
+      icon: BookOpenCheck,
     },
     {
       title: "Invoices & Billing",
