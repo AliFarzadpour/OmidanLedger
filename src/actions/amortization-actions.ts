@@ -61,13 +61,3 @@ export async function calculateAmortization({
         return { success: false, error: error.message || 'Failed to calculate loan balance.' };
     }
 }
-
-// We also need to update the form to pass the correct data.
-const propertySchema = z.object({
-  // ... (rest of schema)
-  mortgage: z.object({
-    // ...
-    principalAndInterest: z.coerce.number().optional(), // Ensure this is present
-    // ...
-  }).optional(),
-});
