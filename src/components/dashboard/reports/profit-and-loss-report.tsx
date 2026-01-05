@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -14,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { PlayCircle, AlertCircle, Loader2, ChevronsRight } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ProfitAndLossDrawer } from './profit-and-loss-drawer';
+import { InterestDetailDrawer } from './InterestDetailDrawer'; // NEW IMPORT
 import type { Transaction } from '@/components/dashboard/transactions-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { calculateAmortization } from '@/actions/amortization-actions';
@@ -123,19 +123,28 @@ interface MonthlyReportData {
     net: number;
 }
 
+// NEW
+export interface InterestCalculationDetail {
+  propertyId: string;
+  propertyName: string;
+  month: string;
+  interest: number;
+}
+
 export function ProfitAndLossReport() {
   const { user } = useUser();
   const firestore = useFirestore();
 
   const [dates, setDates] = useState({ from: '', to: '' });
   const [activeRange, setActiveRange] = useState({ from: '', to: '' });
-  const [allTransactions, setAllTransactions] = useState<any[]>([]);
-  const [properties, setProperties] = useState<any[]>([]);
-  const [calculatedInterest, setCalculatedInterest] = useState<any>({});
+  const [allTransactions, setAllTransactions = useState<any[]>([]);
+  const [properties, setProperties = useState<any[]>([]);
+  const [calculatedInterestDetails, setCalculatedInterestDetails = useState<InterestCalculationDetail[]>([]); // NEW
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isInterestDrawerOpen, setIsInterestDrawerOpen] = useState(false); // NEW
   const [selectedCategory, setSelectedCategory] = useState<{ name: string; transactions: Transaction[] } | null>(null);
 
   useEffect(() => {
@@ -184,12 +193,11 @@ export function ProfitAndLossReport() {
         const fromD = parseISO(activeRange.from);
         const toD = parseISO(activeRange.to);
         const months = eachMonthOfInterval({ start: fromD, end: toD });
-        const interestData: any = {};
+        const interestDetails: InterestCalculationDetail[] = [];
         
         for (const prop of properties) {
             if (prop.mortgage?.originalLoanAmount && prop.mortgage.interestRate && prop.mortgage.principalAndInterest && prop.mortgage.purchaseDate && prop.mortgage.loanTerm) {
                 for (const monthDate of months) {
-                    const monthKey = format(monthDate, 'yyyy-MM');
                     const result = await calculateAmortization({
                         principal: prop.mortgage.originalLoanAmount,
                         annualRate: prop.mortgage.interestRate,
@@ -200,15 +208,17 @@ export function ProfitAndLossReport() {
                     });
                     
                     if (result.success && result.interestPaidForMonth) {
-                        if (!interestData[monthKey]) {
-                            interestData[monthKey] = 0;
-                        }
-                        interestData[monthKey] += result.interestPaidForMonth;
+                         interestDetails.push({
+                            propertyId: prop.id,
+                            propertyName: prop.name,
+                            month: format(monthDate, 'yyyy-MM'),
+                            interest: result.interestPaidForMonth
+                        });
                     }
                 }
             }
         }
-        setCalculatedInterest(interestData);
+        setCalculatedInterestDetails(interestDetails);
     };
 
     calculateAllInterest();
@@ -250,7 +260,7 @@ export function ProfitAndLossReport() {
       }
     });
 
-    const totalInterest = Object.values(calculatedInterest).reduce((sum: number, monthTotal: any) => sum + monthTotal, 0);
+    const totalInterest = calculatedInterestDetails.reduce((sum, item) => sum + item.interest, 0);
     expMap.set("Mortgage Interest (Calculated)", { total: totalInterest, transactions: [] });
     totalExp += totalInterest;
 
@@ -261,7 +271,7 @@ export function ProfitAndLossReport() {
       totalExp,
       net: totalInc - totalExp
     };
-  }, [allTransactions, activeRange, calculatedInterest]);
+  }, [allTransactions, activeRange, calculatedInterestDetails]);
 
   const monthlyReportData: MonthlyReportData = useMemo(() => {
     const empty = { months: [], incomeByCategory: {}, expensesByCategory: {}, monthlyTotals: {}, totalInc: 0, totalExp: 0, net: 0 };
@@ -300,31 +310,32 @@ export function ProfitAndLossReport() {
         }
     });
 
-    // Add calculated interest to the expenses breakdown
     const interestCategoryName = "Mortgage Interest (Calculated)";
     if (!expensesByCategory[interestCategoryName]) {
         expensesByCategory[interestCategoryName] = {};
     }
     
-    months.forEach(monthKey => {
-      const interestForMonth = calculatedInterest[monthKey] || 0;
-      if (interestForMonth > 0) {
-        monthlyTotals[monthKey].expenses += interestForMonth;
-        expensesByCategory[interestCategoryName][monthKey] = (expensesByCategory[interestCategoryName][monthKey] || 0) + interestForMonth;
-      }
+    calculatedInterestDetails.forEach(item => {
+        if (monthlyTotals[item.month]) {
+            monthlyTotals[item.month].expenses += item.interest;
+        }
+        expensesByCategory[interestCategoryName][item.month] = (expensesByCategory[interestCategoryName][item.month] || 0) + item.interest;
     });
-
 
     const totalInc = Object.values(monthlyTotals).reduce((sum, m) => sum + m.income, 0);
     const totalExp = Object.values(monthlyTotals).reduce((sum, m) => sum + m.expenses, 0);
 
     return { months, incomeByCategory, expensesByCategory, monthlyTotals, totalInc, totalExp, net: totalInc - totalExp };
-  }, [allTransactions, activeRange, calculatedInterest]);
+  }, [allTransactions, activeRange, calculatedInterestDetails]);
 
 
   const handleRowClick = (name: string, transactions: Transaction[]) => {
-    setSelectedCategory({ name, transactions });
-    setIsDrawerOpen(true);
+    if (name === 'Mortgage Interest (Calculated)') {
+        setIsInterestDrawerOpen(true);
+    } else {
+        setSelectedCategory({ name, transactions });
+        setIsDrawerOpen(true);
+    }
   };
 
   const handleUpdate = () => {
@@ -365,7 +376,7 @@ export function ProfitAndLossReport() {
                         {summaryReportData.income.length ? summaryReportData.income.map(i => <TableRow key={i.name} onClick={() => handleRowClick(i.name, i.transactions)} className="cursor-pointer hover:bg-slate-50"><TableCell className="pl-8 text-muted-foreground">{i.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(i.total)} <ChevronsRight className="h-4 w-4 text-slate-300" /></TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income found.</TableCell></TableRow>}
                         <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
                         <TableRow className="bg-red-50 font-bold border-b-2 border-red-200"><TableCell className="text-red-800 text-lg">TOTAL EXPENSES</TableCell><TableCell className="text-right text-red-800 text-lg">({formatCurrency(summaryReportData.totalExp)})</TableCell></TableRow>
-                        {summaryReportData.expenses.length ? summaryReportData.expenses.map(e => <TableRow key={e.name} onClick={() => e.name !== 'Mortgage Interest (Calculated)' && handleRowClick(e.name, e.transactions)} className={e.name !== 'Mortgage Interest (Calculated)' ? "cursor-pointer hover:bg-slate-50" : ""}><TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} {e.name !== 'Mortgage Interest (Calculated)' && <ChevronsRight className="h-4 w-4 text-slate-300" />}</TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expenses found.</TableCell></TableRow>}
+                        {summaryReportData.expenses.length ? summaryReportData.expenses.map(e => <TableRow key={e.name} onClick={() => handleRowClick(e.name, e.transactions)} className="cursor-pointer hover:bg-slate-50"><TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} <ChevronsRight className="h-4 w-4 text-slate-300" /></TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expenses found.</TableCell></TableRow>}
                         <TableRow className="border-t-4 border-double font-black text-2xl bg-slate-100"><TableCell>NET OPERATING INCOME</TableCell><TableCell className={`text-right ${summaryReportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(summaryReportData.net)}</TableCell></TableRow>
                         </TableBody>
                     </Table>
@@ -389,6 +400,11 @@ export function ProfitAndLossReport() {
         </Tabs>
       </div>
       {selectedCategory && <ProfitAndLossDrawer isOpen={isDrawerOpen} onOpenChange={setIsDrawerOpen} category={selectedCategory} onUpdate={handleUpdate} />}
+      <InterestDetailDrawer 
+        isOpen={isInterestDrawerOpen} 
+        onOpenChange={setIsInterestDrawerOpen} 
+        details={calculatedInterestDetails} 
+      />
     </>
   );
 }
