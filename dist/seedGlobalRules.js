@@ -151,7 +151,6 @@ const VENDOR_CATEGORY_SEED = {
 };
 // 3. Helper function to map L2 tax lines back to L0/L1 structure
 function getCategoryHierarchy(l2String) {
-    const defaultL3 = l2String.split('—').pop()?.trim() || "General";
     if (l2String.startsWith("Schedule E")) {
         return { l0: "OPERATING EXPENSE", l1: "Property Operations (Rentals)", l2: l2String };
     }
@@ -170,34 +169,63 @@ function getCategoryHierarchy(l2String) {
     // Default fallback
     return { l0: "EXPENSE", l1: "General", l2: l2String };
 }
-async function seedDatabase() {
-    const batch = db.batch();
-    console.log("Starting to seed Global Vendor Map with new structure...");
-    for (const [keyword, l2] of Object.entries(VENDOR_CATEGORY_SEED)) {
-        const { l0, l1 } = getCategoryHierarchy(l2);
-        // Use the keyword as the document ID for consistency and to prevent duplicates
-        const docRef = db.collection('globalVendorMap').doc(keyword);
-        // This is the clean, new data structure. We no longer save `primary`, `secondary`, etc.
-        const ruleData = {
-            originalKeyword: keyword,
-            categoryHierarchy: {
-                l0,
-                l1,
-                l2, // The full tax line string
-                l3: keyword.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') // Auto-generate L3 from keyword
-            },
-            source: 'global_seed_v5_comprehensive'
-        };
-        // Use `set` with { merge: false } or just `set` on its own. 
-        // This will OVERWRITE the document completely, removing old fields.
-        batch.set(docRef, ruleData);
+async function deleteCollection(collectionPath, batchSize) {
+    const collectionRef = db.collection(collectionPath);
+    const query = collectionRef.orderBy('__name__').limit(batchSize);
+    return new Promise((resolve, reject) => {
+        deleteQueryBatch(query, resolve).catch(reject);
+    });
+}
+async function deleteQueryBatch(query, resolve) {
+    const snapshot = await query.get();
+    if (snapshot.size === 0) {
+        return resolve(0);
     }
+    const batch = db.batch();
+    snapshot.docs.forEach((doc) => {
+        batch.delete(doc.ref);
+    });
+    await batch.commit();
+    process.nextTick(() => {
+        deleteQueryBatch(query, resolve);
+    });
+}
+async function seedDatabase() {
     try {
+        // ---- START CLEANUP ----
+        console.log("Starting cleanup of 'globalVendorMap' collection...");
+        const collectionRef = db.collection('globalVendorMap');
+        const snapshot = await collectionRef.limit(1).get();
+        if (!snapshot.empty) {
+            await deleteCollection('globalVendorMap', 100);
+            console.log("Cleanup complete. All old rules have been deleted.");
+        }
+        else {
+            console.log("'globalVendorMap' is already empty. No cleanup needed.");
+        }
+        // ---- END CLEANUP ----
+        const batch = db.batch();
+        console.log("Starting to seed Global Vendor Map with clean, new structure...");
+        for (const [keyword, l2] of Object.entries(VENDOR_CATEGORY_SEED)) {
+            const { l0, l1 } = getCategoryHierarchy(l2);
+            const docRef = db.collection('globalVendorMap').doc(keyword);
+            const ruleData = {
+                originalKeyword: keyword,
+                categoryHierarchy: {
+                    l0,
+                    l1,
+                    l2,
+                    l3: keyword.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
+                },
+                source: 'global_seed_v6_comprehensive'
+            };
+            batch.set(docRef, ruleData);
+        }
         await batch.commit();
-        console.log(`Successfully seeded/updated ${Object.keys(VENDOR_CATEGORY_SEED).length} rules in the globalVendorMap collection.`);
+        console.log(`Successfully seeded ${Object.keys(VENDOR_CATEGORY_SEED).length} clean rules into the globalVendorMap collection.`);
     }
     catch (error) {
-        console.error("Error committing batch:", error);
+        console.error("Error during seeding process:", error);
         throw error;
     }
 }
