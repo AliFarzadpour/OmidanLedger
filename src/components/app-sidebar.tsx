@@ -35,14 +35,14 @@ const data = {
   // Zone 1: The "Physical" World (Real Estate)
   realEstate: [
     {
-      title: "Revenue Center",
-      url: "/dashboard/sales",
-      icon: LayoutDashboard,
-    },
-    {
       title: "Properties",
       url: "/dashboard/properties",
       icon: Building2,
+    },
+    {
+      title: "Revenue Center",
+      url: "/dashboard/sales",
+      icon: LayoutDashboard,
     },
     {
       title: "Debt Center",
