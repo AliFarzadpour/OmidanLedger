@@ -31,6 +31,12 @@ export async function POST(req: Request) {
         const firstAccount = accountsSnapshot.docs[0].data();
         const userId = firstAccount.userId;
 
+        if (!userId) {
+          console.error(`[Webhook] Critical: No userId found on account for item_id: ${item_id}`);
+          return NextResponse.json({ received: true, message: 'User ID missing from account data.' });
+        }
+
+
         // NEW: Check if user has auto-sync enabled
         const userDoc = await db.collection('users').doc(userId).get();
         const userData = userDoc.data();
