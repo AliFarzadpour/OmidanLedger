@@ -1,3 +1,4 @@
+
 // src/lib/categories.ts
 
 export const CATEGORY_MAP = {
