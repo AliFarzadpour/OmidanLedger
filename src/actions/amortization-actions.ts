@@ -1,7 +1,7 @@
 
 'use server';
 
-import { differenceInCalendarMonths } from 'date-fns';
+import { differenceInCalendarMonths, getDay, isAfter, startOfDay } from 'date-fns';
 
 interface AmortizationInput {
     principal: number;
@@ -33,11 +33,19 @@ export async function calculateAmortization({
     try {
         const monthlyRate = annualRate / 100 / 12;
         
-        const start = new Date(startDate);
-        const now = new Date();
-        
-        // Use a more reliable method to count full months passed.
-        const monthsPassed = differenceInCalendarMonths(now, start);
+        const loanStartDate = startOfDay(new Date(startDate));
+        const today = startOfDay(new Date());
+
+        // --- REFINED MONTH COUNTING LOGIC ---
+        // 1. Get the base number of calendar months passed.
+        let monthsPassed = differenceInCalendarMonths(today, loanStartDate);
+
+        // 2. Adjust if the current month's payment hasn't been made yet.
+        // If today's day of the month is *before* the loan's start day,
+        // it implies this calendar month's payment cycle isn't complete yet.
+        if (getDay(today) < getDay(loanStartDate)) {
+            monthsPassed -= 1;
+        }
         
         if (monthsPassed <= 0) {
             return { success: true, currentBalance: principal };
@@ -48,7 +56,11 @@ export async function calculateAmortization({
         for (let i = 0; i < monthsPassed; i++) {
             const interestPayment = currentBalance * monthlyRate;
             const principalPayment = principalAndInterest - interestPayment;
-            currentBalance -= principalPayment;
+            
+            // Safety check: if interest is more than payment, principal doesn't go down
+            if (principalPayment > 0) {
+              currentBalance -= principalPayment;
+            }
         }
         
         // Ensure balance is not negative and round to 2 decimal places
