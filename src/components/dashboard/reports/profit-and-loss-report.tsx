@@ -15,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ProfitAndLossDrawer } from './profit-and-loss-drawer';
 import type { Transaction } from '@/components/dashboard/transactions-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { calculateAmortization } from '@/actions/amortization-actions';
 
 // Helper: normalize Firestore Timestamp OR string to JS Date (or null)
 function toDate(value: any): Date | null {
@@ -128,6 +129,8 @@ export function ProfitAndLossReport() {
   const [dates, setDates] = useState({ from: '', to: '' });
   const [activeRange, setActiveRange] = useState({ from: '', to: '' });
   const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [calculatedInterest, setCalculatedInterest] = useState<any>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,8 +139,8 @@ export function ProfitAndLossReport() {
 
   useEffect(() => {
     const today = new Date();
-    const from = new Date(today.getFullYear(), 0, 1);
-    const to = new Date(today.getFullYear(), 11, 31);
+    const from = startOfYear(today);
+    const to = endOfYear(today);
     const initialDates = {
       from: from.toISOString().split('T')[0],
       to: to.toISOString().split('T')[0]
@@ -151,22 +154,68 @@ export function ProfitAndLossReport() {
     setIsLoading(true);
     setError(null);
     try {
-        const txsQuery = query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
-        const transactionSnapshots = await getDocs(txsQuery);
-        const fetched = transactionSnapshots.docs.map(d => ({ ...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }));
-        setAllTransactions(fetched);
+      // Fetch all data concurrently
+      const [txsSnap, propsSnap] = await Promise.all([
+        getDocs(query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid))),
+        getDocs(query(collection(firestore, 'properties'), where('userId', '==', user.uid)))
+      ]);
+
+      const fetchedTxs = txsSnap.docs.map(d => ({ ...d.data(), id: d.id, bankAccountId: d.ref.parent.parent?.id }));
+      setAllTransactions(fetchedTxs);
+      
+      const fetchedProps = propsSnap.docs.map(d => ({ ...d.data(), id: d.id }));
+      setProperties(fetchedProps);
+
     } catch (e: any) {
-        console.error(e); setError(e.message);
+      console.error(e);
+      setError(e.message);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   }, [user, firestore]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  
+  useEffect(() => {
+    const calculateAllInterest = async () => {
+        if (!properties.length || !activeRange.from || !activeRange.to) return;
+        
+        const fromD = parseISO(activeRange.from);
+        const toD = parseISO(activeRange.to);
+        const months = eachMonthOfInterval({ start: fromD, end: toD });
+        const interestData: any = {};
+        
+        for (const prop of properties) {
+            if (prop.mortgage?.originalLoanAmount && prop.mortgage.interestRate && prop.mortgage.principalAndInterest && prop.mortgage.purchaseDate && prop.mortgage.loanTerm) {
+                for (const monthDate of months) {
+                    const monthKey = format(monthDate, 'yyyy-MM');
+                    const result = await calculateAmortization({
+                        principal: prop.mortgage.originalLoanAmount,
+                        annualRate: prop.mortgage.interestRate,
+                        principalAndInterest: prop.mortgage.principalAndInterest,
+                        loanStartDate: prop.mortgage.purchaseDate,
+                        loanTermInYears: prop.mortgage.loanTerm,
+                        targetDate: monthDate.toISOString(),
+                    });
+                    
+                    if (result.success && result.interestPaidForMonth) {
+                        if (!interestData[monthKey]) {
+                            interestData[monthKey] = 0;
+                        }
+                        interestData[monthKey] += result.interestPaidForMonth;
+                    }
+                }
+            }
+        }
+        setCalculatedInterest(interestData);
+    };
+
+    calculateAllInterest();
+  }, [properties, activeRange]);
 
   const summaryReportData: SummaryReportData = useMemo(() => {
     const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
-    if (!allTransactions || allTransactions.length === 0 || !activeRange.from || !activeRange.to) return empty;
+    if (!allTransactions.length || !activeRange.from || !activeRange.to) return empty;
     const fromD = parseISO(activeRange.from);
     const toD = parseISO(activeRange.to);
     const incMap = new Map<string, { total: number; transactions: Transaction[] }>();
@@ -200,6 +249,10 @@ export function ProfitAndLossReport() {
       }
     });
 
+    const totalInterest = Object.values(calculatedInterest).reduce((sum: number, monthTotal: any) => sum + monthTotal, 0);
+    expMap.set("Mortgage Interest (Calculated)", { total: totalInterest, transactions: [] });
+    totalExp += totalInterest;
+
     return {
       income: Array.from(incMap.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total),
       expenses: Array.from(expMap.entries()).map(([name, data]) => ({ name, ...data })).sort((a, b) => b.total - a.total),
@@ -207,7 +260,7 @@ export function ProfitAndLossReport() {
       totalExp,
       net: totalInc - totalExp
     };
-  }, [allTransactions, activeRange]);
+  }, [allTransactions, activeRange, calculatedInterest]);
 
   const monthlyReportData: MonthlyReportData = useMemo(() => {
     const empty = { months: [], incomeByCategory: {}, expensesByCategory: {}, monthlyTotals: {}, totalInc: 0, totalExp: 0, net: 0 };
@@ -246,11 +299,21 @@ export function ProfitAndLossReport() {
         }
     });
 
+    months.forEach(monthKey => {
+      const interestForMonth = calculatedInterest[monthKey] || 0;
+      if (interestForMonth > 0) {
+        monthlyTotals[monthKey].expenses += interestForMonth;
+        if (!expensesByCategory["Mortgage Interest (Calculated)"]) expensesByCategory["Mortgage Interest (Calculated)"] = {};
+        expensesByCategory["Mortgage Interest (Calculated)"][monthKey] = interestForMonth;
+      }
+    });
+
+
     const totalInc = Object.values(monthlyTotals).reduce((sum, m) => sum + m.income, 0);
     const totalExp = Object.values(monthlyTotals).reduce((sum, m) => sum + m.expenses, 0);
 
     return { months, incomeByCategory, expensesByCategory, monthlyTotals, totalInc, totalExp, net: totalInc - totalExp };
-  }, [allTransactions, activeRange]);
+  }, [allTransactions, activeRange, calculatedInterest]);
 
 
   const handleRowClick = (name: string, transactions: Transaction[]) => {
@@ -296,7 +359,7 @@ export function ProfitAndLossReport() {
                         {summaryReportData.income.length ? summaryReportData.income.map(i => <TableRow key={i.name} onClick={() => handleRowClick(i.name, i.transactions)} className="cursor-pointer hover:bg-slate-50"><TableCell className="pl-8 text-muted-foreground">{i.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(i.total)} <ChevronsRight className="h-4 w-4 text-slate-300" /></TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No income found.</TableCell></TableRow>}
                         <TableRow className="h-8"><TableCell colSpan={2} /></TableRow>
                         <TableRow className="bg-red-50 font-bold border-b-2 border-red-200"><TableCell className="text-red-800 text-lg">TOTAL EXPENSES</TableCell><TableCell className="text-right text-red-800 text-lg">({formatCurrency(summaryReportData.totalExp)})</TableCell></TableRow>
-                        {summaryReportData.expenses.length ? summaryReportData.expenses.map(e => <TableRow key={e.name} onClick={() => handleRowClick(e.name, e.transactions)} className="cursor-pointer hover:bg-slate-50"><TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} <ChevronsRight className="h-4 w-4 text-slate-300" /></TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expenses found.</TableCell></TableRow>}
+                        {summaryReportData.expenses.length ? summaryReportData.expenses.map(e => <TableRow key={e.name} onClick={() => e.name !== 'Mortgage Interest (Calculated)' && handleRowClick(e.name, e.transactions)} className={e.name !== 'Mortgage Interest (Calculated)' ? "cursor-pointer hover:bg-slate-50" : ""}><TableCell className="pl-8 text-muted-foreground">{e.name}</TableCell><TableCell className="text-right flex justify-end items-center gap-2">{formatCurrency(e.total)} {e.name !== 'Mortgage Interest (Calculated)' && <ChevronsRight className="h-4 w-4 text-slate-300" />}</TableCell></TableRow>) : <TableRow><TableCell colSpan={2} className="text-center py-4 text-xs italic text-muted-foreground">No expenses found.</TableCell></TableRow>}
                         <TableRow className="border-t-4 border-double font-black text-2xl bg-slate-100"><TableCell>NET OPERATING INCOME</TableCell><TableCell className={`text-right ${summaryReportData.net >= 0 ? 'text-green-600' : 'text-red-600'}`}>{formatCurrency(summaryReportData.net)}</TableCell></TableRow>
                         </TableBody>
                     </Table>
