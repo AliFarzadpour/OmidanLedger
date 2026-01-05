@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -137,9 +138,9 @@ export function ProfitAndLossReport() {
 
   const [dates, setDates] = useState({ from: '', to: '' });
   const [activeRange, setActiveRange] = useState({ from: '', to: '' });
-  const [allTransactions, setAllTransactions = useState<any[]>([]);
-  const [properties, setProperties = useState<any[]>([]);
-  const [calculatedInterestDetails, setCalculatedInterestDetails = useState<InterestCalculationDetail[]>([]); // NEW
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
+  const [calculatedInterestDetails, setCalculatedInterestDetails] = useState<InterestCalculationDetail[]>([]); // NEW
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
