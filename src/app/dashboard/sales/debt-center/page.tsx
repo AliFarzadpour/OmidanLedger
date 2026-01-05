@@ -3,7 +3,7 @@
 
 import { useState, useMemo, useEffect, useTransition } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import {
   Table,
   TableBody,
@@ -18,7 +18,7 @@ import { useRouter } from 'next/navigation';
 import { Loader2, ArrowLeft, Landmark, HandCoins, Percent, CalendarDays, Pencil, FileWarning, ChevronLeft, ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { calculateAmortization } from '@/actions/amortization-actions';
-import { format, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 
 interface Mortgage {
   hasMortgage?: 'yes' | 'no';
@@ -44,6 +44,15 @@ interface CalculatedBalance {
     interestForMonth: number;
     remainingTermInMonths?: number;
     error?: string;
+}
+
+interface Transaction {
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    categoryHierarchy: { l0: string; l1: string; l2: string; l3: string };
+    costCenter?: string;
 }
 
 function StatCard({ title, value, icon, isLoading, format = 'currency' }: { title: string, value: number, icon: React.ReactNode, isLoading: boolean, format?: 'currency' | 'percent' | 'months' }) {
@@ -79,6 +88,7 @@ export default function DebtCenterPage() {
   const [isPending, startTransition] = useTransition();
 
   const [balances, setBalances] = useState<CalculatedBalance[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const propertiesQuery = useMemoFirebase(() => {
     if (!user || !firestore) return null;
@@ -93,7 +103,22 @@ export default function DebtCenterPage() {
   
   useEffect(() => {
     if (properties) {
-        startTransition(() => {
+        startTransition(async () => {
+            if (!user || !firestore) return;
+            const monthStart = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
+            const monthEnd = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
+
+            // Fetch transactions for the current month
+            const txQuery = query(
+                collection(firestore, `users/${user.uid}/transactions`), 
+                where('date', '>=', monthStart),
+                where('date', '<=', monthEnd)
+            );
+            const txSnap = await getDocs(txQuery);
+            const fetchedTransactions = txSnap.docs.map(doc => doc.data() as Transaction);
+            setTransactions(fetchedTransactions);
+
+            // Calculate balances
             const balancePromises = properties.map(async p => {
                 if (p.mortgage?.originalLoanAmount && p.mortgage.interestRate && p.mortgage.principalAndInterest && p.mortgage.purchaseDate && p.mortgage.loanTerm) {
                     const result = await calculateAmortization({
@@ -117,7 +142,7 @@ export default function DebtCenterPage() {
             Promise.all(balancePromises).then(setBalances);
         });
     }
-  }, [properties, viewingDate]);
+  }, [properties, viewingDate, user, firestore]);
 
 
   const { totalBalance, totalMonthly, avgInterestRate, totalInterestPaid } = useMemo(() => {
@@ -146,6 +171,15 @@ export default function DebtCenterPage() {
   const handleEdit = (propertyId: string) => {
     router.push(`/dashboard/properties/${propertyId}?tab=mortgage`);
   };
+  
+  const getActualPayment = (propertyId: string) => {
+    const paymentTx = transactions.find(tx => 
+        tx.costCenter === propertyId &&
+        tx.categoryHierarchy?.l0 === 'Liability' &&
+        tx.categoryHierarchy?.l1 === 'Debt Service'
+    );
+    return paymentTx?.amount || null;
+  };
 
   const isLoading = isLoadingProperties || isPending;
 
@@ -162,11 +196,11 @@ export default function DebtCenterPage() {
           </div>
         </div>
          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setViewingDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 15))}>
+            <Button variant="outline" size="icon" onClick={() => setViewingDate(d => subMonths(d, 1))}>
                 <ChevronLeft className="h-4 w-4" />
             </Button>
             <span className="font-semibold text-lg w-36 text-center">{format(viewingDate, 'MMMM yyyy')}</span>
-            <Button variant="outline" size="icon" onClick={() => setViewingDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 15))}>
+            <Button variant="outline" size="icon" onClick={() => setViewingDate(d => addMonths(d, 1))}>
                 <ChevronRight className="h-4 w-4" />
             </Button>
         </div>
@@ -194,6 +228,7 @@ export default function DebtCenterPage() {
                 <TableHead>Loan Balance</TableHead>
                 <TableHead>Interest Paid</TableHead>
                 <TableHead>Monthly Payment</TableHead>
+                <TableHead>Actual Payment</TableHead>
                 <TableHead>Rate</TableHead>
                 <TableHead>Term Left</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -201,11 +236,12 @@ export default function DebtCenterPage() {
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={9} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={10} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
               ) : properties && properties.length > 0 ? (
                 properties.map((prop) => {
                   const monthlyPayment = (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
                   const currentBalanceInfo = balances.find(b => b.propertyId === prop.id);
+                  const actualPayment = getActualPayment(prop.id);
                   return (
                     <TableRow key={prop.id}>
                       <TableCell className="font-medium">{prop.name}</TableCell>
@@ -214,6 +250,7 @@ export default function DebtCenterPage() {
                       <TableCell>{formatCurrency(currentBalanceInfo?.balance || 0)}</TableCell>
                       <TableCell>{formatCurrency(currentBalanceInfo?.interestForMonth || 0)}</TableCell>
                       <TableCell>{formatCurrency(monthlyPayment)}</TableCell>
+                      <TableCell className="font-mono">{actualPayment ? formatCurrency(Math.abs(actualPayment)) : 'N/A'}</TableCell>
                       <TableCell>{(prop.mortgage?.interestRate || 0).toFixed(3)}%</TableCell>
                       <TableCell>{currentBalanceInfo?.remainingTermInMonths || 'N/A'} mos</TableCell>
                       <TableCell className="text-right">
@@ -226,7 +263,7 @@ export default function DebtCenterPage() {
                 })
               ) : (
                 <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center">
+                    <TableCell colSpan={10} className="h-24 text-center">
                         <FileWarning className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                         No properties with mortgage data found.
                     </TableCell>
