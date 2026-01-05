@@ -1,3 +1,4 @@
+
 // app/api/webhooks/plaid/route.ts
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/admin-db';
@@ -24,6 +25,21 @@ export async function POST(req: Request) {
         if (accountsSnapshot.empty) {
           console.log(`[Webhook] No account found for item_id: ${item_id}`);
           return NextResponse.json({ received: true, message: 'No account found' });
+        }
+        
+        // There's usually only one user per item, so we check the first one.
+        const firstAccount = accountsSnapshot.docs[0].data();
+        const userId = firstAccount.userId;
+
+        // NEW: Check if user has auto-sync enabled
+        const userDoc = await db.collection('users').doc(userId).get();
+        const userData = userDoc.data();
+        // Default to true if the setting doesn't exist
+        const autoSyncEnabled = userData?.plaidAutoSyncEnabled !== false; 
+
+        if (!autoSyncEnabled) {
+            console.log(`[Webhook] Auto-sync disabled for user ${userId}. Skipping sync for item_id: ${item_id}`);
+            return NextResponse.json({ received: true, message: 'Auto-sync disabled by user.' });
         }
 
         // Trigger Sync for each account found under this Item

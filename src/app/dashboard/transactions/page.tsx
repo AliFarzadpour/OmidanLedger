@@ -1,11 +1,11 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, doc, writeBatch, getDocs, query, collectionGroup, where } from 'firebase/firestore';
+import { useState, useMemo, useEffect } from 'react';
+import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, setDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen } from 'lucide-react';
+import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions-table';
@@ -15,7 +15,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import type { Transaction } from '@/components/dashboard/transactions-table';
 import { ChartOfAccountsDialog } from '@/components/dashboard/transactions/ChartOfAccountsDialog';
-
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Define the shape of a data source for type safety
 interface DataSource {
@@ -41,6 +43,36 @@ export default function TransactionsPage() {
   const [deletingDataSource, setDeletingDataSource] = useState<DataSource | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // New state for auto-sync toggle
+  const userDocRef = useMemoFirebase(() => user ? doc(firestore, `users/${user.uid}`) : null, [user, firestore]);
+  const { data: userData, isLoading: isLoadingUser } = useDoc(userDocRef);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+
+  useEffect(() => {
+    if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
+      setAutoSyncEnabled(userData.plaidAutoSyncEnabled);
+    }
+  }, [userData]);
+
+  const handleAutoSyncToggle = async (enabled: boolean) => {
+    if (!userDocRef) return;
+    setAutoSyncEnabled(enabled); // Optimistic UI update
+    try {
+      await setDoc(userDocRef, { plaidAutoSyncEnabled: enabled }, { merge: true });
+      toast({
+        title: `Auto-Sync ${enabled ? 'Enabled' : 'Disabled'}`,
+        description: `Your accounts will ${enabled ? 'now' : 'no longer'} sync automatically.`,
+      });
+    } catch (error) {
+      console.error('Failed to update auto-sync setting:', error);
+      setAutoSyncEnabled(!enabled); // Revert on error
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Could not save your auto-sync preference.',
+      });
+    }
+  };
 
   const bankAccountsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -90,7 +122,7 @@ export default function TransactionsPage() {
   const handleDeleteRequest = (dataSource: DataSource) => {
     setDeletingDataSource(dataSource);
     setDeleteAlertOpen(true);
-  }
+  };
 
   const handleDeleteConfirm = async () => {
     if (!firestore || !user || !deletingDataSource) return;
@@ -100,7 +132,6 @@ export default function TransactionsPage() {
         const batch = writeBatch(firestore);
         const accountRef = doc(firestore, `users/${user.uid}/bankAccounts`, deletingDataSource.id);
         
-        // Use the already-fetched transactions to find the ones to delete
         const transactionsToDelete = allTransactions?.filter(tx => tx.bankAccountId === deletingDataSource.id) || [];
         transactionsToDelete.forEach(tx => {
             const txRef = doc(accountRef, 'transactions', tx.id);
@@ -153,7 +184,18 @@ export default function TransactionsPage() {
                 <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
             </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-4">
+            {isLoadingUser ? <Skeleton className="h-6 w-32" /> : (
+              <div className="flex items-center space-x-2 bg-muted/60 p-2 rounded-lg">
+                {autoSyncEnabled ? <ToggleRight className="h-5 w-5 text-primary" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
+                <Label htmlFor="autosync-toggle" className="text-sm font-medium">Plaid Auto-Sync</Label>
+                <Switch 
+                  id="autosync-toggle"
+                  checked={autoSyncEnabled} 
+                  onCheckedChange={handleAutoSyncToggle}
+                />
+              </div>
+            )}
             <Button variant="outline" onClick={() => setIsCoaOpen(true)}>
                 <BookOpen className="mr-2 h-4 w-4" /> Chart of Accounts
             </Button>

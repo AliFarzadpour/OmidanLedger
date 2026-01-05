@@ -36,18 +36,32 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // scripts/migrate-account-data.ts
 const admin = __importStar(require("firebase-admin"));
 const path = __importStar(require("path"));
+const fs = __importStar(require("fs"));
 // --- CONFIGURATION ---
 const TARGET_USER_ID = 'QsMUGG2ldOa0bpRHJCnVP3pKyIv1';
 // 1. Initialize Admin SDK
-const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
-const serviceAccount = require(serviceAccountPath);
-if (!admin.apps.length) {
-    admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount)
-    });
+function initializeAdminApp() {
+    const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+    try {
+        if (fs.existsSync(serviceAccountPath)) {
+            const serviceAccount = require(serviceAccountPath);
+            if (admin.apps.length === 0) {
+                admin.initializeApp({
+                    credential: admin.credential.cert(serviceAccount)
+                });
+            }
+        }
+        else {
+            throw new Error("service-account.json not found. Please ensure it exists in your project root.");
+        }
+    }
+    catch (error) {
+        console.error("Error initializing Firebase Admin SDK:", error);
+        process.exit(1);
+    }
 }
 const db = admin.firestore();
-// 2. The Master Mapping Table provided by the user
+// 2. The Master Mapping Table from old categories to the new 4-level structure
 const mappingTable = {
     // --- INCOME ---
     "Income > Rental Income > Adelyn Rental Income": { l0: "Income", l1: "Rental Income", l2: "Line 3: Rents Received", l3: "Adelyn" },
@@ -127,50 +141,42 @@ const mappingTable = {
 // 3. The Migration Logic
 async function runMigration() {
     console.log(`Starting migration for user: ${TARGET_USER_ID}`);
-    // Get all bank accounts for the user
-    const accountsCollection = db.collection(`users/${TARGET_USER_ID}/bankAccounts`);
-    const accountsSnapshot = await accountsCollection.get();
-    if (accountsSnapshot.empty) {
-        console.error(`Error: No bank accounts found for user '${TARGET_USER_ID}'.`);
+    initializeAdminApp();
+    // Get all smart rules for the user
+    const rulesCollection = db.collection(`users/${TARGET_USER_ID}/categoryMappings`);
+    const rulesSnapshot = await rulesCollection.get();
+    if (rulesSnapshot.empty) {
+        console.log(`No custom rules found for user '${TARGET_USER_ID}'. Nothing to do.`);
         return;
     }
     let totalUpdatedCount = 0;
-    for (const accountDoc of accountsSnapshot.docs) {
-        console.log(`\nProcessing account: ${accountDoc.id} (${accountDoc.data().accountName})`);
-        // Get all transactions for that account
-        const transactionsRef = accountDoc.ref.collection('transactions');
-        const transactionsSnap = await transactionsRef.get();
-        if (transactionsSnap.empty) {
-            console.log(' -> No transactions found in this account. Skipping.');
-            continue;
-        }
-        const batch = db.batch();
-        let updatedInThisAccount = 0;
-        transactionsSnap.forEach(doc => {
-            const tx = doc.data();
-            // Construct the "old" messy key from the existing data and trim it
-            const oldKey = `${tx.primaryCategory || ''} > ${tx.secondaryCategory || ''} > ${tx.subcategory || ''}`.trim();
-            const newCategories = mappingTable[oldKey];
-            if (newCategories) {
-                batch.update(doc.ref, {
-                    categoryHierarchy: newCategories
-                });
-                updatedInThisAccount++;
-            }
-            else {
-                console.warn(`- No mapping found for old key: "${oldKey}" (Transaction ID: ${doc.id})`);
-            }
-        });
-        if (updatedInThisAccount > 0) {
-            console.log(` -> Preparing to update ${updatedInThisAccount} transactions in this account...`);
-            await batch.commit();
-            console.log(` -> Successfully updated ${updatedInThisAccount} transactions.`);
-            totalUpdatedCount += updatedInThisAccount;
+    const batch = db.batch();
+    for (const ruleDoc of rulesSnapshot.docs) {
+        const rule = ruleDoc.data();
+        // Construct the "old" messy key from the existing rule data
+        const oldKey = `${rule.primaryCategory || ''} > ${rule.secondaryCategory || ''} > ${rule.subcategory || ''}`.trim();
+        // Find the corresponding new structure in our mapping table
+        const newCategories = mappingTable[oldKey];
+        if (newCategories) {
+            // If a match is found, update the document in the batch
+            batch.update(ruleDoc.ref, {
+                categoryHierarchy: newCategories
+            });
+            totalUpdatedCount++;
         }
         else {
-            console.log(' -> No matching transactions found to update in this account.');
+            // If no match, log a warning so you know which rules couldn't be auto-migrated
+            console.warn(`- No mapping found for old rule key: "${oldKey}" (Rule ID: ${ruleDoc.id})`);
         }
     }
-    console.log(`\nMigration complete! Successfully updated a total of ${totalUpdatedCount} transactions across all accounts.`);
+    if (totalUpdatedCount > 0) {
+        console.log(`\nPreparing to update ${totalUpdatedCount} rules...`);
+        await batch.commit();
+        console.log(`Successfully updated ${totalUpdatedCount} smart rules for user ${TARGET_USER_ID}.`);
+    }
+    else {
+        console.log('\nNo rules required an update.');
+    }
+    console.log('Migration script finished.');
 }
 runMigration().catch(console.error);
