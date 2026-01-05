@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { collection, getDocs, query, collectionGroup, writeBatch, doc } from 'firebase/firestore';
+import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
