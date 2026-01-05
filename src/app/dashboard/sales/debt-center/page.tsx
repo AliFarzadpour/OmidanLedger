@@ -60,7 +60,7 @@ function StatCard({ title, value, icon, isLoading, format = 'currency' }: { titl
     if (format === 'currency') {
         formattedValue = formatCurrency(value);
     } else if (format === 'percent') {
-        formattedValue = `${value.toFixed(2)}%`;
+        formattedValue = `${'value'.toFixed(2)}%`;
     } else {
         formattedValue = `${value.toFixed(0)} mos`;
     }
@@ -231,12 +231,11 @@ export default function DebtCenterPage() {
                 <TableHead>Actual Payment</TableHead>
                 <TableHead>Rate</TableHead>
                 <TableHead>Term Left</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
-                <TableRow><TableCell colSpan={10} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center p-8"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
               ) : properties && properties.length > 0 ? (
                 properties.map((prop) => {
                   const monthlyPayment = (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
@@ -253,17 +252,12 @@ export default function DebtCenterPage() {
                       <TableCell className="font-mono">{actualPayment ? formatCurrency(Math.abs(actualPayment)) : 'N/A'}</TableCell>
                       <TableCell>{(prop.mortgage?.interestRate || 0).toFixed(3)}%</TableCell>
                       <TableCell>{currentBalanceInfo?.remainingTermInMonths || 'N/A'} mos</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(prop.id)}>
-                            <Pencil className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
                     </TableRow>
                   )
                 })
               ) : (
                 <TableRow>
-                    <TableCell colSpan={10} className="h-24 text-center">
+                    <TableCell colSpan={9} className="h-24 text-center">
                         <FileWarning className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                         No properties with mortgage data found.
                     </TableCell>
