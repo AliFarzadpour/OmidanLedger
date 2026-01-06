@@ -13,7 +13,7 @@ export function Logo({
   return (
     <div className={cn('flex items-center', className)}>
       <Image
-        src="https://storage.googleapis.com/project-os-prod/images/56994a5e-01e9-45f0-b0aa-9a77f9038234.png"
+        src="/logo.png"
         alt="OmidanLedger logo"
         width={180}
         height={40}
