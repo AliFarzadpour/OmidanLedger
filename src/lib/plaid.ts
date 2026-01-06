@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -368,12 +367,17 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         const processingBatch = db.batch();
 
         for (const originalTx of allTransactions) {
-          if (originalTx.pending) continue; // Always skip pending transactions
+          if (originalTx.pending) continue; 
 
           try {
             const docRef = db.collection('users').doc(userId)
                 .collection('bankAccounts').doc(originalTx.account_id)
                 .collection('transactions').doc(originalTx.transaction_id);
+
+            const docSnap = await docRef.get();
+            if (docSnap.exists) {
+                continue;
+            }
 
             const signedAmount = originalTx.amount * -1;
             let finalCategory: any;
@@ -455,8 +459,11 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         // Handle removals
         removedTransactions.forEach(rt => {
           if (rt.transaction_id) {
-            const docRef = itemAccountDocs.find(d => d.id === rt.account_id)?.ref.collection('transactions').doc(rt.transaction_id);
-            if (docRef) processingBatch.delete(docRef);
+            const accountDoc = itemAccountDocs.find(d => d.id === rt.account_id);
+            if(accountDoc) {
+                const docRef = accountDoc.ref.collection('transactions').doc(rt.transaction_id);
+                processingBatch.delete(docRef);
+            }
           }
         });
         
@@ -577,4 +584,5 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
 
+    
     
