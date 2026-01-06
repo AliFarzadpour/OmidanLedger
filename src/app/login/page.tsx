@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
 import { useAuth, useUser } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Lock, Banknote } from 'lucide-react';
+import { AlertCircle, Lock, Banknote, Loader2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { signInWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
 
@@ -121,7 +121,7 @@ export default function LoginPage() {
                   <FormItem>
                     <div className="flex items-center">
                       <FormLabel>Password</FormLabel>
-                      <Link href="#" className="ml-auto inline-block text-sm underline">
+                      <Link href="#" className="ml-auto inline-block text-sm underline text-muted-foreground hover:text-primary">
                         Forgot your password?
                       </Link>
                     </div>
@@ -134,7 +134,12 @@ export default function LoginPage() {
                 )}
               />
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Signing In...' : 'Sign In'}
+                {form.formState.isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Signing In...
+                  </>
+                ) : 'Sign In'}
               </Button>
             </form>
           </Form>
