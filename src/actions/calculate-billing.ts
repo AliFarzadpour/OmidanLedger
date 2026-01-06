@@ -4,9 +4,10 @@
 import { db } from '@/lib/admin-db';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
-const PCT = 0.0075;
-const UNIT_CAP = 30.00;
-const MIN_FEE = 29.00;
+// --- SYSTEM DEFAULTS ---
+const DEFAULT_PCT = 0.0075;
+const DEFAULT_UNIT_CAP = 30.00;
+const DEFAULT_MIN_FEE = 29.00;
 
 export interface FeeCalculationResult {
     userId: string;
@@ -31,8 +32,14 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
 
   for (const landlord of landlords) {
     
+    // --- Get per-user billing config, or fall back to defaults ---
+    const userBillingConfig = landlord.billing || {};
+    const subscriptionTier = userBillingConfig.subscriptionTier || 'free';
+    const pct = userBillingConfig.transactionFeePercent ?? DEFAULT_PCT;
+    const unitCap = userBillingConfig.unitCap ?? DEFAULT_UNIT_CAP;
+    const minFee = userBillingConfig.minFee ?? DEFAULT_MIN_FEE;
+
     // Skip free/trial users from fee calculation, but still include them in the report
-    const subscriptionTier = landlord.billing?.subscriptionTier || 'free';
     if (subscriptionTier === 'free' || subscriptionTier === 'trialing') {
         results.push({
           userId: landlord.id,
@@ -65,7 +72,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
           activeUnits: 0,
           totalRentCollected: 0,
           rawMonthlyFee: 0,
-          finalMonthlyFee: MIN_FEE,
+          finalMonthlyFee: minFee, // Apply the user-specific or default minimum
           subscriptionTier: subscriptionTier,
       });
       continue;
@@ -87,24 +94,24 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
             activeUnits: 0,
             totalRentCollected: 0,
             rawMonthlyFee: 0,
-            finalMonthlyFee: MIN_FEE,
+            finalMonthlyFee: minFee, // Apply the user-specific or default minimum
             subscriptionTier: subscriptionTier,
         });
         continue;
     }
 
-    // 4. Calculate the fee based on the rules
+    // 4. Calculate the fee based on the rules (user-specific or default)
     let rawMonthlyFee = 0;
     let totalRentCollected = 0;
 
     for (const [unitId, collectedRent] of unitPayments.entries()) {
       totalRentCollected += collectedRent;
-      const unitPercentFee = collectedRent * PCT;
-      const unitFee = Math.min(unitPercentFee, UNIT_CAP);
+      const unitPercentFee = collectedRent * pct;
+      const unitFee = Math.min(unitPercentFee, unitCap); // Use user-specific cap
       rawMonthlyFee += unitFee;
     }
 
-    const finalMonthlyFee = Math.max(rawMonthlyFee, MIN_FEE);
+    const finalMonthlyFee = Math.max(rawMonthlyFee, minFee); // Use user-specific minimum
     
     // Round to 2 decimal places
     const roundedFinalFee = Math.round(finalMonthlyFee * 100) / 100;

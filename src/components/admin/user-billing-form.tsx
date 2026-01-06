@@ -24,11 +24,12 @@ export function UserBillingForm({ user }: { user: any }) {
   const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
+  // Updated state to match new pricing rules, with fallbacks to defaults
   const [config, setConfig] = useState({
     subscriptionTier: user.billing?.subscriptionTier || 'free',
-    baseFee: user.billing?.baseFee || 0,
-    propertyRate: user.billing?.propertyRate || 0,
-    transactionFeePercent: user.billing?.transactionFeePercent || 0,
+    minFee: user.billing?.minFee ?? 29.00,
+    unitCap: user.billing?.unitCap ?? 30.00,
+    transactionFeePercent: user.billing?.transactionFeePercent ?? 0.0075,
   });
 
   const handleSave = async () => {
@@ -36,8 +37,8 @@ export function UserBillingForm({ user }: { user: any }) {
     try {
       await updateUserBillingConfig(user.id, {
         ...config,
-        baseFee: Number(config.baseFee),
-        propertyRate: Number(config.propertyRate),
+        minFee: Number(config.minFee),
+        unitCap: Number(config.unitCap),
         transactionFeePercent: Number(config.transactionFeePercent),
       });
       toast({
@@ -45,8 +46,6 @@ export function UserBillingForm({ user }: { user: any }) {
         description: `Settings saved for ${user.email}. The page will now refresh.`,
       });
       setIsOpen(false);
-      // This is a client-side navigation, not a full reload.
-      // It helps Next.js re-fetch server component data.
       window.location.reload();
     } catch (error: any) {
       toast({
@@ -93,36 +92,37 @@ export function UserBillingForm({ user }: { user: any }) {
             </Select>
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="baseFee" className="text-right">
-              Base Fee ($)
+            <Label htmlFor="minFee" className="text-right">
+              Base/Min Fee ($)
             </Label>
             <Input
-              id="baseFee"
+              id="minFee"
               type="number"
-              value={config.baseFee}
-              onChange={(e) => setConfig({ ...config, baseFee: e.target.valueAsNumber || 0 })}
+              value={config.minFee}
+              onChange={(e) => setConfig({ ...config, minFee: e.target.valueAsNumber || 0 })}
               className="col-span-3"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="propertyRate" className="text-right">
-              Rate/Property
+            <Label htmlFor="unitCap" className="text-right">
+              Unit Cap ($)
             </Label>
             <Input
-              id="propertyRate"
+              id="unitCap"
               type="number"
-              value={config.propertyRate}
-              onChange={(e) => setConfig({ ...config, propertyRate: e.target.valueAsNumber || 0 })}
+              value={config.unitCap}
+              onChange={(e) => setConfig({ ...config, unitCap: e.target.valueAsNumber || 0 })}
               className="col-span-3"
             />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="txFee" className="text-right">
-              Tx Fee (%)
+              Txn Fee (%)
             </Label>
             <Input
               id="txFee"
               type="number"
+              step="0.0001"
               value={config.transactionFeePercent}
               onChange={(e) => setConfig({ ...config, transactionFeePercent: e.target.valueAsNumber || 0 })}
               className="col-span-3"
