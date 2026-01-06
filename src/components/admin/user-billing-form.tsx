@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { updateUserBillingConfig } from '@/actions/admin-billing';
 import { Settings, Loader2 } from 'lucide-react';
+import { revalidatePath } from 'next/cache';
 
 export function UserBillingForm({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -42,9 +43,12 @@ export function UserBillingForm({ user }: { user: any }) {
       });
       toast({
         title: 'Billing Updated',
-        description: `Settings saved for ${user.email}.`,
+        description: `Settings saved for ${user.email}. The page will now refresh.`,
       });
       setIsOpen(false);
+      // This is a client-side navigation, not a full reload.
+      // It helps Next.js re-fetch server component data.
+      window.location.reload();
     } catch (error: any) {
       toast({
         variant: 'destructive',
@@ -97,7 +101,7 @@ export function UserBillingForm({ user }: { user: any }) {
               id="baseFee"
               type="number"
               value={config.baseFee}
-              onChange={(e) => setConfig({ ...config, baseFee: e.target.valueAsNumber })}
+              onChange={(e) => setConfig({ ...config, baseFee: e.target.valueAsNumber || 0 })}
               className="col-span-3"
             />
           </div>
@@ -109,7 +113,7 @@ export function UserBillingForm({ user }: { user: any }) {
               id="propertyRate"
               type="number"
               value={config.propertyRate}
-              onChange={(e) => setConfig({ ...config, propertyRate: e.target.valueAsNumber })}
+              onChange={(e) => setConfig({ ...config, propertyRate: e.target.valueAsNumber || 0 })}
               className="col-span-3"
             />
           </div>
@@ -121,7 +125,7 @@ export function UserBillingForm({ user }: { user: any }) {
               id="txFee"
               type="number"
               value={config.transactionFeePercent}
-              onChange={(e) => setConfig({ ...config, transactionFeePercent: e.target.valueAsNumber })}
+              onChange={(e) => setConfig({ ...config, transactionFeePercent: e.target.valueAsNumber || 0 })}
               className="col-span-3"
             />
           </div>

@@ -17,6 +17,7 @@ export async function updateUserBillingConfig(userId: string, config: {
       'billing.propertyRate': config.propertyRate,
       'billing.transactionFeePercent': config.transactionFeePercent,
       'billing.subscriptionTier': config.subscriptionTier,
+      'billing.status': config.subscriptionTier !== 'free' ? 'active' : 'trialing',
       'billing.updatedAt': new Date()
     });
     
