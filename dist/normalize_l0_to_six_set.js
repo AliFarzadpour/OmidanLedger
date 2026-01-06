@@ -1,8 +1,21 @@
 "use strict";
 const admin = require("firebase-admin");
-const projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+const fs = require('fs');
+const path = require('path');
+let projectId;
+try {
+    const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+    if (fs.existsSync(serviceAccountPath)) {
+        const serviceAccount = require(serviceAccountPath);
+        projectId = serviceAccount.project_id;
+    }
+}
+catch (e) {
+    // fallback to env var if service account is missing or malformed
+    projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+}
 if (!projectId) {
-    throw new Error("Missing GOOGLE_CLOUD_PROJECT/GCLOUD_PROJECT env var.");
+    throw new Error("Could not determine project ID. Ensure service-account.json exists or GOOGLE_CLOUD_PROJECT is set.");
 }
 admin.initializeApp({
     credential: admin.credential.applicationDefault(),

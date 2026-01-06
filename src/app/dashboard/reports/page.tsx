@@ -1,10 +1,8 @@
-
 'use client';
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser, FileText, ListOrdered, Building, TrendingUp, Scale, ShieldAlert } from 'lucide-react';
-import { DatabaseStructureCard } from '@/components/dashboard/reports/database-structure-card';
+import { ArrowRight, BrainCircuit, BookUser, FileText, Building, Scale, ShieldAlert } from 'lucide-react';
 
 export default function ReportsPage() {
   const reports = [
@@ -33,22 +31,10 @@ export default function ReportsPage() {
       icon: FileText,
     },
     {
-      title: 'Income Statement',
-      description: 'A detailed breakdown of all revenue sources.',
-      href: '/dashboard/reports/income-statement',
-      icon: TrendingUp,
-    },
-    {
       title: 'General Ledger',
       description: 'A detailed history of all transactions, grouped by account.',
       href: '/dashboard/reports/general-ledger',
       icon: BookUser,
-    },
-    {
-      title: 'Detailed Ledger',
-      description: 'An interactive report of all transactions, grouped by category.',
-      href: '/dashboard/reports/detailed-ledger',
-      icon: ListOrdered,
     },
     {
       title: 'Trial Balance',
@@ -56,13 +42,13 @@ export default function ReportsPage() {
       href: '/dashboard/reports/trial-balance',
       icon: Scale,
     },
-  ]
+  ];
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
         <p className="text-muted-foreground">
-          Generate reports and review your application's data structure.
+          Generate reports to analyze your financial data.
         </p>
       </div>
 
@@ -86,7 +72,6 @@ export default function ReportsPage() {
               </Card>
           </Link>
         ))}
-        <DatabaseStructureCard />
       </div>
     </div>
   );
