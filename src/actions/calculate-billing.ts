@@ -1,4 +1,3 @@
-
 'use server';
 
 import { db } from '@/lib/admin-db';
@@ -84,7 +83,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
         const propertyId = propDoc.id;
 
         // If it's a multi-unit property, we need to check each unit
-        if (property.type === 'multi-family' || property.type === 'commercial' || property.type === 'office') {
+        if (property.isMultiUnit || property.type === 'multi-family' || property.type === 'commercial' || property.type === 'office') {
             const unitsSnap = await propDoc.ref.collection('units').get();
             if (!unitsSnap.empty) {
                 unitsSnap.docs.forEach(unitDoc => {
@@ -112,16 +111,28 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
 
 
     if (rentBySpace.size === 0) {
-        results.push({
-            userId: landlord.id,
-            userEmail: landlord.email,
-            activeUnits: 0,
-            totalRentCollected: 0,
-            rawCalculatedFee: 0,
-            finalMonthlyFee: minFee,
-            subscriptionTier: subscriptionTier,
+        // Fallback for transactions that might not have a costCenter but should be counted
+        let unassignedRent = 0;
+        rentTransactions.forEach(tx => {
+            if (!tx.costCenter) {
+                unassignedRent += tx.amount;
+            }
         });
-        continue;
+        // If there's unassigned rent, we count it as one active unit to ensure a fee is generated
+        if (unassignedRent > 0) {
+            rentBySpace.set('unassigned', unassignedRent);
+        } else {
+             results.push({
+                userId: landlord.id,
+                userEmail: landlord.email,
+                activeUnits: 0,
+                totalRentCollected: 0,
+                rawCalculatedFee: 0,
+                finalMonthlyFee: minFee,
+                subscriptionTier: subscriptionTier,
+            });
+            continue;
+        }
     }
 
     let rawMonthlyFee = 0;
