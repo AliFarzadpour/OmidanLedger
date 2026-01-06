@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { Loader2, ChevronLeft, ChevronRight, ArrowLeft, TrendingUp, Receipt, Users, CheckCircle2, AlertCircle } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { calculateAllFees, type FeeCalculationResult } from '@/actions/calculate-billing';
