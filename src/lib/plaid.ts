@@ -11,21 +11,21 @@ import {
   Transaction as PlaidTransaction,
   RemovedTransaction
 } from 'plaid';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, DocumentData, Firestore } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { CATEGORIZATION_SYSTEM_PROMPT, BatchCategorizationSchema } from '@/ai/prompts/categorization';
 import { deepCategorizeTransaction } from '@/ai/flows/deep-categorize-transaction';
 import { incrementPropertyStats } from '@/actions/update-property-stats';
 
 // --- INITIALIZATION ---
-function getAdminDB() {
+function getAdminDB(): Firestore {
   if (!getApps().length) {
     initializeApp();
   }
   return getFirestore();
 }
 
-function getPlaidClient() {
+function getPlaidClient(): PlaidApi {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
     throw new Error('Plaid credentials missing in .env');
@@ -68,7 +68,7 @@ interface UserContext {
 }
 
 // --- NORMALIZATION ---
-function sanitizeVendorId(description: string) {
+function sanitizeVendorId(description: string): string {
   if (!description) return '';
   return description.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
@@ -311,16 +311,28 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
     const plaidClient = getPlaidClient();
 
     try {
-        const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
-        const accountSnap = await accountRef.get();
-        if (!accountSnap.exists) throw new Error("Account not found");
+        const triggeredAccountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
+        const triggeredAccountSnap = await triggeredAccountRef.get();
+        if (!triggeredAccountSnap.exists) throw new Error("Triggered account not found.");
 
-        const data = accountSnap.data();
-        const accessToken = data?.plaidAccessToken;
-        let cursor = data?.plaidSyncCursor ?? undefined;
+        const data = triggeredAccountSnap.data();
+        if (!data) throw new Error("Account data is missing.");
 
-        if (!accessToken) throw new Error("No access token.");
+        const { plaidAccessToken, plaidItemId } = data;
+        if (!plaidAccessToken || !plaidItemId) throw new Error("Plaid Token or Item ID missing.");
 
+        // 1. Find all accounts associated with this Plaid Item
+        const itemAccountsSnap = await db.collection('users').doc(userId).collection('bankAccounts').where('plaidItemId', '==', plaidItemId).get();
+        const itemAccountDocs = itemAccountsSnap.docs;
+        if (itemAccountDocs.length === 0) throw new Error("No accounts found for this Plaid Item ID.");
+
+        // 2. Determine the most recent cursor for the entire item
+        let cursor = itemAccountDocs.reduce((latestCursor, doc) => {
+            const docCursor = doc.data()?.plaidSyncCursor;
+            // A simple string comparison works for Plaid cursors
+            return docCursor > latestCursor ? docCursor : latestCursor;
+        }, data.plaidSyncCursor || undefined);
+        
         const userContext = await fetchUserContext(db, userId);
 
         let allTransactions: PlaidTransaction[] = [];
@@ -331,168 +343,137 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         while (hasMore && loopCount < 50) {
             loopCount++;
             const response = await plaidClient.transactionsSync({
-                access_token: accessToken,
+                access_token: plaidAccessToken,
                 cursor: cursor,
                 count: 500,
             });
             
-            // FIX: Process both added and modified transactions
             allTransactions = allTransactions.concat(response.data.added, response.data.modified);
             removedTransactions = removedTransactions.concat(response.data.removed);
 
             hasMore = response.data.has_more;
             cursor = response.data.next_cursor;
         }
-        
-        const relevantTransactions = allTransactions.filter(tx => {
-            return tx.account_id === bankAccountId && !tx.pending;
-        });
 
-        if (relevantTransactions.length === 0 && removedTransactions.length === 0) {
-            await accountRef.update({ plaidSyncCursor: cursor, lastSyncedAt: FieldValue.serverTimestamp() });
+        if (allTransactions.length === 0 && removedTransactions.length === 0) {
+            const updateTimestampBatch = db.batch();
+            itemAccountDocs.forEach(doc => {
+                updateTimestampBatch.update(doc.ref, { lastSyncedAt: FieldValue.serverTimestamp(), historicalDataPending: false });
+            });
+            await updateTimestampBatch.commit();
             return { count: 0 };
         }
-
-        const BATCH_SIZE = 10; 
-        const batchPromises = [];
-
-        // Handle transaction removals
-        if (removedTransactions.length > 0) {
-          const removalBatch = db.batch();
-          removedTransactions.forEach(rt => {
-              if (rt.transaction_id) {
-                const docRef = db.collection('users').doc(userId)
-                  .collection('bankAccounts').doc(bankAccountId)
-                  .collection('transactions').doc(rt.transaction_id);
-                removalBatch.delete(docRef);
-              }
-          });
-          batchPromises.push(removalBatch.commit());
-        }
-
-        for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
-            const chunk = relevantTransactions.slice(i, i + BATCH_SIZE);
-            
-            const p = (async () => {
-                const batch = db.batch();
-                
-                for (const originalTx of chunk) {
-                  try {
-                    const docRef = db.collection('users').doc(userId)
-                        .collection('bankAccounts').doc(bankAccountId)
-                        .collection('transactions').doc(originalTx.transaction_id);
-
-                    const signedAmount = originalTx.amount * -1;
-                    let finalCategory: any;
-
-                    // 1. RULES ENGINE FIRST
-                    const ruleResult = await getCategoryFromDatabase(originalTx.name, userContext, db);
-                    
-                    if (ruleResult) {
-                        finalCategory = {
-                            categoryHierarchy: ruleResult.categoryHierarchy,
-                            costCenter: ruleResult.propertyId || null, // Apply cost center from rule
-                            confidence: 1.0,
-                            aiExplanation: `Matched Rule: ${ruleResult.source}`,
-                            merchantName: originalTx.merchant_name || originalTx.name,
-                            status: 'posted',
-                            source: ruleResult.source,
-                        };
-                    } else {
-                        // 2. AI FALLBACK
-                        const deepResult = await deepCategorizeTransaction({
-                            description: originalTx.name,
-                            amount: signedAmount,
-                            date: originalTx.date
-                        });
-                        
-                        if (deepResult) {
-                           finalCategory = {
-                                categoryHierarchy: deepResult.categoryHierarchy,
-                                confidence: deepResult.confidence,
-                                aiExplanation: deepResult.reasoning,
-                                merchantName: deepResult.merchantName,
-                                status: 'posted',
-                                costCenter: null // AI doesn't know property
-                            };
-                        } else {
-                            // 3. HEURISTICS LAST RESORT
-                            const heuristicResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
-                            finalCategory = {
-                                categoryHierarchy: {
-                                    l0: heuristicResult.l0,
-                                    l1: heuristicResult.l1,
-                                    l2: heuristicResult.l2,
-                                    l3: heuristicResult.l3
-                                },
-                                confidence: heuristicResult.confidence,
-                                aiExplanation: 'Deep AI failed, used standard Rules',
-                                merchantName: originalTx.merchant_name || originalTx.name,
-                                status: 'review',
-                                costCenter: null
-                            };
-                        }
-                    }
-
-                    if (!finalCategory?.categoryHierarchy) {
-                      finalCategory = {
-                          categoryHierarchy: { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'Uncategorized' },
-                          confidence: 0.0,
-                          aiExplanation: 'Categorization failed, requires manual review.',
-                          reviewStatus: 'needs-review'
-                      };
-                    }
-                    
-                    // 4. FINAL ACCOUNTING GUARDRAIL
-                    const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
-                    
-                    const txData = {
-                        date: originalTx.date,
-                        description: originalTx.name,
-                        amount: signedAmount,
-                        plaidTransactionId: originalTx.transaction_id,
-                        bankAccountId: originalTx.account_id,
-                        userId: userId,
-                        createdAt: FieldValue.serverTimestamp(),
-                        ...enforcedCategory,
-                        reviewStatus: 'needs-review',
-                    };
-
-                    batch.set(docRef, txData, { merge: true });
-
-                    // Increment stats only if a property is linked AND the tx isn't an internal transfer
-                    const isTransfer = (txData.categoryHierarchy?.l1 || '').toLowerCase().includes('transfer');
-                    if (txData.costCenter && !isTransfer) { 
-                        incrementPropertyStats({
-                            propertyId: txData.costCenter,
-                            date: txData.date,
-                            amount: txData.amount,
-                            userId: userId,
-                        }).catch(console.error);
-                    }
-                   } catch (txError: any) {
-                        console.error(`Failed to process transaction ${originalTx.transaction_id}. Reason: ${txError.message}`, {
-                          description: originalTx.name,
-                          amount: originalTx.amount
-                        });
-                        // Continue to next transaction in the chunk
-                   }
-                }
-                
-                return batch.commit();
-            })();
-            batchPromises.push(p);
-        }
-
-        await Promise.all(batchPromises);
         
-        await accountRef.update({ 
-            plaidSyncCursor: cursor,
-            historicalDataPending: false,
-            lastSyncedAt: FieldValue.serverTimestamp()
-        });
+        // 3. Process all fetched transactions
+        const processingBatch = db.batch();
 
-        return { count: relevantTransactions.length };
+        for (const originalTx of allTransactions) {
+          if (originalTx.pending) continue; // Always skip pending transactions
+
+          try {
+            const docRef = db.collection('users').doc(userId)
+                .collection('bankAccounts').doc(originalTx.account_id)
+                .collection('transactions').doc(originalTx.transaction_id);
+
+            const signedAmount = originalTx.amount * -1;
+            let finalCategory: any;
+
+            const ruleResult = await getCategoryFromDatabase(originalTx.name, userContext, db);
+            
+            if (ruleResult) {
+                finalCategory = {
+                    categoryHierarchy: ruleResult.categoryHierarchy,
+                    costCenter: ruleResult.propertyId || null,
+                    confidence: 1.0,
+                    aiExplanation: `Matched Rule: ${ruleResult.source}`,
+                    merchantName: originalTx.merchant_name || originalTx.name,
+                    status: 'posted',
+                    source: ruleResult.source,
+                };
+            } else {
+                const deepResult = await deepCategorizeTransaction({ description: originalTx.name, amount: signedAmount, date: originalTx.date });
+                if (deepResult) {
+                   finalCategory = {
+                        categoryHierarchy: deepResult.categoryHierarchy,
+                        confidence: deepResult.confidence,
+                        aiExplanation: deepResult.reasoning,
+                        merchantName: deepResult.merchantName,
+                        status: 'posted',
+                        costCenter: null
+                    };
+                } else {
+                    const heuristicResult = await categorizeWithHeuristics(originalTx.name, signedAmount, originalTx.personal_finance_category, userContext);
+                    finalCategory = {
+                        categoryHierarchy: { l0: heuristicResult.l0, l1: heuristicResult.l1, l2: heuristicResult.l2, l3: heuristicResult.l3 },
+                        confidence: heuristicResult.confidence,
+                        aiExplanation: 'Deep AI failed, used standard Rules',
+                        merchantName: originalTx.merchant_name || originalTx.name,
+                        status: 'review',
+                        costCenter: null
+                    };
+                }
+            }
+
+            if (!finalCategory?.categoryHierarchy) {
+              finalCategory = {
+                  categoryHierarchy: { l0: 'Expense', l1: 'General', l2: 'Needs Review', l3: 'Uncategorized' },
+                  confidence: 0.0,
+                  aiExplanation: 'Categorization failed, requires manual review.',
+                  reviewStatus: 'needs-review'
+              };
+            }
+            
+            const enforcedCategory = await enforceAccountingRules(finalCategory, signedAmount);
+            
+            const txData = {
+                date: originalTx.date,
+                description: originalTx.name,
+                amount: signedAmount,
+                plaidTransactionId: originalTx.transaction_id,
+                bankAccountId: originalTx.account_id,
+                userId: userId,
+                createdAt: FieldValue.serverTimestamp(),
+                ...enforcedCategory,
+                reviewStatus: 'needs-review',
+            };
+
+            processingBatch.set(docRef, txData, { merge: true });
+
+            if (txData.costCenter && !(txData.categoryHierarchy?.l1 || '').toLowerCase().includes('transfer')) { 
+                incrementPropertyStats({
+                    propertyId: txData.costCenter,
+                    date: txData.date,
+                    amount: txData.amount,
+                    userId: userId,
+                }).catch(console.error);
+            }
+          } catch (txError: any) {
+             console.error(`Failed to process transaction ${originalTx.transaction_id}. Reason: ${txError.message}`);
+          }
+        }
+        
+        // Handle removals
+        removedTransactions.forEach(rt => {
+          if (rt.transaction_id) {
+            const docRef = itemAccountDocs.find(d => d.id === rt.account_id)?.ref.collection('transactions').doc(rt.transaction_id);
+            if (docRef) processingBatch.delete(docRef);
+          }
+        });
+        
+        await processingBatch.commit();
+        
+        // 4. Update cursor and timestamp on ALL related accounts
+        const updateCursorBatch = db.batch();
+        itemAccountDocs.forEach(doc => {
+            updateCursorBatch.update(doc.ref, { 
+                plaidSyncCursor: cursor, 
+                historicalDataPending: false,
+                lastSyncedAt: FieldValue.serverTimestamp()
+            });
+        });
+        await updateCursorBatch.commit();
+
+        return { count: allTransactions.length };
 
     } catch (error: any) {
         console.error("Sync Error:", error);
