@@ -16,6 +16,7 @@ import {
   ShieldCheck, // New Icon for Admin
   Activity, // New Icon for Health
   BookOpenCheck, // Icon for Onboarding
+  DollarSign, // Icon for Billing
 } from "lucide-react";
 
 import {
@@ -103,6 +104,11 @@ const data = {
       title: "User Management",
       url: "/admin/users",
       icon: Users,
+    },
+    {
+      title: "Billing",
+      url: "/admin/billing",
+      icon: DollarSign,
     },
     {
       title: "System Health",
