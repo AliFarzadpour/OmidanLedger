@@ -7,8 +7,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, PlayCircle } from 'lucide-react';
-import { format } from 'date-fns';
+import { Loader2, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, addMonths, subMonths } from 'date-fns';
 import { calculateAllFees, type FeeCalculationResult } from '@/actions/calculate-billing';
 import { Badge } from '@/components/ui/badge';
 import { FeeBreakdownDialog } from '@/components/admin/FeeBreakdownDialog';
@@ -33,7 +33,13 @@ export default function AdminBillingPage() {
 
   useEffect(() => {
     handleRunReport();
-  }, []);
+  }, [billingPeriod]);
+
+  const handleDateChange = (direction: 'next' | 'prev') => {
+    const currentDate = new Date(billingPeriod + '-02'); // Use day 2 to avoid timezone issues
+    const newDate = direction === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
+    setBillingPeriod(format(newDate, 'yyyy-MM'));
+  };
 
   const totalRevenue = results.reduce((sum, result) => sum + (result.finalMonthlyFee || 0), 0);
 
@@ -51,18 +57,18 @@ export default function AdminBillingPage() {
               <div className="flex items-end gap-2">
                   <div className="grid gap-1.5">
                       <Label htmlFor="billing-period">Billing Period</Label>
-                      <Input
-                          id="billing-period"
-                          type="month"
-                          value={billingPeriod}
-                          onChange={(e) => setBillingPeriod(e.target.value)}
-                          className="w-[180px]"
-                      />
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="icon" onClick={() => handleDateChange('prev')}>
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="font-semibold text-lg w-36 text-center">
+                            {format(new Date(billingPeriod + '-02'), 'MMMM yyyy')}
+                        </span>
+                        <Button variant="outline" size="icon" onClick={() => handleDateChange('next')}>
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </div>
                   </div>
-                  <Button onClick={handleRunReport} disabled={isLoading}>
-                      {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PlayCircle className="mr-2 h-4 w-4" />}
-                      Run Calculation
-                  </Button>
               </div>
           </CardHeader>
         </Card>
@@ -101,7 +107,7 @@ export default function AdminBillingPage() {
                                   <TableCell><Badge variant="outline" className="capitalize">{res.subscriptionTier}</Badge></TableCell>
                                   <TableCell>{res.activeUnits}</TableCell>
                                   <TableCell>${(res.totalRentCollected || 0).toLocaleString()}</TableCell>
-                                  <TableCell>${(res.rawCalculatedFee || 0).toFixed(2)}</TableCell>
+                                  <TableCell>${(res.rawMonthlyFee || 0).toFixed(2)}</TableCell>
                                   <TableCell className="text-right font-bold text-primary">${(res.finalMonthlyFee || 0).toFixed(2)}</TableCell>
                               </TableRow>
                           ))
