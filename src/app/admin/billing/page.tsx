@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, PlayCircle, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import { calculateAllFees, type FeeCalculationResult } from '@/actions/calculate-billing';
+import { Badge } from '@/components/ui/badge';
 
 export default function AdminBillingPage() {
   const [billingPeriod, setBillingPeriod] = useState(format(new Date(), 'yyyy-MM'));
@@ -79,6 +80,7 @@ export default function AdminBillingPage() {
                 <TableHeader>
                     <TableRow>
                         <TableHead>Landlord Email</TableHead>
+                        <TableHead>Plan</TableHead>
                         <TableHead>Active Units</TableHead>
                         <TableHead>Total Rent Collected</TableHead>
                         <TableHead>Raw Calculated Fee</TableHead>
@@ -87,13 +89,14 @@ export default function AdminBillingPage() {
                 </TableHeader>
                 <TableBody>
                     {isLoading ? (
-                        <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="animate-spin h-6 w-6" /></TableCell></TableRow>
+                        <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="animate-spin h-6 w-6" /></TableCell></TableRow>
                     ) : results.length === 0 ? (
-                        <TableRow><TableCell colSpan={5} className="h-24 text-center">No landlords with collected rent found for this period.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={6} className="h-24 text-center">No landlords found.</TableCell></TableRow>
                     ) : (
                         results.map(res => (
                             <TableRow key={res.userId}>
                                 <TableCell className="font-medium">{res.userEmail}</TableCell>
+                                <TableCell><Badge variant="outline" className="capitalize">{res.subscriptionTier}</Badge></TableCell>
                                 <TableCell>{res.activeUnits}</TableCell>
                                 <TableCell>${res.totalRentCollected.toLocaleString()}</TableCell>
                                 <TableCell>${res.rawMonthlyFee.toFixed(2)}</TableCell>

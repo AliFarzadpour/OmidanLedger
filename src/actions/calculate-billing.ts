@@ -15,6 +15,7 @@ export interface FeeCalculationResult {
     totalRentCollected: number;
     rawMonthlyFee: number;
     finalMonthlyFee: number;
+    subscriptionTier: string;
 }
 
 export async function calculateAllFees({ billingPeriod }: { billingPeriod: string }): Promise<FeeCalculationResult[]> {
@@ -29,6 +30,22 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
   const results: FeeCalculationResult[] = [];
 
   for (const landlord of landlords) {
+    
+    // Skip free/trial users from fee calculation, but still include them in the report
+    const subscriptionTier = landlord.billing?.subscriptionTier || 'free';
+    if (subscriptionTier === 'free' || subscriptionTier === 'trialing') {
+        results.push({
+          userId: landlord.id,
+          userEmail: landlord.email,
+          activeUnits: 0,
+          totalRentCollected: 0,
+          rawMonthlyFee: 0,
+          finalMonthlyFee: 0,
+          subscriptionTier: subscriptionTier,
+        });
+        continue;
+    }
+
     // 2. For each landlord, get all their income transactions for the period
     const transactionsSnap = await db.collectionGroup('transactions')
       .where('userId', '==', landlord.id)
@@ -41,7 +58,17 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
         .filter(tx => tx.categoryHierarchy?.l0 === 'Income' && tx.categoryHierarchy?.l1 === 'Rental Income');
 
     if (incomeTransactions.length === 0) {
-      continue; // Skip landlords with no rent collected this month
+      // If no income, the raw fee is 0, but the minimum still applies.
+      results.push({
+          userId: landlord.id,
+          userEmail: landlord.email,
+          activeUnits: 0,
+          totalRentCollected: 0,
+          rawMonthlyFee: 0,
+          finalMonthlyFee: MIN_FEE,
+          subscriptionTier: subscriptionTier,
+      });
+      continue;
     }
     
     // 3. Group collected rent by unit (costCenter)
@@ -54,6 +81,15 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
     });
 
     if (unitPayments.size === 0) {
+        results.push({
+            userId: landlord.id,
+            userEmail: landlord.email,
+            activeUnits: 0,
+            totalRentCollected: 0,
+            rawMonthlyFee: 0,
+            finalMonthlyFee: MIN_FEE,
+            subscriptionTier: subscriptionTier,
+        });
         continue;
     }
 
@@ -81,6 +117,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
       totalRentCollected: totalRentCollected,
       rawMonthlyFee: roundedRawFee,
       finalMonthlyFee: roundedFinalFee,
+      subscriptionTier: subscriptionTier,
     });
   }
 
