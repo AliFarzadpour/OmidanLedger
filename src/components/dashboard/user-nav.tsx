@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -32,7 +33,7 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
   const firestore = useFirestore();
   const router = useRouter();
 
-  // Fetch the user's full profile to get the logo URL
+  // Fetch the user's full profile to get logo and billing info
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return doc(firestore, 'users', user.uid);
@@ -40,6 +41,7 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
 
   const { data: userData } = useDoc<{
     businessProfile?: { logoUrl?: string };
+    billing?: { subscriptionTier?: string };
   }>(userDocRef);
 
   const [isClient, setIsClient] = useState(false);
@@ -82,6 +84,7 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
   }
 
   const logoUrl = userData?.businessProfile?.logoUrl;
+  const subscriptionTier = userData?.billing?.subscriptionTier || 'Free';
 
   const trigger = (
     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
@@ -114,9 +117,14 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
             <span>Profile</span>
           </Link>
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          <CreditCard className="mr-2 h-4 w-4" />
-          <span>Billing</span>
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/settings">
+            <CreditCard className="mr-2 h-4 w-4" />
+            <div className="flex justify-between items-center w-full">
+                <span>Billing</span>
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-md capitalize">{subscriptionTier}</span>
+            </div>
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/dashboard/settings">
