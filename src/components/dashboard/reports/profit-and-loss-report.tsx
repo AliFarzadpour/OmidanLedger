@@ -150,8 +150,8 @@ export function ProfitAndLossReport() {
 
   useEffect(() => {
     const today = new Date();
-    const from = startOfYear(today);
-    const to = endOfYear(today);
+    const from = startOfMonth(today);
+    const to = endOfMonth(today);
     const initialDates = {
       from: from.toISOString().split('T')[0],
       to: to.toISOString().split('T')[0]
