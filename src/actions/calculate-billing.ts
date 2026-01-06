@@ -133,7 +133,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
         continue;
     }
 
-    let rawMonthlyFee = 0;
+    let rawCalculatedFee = 0;
     let totalRentCollected = 0;
     const breakdown: FeeBreakdownItem[] = [];
     
@@ -141,7 +141,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
       totalRentCollected += spaceData.collectedRent;
       const spacePercentFee = spaceData.collectedRent * pct;
       const spaceFee = Math.min(spacePercentFee, unitCap);
-      rawMonthlyFee += spaceFee;
+      rawCalculatedFee += spaceFee;
       breakdown.push({
           spaceId,
           spaceName: spaceData.name,
@@ -150,14 +150,14 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
       });
     }
 
-    const finalMonthlyFee = Math.max(rawMonthlyFee, minFee);
+    const finalMonthlyFee = Math.max(rawCalculatedFee, minFee);
     
     results.push({
       userId: landlord.id,
       userEmail: landlord.email,
       activeUnits: rentBySpace.size,
       totalRentCollected: Math.round(totalRentCollected * 100) / 100,
-      rawCalculatedFee: Math.round(rawMonthlyFee * 100) / 100,
+      rawCalculatedFee: Math.round(rawCalculatedFee * 100) / 100,
       finalMonthlyFee: Math.round(finalMonthlyFee * 100) / 100,
       subscriptionTier: subscriptionTier,
       breakdown,
