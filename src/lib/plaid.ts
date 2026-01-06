@@ -339,7 +339,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
         
         const relevantTransactions = allTransactions.filter(tx => {
-            return tx.account_id === bankAccountId && !tx.pending;
+            return tx.account_id === bankAccountId && tx.pending === false;
         });
 
         if (relevantTransactions.length === 0) {
@@ -574,3 +574,4 @@ const CreateLinkTokenInputSchema = z.object({
       }
     }
   );
+
