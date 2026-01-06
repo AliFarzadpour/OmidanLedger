@@ -2,15 +2,16 @@
 'use client';
 
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, writeBatch, deleteDoc } from 'firebase/firestore';
+import { doc, collection, query, writeBatch, deleteDoc, addDoc } from 'firebase/firestore';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
-import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText } from 'lucide-react';
+import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText, BookOpen } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { useState, useMemo, useEffect } from 'react';
 import { useUser, useStorage } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { deleteObject, ref } from 'firebase/storage';
+import Link from 'next/link';
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,6 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AddUnitDialog } from '@/components/dashboard/properties/AddUnitDialog';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
@@ -37,6 +37,100 @@ import { UnitMatrix } from '@/components/dashboard/sales/UnitMatrix';
 import { generateRulesForProperty } from '@/lib/rule-engine';
 import { updateUnitsInBulk } from '@/actions/unit-actions';
 
+
+function AddUnitDialog({ propertyId, onUnitAdded }: { propertyId: string; onUnitAdded: () => void; }) {
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [unitName, setUnitName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleAddNewUnit = async () => {
+    if (!user || !firestore || !unitName.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Validation Error',
+        description: 'Unit name cannot be empty.',
+      });
+      return;
+    }
+    setIsLoading(true);
+
+    try {
+      const unitsCollection = collection(firestore, 'properties', propertyId, 'units');
+      await addDoc(unitsCollection, {
+        userId: user.uid,
+        propertyId: propertyId, // Storing the parent property ID is crucial for collectionGroup queries
+        unitNumber: unitName.trim(),
+        status: 'vacant',
+        createdAt: new Date().toISOString(),
+        bedrooms: 0,
+        bathrooms: 0,
+        sqft: 0,
+        amenities: [],
+        financials: {
+          rent: 0,
+          deposit: 0,
+        },
+      });
+
+      toast({
+        title: 'Unit Added',
+        description: `Unit "${unitName}" has been successfully created.`,
+      });
+
+      onUnitAdded(); // Trigger refetch on parent page
+      setUnitName('');
+      setIsOpen(false);
+    } catch (error: any) {
+      console.error('Error adding new unit:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to add the new unit.',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <Plus className="h-4 w-4" />
+          New Unit
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Add a New Unit</DialogTitle>
+          <DialogDescription>
+            Create a single new unit for this property. You can edit the details later.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-2 py-4">
+          <Label htmlFor="unit-name">Unit Number or Name</Label>
+          <Input
+            id="unit-name"
+            placeholder="e.g., 204, or Suite B"
+            value={unitName}
+            onChange={(e) => setUnitName(e.target.value)}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
+          <Button onClick={handleAddNewUnit} disabled={isLoading}>
+            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Create Unit
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function BulkOperationsDialog({ propertyId, units }: { propertyId: string, units: any[] }) {
     const firestore = useFirestore();
@@ -241,9 +335,9 @@ export default function PropertyDetailPage() {
   }
 
   const propertyDocRef = useMemoFirebase(() => {
-    if (!firestore || !id) return null;
+    if (!firestore || !id || !user) return null;
     return doc(firestore, 'properties', id);
-  }, [firestore, id, refreshKey]);
+  }, [firestore, id, user, refreshKey]);
 
   const { data: property, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
 
@@ -296,7 +390,7 @@ export default function PropertyDetailPage() {
 
   // --- THE INTERFACE ROUTER ---
   // If it's a multi-unit or commercial property, show the Central Hub (Unit Matrix)
-  if (property?.isMultiUnit) {
+  if (property?.isMultiUnit || (units && units.length > 0)) {
     return (
         <>
       <div className="space-y-6 p-8">
@@ -321,12 +415,20 @@ export default function PropertyDetailPage() {
             <TabsList>
                 <TabsTrigger value="units">Unit Matrix</TabsTrigger>
                 <TabsTrigger value="documents">Building Documents</TabsTrigger>
+                <TabsTrigger value="ledger">Property Ledger</TabsTrigger>
             </TabsList>
             <TabsContent value="units" className="mt-6">
                 <UnitMatrix propertyId={id} units={units || []} onUpdate={handleUnitUpdate} />
             </TabsContent>
             <TabsContent value="documents" className="mt-6">
                  <PropertyDocuments propertyId={id} landlordId={user.uid} />
+            </TabsContent>
+            <TabsContent value="ledger" className="mt-6">
+                 <Link href={`/dashboard/properties/${id}/transactions`}>
+                    <Button>
+                        <BookOpen className="mr-2 h-4 w-4" /> Go to Full Ledger
+                    </Button>
+                 </Link>
             </TabsContent>
         </Tabs>
 
@@ -354,3 +456,5 @@ export default function PropertyDetailPage() {
   // Otherwise, return your original Single Family interface
   return <PropertyDashboardSFH property={property} onUpdate={() => setRefreshKey(k => k + 1)} />;
 }
+
+    

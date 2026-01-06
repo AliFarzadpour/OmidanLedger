@@ -84,10 +84,6 @@ service cloud.firestore {
             allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
         }
       }
-      // This rule specifically allows LISTING the units collection.
-      match /units/{unit} {
-        allow list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
-      }
     }
     
     // Rule for querying 'units' collection group.
@@ -140,3 +136,5 @@ service firebase.storage {
     }
   }
 }
+
+    

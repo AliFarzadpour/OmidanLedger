@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -65,11 +66,11 @@ export default function ServiceInvoicesPage() {
   const collectedThisMonth = 0; 
   
   const handleDelete = async (invoiceId: string) => {
-    if (!firestore) return;
-    const docRef = doc(firestore, 'invoices', invoiceId);
-    await deleteDoc(docRef);
-    refetch(); // Trigger a refetch to update the UI
-    setDeletingId(null);
+      if (!firestore) return;
+      const docRef = doc(firestore, 'invoices', invoiceId);
+      await deleteDoc(docRef);
+      refetch(); // Trigger a refetch to update the UI
+      setDeletingId(null);
   }
 
   return (
@@ -220,3 +221,5 @@ export default function ServiceInvoicesPage() {
     </div>
   );
 }
+
+    

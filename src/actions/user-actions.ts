@@ -1,3 +1,4 @@
+
 'use server';
 
 import { db } from '@/lib/admin-db';
@@ -55,6 +56,8 @@ export async function deleteAllUserData(userId: string) {
 
         // --- 4. Delete other user subcollections ---
         await deleteCollection(db.collection('users').doc(userId).collection('categoryMappings').path, batch);
+        await deleteCollection(db.collection('users').doc(userId).collection('admin_invoices').path, batch);
+        await deleteCollection(db.collection('users').doc(userId).collection('charges').path, batch);
 
         // --- 5. Finally, delete the user document itself ---
         batch.delete(db.collection('users').doc(userId));
@@ -68,3 +71,5 @@ export async function deleteAllUserData(userId: string) {
         throw new Error("Failed to delete user data: " + error.message);
     }
 }
+
+    
