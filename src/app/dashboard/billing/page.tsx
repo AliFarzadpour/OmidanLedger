@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Label } from '@/components/ui/label';
 
 export default function LandlordBillingPage() {
   const { user } = useUser();
