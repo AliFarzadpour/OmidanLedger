@@ -20,7 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
 import { useAuth, useUser } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Lock, Banknote } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { signInWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
 
@@ -83,12 +83,12 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-background">
       <Card className="w-full max-w-md shadow-2xl">
-        <CardHeader className="space-y-1 text-center">
+        <CardHeader className="space-y-1 text-center pt-8">
           <div className="flex justify-center mb-4">
-            <Logo showText={false} />
+            <Logo />
           </div>
           <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
-          <CardDescription>Enter your email below to login to your account</CardDescription>
+          <CardDescription>Track rent, expenses, and reports in one place.</CardDescription>
         </CardHeader>
         <CardContent>
           <Form {...form}>
@@ -107,7 +107,7 @@ export default function LoginPage() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="m@example.com" {...field} />
+                      <Input placeholder="landlord@email.com" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -128,6 +128,7 @@ export default function LoginPage() {
                       <Input type="password" {...field} />
                     </FormControl>
                     <FormMessage />
+                    <p className="text-xs text-muted-foreground pt-1">We never share or sell your data.</p>
                   </FormItem>
                 )}
               />
@@ -139,11 +140,15 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <div className="text-center text-sm">
-            Don&apos;t have an account?{' '}
+            New here?{' '}
             <Link href="/signup" className="underline">
-              Sign up
+              Create a free account
             </Link>
           </div>
+           <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground pt-4">
+              <span className="flex items-center gap-1.5"><Lock className="h-3 w-3" /> Secure by Firebase</span>
+              <span className="flex items-center gap-1.5"><Banknote className="h-3 w-3" /> Bank connections via Plaid</span>
+            </div>
         </CardFooter>
       </Card>
     </div>
