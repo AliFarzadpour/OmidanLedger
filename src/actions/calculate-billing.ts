@@ -21,10 +21,10 @@ export interface FeeCalculationResult {
     userEmail: string;
     activeUnits: number;
     totalRentCollected: number;
-    rawCalculatedFee: number;
+    rawMonthlyFee: number;
     finalMonthlyFee: number;
     subscriptionTier: string;
-    breakdown: FeeBreakdownItem[]; // Added for detailed view
+    breakdown: FeeBreakdownItem[];
 }
 
 export async function calculateAllFees({ billingPeriod }: { billingPeriod: string }): Promise<FeeCalculationResult[]> {
@@ -41,25 +41,27 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
     const userBillingConfig = landlord.billing || {};
     const subscriptionTier = userBillingConfig.subscriptionTier || 'free';
     
-    // Always include the landlord, even if they end up with $0 fee.
     if (subscriptionTier === 'free' || subscriptionTier === 'trialing') {
         results.push({
           userId: landlord.id,
           userEmail: landlord.email,
           activeUnits: 0,
           totalRentCollected: 0,
-          rawCalculatedFee: 0,
+          rawMonthlyFee: 0,
           finalMonthlyFee: 0,
           subscriptionTier: subscriptionTier,
           breakdown: [],
         });
         continue;
     }
-
-    const pct = userBillingConfig.transactionFeePercent ?? DEFAULT_PCT;
-    const unitCap = userBillingConfig.unitCap ?? DEFAULT_UNIT_CAP;
-    const minFee = userBillingConfig.minFee ?? DEFAULT_MIN_FEE;
-
+    
+    // --- NORMALIZATION & DEBUGGING ---
+    const pctRaw = userBillingConfig.transactionFeePercent ?? DEFAULT_PCT;
+    // If someone stored "0.75" meaning 0.75%, convert to 0.0075.
+    const pct = Number(pctRaw) > 0.2 ? Number(pctRaw) / 100 : Number(pctRaw);
+    const unitCap = Number(userBillingConfig.unitCap ?? DEFAULT_UNIT_CAP);
+    const minFee = Number(userBillingConfig.minFee ?? DEFAULT_MIN_FEE);
+    
     const transactionsSnap = await db.collectionGroup('transactions')
       .where('userId', '==', landlord.id)
       .where('date', '>=', startDate)
@@ -69,17 +71,14 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
       .get();
     
     const rentTransactions = transactionsSnap.docs.map(doc => doc.data());
-
-    // This map will hold the rent collected for each distinct space (property or unit)
+    
     const rentBySpace = new Map<string, { name: string; collectedRent: number }>();
-
     const propertiesSnap = await db.collection('properties').where('userId', '==', landlord.id).get();
     
     for (const propDoc of propertiesSnap.docs) {
         const property = propDoc.data();
         const propertyId = propDoc.id;
 
-        // If it's a multi-unit property, we need to check each unit
         if (property.isMultiUnit || property.type === 'multi-family' || property.type === 'commercial' || property.type === 'office') {
             const unitsSnap = await propDoc.ref.collection('units').get();
             if (!unitsSnap.empty) {
@@ -87,12 +86,10 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
                     const unitId = unitDoc.id;
                     const unitData = unitDoc.data();
                     
-                    // Sum rent for this specific unit
                     const unitRent = rentTransactions
                         .filter(tx => tx.costCenter === unitId)
                         .reduce((sum, tx) => sum + tx.amount, 0);
 
-                    // Only count if rent was collected
                     if (unitRent > 0) {
                         const current = rentBySpace.get(unitId) || { name: `${property.name} #${unitData.unitNumber}`, collectedRent: 0 };
                         current.collectedRent += unitRent;
@@ -100,7 +97,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
                     }
                 });
             }
-        } else { // For single-family homes, the property itself is the space
+        } else { 
             const propertyRent = rentTransactions
                 .filter(tx => tx.costCenter === propertyId)
                 .reduce((sum, tx) => sum + tx.amount, 0);
@@ -113,22 +110,18 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
         }
     }
     
-    // After checking all properties and units, handle transactions that might not have a cost center assigned
-    if (rentTransactions.length > 0) {
-        let unassignedRent = 0;
-        rentTransactions.forEach(tx => {
-            if (!tx.costCenter) {
-                unassignedRent += tx.amount;
-            }
-        });
-        if (unassignedRent > 0) {
-             if (!rentBySpace.has('unassigned')) {
-                rentBySpace.set('unassigned', { name: 'Unassigned Properties', collectedRent: 0 });
-            }
-            rentBySpace.get('unassigned')!.collectedRent += unassignedRent;
+    let unassignedRent = 0;
+    rentTransactions.forEach(tx => {
+        if (!tx.costCenter) {
+            unassignedRent += tx.amount;
         }
+    });
+    if (unassignedRent > 0) {
+         if (!rentBySpace.has('unassigned')) {
+            rentBySpace.set('unassigned', { name: 'Unassigned Properties', collectedRent: 0 });
+        }
+        rentBySpace.get('unassigned')!.collectedRent += unassignedRent;
     }
-
 
     if (rentBySpace.size === 0) {
         results.push({
@@ -136,7 +129,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
             userEmail: landlord.email,
             activeUnits: 0,
             totalRentCollected: 0,
-            rawCalculatedFee: 0,
+            rawMonthlyFee: 0,
             finalMonthlyFee: minFee,
             subscriptionTier: subscriptionTier,
             breakdown: [],
@@ -148,14 +141,14 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
     let totalRentCollected = 0;
     const breakdown: FeeBreakdownItem[] = [];
     
-    // This is the core logic loop that needs to be correct.
     for (const [spaceId, spaceData] of rentBySpace.entries()) {
       totalRentCollected += spaceData.collectedRent;
       
+      // Corrected Fee Calculation Logic
       const percentageBasedFee = spaceData.collectedRent * pct;
-      const spaceFee = Math.min(percentageBasedFee, unitCap); // Apply the cap
+      const spaceFee = Math.min(percentageBasedFee, unitCap);
       
-      rawCalculatedFee += spaceFee; // Add the (potentially capped) fee to the raw total
+      rawCalculatedFee += spaceFee; 
 
       breakdown.push({
           spaceId,
@@ -171,9 +164,9 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
       userId: landlord.id,
       userEmail: landlord.email,
       activeUnits: rentBySpace.size,
-      totalRentCollected: Math.round(totalRentCollected * 100) / 100,
-      rawCalculatedFee: Math.round(rawCalculatedFee * 100) / 100,
-      finalMonthlyFee: Math.round(finalMonthlyFee * 100) / 100,
+      totalRentCollected: Number(totalRentCollected.toFixed(2)),
+      rawMonthlyFee: Number(rawCalculatedFee.toFixed(2)),
+      finalMonthlyFee: Number(finalMonthlyFee.toFixed(2)),
       subscriptionTier: subscriptionTier,
       breakdown,
     });
