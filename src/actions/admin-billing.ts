@@ -76,33 +76,41 @@ export async function sendLandlordInvoice(data: {
       description: `Subscription Fee for ${billingPeriod}`,
     });
 
-    // 3. Create the Invoice
+    // 3. Create the Invoice in a DRAFT state
     const invoice = await stripe.invoices.create({
       customer: customer.id,
       collection_method: 'send_invoice',
       days_until_due: 15,
-      auto_advance: true, // Automatically finalize and send
+      auto_advance: false, // Create as draft first
       metadata: {
         firebase_uid: userId,
         billing_period: billingPeriod,
       },
     });
+    
+    // 4. Finalize the draft invoice
+    const finalizedInvoice = await stripe.invoices.finalizeInvoice(invoice.id);
 
-    // 4. Log the sent invoice in Firestore for tracking
-    const adminInvoiceRef = db.collection('users').doc(userId).collection('admin_invoices').doc(invoice.id);
+    // 5. Explicitly SEND the invoice
+    const sentInvoice = await stripe.invoices.sendInvoice(finalizedInvoice.id);
+
+    if (!sentInvoice.hosted_invoice_url) {
+        throw new Error("Failed to retrieve the hosted invoice URL after sending.");
+    }
+
+    // 6. Log the sent invoice in Firestore for tracking
+    const adminInvoiceRef = db.collection('users').doc(userId).collection('admin_invoices').doc(sentInvoice.id);
     await adminInvoiceRef.set({
-      stripeInvoiceId: invoice.id,
+      stripeInvoiceId: sentInvoice.id,
       stripeCustomerId: customer.id,
       amount: amount,
-      status: 'open',
+      status: sentInvoice.status,
       billingPeriod: billingPeriod,
       sentAt: FieldValue.serverTimestamp(),
-      invoiceUrl: invoice.hosted_invoice_url,
+      invoiceUrl: sentInvoice.hosted_invoice_url,
     });
-    
-    // The invoice is sent automatically by Stripe.
 
-    return { success: true, invoiceId: invoice.id, invoiceUrl: invoice.hosted_invoice_url };
+    return { success: true, invoiceId: sentInvoice.id, invoiceUrl: sentInvoice.hosted_invoice_url };
   } catch (error: any) {
     console.error('Stripe invoice creation failed:', error);
     throw new Error(error.message || 'An internal error occurred with Stripe.');
