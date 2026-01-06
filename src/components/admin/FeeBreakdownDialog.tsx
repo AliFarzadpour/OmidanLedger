@@ -29,7 +29,7 @@ export function FeeBreakdownDialog({ isOpen, onOpenChange, result, billingPeriod
     userEmail,
     breakdown,
     totalRentCollected,
-    rawCalculatedFee,
+    rawMonthlyFee,
     finalMonthlyFee,
   } = result;
 
@@ -75,11 +75,11 @@ export function FeeBreakdownDialog({ isOpen, onOpenChange, result, billingPeriod
         <div className="space-y-4 pt-4 border-t">
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Total Rent Collected:</span>
-            <span className="font-medium">${totalRentCollected.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            <span className="font-medium">${(totalRentCollected || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Sum of Per-Unit Fees (Raw Fee):</span>
-            <span className="font-medium">${rawCalculatedFee.toFixed(2)}</span>
+            <span className="font-medium">${(rawMonthlyFee || 0).toFixed(2)}</span>
           </div>
            <div className="flex justify-between items-center text-sm">
             <span className="text-muted-foreground">Monthly Minimum:</span>
@@ -87,7 +87,7 @@ export function FeeBreakdownDialog({ isOpen, onOpenChange, result, billingPeriod
           </div>
           <div className="flex justify-between items-center font-bold text-lg border-t pt-4">
             <span>Final Monthly Fee:</span>
-            <span className="text-primary">${finalMonthlyFee.toFixed(2)}</span>
+            <span className="text-primary">${(finalMonthlyFee || 0).toFixed(2)}</span>
           </div>
         </div>
 
