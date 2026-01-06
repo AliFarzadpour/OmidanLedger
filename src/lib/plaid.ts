@@ -292,6 +292,27 @@ export async function enforceAccountingRules(
   return category; 
 }
 
+// HELPER: Commit batches safely in chunks of 400 (safe margin under 500)
+async function commitBatchChunks(db: FirebaseFirestore.Firestore, operations: any[]) {
+    const CHUNK_SIZE = 400;
+    for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+        const chunk = operations.slice(i, i + CHUNK_SIZE);
+        const batch = db.batch();
+        
+        chunk.forEach(op => {
+            if (op.type === 'set') {
+                batch.set(op.ref, op.data, op.options);
+            } else if (op.type === 'update') {
+                batch.update(op.ref, op.data);
+            } else if (op.type === 'delete') {
+                batch.delete(op.ref);
+            }
+        });
+        
+        await batch.commit();
+    }
+}
+
 
 const SyncTransactionsInputSchema = z.object({ userId: z.string(), bankAccountId: z.string() });
 
@@ -325,13 +346,19 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         const itemAccountDocs = itemAccountsSnap.docs;
         if (itemAccountDocs.length === 0) throw new Error("No accounts found for this Plaid Item ID.");
 
-        // 2. Determine the most recent cursor for the entire item
-        let cursor = itemAccountDocs.reduce((latestCursor, doc) => {
-            const docCursor = doc.data()?.plaidSyncCursor;
-            // A simple string comparison works for Plaid cursors
-            return docCursor > latestCursor ? docCursor : latestCursor;
-        }, data.plaidSyncCursor || undefined);
+        // 2. FIX: Safest Cursor Logic
+        const anyAccountMissingCursor = itemAccountDocs.some(doc => !doc.data().plaidSyncCursor);
         
+        let cursor: string | undefined = undefined;
+        
+        if (!anyAccountMissingCursor) {
+             cursor = itemAccountDocs.reduce((latestCursor, doc) => {
+                const docCursor = doc.data()?.plaidSyncCursor;
+                if (!latestCursor) return docCursor;
+                return (docCursor > latestCursor) ? docCursor : latestCursor;
+            }, data.plaidSyncCursor);
+        }
+
         const userContext = await fetchUserContext(db, userId);
 
         let allTransactions: PlaidTransaction[] = [];
@@ -363,8 +390,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             return { count: 0 };
         }
         
-        // 3. Process all fetched transactions
-        const processingBatch = db.batch();
+        const batchOperations: any[] = [];
 
         for (const originalTx of allTransactions) {
           if (originalTx.pending) continue; 
@@ -441,7 +467,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 reviewStatus: 'needs-review',
             };
 
-            processingBatch.set(docRef, txData, { merge: true });
+            batchOperations.push({ type: 'set', ref: docRef, data: txData, options: { merge: true } });
 
             if (txData.costCenter && !(txData.categoryHierarchy?.l1 || '').toLowerCase().includes('transfer')) { 
                 incrementPropertyStats({
@@ -456,29 +482,29 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
           }
         }
         
-        // Handle removals
         removedTransactions.forEach(rt => {
           if (rt.transaction_id) {
             const accountDoc = itemAccountDocs.find(d => d.id === rt.account_id);
             if(accountDoc) {
                 const docRef = accountDoc.ref.collection('transactions').doc(rt.transaction_id);
-                processingBatch.delete(docRef);
+                batchOperations.push({ type: 'delete', ref: docRef });
             }
           }
         });
         
-        await processingBatch.commit();
-        
-        // 4. Update cursor and timestamp on ALL related accounts
-        const updateCursorBatch = db.batch();
         itemAccountDocs.forEach(doc => {
-            updateCursorBatch.update(doc.ref, { 
-                plaidSyncCursor: cursor, 
-                historicalDataPending: false,
-                lastSyncedAt: FieldValue.serverTimestamp()
+            batchOperations.push({
+                type: 'update',
+                ref: doc.ref,
+                data: { 
+                    plaidSyncCursor: cursor, 
+                    historicalDataPending: false,
+                    lastSyncedAt: FieldValue.serverTimestamp()
+                }
             });
         });
-        await updateCursorBatch.commit();
+        
+        await commitBatchChunks(db, batchOperations);
 
         return { count: allTransactions.length };
 
