@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Landmark } from 'lucide-react';
+import Image from 'next/image';
 
 export function Logo({
   showIcon = true,
@@ -11,9 +11,14 @@ export function Logo({
   className?: string;
 }) {
   return (
-    <div className={cn('flex items-center gap-2', className)}>
-      {showIcon && <Landmark className="h-7 w-7 text-primary" />}
-      {showText && <span className="text-xl font-bold text-foreground">FiscalFlow</span>}
+    <div className={cn('flex items-center', className)}>
+      <Image
+        src="https://storage.googleapis.com/project-os-prod/images/56994a5e-01e9-45f0-b0aa-9a77f9038234.png"
+        alt="OmidanLedger logo"
+        width={180}
+        height={40}
+        priority
+      />
     </div>
   );
 }
