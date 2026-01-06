@@ -18,7 +18,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { updateUserBillingConfig } from '@/actions/admin-billing';
 import { Settings, Loader2 } from 'lucide-react';
-import { revalidatePath } from 'next/cache';
 
 export function UserBillingForm({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false);
