@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -50,7 +49,7 @@ function OnboardingStep({
             "flex items-center gap-4 p-4 rounded-lg transition-colors", 
             status === 'next' ? 'bg-blue-50 border border-blue-200' : 'bg-transparent',
             isClickable && status === 'next' ? 'cursor-pointer hover:bg-blue-100' : '',
-            status === 'upcoming' ? 'cursor-not-allowed' : ''
+            status === 'upcoming' ? 'cursor-not-allowed opacity-60' : ''
         )}
         onClick={onClick}
       >
