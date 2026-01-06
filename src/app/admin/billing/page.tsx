@@ -12,6 +12,7 @@ import { format, addMonths, subMonths } from 'date-fns';
 import { calculateAllFees, type FeeCalculationResult } from '@/actions/calculate-billing';
 import { Badge } from '@/components/ui/badge';
 import { FeeBreakdownDialog } from '@/components/admin/FeeBreakdownDialog';
+import { cn } from '@/lib/utils';
 
 export default function AdminBillingPage() {
   const [billingPeriod, setBillingPeriod] = useState(format(new Date(), 'yyyy-MM'));
@@ -104,7 +105,18 @@ export default function AdminBillingPage() {
                           results.map(res => (
                               <TableRow key={res.userId} onClick={() => setSelectedResult(res)} className="cursor-pointer hover:bg-muted/50">
                                   <TableCell className="font-medium">{res.userEmail}</TableCell>
-                                  <TableCell><Badge variant="outline" className="capitalize">{res.subscriptionTier}</Badge></TableCell>
+                                  <TableCell>
+                                    <Badge
+                                        variant="outline"
+                                        className={cn('capitalize', {
+                                            'bg-blue-100 text-blue-800 border-blue-200': res.subscriptionTier === 'pro',
+                                            'bg-purple-100 text-purple-800 border-purple-200': res.subscriptionTier === 'enterprise',
+                                            'bg-gray-100 text-gray-800 border-gray-200': res.subscriptionTier === 'free' || res.subscriptionTier === 'trialing',
+                                        })}
+                                    >
+                                        {res.subscriptionTier}
+                                    </Badge>
+                                  </TableCell>
                                   <TableCell>{res.activeUnits}</TableCell>
                                   <TableCell>${(res.totalRentCollected || 0).toLocaleString()}</TableCell>
                                   <TableCell>${(res.rawMonthlyFee || 0).toFixed(2)}</TableCell>
