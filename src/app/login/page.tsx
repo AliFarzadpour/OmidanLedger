@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -128,7 +129,7 @@ export default function LoginPage() {
                       <Input type="password" {...field} />
                     </FormControl>
                     <FormMessage />
-                    <p className="text-xs text-muted-foreground pt-1">We never share or sell your data.</p>
+                    <p className="text-xs text-slate-600 pt-1">We never share or sell your data.</p>
                   </FormItem>
                 )}
               />
@@ -146,8 +147,8 @@ export default function LoginPage() {
             </Link>
           </div>
            <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground pt-4">
-              <span className="flex items-center gap-1.5"><Lock className="h-3 w-3" /> Secure by Firebase</span>
-              <span className="flex items-center gap-1.5"><Banknote className="h-3 w-3" /> Bank connections via Plaid</span>
+              <span className="flex items-center gap-1.5"><Lock className="h-4 w-4" /> Secure by Firebase</span>
+              <span className="flex items-center gap-1.5"><Banknote className="h-4 w-4" /> Bank connections via Plaid</span>
             </div>
         </CardFooter>
       </Card>
