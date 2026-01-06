@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -7,7 +8,8 @@ import {
   PlaidApi, 
   Configuration, 
   PlaidEnvironments, 
-  Transaction as PlaidTransaction 
+  Transaction as PlaidTransaction,
+  RemovedTransaction
 } from 'plaid';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getApps, initializeApp } from 'firebase-admin/app';
@@ -322,6 +324,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         const userContext = await fetchUserContext(db, userId);
 
         let allTransactions: PlaidTransaction[] = [];
+        let removedTransactions: RemovedTransaction[] = [];
         let hasMore = true;
         let loopCount = 0;
 
@@ -332,7 +335,11 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
                 cursor: cursor,
                 count: 500,
             });
-            allTransactions = allTransactions.concat(response.data.added);
+            
+            // FIX: Process both added and modified transactions
+            allTransactions = allTransactions.concat(response.data.added, response.data.modified);
+            removedTransactions = removedTransactions.concat(response.data.removed);
+
             hasMore = response.data.has_more;
             cursor = response.data.next_cursor;
         }
@@ -341,13 +348,27 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
             return tx.account_id === bankAccountId && !tx.pending;
         });
 
-        if (relevantTransactions.length === 0) {
+        if (relevantTransactions.length === 0 && removedTransactions.length === 0) {
             await accountRef.update({ plaidSyncCursor: cursor, lastSyncedAt: FieldValue.serverTimestamp() });
             return { count: 0 };
         }
 
         const BATCH_SIZE = 10; 
         const batchPromises = [];
+
+        // Handle transaction removals
+        if (removedTransactions.length > 0) {
+          const removalBatch = db.batch();
+          removedTransactions.forEach(rt => {
+              if (rt.transaction_id) {
+                const docRef = db.collection('users').doc(userId)
+                  .collection('bankAccounts').doc(bankAccountId)
+                  .collection('transactions').doc(rt.transaction_id);
+                removalBatch.delete(docRef);
+              }
+          });
+          batchPromises.push(removalBatch.commit());
+        }
 
         for (let i = 0; i < relevantTransactions.length; i += BATCH_SIZE) {
             const chunk = relevantTransactions.slice(i, i + BATCH_SIZE);
