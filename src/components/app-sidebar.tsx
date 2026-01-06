@@ -29,10 +29,12 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarGroupContent,
+} from "@/components/ui/sidebar";
+import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-} from "@/components/ui/sidebar";
+} from "@/components/ui/tooltip";
 import { useUser, useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { isSuperAdmin } from "@/lib/auth-utils";
 import { Logo } from "@/components/logo";
