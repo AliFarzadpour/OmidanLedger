@@ -118,7 +118,7 @@ export function UserNav({ isMobile }: { isMobile: boolean }) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/dashboard/settings">
+          <Link href="/dashboard/billing">
             <CreditCard className="mr-2 h-4 w-4" />
             <div className="flex justify-between items-center w-full">
                 <span>Billing</span>

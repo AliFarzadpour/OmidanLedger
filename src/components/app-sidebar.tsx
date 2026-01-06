@@ -34,6 +34,7 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
+  TooltipProvider,
 } from "@/components/ui/tooltip";
 import { useUser, useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { isSuperAdmin } from "@/lib/auth-utils";
@@ -144,6 +145,12 @@ const data = {
       title: "Settings",
       url: "/dashboard/settings",
       icon: Settings,
+      advanced: false,
+    },
+     {
+      title: "My Billing",
+      url: "/dashboard/billing",
+      icon: CreditCard,
       advanced: false,
     },
   ]
