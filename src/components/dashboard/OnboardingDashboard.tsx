@@ -49,7 +49,7 @@ function OnboardingStep({
             "flex items-center gap-4 p-4 rounded-lg transition-colors", 
             status === 'next' ? 'bg-blue-50 border border-blue-200' : 'bg-transparent',
             isClickable && status === 'next' ? 'cursor-pointer hover:bg-blue-100' : '',
-            status === 'upcoming' ? 'cursor-not-allowed opacity-60' : ''
+            status === 'upcoming' ? 'cursor-not-allowed opacity-50' : 'opacity-90'
         )}
         onClick={onClick}
       >
@@ -142,7 +142,7 @@ export function OnboardingDashboard() {
               </CardContent>
             </Card>
 
-             <div className="pl-4">
+             <div className="pl-4 hidden">
                  <AddPropertyModal 
                     buttonContent={
                         <>
