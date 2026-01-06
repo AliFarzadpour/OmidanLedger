@@ -1,5 +1,6 @@
 
 import { z } from 'zod';
+import { CATEGORY_MAP } from '@/lib/categories';
 
 // This is the output schema for the entire deepCategorizeTransaction flow, not just the AI prompt.
 export const DeepCategorizationSchema = z.object({
@@ -26,24 +27,30 @@ export const AICategoryOutputSchema = z.object({
 
 
 export const DEEP_ANALYSIS_PROMPT = `
-You are a professional CPA. Categorize this transaction into a 4-level hierarchy based on IRS Schedule E.
+You are a professional CPA. Categorize this transaction into a 4-level hierarchy based on the provided JSON category map.
 
-LEVEL 0 (Account Type): Must be one of [Income, Expense, Asset, Liability, Equity].
-LEVEL 1 (Group): A logical grouping like [Rental Income, Property Operations, Travel, Personal, Financing].
-LEVEL 2 (Tax Line): MUST be a specific Schedule E Line [Line 5: Advertising, Line 6: Auto & Travel, Line 7: Cleaning and maintenance, Line 9: Insurance, Line 10: Legal and other professional fees, Line 11: Management fees, Line 12: Mortgage interest, Line 14: Repairs, Line 15: Supplies, Line 16: Taxes, Line 17: Utilities, Line 19: Other] or one of [Owner's Draw, Loan Paydown, Internal Transfer].
-LEVEL 3 (Detail): Cleaned merchant name (e.g., 'Amazon' or 'City of Laguna').
+**CATEGORY MAP (Source of Truth):**
+${JSON.stringify(CATEGORY_MAP, null, 2)}
 
-CRITICAL RULES:
-1. DO NOT use the words 'General', 'Miscellaneous', or 'Needs Review'. If you are unsure, you MUST default to 'Expense' > 'Property Operations' > 'Line 19: Other Expenses' > [Cleaned Merchant Name].
-2. Clothing/Personal Shopping (Macy's, TJ Maxx) is ALWAYS Equity > Personal > Owner's Draw > [Merchant Name].
-3. Grocery/Fast Food (Shake Shack, Kroger) defaults to Equity > Personal > Owner's Draw > [Merchant Name] unless 'Business' is in the description.
-4. Home Depot/Lowe's is ALWAYS Expense > Property Operations > Line 14: Repairs > Supplies.
-5. For credit card transactions, prioritize finding a business-related 'Expense' category before defaulting to 'Equity'.
+**Instructions & Rules:**
+1.  **Analyze**: Look at the transaction description, amount, and date.
+2.  **Select L0**: Choose the top-level category from the map: [INCOME, OPERATING EXPENSE, EXPENSE, ASSET, LIABILITY, EQUITY].
+3.  **Select L1**: Based on L0, choose the appropriate L1 group from the map.
+4.  **Select L2**: Based on L1, choose the most specific L2 tax line from the map (e.g., "Schedule E, Line 14 — Repairs").
+5.  **Determine L3**: This should be the cleaned-up merchant or vendor name (e.g., "The Home Depot", "City of Austin Utilities").
 
-Format JSON Output: { "l0": "...", "l1": "...", "l2": "...", "l3": "..." }
+**CRITICAL RULES (Non-negotiable):**
+1.  **Default for Ambiguity**: If unsure, you MUST default to 'OPERATING EXPENSE' > 'Property Operations (Rentals)' > 'Schedule E, Line 19 — Other'.
+2.  **Personal Spending**: General retail (Macy's, TJ Maxx), restaurants, and groceries are ALWAYS 'EQUITY' > 'Owner / Shareholder Equity' > 'Owner Distributions' unless 'Business' is explicitly in the description.
+3.  **Hardware Stores**: Home Depot, Lowe's, etc., are ALWAYS 'OPERATING EXPENSE' > 'Property Operations (Rentals)' > 'Schedule E, Line 14 — Repairs'.
+4.  **No New Categories**: You MUST select from the provided map. Do not invent new categories.
 
-TRANSACTION:
+**Format JSON Output:** { "l0": "...", "l1": "...", "l2": "...", "l3": "..." }
+
+---
+**TRANSACTION TO ANALYZE:**
 - Description: "{{description}}"
 - Amount: {{amount}}
 - Date: {{date}}
+---
 `;

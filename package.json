@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "db:seed": "tsc --project tsconfig.scripts.json && node dist/seedGlobalRules.js",
     "db:migrate-user-rules": "tsc --project tsconfig.scripts.json && node dist/migrate-account-data.js",
-    "db:migrate": "tsc --project tsconfig.scripts.json && node dist/migrate_transactions_schema_v2.js",
+    "db:migrate": "tsc --project tsconfig.scripts.json && node dist/normalize_l0_to_six_set.js",
     "db:analyze": "tsc --project tsconfig.scripts.json && node dist/analyze-categories.js"
   },
   "dependencies": {
@@ -65,7 +65,6 @@
     "@types/jspdf": "^2.0.0",
     "@types/marked": "^6.0.0",
     "@types/node": "^20",
-    "@types/papaparse": "^5.3.15",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "@types/uuid": "^9.0.8",

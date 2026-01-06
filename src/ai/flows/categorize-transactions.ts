@@ -11,7 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { MasterCategoryFramework } from './category-framework';
+import { CATEGORY_MAP } from '@/lib/categories';
 import { initializeServerFirebase } from '@/ai/utils';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -50,8 +50,8 @@ Your task is to analyze a single transaction description and classify it with ex
 **Context:**
 The business operates in the **{{{userTrade}}}** industry.
 
-**Master Category Framework:**
-${MasterCategoryFramework}
+**Master Category Framework (MUST use these exact strings):**
+${JSON.stringify(CATEGORY_MAP, null, 2)}
 
 **Transaction Description:**
 {{{transactionDescription}}}

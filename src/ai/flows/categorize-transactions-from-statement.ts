@@ -7,7 +7,7 @@ import {
   StatementInputSchema,
   StatementOutputSchema,
 } from './schemas';
-import { MasterCategoryFramework } from './category-framework';
+import { CATEGORY_MAP } from '@/lib/categories';
 import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
 
 // NOTE: We use Admin SDK syntax (db.collection) here
@@ -30,8 +30,8 @@ Use this context to infer the business purpose of ambiguous transactions.
 **User's Custom Rules (Source of Truth):**
 {{{userMappings}}}
 
-**Master Category Framework:**
-${MasterCategoryFramework}
+**Master Category Framework (MUST use these exact strings):**
+${JSON.stringify(CATEGORY_MAP, null, 2)}
   
 **Financial Statement File:**
 {{media url=statementDataUri}}
