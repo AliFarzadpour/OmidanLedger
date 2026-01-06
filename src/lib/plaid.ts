@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -339,7 +338,7 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         }
         
         const relevantTransactions = allTransactions.filter(tx => {
-            return tx.account_id === bankAccountId && tx.pending === false;
+            return tx.account_id === bankAccountId && !tx.pending;
         });
 
         if (relevantTransactions.length === 0) {
@@ -440,8 +439,9 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
 
                     batch.set(docRef, txData, { merge: true });
 
-                    // Increment stats only if a property is linked
-                    if (txData.costCenter) { // Use costCenter from the final data
+                    // Increment stats only if a property is linked AND the tx isn't an internal transfer
+                    const isTransfer = (txData.categoryHierarchy?.l1 || '').toLowerCase().includes('transfer');
+                    if (txData.costCenter && !isTransfer) { 
                         incrementPropertyStats({
                             propertyId: txData.costCenter,
                             date: txData.date,
@@ -575,3 +575,4 @@ const CreateLinkTokenInputSchema = z.object({
     }
   );
 
+    
