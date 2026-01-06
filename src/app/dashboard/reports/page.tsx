@@ -7,6 +7,12 @@ import { ArrowRight, BrainCircuit, BookUser, FileText, Building, Scale, ShieldAl
 export default function ReportsPage() {
   const reports = [
     {
+      title: 'Profit & Loss',
+      description: 'Review your income, expenses, and profitability over a period.',
+      href: '/dashboard/reports/profit-and-loss',
+      icon: FileText,
+    },
+    {
       title: 'Financial Audit',
       description: 'Scan all transactions for errors and inconsistencies.',
       href: '/dashboard/reports/audit',
@@ -23,12 +29,6 @@ export default function ReportsPage() {
       description: 'Ask questions and run analysis across your property portfolio.',
       href: '/dashboard/reports/property-ai-report',
       icon: Building,
-    },
-    {
-      title: 'Profit & Loss',
-      description: 'Review your income, expenses, and profitability over a period.',
-      href: '/dashboard/reports/profit-and-loss',
-      icon: FileText,
     },
     {
       title: 'General Ledger',
