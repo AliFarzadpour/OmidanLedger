@@ -13,6 +13,17 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
@@ -171,10 +182,8 @@ export function BusinessProfileForm() {
       });
   
       if (result.success && result.url) {
-        // FIX: Open in a new tab to bypass Firebase Studio's iframe restrictions
         window.open(result.url, '_blank', 'noopener,noreferrer');
         
-        // Optional: Reset spinner after a delay since the user is in a new tab
         setTimeout(() => setIsConnectingStripe(false), 2000);
       } else {
         throw new Error("Failed to get Stripe redirect URL.");
@@ -212,10 +221,38 @@ export function BusinessProfileForm() {
                         Your account is connected and ready to receive payments.
                     </div>
                 ) : (
-                    <Button type="button" onClick={handleStripeConnect} disabled={isConnectingStripe}>
-                        {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
-                        {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
-                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button type="button" disabled={isConnectingStripe}>
+                                {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+                                {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Stripe Processing Fees</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Omidan Ledger utilizes Stripe for secure invoicing and payment processing. Please be aware that payments made via the digital invoice link are subject to Stripe’s standard processing fees.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <div className="text-sm space-y-3 py-2">
+                                <div>
+                                    <h4 className="font-semibold">Credit/Debit Cards: ~2.9% + 30¢ per transaction.</h4>
+                                    <p className="text-xs text-muted-foreground">Example ($1,000 Invoice): You pay ~$33.00 in fees.</p>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold">Bank Transfers (ACH): 0.8% (capped at $5.00).</h4>
+                                    <p className="text-xs text-muted-foreground">Example ($1,000 Invoice): You pay only $5.00 in fees (because of the cap).</p>
+                                </div>
+                            </div>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleStripeConnect}>
+                                    Agree & Continue
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 )}
                  {stripeStatus === 'incomplete' && <p className="text-sm text-destructive mt-2">Your Stripe account setup is incomplete. Please re-connect to finish.</p>}
             </ClientOnly>
