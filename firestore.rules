@@ -54,7 +54,11 @@ service cloud.firestore {
         }
 
         match /admin_invoices/{invoiceId} {
-            allow read, write, delete: if isOwner(userId);
+            allow read, list, write, delete: if isOwner(userId);
+        }
+
+        match /charges/{chargeId} {
+            allow read, list, write, delete: if isOwner(userId);
         }
     }
     
