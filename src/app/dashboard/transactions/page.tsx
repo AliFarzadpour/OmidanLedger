@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -45,7 +46,7 @@ export default function TransactionsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   
   // State to track sync status for the auto-sync feature
-  const [autoSyncingId, setAutoSyncingId] = useState<string | null>(null);
+  const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
 
 
   // New state for auto-sync toggle
@@ -86,24 +87,31 @@ export default function TransactionsPage() {
 
   const { data: dataSources, isLoading: isLoadingDataSources, refetch: refetchDataSources } = useCollection<DataSource>(bankAccountsQuery);
   
-  // --- AUTO-SYNC LOGIC ---
+  // --- AUTO-SYNC LOGIC (FIXED) ---
   useEffect(() => {
-    if (dataSources && dataSources.length > 0 && autoSyncEnabled) {
+    if (dataSources && dataSources.length > 0 && autoSyncEnabled && user) {
       dataSources.forEach(source => {
-        if (source.plaidAccessToken) { // Only sync Plaid accounts
-          const now = new Date();
-          const lastSyncedDate = source.lastSyncedAt 
-            ? (source.lastSyncedAt as any).toDate ? (source.lastSyncedAt as any).toDate() : new Date((source.lastSyncedAt as any).seconds * 1000)
-            : new Date(0); // If never synced, set a very old date
+        // Skip if Plaid account, already syncing, or recently synced
+        if (!source.plaidAccessToken || syncingIds.has(source.id)) {
+            return;
+        }
 
-          const hoursSinceLastSync = differenceInHours(now, lastSyncedDate);
+        const now = new Date();
+        const lastSyncedDate = source.lastSyncedAt 
+          ? (source.lastSyncedAt as any).toDate ? (source.lastSyncedAt as any).toDate() : new Date((source.lastSyncedAt as any).seconds * 1000)
+          : new Date(0); // If never synced, use a very old date
 
-          if (hoursSinceLastSync > 12) {
+        const hoursSinceLastSync = differenceInHours(now, lastSyncedDate);
+
+        if (hoursSinceLastSync > 12) {
             console.log(`Auto-syncing account ${source.id} as it's been ${hoursSinceLastSync} hours.`);
-            setAutoSyncingId(source.id); // Set syncing status for UI feedback
+            
+            // Add to syncing set to prevent re-triggering
+            setSyncingIds(prev => new Set(prev).add(source.id));
+            
             toast({ title: `Auto-Syncing ${source.accountName}`, description: 'Fetching latest transactions...' });
             
-            syncAndCategorizePlaidTransactions({ userId: user!.uid, bankAccountId: source.id })
+            syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: source.id })
               .then(() => {
                 toast({ title: `Sync Complete for ${source.accountName}` });
                 refetchDataSources(); // Refetch to get the new `lastSyncedAt` timestamp
@@ -112,13 +120,17 @@ export default function TransactionsPage() {
                 toast({ variant: "destructive", title: `Sync Failed for ${source.accountName}`, description: error.message });
               })
               .finally(() => {
-                setAutoSyncingId(null); // Clear syncing status
+                // Remove from syncing set when done
+                setSyncingIds(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(source.id);
+                    return newSet;
+                });
               });
-          }
         }
       });
     }
-  }, [dataSources, autoSyncEnabled, user, toast, refetchDataSources]);
+  }, [dataSources, autoSyncEnabled, user, toast, refetchDataSources, syncingIds]); // Add syncingIds to dependencies
 
 
   const allTransactionsQuery = useMemoFirebase(() => {
@@ -251,7 +263,7 @@ export default function TransactionsPage() {
         onSelect={handleSelectDataSource}
         onDelete={handleDeleteRequest}
         selectedDataSourceId={selectedDataSource?.id}
-        autoSyncingId={autoSyncingId}
+        autoSyncingId={Array.from(syncingIds)[0]}
       />
       
       {selectedDataSource ? (
