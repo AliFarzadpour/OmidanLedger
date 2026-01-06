@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,18 +6,22 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, PlayCircle, ChevronLeft, ChevronRight, Send } from 'lucide-react';
 import { format, addMonths, subMonths } from 'date-fns';
 import { calculateAllFees, type FeeCalculationResult } from '@/actions/calculate-billing';
 import { Badge } from '@/components/ui/badge';
 import { FeeBreakdownDialog } from '@/components/admin/FeeBreakdownDialog';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import { sendLandlordInvoice } from '@/actions/admin-billing';
 
 export default function AdminBillingPage() {
   const [billingPeriod, setBillingPeriod] = useState(format(new Date(), 'yyyy-MM'));
   const [results, setResults] = useState<FeeCalculationResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedResult, setSelectedResult] = useState<FeeCalculationResult | null>(null);
+  const [sendingInvoiceId, setSendingInvoiceId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const handleRunReport = async () => {
     setIsLoading(true);
@@ -40,6 +43,38 @@ export default function AdminBillingPage() {
     const currentDate = new Date(billingPeriod + '-02'); // Use day 2 to avoid timezone issues
     const newDate = direction === 'next' ? addMonths(currentDate, 1) : subMonths(currentDate, 1);
     setBillingPeriod(format(newDate, 'yyyy-MM'));
+  };
+
+  const handleSendInvoice = async (landlord: FeeCalculationResult) => {
+    if (landlord.finalMonthlyFee <= 0) {
+        toast({
+            variant: 'destructive',
+            title: 'Cannot Send Invoice',
+            description: 'A bill cannot be sent for a $0.00 amount.',
+        });
+        return;
+    }
+    setSendingInvoiceId(landlord.userId);
+    try {
+        const result = await sendLandlordInvoice({
+            userId: landlord.userId,
+            userEmail: landlord.userEmail,
+            amount: landlord.finalMonthlyFee,
+            billingPeriod: format(new Date(billingPeriod + '-02'), 'MMMM yyyy'),
+        });
+        toast({
+            title: 'Invoice Sent!',
+            description: `An invoice for $${landlord.finalMonthlyFee.toFixed(2)} was sent to ${landlord.userEmail}.`,
+        });
+    } catch (error: any) {
+        toast({
+            variant: 'destructive',
+            title: 'Invoice Failed',
+            description: error.message,
+        });
+    } finally {
+        setSendingInvoiceId(null);
+    }
   };
 
   const totalRevenue = results.reduce((sum, result) => sum + (result.finalMonthlyFee || 0), 0);
@@ -93,19 +128,20 @@ export default function AdminBillingPage() {
                           <TableHead>Active Units</TableHead>
                           <TableHead>Total Rent Collected</TableHead>
                           <TableHead>Raw Calculated Fee</TableHead>
-                          <TableHead className="text-right">Final Monthly Fee</TableHead>
+                          <TableHead>Final Fee</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                   </TableHeader>
                   <TableBody>
                       {isLoading ? (
-                          <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="animate-spin h-6 w-6" /></TableCell></TableRow>
+                          <TableRow><TableCell colSpan={7} className="h-24 text-center"><Loader2 className="animate-spin h-6 w-6 mx-auto" /></TableCell></TableRow>
                       ) : results.length === 0 ? (
-                          <TableRow><TableCell colSpan={6} className="h-24 text-center">No landlords found.</TableCell></TableRow>
+                          <TableRow><TableCell colSpan={7} className="h-24 text-center">No landlords found.</TableCell></TableRow>
                       ) : (
                           results.map(res => (
-                              <TableRow key={res.userId} onClick={() => setSelectedResult(res)} className="cursor-pointer hover:bg-muted/50">
-                                  <TableCell className="font-medium">{res.userEmail}</TableCell>
-                                  <TableCell>
+                              <TableRow key={res.userId} className="hover:bg-muted/50">
+                                  <TableCell onClick={() => setSelectedResult(res)} className="font-medium cursor-pointer">{res.userEmail}</TableCell>
+                                  <TableCell onClick={() => setSelectedResult(res)} className="cursor-pointer">
                                     <Badge
                                         variant="outline"
                                         className={cn('capitalize', {
@@ -117,10 +153,25 @@ export default function AdminBillingPage() {
                                         {res.subscriptionTier}
                                     </Badge>
                                   </TableCell>
-                                  <TableCell>{res.activeUnits}</TableCell>
-                                  <TableCell>${(res.totalRentCollected || 0).toLocaleString()}</TableCell>
-                                  <TableCell>${(res.rawMonthlyFee || 0).toFixed(2)}</TableCell>
-                                  <TableCell className="text-right font-bold text-primary">${(res.finalMonthlyFee || 0).toFixed(2)}</TableCell>
+                                  <TableCell onClick={() => setSelectedResult(res)} className="cursor-pointer">{res.activeUnits}</TableCell>
+                                  <TableCell onClick={() => setSelectedResult(res)} className="cursor-pointer">${(res.totalRentCollected || 0).toLocaleString()}</TableCell>
+                                  <TableCell onClick={() => setSelectedResult(res)} className="cursor-pointer">${(res.rawMonthlyFee || 0).toFixed(2)}</TableCell>
+                                  <TableCell onClick={() => setSelectedResult(res)} className="cursor-pointer font-bold text-primary">${(res.finalMonthlyFee || 0).toFixed(2)}</TableCell>
+                                  <TableCell className="text-right">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleSendInvoice(res)}
+                                      disabled={sendingInvoiceId === res.userId || res.finalMonthlyFee <= 0}
+                                    >
+                                      {sendingInvoiceId === res.userId ? (
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Send className="mr-2 h-4 w-4" />
+                                      )}
+                                      Send Invoice
+                                    </Button>
+                                  </TableCell>
                               </TableRow>
                           ))
                       )}
