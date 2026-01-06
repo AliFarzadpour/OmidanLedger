@@ -87,7 +87,7 @@ const toNum = (v: any): number => {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (typeof v === "string") {
-    const cleaned = v.replace(/[^0-9.-]/g, ""); // strips $ and commas safely
+    const cleaned = v.replace(/[^0-9.-]/g, "", ""); // strips $ and commas safely
     const n = parseFloat(cleaned);
     return Number.isFinite(n) ? n : 0;
   }
