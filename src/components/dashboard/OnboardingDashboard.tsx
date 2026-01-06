@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
@@ -7,16 +8,21 @@ import { Home, Users, Banknote, PieChart, Plus, DollarSign, Receipt, FileText, L
 import { AddPropertyModal } from './sales/AddPropertyModal';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // Updated Checklist Item to be a numbered step
 function OnboardingStep({ 
   children, 
   stepNumber, 
-  status 
+  status,
+  isClickable,
+  onClick
 }: { 
   children: React.ReactNode, 
   stepNumber: number, 
-  status: 'next' | 'upcoming' | 'complete' 
+  status: 'next' | 'upcoming' | 'complete',
+  isClickable?: boolean,
+  onClick?: () => void
 }) {
     const statusConfig = {
         next: {
@@ -38,19 +44,44 @@ function OnboardingStep({
 
     const currentStatus = statusConfig[status];
 
-    return (
-        <div className={cn("flex items-center gap-4 p-4 rounded-lg transition-colors", status === 'next' ? 'bg-blue-50 border border-blue-200' : 'bg-transparent')}>
-            <div className={cn("flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold text-lg", currentStatus.bgColor, currentStatus.textColor)}>
-                {stepNumber}
-            </div>
-            <div className="flex-1">
-                <span className={cn("font-semibold", status === 'upcoming' ? 'text-slate-400' : 'text-slate-800')}>
-                    {children}
-                </span>
-            </div>
-            {status === 'next' && <span className="text-xs font-semibold text-primary uppercase tracking-wider">{currentStatus.label}</span>}
-        </div>
+    const stepContent = (
+      <div 
+        className={cn(
+            "flex items-center gap-4 p-4 rounded-lg transition-colors", 
+            status === 'next' ? 'bg-blue-50 border border-blue-200' : 'bg-transparent',
+            isClickable && status === 'next' ? 'cursor-pointer hover:bg-blue-100' : '',
+            status === 'upcoming' ? 'cursor-not-allowed' : ''
+        )}
+        onClick={onClick}
+      >
+          <div className={cn("flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold text-lg", currentStatus.bgColor, currentStatus.textColor)}>
+              {stepNumber}
+          </div>
+          <div className="flex-1">
+              <span className={cn("font-semibold", status === 'upcoming' ? 'text-slate-400' : 'text-slate-800')}>
+                  {children}
+              </span>
+          </div>
+          {status === 'next' && <span className="text-xs font-semibold text-primary uppercase tracking-wider">{currentStatus.label}</span>}
+      </div>
     );
+    
+    if (status === 'upcoming') {
+        return (
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <div>{stepContent}</div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Complete Step 1 first</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+        );
+    }
+
+    return stepContent;
 }
 
 export function OnboardingDashboard() {
@@ -63,6 +94,13 @@ export function OnboardingDashboard() {
     { text: 'Connect a bank account (optional)', href: '/dashboard/transactions', icon: Banknote, status: 'upcoming' as const },
     { text: 'Review your first report', href: '/dashboard/reports', icon: PieChart, status: 'upcoming' as const },
   ];
+  
+  const openAddPropertyModal = () => {
+      // This is a bit of a trick. The modal is controlled by the AddPropertyModal component itself.
+      // We find its trigger button and click it programmatically.
+      const trigger = document.getElementById('add-property-modal-trigger');
+      trigger?.click();
+  };
 
   return (
     <div className="p-8 max-w-4xl mx-auto bg-gradient-to-b from-slate-50 to-white min-h-full">
@@ -92,7 +130,13 @@ export function OnboardingDashboard() {
               </CardHeader>
               <CardContent className="space-y-2">
                 {onboardingSteps.map((item, index) => (
-                  <OnboardingStep key={index} stepNumber={index + 1} status={item.status}>
+                  <OnboardingStep 
+                    key={index} 
+                    stepNumber={index + 1} 
+                    status={item.status}
+                    isClickable={index === 0}
+                    onClick={index === 0 ? openAddPropertyModal : undefined}
+                  >
                       {item.text}
                   </OnboardingStep>
                 ))}
@@ -100,17 +144,20 @@ export function OnboardingDashboard() {
             </Card>
 
              <div className="pl-4">
-                 <AddPropertyModal buttonContent={
-                    <>
-                        <Plus className="mr-2 h-4 w-4" /> Add your first property
-                    </>
-                 } />
+                 <AddPropertyModal 
+                    buttonContent={
+                        <>
+                            <Plus className="mr-2 h-4 w-4" /> Add your first property
+                        </>
+                    }
+                    triggerId="add-property-modal-trigger" // Add an ID to the trigger
+                 />
             </div>
         </div>
 
         {/* Right Column: Preview */}
         <div className="space-y-8 md:pt-16">
-            <Card className="border-dashed">
+            <Card className="border-dashed border-slate-300">
                 <CardHeader>
                     <CardTitle>What You’ll See Here</CardTitle>
                     <CardDescription>

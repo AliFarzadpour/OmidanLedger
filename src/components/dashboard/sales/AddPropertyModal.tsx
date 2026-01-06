@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -15,9 +16,10 @@ import { Plus } from 'lucide-react';
 interface AddPropertyModalProps {
   onSuccess?: () => void;
   buttonContent?: React.ReactNode;
+  triggerId?: string;
 }
 
-export function AddPropertyModal({ onSuccess, buttonContent }: AddPropertyModalProps) {
+export function AddPropertyModal({ onSuccess, buttonContent, triggerId }: AddPropertyModalProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSuccess = () => {
@@ -30,7 +32,7 @@ export function AddPropertyModal({ onSuccess, buttonContent }: AddPropertyModalP
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700 h-12 px-6 text-base shadow-lg hover:shadow-xl transition-shadow">
+        <Button id={triggerId} className="bg-blue-600 hover:bg-blue-700 h-12 px-6 text-base shadow-lg hover:shadow-xl transition-shadow">
           {buttonContent || <><Plus className="mr-2 h-4 w-4" /> Add New Property</>}
         </Button>
       </DialogTrigger>
