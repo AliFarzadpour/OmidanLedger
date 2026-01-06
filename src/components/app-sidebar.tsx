@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useUser } from "@/firebase";
 import { isSuperAdmin } from "@/lib/auth-utils";
+import { Logo } from "../logo";
 
 const data = {
   // Zone 1: The "Physical" World (Real Estate)
@@ -135,11 +136,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar variant="inset" className="border-r bg-white" {...props}>
-      <SidebarHeader className="h-16 flex items-center px-6 border-b bg-white mb-2">
-        <div className="flex items-center gap-2 font-bold text-xl text-slate-900">
-          <Landmark className="h-6 w-6 text-blue-600" />
-          <span>FiscalFlow</span>
-        </div>
+      <SidebarHeader className="h-16 flex items-center px-4 border-b bg-white mb-2">
+        <Logo />
       </SidebarHeader>
 
       <SidebarContent className="bg-slate-50/50 px-2">
