@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { type FeeCalculationResult } from '@/actions/calculate-billing';
 import { format } from 'date-fns';
+import { AlertCircle } from 'lucide-react';
 
 interface FeeBreakdownDialogProps {
   isOpen: boolean;
@@ -63,8 +64,8 @@ export function FeeBreakdownDialog({ isOpen, onOpenChange, result, billingPeriod
                 breakdown.map(item => (
                   <TableRow key={item.spaceId}>
                     <TableCell className="font-medium">{item.spaceName}</TableCell>
-                    <TableCell className="text-right">${item.collectedRent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">${item.fee.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">${(item.collectedRent || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right">${(item.fee || 0).toFixed(2)}</TableCell>
                   </TableRow>
                 ))
               )}
@@ -89,6 +90,13 @@ export function FeeBreakdownDialog({ isOpen, onOpenChange, result, billingPeriod
             <span>Final Monthly Fee:</span>
             <span className="text-primary">${(finalMonthlyFee || 0).toFixed(2)}</span>
           </div>
+
+           <div className="flex items-start gap-3 text-xs text-muted-foreground bg-slate-50 p-3 rounded-md">
+                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                <p>
+                    The <strong>Raw Calculated Fee</strong> is the sum of individual fees for each unit (0.75% of rent, capped at $30 per unit). The <strong>Final Monthly Fee</strong> is the greater of the Raw Fee or the $29.00 monthly minimum.
+                </p>
+            </div>
         </div>
 
         <DialogFooter>
