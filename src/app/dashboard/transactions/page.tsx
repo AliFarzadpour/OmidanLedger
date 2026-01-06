@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -17,6 +16,8 @@ import type { Transaction } from '@/components/dashboard/transactions-table';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
+import { differenceInHours } from 'date-fns';
 
 // Define the shape of a data source for type safety
 interface DataSource {
@@ -25,6 +26,8 @@ interface DataSource {
   bankName: string;
   accountType: 'checking' | 'savings' | 'credit-card' | 'cash';
   accountNumber?: string;
+  plaidAccessToken?: string;
+  lastSyncedAt?: { seconds: number; nanoseconds: number } | Date;
 }
 
 export default function TransactionsPage() {
@@ -40,6 +43,10 @@ export default function TransactionsPage() {
   const [isDeleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [deletingDataSource, setDeletingDataSource] = useState<DataSource | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  
+  // State to track sync status for the auto-sync feature
+  const [autoSyncingId, setAutoSyncingId] = useState<string | null>(null);
+
 
   // New state for auto-sync toggle
   const userDocRef = useMemoFirebase(() => user ? doc(firestore, `users/${user.uid}`) : null, [user, firestore]);
@@ -77,8 +84,43 @@ export default function TransactionsPage() {
     return collection(firestore, `users/${user.uid}/bankAccounts`);
   }, [firestore, user]);
 
-  const { data: dataSources, isLoading: isLoadingDataSources } = useCollection<DataSource>(bankAccountsQuery);
+  const { data: dataSources, isLoading: isLoadingDataSources, refetch: refetchDataSources } = useCollection<DataSource>(bankAccountsQuery);
   
+  // --- AUTO-SYNC LOGIC ---
+  useEffect(() => {
+    if (dataSources && dataSources.length > 0 && autoSyncEnabled) {
+      dataSources.forEach(source => {
+        if (source.plaidAccessToken) { // Only sync Plaid accounts
+          const now = new Date();
+          const lastSyncedDate = source.lastSyncedAt 
+            ? (source.lastSyncedAt as any).toDate ? (source.lastSyncedAt as any).toDate() : new Date((source.lastSyncedAt as any).seconds * 1000)
+            : new Date(0); // If never synced, set a very old date
+
+          const hoursSinceLastSync = differenceInHours(now, lastSyncedDate);
+
+          if (hoursSinceLastSync > 12) {
+            console.log(`Auto-syncing account ${source.id} as it's been ${hoursSinceLastSync} hours.`);
+            setAutoSyncingId(source.id); // Set syncing status for UI feedback
+            toast({ title: `Auto-Syncing ${source.accountName}`, description: 'Fetching latest transactions...' });
+            
+            syncAndCategorizePlaidTransactions({ userId: user!.uid, bankAccountId: source.id })
+              .then(() => {
+                toast({ title: `Sync Complete for ${source.accountName}` });
+                refetchDataSources(); // Refetch to get the new `lastSyncedAt` timestamp
+              })
+              .catch(error => {
+                toast({ variant: "destructive", title: `Sync Failed for ${source.accountName}`, description: error.message });
+              })
+              .finally(() => {
+                setAutoSyncingId(null); // Clear syncing status
+              });
+          }
+        }
+      });
+    }
+  }, [dataSources, autoSyncEnabled, user, toast, refetchDataSources]);
+
+
   const allTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
@@ -209,6 +251,7 @@ export default function TransactionsPage() {
         onSelect={handleSelectDataSource}
         onDelete={handleDeleteRequest}
         selectedDataSourceId={selectedDataSource?.id}
+        autoSyncingId={autoSyncingId}
       />
       
       {selectedDataSource ? (

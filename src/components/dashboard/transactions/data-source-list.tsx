@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -9,7 +8,7 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag } from 'lucide-react';
+import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +31,7 @@ interface DataSourceListProps {
   onDelete: (dataSource: DataSource) => void;
   selectedDataSourceId?: string | null;
   flagCounts: Record<string, { needsReview: number; incorrect: number }>;
+  autoSyncingId?: string | null;
 }
 
 const typeIcons = {
@@ -50,7 +50,8 @@ export function DataSourceList({
     onSelect, 
     onDelete, 
     selectedDataSourceId,
-    flagCounts
+    flagCounts,
+    autoSyncingId
 }: DataSourceListProps) {
 
   const handleDeleteClick = (e: React.MouseEvent, source: DataSource) => {
@@ -89,6 +90,7 @@ export function DataSourceList({
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {dataSources.map((source) => {
         const counts = flagCounts[source.id] || { needsReview: 0, incorrect: 0 };
+        const isAutoSyncing = autoSyncingId === source.id;
         return (
             <div key={source.id} className="relative group">
             <Card 
@@ -115,7 +117,11 @@ export function DataSourceList({
                 </CardContent>
                 <CardFooter className="p-3 pt-2 flex items-center justify-between">
                     <div>
-                        {source.historicalDataPending ? (
+                        {isAutoSyncing ? (
+                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
+                              <Loader2 className="mr-1 h-3 w-3 animate-spin"/> Syncing...
+                          </Badge>
+                        ) : source.historicalDataPending ? (
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">
                                 <span className="animate-pulse mr-1">⏳</span> Syncing...
                             </Badge>
