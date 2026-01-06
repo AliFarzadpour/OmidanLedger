@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useUser } from "@/firebase";
 import { isSuperAdmin } from "@/lib/auth-utils";
-import { Logo } from "../logo";
+import { Logo } from "@/components/logo";
 
 const data = {
   // Zone 1: The "Physical" World (Real Estate)
