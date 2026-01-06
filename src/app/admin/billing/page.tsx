@@ -34,7 +34,7 @@ export default function AdminBillingPage() {
     handleRunReport();
   }, []);
 
-  const totalRevenue = results.reduce((sum, result) => sum + result.finalMonthlyFee, 0);
+  const totalRevenue = results.reduce((sum, result) => sum + (result.finalMonthlyFee || 0), 0);
 
   return (
     <div className="p-8 space-y-6">
@@ -98,9 +98,9 @@ export default function AdminBillingPage() {
                                 <TableCell className="font-medium">{res.userEmail}</TableCell>
                                 <TableCell><Badge variant="outline" className="capitalize">{res.subscriptionTier}</Badge></TableCell>
                                 <TableCell>{res.activeUnits}</TableCell>
-                                <TableCell>${res.totalRentCollected.toLocaleString()}</TableCell>
-                                <TableCell>${res.rawMonthlyFee.toFixed(2)}</TableCell>
-                                <TableCell className="text-right font-bold text-primary">${res.finalMonthlyFee.toFixed(2)}</TableCell>
+                                <TableCell>${(res.totalRentCollected || 0).toLocaleString()}</TableCell>
+                                <TableCell>${(res.rawCalculatedFee || 0).toFixed(2)}</TableCell>
+                                <TableCell className="text-right font-bold text-primary">${(res.finalMonthlyFee || 0).toFixed(2)}</TableCell>
                             </TableRow>
                         ))
                     )}
