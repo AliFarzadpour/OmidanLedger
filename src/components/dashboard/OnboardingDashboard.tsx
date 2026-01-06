@@ -6,16 +6,49 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Home, Users, Banknote, PieChart, Plus, DollarSign, Receipt, FileText, Lock } from 'lucide-react';
 import { AddPropertyModal } from './sales/AddPropertyModal';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
-function ChecklistItem({ children, isCompleted = false, icon: Icon }: { children: React.ReactNode, isCompleted?: boolean, icon: React.ElementType }) {
+// Updated Checklist Item to be a numbered step
+function OnboardingStep({ 
+  children, 
+  stepNumber, 
+  status 
+}: { 
+  children: React.ReactNode, 
+  stepNumber: number, 
+  status: 'next' | 'upcoming' | 'complete' 
+}) {
+    const statusConfig = {
+        next: {
+            bgColor: 'bg-primary',
+            textColor: 'text-primary-foreground',
+            label: 'Next step',
+        },
+        upcoming: {
+            bgColor: 'bg-slate-200',
+            textColor: 'text-slate-500',
+            label: '',
+        },
+        complete: {
+            bgColor: 'bg-green-500',
+            textColor: 'text-white',
+            label: 'Completed',
+        }
+    };
+
+    const currentStatus = statusConfig[status];
+
     return (
-        <div className="flex items-center gap-4 p-3 rounded-lg hover:bg-slate-100 transition-colors">
-            <div className={`p-2 rounded-full ${isCompleted ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-                <Icon className="h-5 w-5" />
+        <div className={cn("flex items-center gap-4 p-4 rounded-lg transition-colors", status === 'next' ? 'bg-blue-50 border border-blue-200' : 'bg-transparent')}>
+            <div className={cn("flex-shrink-0 h-8 w-8 rounded-full flex items-center justify-center font-bold text-lg", currentStatus.bgColor, currentStatus.textColor)}>
+                {stepNumber}
             </div>
-            <span className={`text-slate-700 font-medium ${isCompleted ? 'line-through text-slate-400' : ''}`}>
-                {children}
-            </span>
+            <div className="flex-1">
+                <span className={cn("font-semibold", status === 'upcoming' ? 'text-slate-400' : 'text-slate-800')}>
+                    {children}
+                </span>
+            </div>
+            {status === 'next' && <span className="text-xs font-semibold text-primary uppercase tracking-wider">{currentStatus.label}</span>}
         </div>
     );
 }
@@ -23,11 +56,12 @@ function ChecklistItem({ children, isCompleted = false, icon: Icon }: { children
 export function OnboardingDashboard() {
   const router = useRouter();
 
-  const checklistItems = [
-    { text: 'Add your first property', href: '/dashboard/properties', icon: Home, isCompleted: false },
-    { text: 'Add units or tenants', href: '/dashboard/properties', icon: Users, isCompleted: false },
-    { text: 'Connect a bank account (optional)', href: '/dashboard/transactions', icon: Banknote, isCompleted: false },
-    { text: 'Review your first report', href: '/dashboard/reports', icon: PieChart, isCompleted: false },
+  // Based on your logic, the user is always on step 1 when this screen shows.
+  const onboardingSteps = [
+    { text: 'Add your first property', href: '/dashboard/properties', icon: Home, status: 'next' as const },
+    { text: 'Add units or tenants', href: '/dashboard/properties', icon: Users, status: 'upcoming' as const },
+    { text: 'Connect a bank account (optional)', href: '/dashboard/transactions', icon: Banknote, status: 'upcoming' as const },
+    { text: 'Review your first report', href: '/dashboard/reports', icon: PieChart, status: 'upcoming' as const },
   ];
 
   return (
@@ -46,33 +80,36 @@ export function OnboardingDashboard() {
       </div>
 
       <div className="grid md:grid-cols-2 gap-10 items-start">
-        {/* Left Column: Checklist */}
-        <Card className="bg-white/80 shadow-sm border-slate-200">
-          <CardHeader>
-            <CardTitle>Get set up in minutes</CardTitle>
-            <CardDescription>0 of 4 completed</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {checklistItems.map((item, index) => (
-              <Link href={item.href} key={index}>
-                  <ChecklistItem icon={item.icon} isCompleted={item.isCompleted}>
+        {/* Left Column: Checklist and CTA */}
+        <div className="space-y-6">
+            <Card className="bg-white/80 shadow-sm border-slate-200">
+              <CardHeader>
+                <CardTitle>Get set up in minutes</CardTitle>
+                <CardDescription>
+                    0 of 4 completed. 
+                    <span className="text-slate-400"> Most landlords finish setup in under 5 minutes.</span>
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {onboardingSteps.map((item, index) => (
+                  <OnboardingStep key={index} stepNumber={index + 1} status={item.status}>
                       {item.text}
-                  </ChecklistItem>
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+                  </OnboardingStep>
+                ))}
+              </CardContent>
+            </Card>
 
-        {/* Right Column: CTA and Preview */}
-        <div className="space-y-8">
-            <div className="text-center md:text-left">
+             <div className="pl-4">
                  <AddPropertyModal buttonContent={
                     <>
                         <Plus className="mr-2 h-4 w-4" /> Add your first property
                     </>
                  } />
             </div>
+        </div>
 
+        {/* Right Column: Preview */}
+        <div className="space-y-8 md:pt-16">
             <Card className="border-dashed">
                 <CardHeader>
                     <CardTitle>What You’ll See Here</CardTitle>
