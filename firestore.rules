@@ -52,6 +52,10 @@ service cloud.firestore {
         match /categoryMappings/{mappingId} {
             allow read, write, delete: if isOwner(userId);
         }
+
+        match /admin_invoices/{invoiceId} {
+            allow read, write, delete: if isOwner(userId);
+        }
     }
     
     match /properties/{propertyId} {
