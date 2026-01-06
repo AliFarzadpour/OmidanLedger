@@ -55,14 +55,12 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
         continue;
     }
     
-    // --- NORMALIZATION & DEBUGGING ---
     const pctRaw = userBillingConfig.transactionFeePercent ?? DEFAULT_PCT;
-    // If someone stored "0.75" meaning 0.75%, convert to 0.0075.
     const pct = Number(pctRaw) > 0.2 ? Number(pctRaw) / 100 : Number(pctRaw);
     const unitCap = Number(userBillingConfig.unitCap ?? DEFAULT_UNIT_CAP);
     const minFee = Number(userBillingConfig.minFee ?? DEFAULT_MIN_FEE);
-    
-    const transactionsSnap = await db.collectionGroup('transactions')
+
+    const rentTransactionsSnap = await db.collectionGroup('transactions')
       .where('userId', '==', landlord.id)
       .where('date', '>=', startDate)
       .where('date', '<=', endDate)
@@ -70,7 +68,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
       .where('categoryHierarchy.l1', '==', 'Rental Income')
       .get();
     
-    const rentTransactions = transactionsSnap.docs.map(doc => doc.data());
+    const rentTransactions = rentTransactionsSnap.docs.map(doc => doc.data());
     
     const rentBySpace = new Map<string, { name: string; collectedRent: number }>();
     const propertiesSnap = await db.collection('properties').where('userId', '==', landlord.id).get();
@@ -81,25 +79,38 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
 
         if (property.isMultiUnit || property.type === 'multi-family' || property.type === 'commercial' || property.type === 'office') {
             const unitsSnap = await propDoc.ref.collection('units').get();
+            let matchedAnyUnit = false;
             if (!unitsSnap.empty) {
                 unitsSnap.docs.forEach(unitDoc => {
                     const unitId = unitDoc.id;
                     const unitData = unitDoc.data();
                     
                     const unitRent = rentTransactions
-                        .filter(tx => tx.costCenter === unitId)
+                        .filter(tx => tx.unitId === unitId || tx.costCenter === unitId)
                         .reduce((sum, tx) => sum + tx.amount, 0);
 
                     if (unitRent > 0) {
+                        matchedAnyUnit = true;
                         const current = rentBySpace.get(unitId) || { name: `${property.name} #${unitData.unitNumber}`, collectedRent: 0 };
                         current.collectedRent += unitRent;
                         rentBySpace.set(unitId, current);
                     }
                 });
             }
+
+            if (!matchedAnyUnit) {
+                const propertyRent = rentTransactions
+                  .filter((tx: any) => tx.propertyId === propertyId || tx.costCenter === propertyId)
+                  .reduce((sum: number, tx: any) => sum + Number(tx.amount ?? 0), 0);
+          
+                if (propertyRent > 0) {
+                  rentBySpace.set(propertyId, { name: property.name, collectedRent: propertyRent });
+                }
+            }
+
         } else { 
             const propertyRent = rentTransactions
-                .filter(tx => tx.costCenter === propertyId)
+                .filter(tx => tx.costCenter === propertyId || tx.propertyId === propertyId)
                 .reduce((sum, tx) => sum + tx.amount, 0);
             
             if (propertyRent > 0) {
@@ -112,7 +123,7 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
     
     let unassignedRent = 0;
     rentTransactions.forEach(tx => {
-        if (!tx.costCenter) {
+        if (!tx.costCenter && !tx.unitId && !tx.propertyId) {
             unassignedRent += tx.amount;
         }
     });
@@ -144,9 +155,8 @@ export async function calculateAllFees({ billingPeriod }: { billingPeriod: strin
     for (const [spaceId, spaceData] of rentBySpace.entries()) {
       totalRentCollected += spaceData.collectedRent;
       
-      // Corrected Fee Calculation Logic
       const percentageBasedFee = spaceData.collectedRent * pct;
-      const spaceFee = Math.min(percentageBasedFee, unitCap);
+      const spaceFee = percentageBasedFee > unitCap ? unitCap : percentageBasedFee;
       
       rawCalculatedFee += spaceFee; 
 

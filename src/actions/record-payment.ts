@@ -8,15 +8,15 @@ import { incrementPropertyStats } from './update-property-stats';
 export async function recordManualPayment({
   tenantId,
   propertyId,
-  unitId, // <-- ADDED
+  unitId,
   landlordId,
   amount,
-  method, // 'Zelle', 'Cash', 'Check', etc.
+  method,
   date
 }: {
   tenantId: string;
   propertyId: string;
-  unitId?: string; // <-- ADDED
+  unitId?: string;
   landlordId: string;
   amount: number;
   method: string;
@@ -39,21 +39,30 @@ export async function recordManualPayment({
       .collection('bankAccounts').doc(destinationAccountId)
       .collection('transactions').doc();
 
-    batch.set(txRef, {
-      amount: amount,
-      description: `Rent payment via ${method}`,
-      date: date,
-      primaryCategory: "Income",
-      secondaryCategory: "Rental Income",
-      subcategory: "Residential Rent",
-      status: 'posted',
-      propertyId: propertyId,
-      unitId: unitId, // <-- ADDED
-      tenantId: tenantId, // Crucial for the Tenant History view
-      userId: landlordId,
-      bankAccountId: destinationAccountId,
-      createdAt: FieldValue.serverTimestamp()
-    });
+    const txData: any = {
+        amount: amount,
+        description: `Rent payment via ${method}`,
+        date: date,
+        categoryHierarchy: {
+            l0: 'INCOME',
+            l1: 'Rental Income',
+            l2: 'Line 3: Rents Received'
+        },
+        status: 'posted',
+        propertyId: propertyId,
+        tenantId: tenantId, 
+        userId: landlordId,
+        bankAccountId: destinationAccountId,
+        createdAt: FieldValue.serverTimestamp(),
+        costCenter: unitId || propertyId
+    };
+
+    if (unitId) {
+        txData.unitId = unitId;
+    }
+
+    batch.set(txRef, txData);
+
 
     // 2. Deduct from Tenant Balance
     const tenantRef = db.collection('users').doc(tenantId);

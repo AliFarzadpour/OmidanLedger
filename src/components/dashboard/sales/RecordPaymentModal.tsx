@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -57,7 +58,7 @@ export function RecordPaymentModal({
       });
       toast({
         title: 'Payment Recorded',
-        description: 'Tenant balance and property stats updated.',
+        description: 'Ledger and tenant balance updated.',
       });
       setIsOpen(false);
       if (onSuccess) onSuccess();
