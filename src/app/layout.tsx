@@ -6,7 +6,7 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 
 export const metadata: Metadata = {
-  title: 'FiscalFlow',
+  title: 'OmidanLedger',
   description: 'Your modern solution for financial management.',
 };
 
