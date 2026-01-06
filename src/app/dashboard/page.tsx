@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useUser, useFirestore } from '@/firebase';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
 import {
   collection,
   getDocs,
@@ -24,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { OnboardingDashboard } from '@/components/dashboard/OnboardingDashboard';
 
 type FilterOption = 'this-month' | 'last-month' | 'this-year';
 
@@ -128,6 +130,13 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
 
+  // Fetch properties to determine if we should show the onboarding or main dashboard
+  const propertiesQuery = useMemoFirebase(() => {
+    if (!firestore || !user) return null;
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  }, [firestore, user]);
+  const { data: properties, isLoading: isLoadingProperties } = useCollection(propertiesQuery);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -147,11 +156,9 @@ export default function DashboardPage() {
         }));
 
         // 2) For each bank account, load transactions
-        // Optional: you can constrain to this date range if your "date" field is ISO string YYYY-MM-DD
         const txPromises = bankAccounts.map(async (acct) => {
           const txRef = collection(firestore, `users/${user.uid}/bankAccounts/${acct.id}/transactions`);
 
-          // If your date strings are consistent YYYY-MM-DD, this range query works
           const txQ = query(
             txRef,
             where('date', '>=', startDate),
@@ -177,19 +184,27 @@ export default function DashboardPage() {
 
         if (!cancelled) {
           setAllTransactions(merged);
-          setIsLoading(false);
         }
       } catch (e: any) {
         if (!cancelled) {
           setError(e);
+        }
+      } finally {
+        if (!cancelled) {
           setIsLoading(false);
         }
       }
     }
 
-    load();
+    // Only load transactions if there are properties
+    if (properties && properties.length > 0) {
+        load();
+    } else if (!isLoadingProperties) {
+        setIsLoading(false);
+    }
+    
     return () => { cancelled = true; };
-  }, [user, firestore, startDate, endDate]);
+  }, [user, firestore, startDate, endDate, properties, isLoadingProperties]);
 
   const stats = useMemo(() => {
     const filtered = allTransactions;
@@ -264,6 +279,26 @@ export default function DashboardPage() {
     { label: 'Last Month', value: 'last-month' },
     { label: 'This Year', value: 'this-year' },
   ];
+
+  if (isLoadingProperties) {
+    return (
+      <div className="p-8">
+        <Skeleton className="h-8 w-1/3 mb-4" />
+        <Skeleton className="h-4 w-1/2" />
+        <div className="grid gap-4 md:grid-cols-4 mt-8">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // Conditional Rendering Logic
+  if (!properties || properties.length === 0) {
+    return <OnboardingDashboard />;
+  }
 
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
