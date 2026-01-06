@@ -82,7 +82,7 @@ const data = {
       title: "Onboarding",
       url: "/dashboard/onboarding/opening-balances",
       icon: BookOpenCheck,
-      advanced: false,
+      advanced: true,
     },
     {
       title: "Invoices & Billing",
