@@ -3,7 +3,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
-import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
+import { collectionGroup, query, where, getDocs, collection } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2, Users, TrendingUp, AlertTriangle } from 'lucide-react';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
