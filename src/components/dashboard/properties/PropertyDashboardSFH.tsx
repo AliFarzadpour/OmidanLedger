@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -262,57 +261,45 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const { user } = useUser();
   const firestore = useFirestore();
-  const [monthlyTxs, setMonthlyTxs] = useState<any[]>([]);
-  const [loadingTxs, setLoadingTxs] = useState(true);
   const [interestForMonth, setInterestForMonth] = useState(0);
+
+  // NEW: Fetch pre-calculated monthly stats
+  const monthKey = format(new Date(), 'yyyy-MM');
+  const monthlyStatsRef = useMemoFirebase(() => {
+    if (!firestore || !property?.id) return null;
+    return doc(firestore, `properties/${property.id}/monthlyStats/${monthKey}`);
+  }, [firestore, property, monthKey]);
+  const { data: monthlyStats, isLoading: loadingTxs } = useDoc(monthlyStatsRef);
 
   useEffect(() => {
     if (!user || !property?.id) return;
     
-    const fetchMonthlyData = async () => {
-        setLoadingTxs(true);
-        const today = new Date();
-        const start = startOfMonth(today);
-        const end = endOfMonth(today);
-
-        const txsQuery = query(
-            collectionGroup(firestore, 'transactions'),
-            where('userId', '==', user.uid),
-            where('date', '>=', format(start, 'yyyy-MM-dd')),
-            where('date', '<=', format(end, 'yyyy-MM-dd')),
-            where('costCenter', '==', property.id)
-        );
-
-        const txsSnapshot = await getDocs(txsQuery);
-        const txs = txsSnapshot.docs.map(doc => doc.data());
-        setMonthlyTxs(txs);
-        setLoadingTxs(false);
-
-        // Calculate interest for cash flow
-        if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
-            const result = await calculateAmortization({
-                principal: property.mortgage.originalLoanAmount,
-                annualRate: property.mortgage.interestRate,
-                principalAndInterest: property.mortgage.principalAndInterest,
-                loanStartDate: property.mortgage.purchaseDate,
-                loanTermInYears: property.mortgage.loanTerm,
-                targetDate: new Date().toISOString(),
-            });
-            if (result.success) {
-                setInterestForMonth(result.interestPaidForMonth || 0);
-            }
-        }
+    // Calculate interest for cash flow
+    const calculateInterest = async () => {
+      if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
+          const result = await calculateAmortization({
+              principal: property.mortgage.originalLoanAmount,
+              annualRate: property.mortgage.interestRate,
+              principalAndInterest: property.mortgage.principalAndInterest,
+              loanStartDate: property.mortgage.purchaseDate,
+              loanTermInYears: property.mortgage.loanTerm,
+              targetDate: new Date().toISOString(),
+          });
+          if (result.success) {
+              setInterestForMonth(result.interestPaidForMonth || 0);
+          }
+      }
     };
-    fetchMonthlyData();
-  }, [user, property, firestore]);
+    calculateInterest();
+  }, [user, property]);
 
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent } = useMemo(() => {
     if (!property) {
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0 };
     }
 
-    const income = monthlyTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
-    const expenses = monthlyTxs.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const income = monthlyStats?.income || 0;
+    const expenses = Math.abs(monthlyStats?.expenses || 0);
     const noi = income - expenses;
 
     const debtPayment = (property.mortgage?.principalAndInterest || 0);
@@ -335,7 +322,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       rentalIncome: income, 
       potentialRent: potentialRentValue
     };
-  }, [monthlyTxs, property, interestForMonth]);
+  }, [monthlyStats, property, interestForMonth]);
 
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
@@ -364,6 +351,24 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const currentRent = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
   const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
   
+  const getDscrBadge = (ratio: number) => {
+    if (ratio >= 1.25) return <Badge variant="default" className="bg-green-600">Healthy</Badge>;
+    if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-500">Watch</Badge>;
+    return <Badge variant="destructive">Risk</Badge>;
+  }
+
+  const getAiInsight = () => {
+    if (loadingTxs) return "Analyzing property performance...";
+    if (cashFlow > 0 && economicOccupancy < 80) return "This property generates positive cash flow but has elevated non-payment risk.";
+    if (dscr > 1.5 && property.tenants?.length === 1) return "Debt coverage is strong, but rent concentration is high with a single tenant.";
+    if (economicOccupancy < 90 && potentialRent > 0) {
+        const improvement = potentialRent * 0.10;
+        return `Improving collection rate by 10% would increase cash flow by ~${formatCurrency(improvement)}/month.`
+    }
+    if (cashFlow < 0 && noi > 0) return "The property is profitable (NOI > 0) but cash flow is negative due to high debt service.";
+    return "Property financials appear stable for the current period.";
+  }
+
   const header = (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-4">
@@ -398,12 +403,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </div>
   );
 
-  const getDscrBadge = (ratio: number) => {
-    if (ratio >= 1.25) return <Badge variant="default" className="bg-green-600">Healthy</Badge>;
-    if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-500">Watch</Badge>;
-    return <Badge variant="destructive">Risk</Badge>;
-  }
-
   return (
     <>
       <div className="space-y-6 p-6">
@@ -413,11 +412,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         <div className="grid grid-cols-4 gap-4">
             <TooltipProvider>
                 <Tooltip><TooltipTrigger asChild><div>
-                    <StatCard title="NOI (Monthly)" value={noi} icon={<Building/>} isLoading={loadingTxs} />
+                    <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} />
                 </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
-                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<Wallet/>} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
+                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
                 </div></TooltipTrigger><TooltipContent><p>NOI minus total debt payment. The cash left in your pocket.</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
@@ -428,17 +427,24 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
                 
                 <Tooltip><TooltipTrigger asChild><div>
-                    <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<TrendingUp/>} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} />
+                    <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} />
                 </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
             </TooltipProvider>
         </div>
 
+        {/* --- AI Insight --- */}
+         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center gap-3">
+             <Bot className="h-5 w-5 text-slate-500 shrink-0" />
+             <p className="text-sm text-slate-600">{getAiInsight()}</p>
+         </div>
+
+
         {/* --- Operational KPIs --- */}
         <div className="grid grid-cols-4 gap-4">
-            <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark/>} isLoading={loadingTxs} />
-            <StatCard title="Current Rent" value={currentRent} icon={<FileText/>} isLoading={loadingTxs} />
+            <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+            <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
-             <StatCard title="Break-Even Rent" value={breakEvenRent} icon={<AlertTriangle/>} isLoading={loadingTxs} description={`Surplus: ${formatCurrency(currentRent - breakEvenRent)}`} />
+             <StatCard title="Break-Even Rent" value={breakEvenRent} icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`Surplus: ${formatCurrency(currentRent - breakEvenRent)}`} />
         </div>
 
         <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
