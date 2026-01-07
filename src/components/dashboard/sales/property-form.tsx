@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
@@ -442,16 +442,22 @@ export function PropertyForm({
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Type</Label>
-                    <Select onValueChange={(v:any)=>form.setValue('type',v)} value={form.watch('type')}>
-                    <SelectTrigger><SelectValue/></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="single-family">Single Family</SelectItem>
-                        <SelectItem value="multi-family">Multi-Family</SelectItem>
-                        <SelectItem value="condo">Condo</SelectItem>
-                        <SelectItem value="commercial">Commercial</SelectItem>
-                        <SelectItem value="office">Office</SelectItem>
-                    </SelectContent>
-                    </Select>
+                    <Controller
+                        name="type"
+                        control={form.control}
+                        render={({ field }) => (
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="single-family">Single Family</SelectItem>
+                                    <SelectItem value="multi-family">Multi-Family</SelectItem>
+                                    <SelectItem value="condo">Condo</SelectItem>
+                                    <SelectItem value="commercial">Commercial</SelectItem>
+                                    <SelectItem value="office">Office</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        )}
+                    />
                 </div>
               </div>
               <div className="grid gap-2">
@@ -503,13 +509,19 @@ export function PropertyForm({
                                         <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...form.register(`tenants.${originalIndex}.deposit`, { valueAsNumber: true })} /></div>
                                     </div>
                                   <div className="space-y-1"><Label className="text-xs">Status</Label>
-                                    <Select onValueChange={(val: any) => form.setValue(`tenants.${originalIndex}.status`, val)} value={form.watch(`tenants.${originalIndex}.status`)}>
-                                        <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="active">Active</SelectItem>
-                                            <SelectItem value="past">Past</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Controller
+                                        name={`tenants.${originalIndex}.status`}
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger className="bg-white"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="active">Active</SelectItem>
+                                                    <SelectItem value="past">Past</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
                                   </div>
                                 </div>
                             );
@@ -534,13 +546,19 @@ export function PropertyForm({
                                         <p className="font-medium">{form.watch(`tenants.${originalIndex}.firstName`)} {form.watch(`tenants.${originalIndex}.lastName`)}</p>
                                         <p className="text-xs text-muted-foreground">{form.watch(`tenants.${originalIndex}.email`)}</p>
                                     </div>
-                                    <Select onValueChange={(val: any) => form.setValue(`tenants.${originalIndex}.status`, val)} value={form.watch(`tenants.${originalIndex}.status`)}>
-                                        <SelectTrigger className="bg-white h-8 w-[100px]"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="active">Active</SelectItem>
-                                            <SelectItem value="past">Past</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Controller
+                                        name={`tenants.${originalIndex}.status`}
+                                        control={form.control}
+                                        render={({ field }) => (
+                                            <Select onValueChange={field.onChange} value={field.value}>
+                                                <SelectTrigger className="bg-white h-8 w-[100px]"><SelectValue /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="active">Active</SelectItem>
+                                                    <SelectItem value="past">Past</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    />
                                 </div>
                              )
                            })}
@@ -569,10 +587,16 @@ export function PropertyForm({
             <CardContent className="space-y-6">
                <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                   <Label>Management Style</Label>
-                  <RadioGroup defaultValue="self" onValueChange={(val: any) => form.setValue('management.isManaged', val)} className="flex gap-4">
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="self" id="self" /><Label htmlFor="self">Self-Managed</Label></div>
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="professional" id="pro" /><Label htmlFor="pro">Professional</Label></div>
-                  </RadioGroup>
+                  <Controller
+                      name="management.isManaged"
+                      control={form.control}
+                      render={({ field }) => (
+                          <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="self" id="self" /><Label htmlFor="self">Self-Managed</Label></div>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="professional" id="pro" /><Label htmlFor="pro">Professional</Label></div>
+                          </RadioGroup>
+                      )}
+                    />
                </div>
                {form.watch('management.isManaged') === 'professional' && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
@@ -592,7 +616,18 @@ export function PropertyForm({
                     <div className="p-4 bg-slate-50 border rounded-lg">
                        <Label className="mb-2 block font-semibold text-slate-700">Fee Structure</Label>
                        <div className="grid grid-cols-12 gap-4 mb-3">
-                          <div className="col-span-4"><Label className="text-xs">Monthly Fee</Label><Select onValueChange={(val:any) => form.setValue('management.feeType', val)} defaultValue="percent"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="percent">% of Rent</SelectItem><SelectItem value="flat">Flat Fee</SelectItem></SelectContent></Select></div>
+                          <div className="col-span-4"><Label className="text-xs">Monthly Fee</Label>
+                            <Controller
+                                name="management.feeType"
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger><SelectValue /></SelectTrigger>
+                                        <SelectContent><SelectItem value="percent">% of Rent</SelectItem><SelectItem value="flat">Flat Fee</SelectItem></SelectContent>
+                                    </Select>
+                                )}
+                            />
+                          </div>
                           <div className="col-span-8"><Label className="text-xs">Value</Label><Input type="number" placeholder="10" {...form.register('management.feeValue')} /></div>
                        </div>
                        <div className="grid grid-cols-2 gap-4">
@@ -616,14 +651,16 @@ export function PropertyForm({
               </div>
               <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
                 <Label>Is there a mortgage?</Label>
-                <RadioGroup 
-                    value={form.watch('mortgage.hasMortgage')} 
-                    onValueChange={(val: any) => form.setValue('mortgage.hasMortgage', val)} 
-                    className="flex gap-4"
-                >
-                  <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
-                  <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
-                </RadioGroup>
+                <Controller
+                    name="mortgage.hasMortgage"
+                    control={form.control}
+                    render={({ field }) => (
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
+                        </RadioGroup>
+                    )}
+                />
               </div>
               {form.watch('mortgage.hasMortgage') === 'yes' && (
                 <>
@@ -693,13 +730,19 @@ export function PropertyForm({
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Method</Label>
-                        <Select onValueChange={(val:any)=>form.setValue('depreciation.method',val)} value={form.watch('depreciation.method')}>
-                            <SelectTrigger><SelectValue/></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="SL">Straight-Line (SL)</SelectItem>
-                                <SelectItem value="MACRS">MACRS</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <Controller
+                            name="depreciation.method"
+                            control={form.control}
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="SL">Straight-Line (SL)</SelectItem>
+                                        <SelectItem value="MACRS">MACRS</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        />
                     </div>
                     <div className="space-y-2"><Label>Useful Life (Years)</Label><Input type="number" step="0.5" {...form.register('depreciation.usefulLife')} /></div>
                 </div>
@@ -753,20 +796,37 @@ export function PropertyForm({
             <CardContent className="space-y-4">
                <div className="flex items-center space-x-4 mb-4">
                   <Label>Is there an HOA?</Label>
-                  <RadioGroup defaultValue="no" onValueChange={(val: any) => form.setValue('hoa.hasHoa', val)} className="flex gap-4">
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
-                  </RadioGroup>
+                  <Controller
+                    name="hoa.hasHoa"
+                    control={form.control}
+                    render={({ field }) => (
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
+                            <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
+                        </RadioGroup>
+                    )}
+                  />
                 </div>
                 {form.watch('hoa.hasHoa') === 'yes' && (
                   <>
                     <div className="grid grid-cols-2 gap-4">
                        <div className="grid gap-2"><Label>Fee Amount</Label><Input type="number" {...form.register('hoa.fee')} /></div>
                        <div className="grid gap-2"><Label>Frequency</Label>
-                          <Select onValueChange={(val: any) => form.setValue('hoa.frequency', val)} defaultValue="monthly">
-                            <SelectTrigger><SelectValue /></SelectTrigger>
-                            <SelectContent><SelectItem value="monthly">Monthly</SelectItem><SelectItem value="quarterly">Quarterly</SelectItem><SelectItem value="semi-annually">Semi-Annually</SelectItem><SelectItem value="annually">Annually</SelectItem></SelectContent>
-                          </Select>
+                          <Controller
+                            name="hoa.frequency"
+                            control={form.control}
+                            render={({ field }) => (
+                                <Select onValueChange={field.onChange} value={field.value}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="monthly">Monthly</SelectItem>
+                                        <SelectItem value="quarterly">Quarterly</SelectItem>
+                                        <SelectItem value="semi-annually">Semi-Annually</SelectItem>
+                                        <SelectItem value="annually">Annually</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            )}
+                          />
                        </div>
                     </div>
                     <Separator />
@@ -791,7 +851,21 @@ export function PropertyForm({
                    {utilityFields.fields.map((field, index) => (
                      <TableRow key={field.id}>
                        <TableCell className="font-medium">{form.getValues(`utilities.${index}.type`)}</TableCell>
-                       <TableCell><Select onValueChange={(val:any) => form.setValue(`utilities.${index}.responsibility`, val)} defaultValue={field.responsibility}><SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="tenant">Tenant Pays</SelectItem><SelectItem value="landlord">Landlord Pays</SelectItem></SelectContent></Select></TableCell>
+                       <TableCell>
+                           <Controller
+                                name={`utilities.${index}.responsibility`}
+                                control={form.control}
+                                render={({ field }) => (
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <SelectTrigger className="h-8 w-[130px]"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="tenant">Tenant Pays</SelectItem>
+                                            <SelectItem value="landlord">Landlord Pays</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            />
+                       </TableCell>
                        <TableCell><Input className="h-8" placeholder="Provider" {...form.register(`utilities.${index}.providerName`)} /></TableCell>
                        <TableCell><Input className="h-8" placeholder="Phone/Acct" {...form.register(`utilities.${index}.providerContact`)} /></TableCell>
                      </TableRow>
