@@ -1,7 +1,7 @@
+
 'use server';
 
 import { db } from '@/lib/admin-db';
-import { collectionGroup, getDocs, query, where } from 'firebase-admin/firestore';
 import { calculateAmortization } from './amortization-actions';
 
 interface ReportParams {
@@ -17,7 +17,7 @@ export async function getScheduleESummary({ userId, startDate, endDate, property
     
     const summary: Record<string, { total: number }> = {};
 
-    transactions.forEach(tx => {
+    transactions.forEach((tx: any) => {
         const l0 = tx.categoryHierarchy?.l0?.toUpperCase() || '';
         if (l0 !== 'INCOME' && l0 !== 'EXPENSE' && l0 !== 'OPERATING EXPENSE') {
             return; // Skip non-operational transactions
@@ -39,12 +39,12 @@ export async function getScheduleESummary({ userId, startDate, endDate, property
 
 // --- 2. DEPRECIATION SCHEDULE ---
 export async function getDepreciationSchedule({ userId, propertyId }: ReportParams) {
-    let q = query(collectionGroup(db, 'properties'), where('userId', '==', userId));
+    let q: FirebaseFirestore.Query = db.collection('properties').where('userId', '==', userId);
     if (propertyId && propertyId !== 'all') {
-        q = query(q, where('id', '==', propertyId));
+        q = q.where('id', '==', propertyId);
     }
     
-    const snap = await getDocs(q);
+    const snap = await q.get();
     const properties = snap.docs.map(doc => doc.data());
 
     return properties.map(p => {
@@ -65,13 +65,13 @@ export async function getDepreciationSchedule({ userId, propertyId }: ReportPara
 export async function getMortgageInterestSummary({ userId, startDate, endDate, propertyId }: ReportParams) {
      const transactions = await getFilteredTransactions(userId, startDate, endDate, propertyId);
 
-    const interestPayments = transactions.filter(tx => 
+    const interestPayments = transactions.filter((tx: any) => 
         tx.categoryHierarchy?.l2?.toLowerCase().includes('mortgage interest')
     );
 
     const summary: Record<string, { lender: string; total: number }> = {};
 
-    interestPayments.forEach(tx => {
+    interestPayments.forEach((tx: any) => {
         const propertyName = tx.costCenter || 'Unknown Property';
          if (!summary[propertyName]) {
             summary[propertyName] = { lender: 'Unknown Lender', total: 0 };
@@ -91,14 +91,14 @@ export async function getGeneralLedger({ userId, startDate, endDate, propertyId 
     const transactions = await getFilteredTransactions(userId, startDate, endDate, propertyId);
     
     return transactions
-      .filter(tx => !tx.categoryHierarchy?.l1?.toLowerCase().includes('transfer'))
-      .map(tx => ({
+      .filter((tx: any) => !tx.categoryHierarchy?.l1?.toLowerCase().includes('transfer'))
+      .map((tx: any) => ({
         date: tx.date,
         description: tx.description,
         category: `${tx.categoryHierarchy?.l1 || ''} > ${tx.categoryHierarchy?.l2 || ''}`,
         amount: tx.amount,
       }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
 // --- 5. EQUITY ROLL-FORWARD ---
@@ -106,16 +106,16 @@ export async function getEquityRollForward({ userId, startDate, endDate, propert
     const transactions = await getFilteredTransactions(userId, startDate, endDate, propertyId);
 
     const contributions = transactions
-        .filter(tx => tx.categoryHierarchy?.l1?.toLowerCase().includes('owner contributions'))
-        .reduce((sum, tx) => sum + tx.amount, 0);
+        .filter((tx: any) => tx.categoryHierarchy?.l1?.toLowerCase().includes('owner contributions'))
+        .reduce((sum: any, tx: any) => sum + tx.amount, 0);
 
     const distributions = transactions
-        .filter(tx => tx.categoryHierarchy?.l1?.toLowerCase().includes('owner distributions'))
-        .reduce((sum, tx) => sum + tx.amount, 0);
+        .filter((tx: any) => tx.categoryHierarchy?.l1?.toLowerCase().includes('owner distributions'))
+        .reduce((sum: any, tx: any) => sum + tx.amount, 0);
     
     // For net income, we need all income and expenses
-    const income = transactions.filter(tx => tx.categoryHierarchy?.l0 === 'Income').reduce((sum, tx) => sum + tx.amount, 0);
-    const expense = transactions.filter(tx => tx.categoryHierarchy?.l0?.includes('Expense')).reduce((sum, tx) => sum + tx.amount, 0);
+    const income = transactions.filter((tx: any) => tx.categoryHierarchy?.l0 === 'Income').reduce((sum: any, tx: any) => sum + tx.amount, 0);
+    const expense = transactions.filter((tx: any) => tx.categoryHierarchy?.l0?.includes('Expense')).reduce((sum: any, tx: any) => sum + tx.amount, 0);
     const netIncome = income + expense;
 
     return [
@@ -130,17 +130,15 @@ export async function getEquityRollForward({ userId, startDate, endDate, propert
 
 // --- HELPER FUNCTION ---
 async function getFilteredTransactions(userId: string, startDate: string, endDate: string, propertyId?: string) {
-    let txQuery = query(
-        collectionGroup(db, 'transactions'),
-        where('userId', '==', userId),
-        where('date', '>=', startDate),
-        where('date', '<=', endDate)
-    );
+    let txQuery: FirebaseFirestore.Query = db.collectionGroup('transactions')
+        .where('userId', '==', userId)
+        .where('date', '>=', startDate)
+        .where('date', '<=', endDate);
 
     if (propertyId && propertyId !== 'all') {
-        txQuery = query(txQuery, where('costCenter', '==', propertyId));
+        txQuery = txQuery.where('costCenter', '==', propertyId);
     }
 
-    const snap = await getDocs(txQuery);
+    const snap = await txQuery.get();
     return snap.docs.map(doc => doc.data() as any);
 }
