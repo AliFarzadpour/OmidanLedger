@@ -1,3 +1,4 @@
+
 'use client';
 
 import {
@@ -137,12 +138,6 @@ export function DataSourceList({
   }
 
   return (
-    <>
-    <div className="flex justify-end mb-2 -mt-4">
-        <Button variant="ghost" size="sm" onClick={onRefreshBalances} className="text-xs text-muted-foreground gap-2">
-            <RefreshCw className="h-3 w-3" /> Refresh Bank Balances
-        </Button>
-    </div>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {dataSources.map((source) => {
         const counts = flagCounts[source.id] || { needsReview: 0, incorrect: 0 };
@@ -252,6 +247,5 @@ export function DataSourceList({
         )
       })}
     </div>
-    </>
   );
 }
