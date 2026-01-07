@@ -2,11 +2,11 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, collectionGroup, format, getDoc } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle, Users } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle, Users, BadgeHelp } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
@@ -35,7 +35,7 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO, format } from 'date-fns';
+import { isPast, parseISO } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -265,10 +265,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const [interestForMonth, setInterestForMonth] = useState(0);
 
   // NEW: Fetch pre-calculated monthly stats
-  const monthKey = format(new Date(), 'yyyy-MM');
+  const monthKey = '2024-07'; // This should be dynamic based on user selection in a real app
   const monthlyStatsRef = useMemoFirebase(() => {
     if (!firestore || !property?.id) return null;
-    return doc(firestore, `properties/${property.id}/monthlyStats/${monthKey}`);
+    // Corrected path to the monthlyStats subcollection
+    return doc(firestore, 'properties', property.id, 'monthlyStats', monthKey);
   }, [firestore, property, monthKey]);
   const { data: monthlyStats, isLoading: loadingTxs } = useDoc(monthlyStatsRef);
 
@@ -294,9 +295,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     calculateInterest();
   }, [user, property]);
 
-  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent } = useMemo(() => {
+  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
-      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0 };
+      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
     }
 
     const income = monthlyStats?.income || 0;
@@ -314,6 +315,20 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     
     const breakEvenRentValue = expenses + totalDebt;
     
+    let verdictLabel = "Stable";
+    let verdictColor = "bg-blue-100 text-blue-800";
+
+    if (cashFlowValue > 100 && dscrValue > 1.25) {
+        verdictLabel = "Healthy Cash Flow";
+        verdictColor = "bg-green-100 text-green-800";
+    } else if (cashFlowValue < 0) {
+        verdictLabel = "Underperforming";
+        verdictColor = "bg-red-100 text-red-800";
+    } else if (dscrValue < 1.25 && debtPayment > 0) {
+        verdictLabel = "High Debt Ratio";
+        verdictColor = "bg-amber-100 text-amber-800";
+    }
+
     return { 
       noi: noiValue, 
       cashFlow: cashFlowValue, 
@@ -321,21 +336,19 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       economicOccupancy: economicOccupancyValue, 
       breakEvenRent: breakEvenRentValue, 
       rentalIncome: income, 
-      potentialRent: potentialRentValue
+      potentialRent: potentialRentValue,
+      verdict: { label: verdictLabel, color: verdictColor },
     };
   }, [monthlyStats, property, interestForMonth]);
   
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
-    if (cashFlow > 0 && economicOccupancy < 80) return "This property generates positive cash flow but has elevated non-payment risk.";
-    if (dscr > 1.5 && property?.tenants?.length === 1) return "Debt coverage is strong, but rent concentration is high with a single tenant.";
-    if (economicOccupancy < 90 && potentialRent > 0) {
-        const improvement = potentialRent * 0.10;
-        return `Improving collection rate by 10% would increase cash flow by ~${formatCurrency(improvement)}/month.`
-    }
-    if (cashFlow < 0 && noi > 0) return "The property is profitable (NOI > 0) but cash flow is negative due to high debt service.";
-    return "Property financials appear stable for the current period.";
-  }, [loadingTxs, cashFlow, economicOccupancy, dscr, property, potentialRent, noi]);
+    if (cashFlow > 0 && economicOccupancy < 80 && economicOccupancy > 0) return `Insight: This property is cash-flowing, but collections are low. Improving the collection rate to 95% could increase monthly cash flow by approximately ${formatCurrency(potentialRent * 0.95 - rentalIncome)}.`;
+    if (dscr > 1.5 && property?.tenants?.length === 1) return "Insight: Debt coverage is strong, but be mindful of tenant concentration risk. Consider a lease renewal strategy.";
+    if (cashFlow < 0 && noi > 0) return "Insight: The property is profitable on an operating basis, but negative cash flow suggests the debt service is high. Consider refinancing options.";
+    if (dscr < 1.2 && dscr > 0) return "Insight: The debt service coverage ratio is below the typical lender threshold of 1.25x. Focus on increasing NOI by reducing expenses or raising rent."
+    return "Insight: Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.";
+  }, [loadingTxs, cashFlow, economicOccupancy, dscr, property, potentialRent, rentalIncome, noi]);
 
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
@@ -365,13 +378,14 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
   
   const getDscrBadge = (ratio: number) => {
-    if (ratio >= 1.25) return <Badge variant="default" className="bg-green-600">Healthy</Badge>;
-    if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-500">Watch</Badge>;
+    if (!isFinite(ratio)) return <Badge className="bg-blue-100 text-blue-800">No Debt</Badge>;
+    if (ratio >= 1.25) return <Badge className="bg-green-100 text-green-800">Healthy</Badge>;
+    if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Watch</Badge>;
     return <Badge variant="destructive">Risk</Badge>;
   }
 
   const header = (
-    <div className="flex items-center justify-between">
+    <div className="flex items-start justify-between">
       <div className="flex items-center gap-4">
         <Link href="/dashboard/properties">
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
@@ -380,6 +394,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           <h1 className="text-2xl font-bold">{property.name}</h1>
           <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
         </div>
+        <Badge className={cn("mt-1", verdict.color)}>{verdict.label}</Badge>
       </div>
       <div className="flex items-center gap-2">
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -406,24 +421,24 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   return (
     <>
-      <div className="space-y-6 p-6">
+      <div className="space-y-8 p-6">
         {header}
 
         {/* --- Investor KPIs --- */}
         <div className="grid grid-cols-4 gap-4">
             <TooltipProvider>
                 <Tooltip><TooltipTrigger asChild><div>
-                    <StatCard title="NOI (Monthly)" value={noi} icon={<Building className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} />
+                    <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} />
                 </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
-                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<Wallet className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
-                </div></TooltipTrigger><TooltipContent><p>NOI minus total debt payment. The cash left in your pocket.</p></TooltipContent></Tooltip>
+                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"}/>
+                </div></TooltipTrigger><TooltipContent><p>NOI minus principal & interest payments. The cash left in your pocket.</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
                      <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle></CardHeader><CardContent>
-                        <div className="text-2xl font-bold">{isFinite(dscr) ? `${dscr.toFixed(2)}x` : 'N/A'}</div>
-                        {isFinite(dscr) && getDscrBadge(dscr)}
+                        <div className="text-2xl font-bold">{isFinite(dscr) ? `${dscr.toFixed(2)}x` : '∞'}</div>
+                        {getDscrBadge(dscr)}
                     </CardContent></Card>
                 </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
                 
@@ -438,13 +453,22 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
             <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
-             <StatCard title="Break-Even Rent" value={breakEvenRent} icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`Surplus: ${formatCurrency(currentRent - breakEvenRent)}`} />
+             <StatCard 
+                title="Break-Even Rent" 
+                value={breakEvenRent} 
+                icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
+                isLoading={loadingTxs} 
+                description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(currentRent - breakEvenRent)}` : 'No fixed costs'}
+             />
         </div>
         
         {/* --- AI Insight --- */}
-         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center gap-3">
-             <Bot className="h-5 w-5 text-slate-500 shrink-0" />
-             <p className="text-sm text-slate-600">{getAiInsight}</p>
+         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3 mt-8">
+             <div className="bg-slate-200 p-2 rounded-full"><Bot className="h-5 w-5 text-slate-500 shrink-0" /></div>
+             <div>
+                <h4 className="font-semibold text-slate-800">Insight</h4>
+                <p className="text-sm text-slate-600">{getAiInsight}</p>
+             </div>
          </div>
 
         <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
