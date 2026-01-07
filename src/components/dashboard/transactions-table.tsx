@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -66,10 +66,12 @@ type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
   dataSource: DataSource;
+  onSyncStart: (id: string) => void;
+  onSyncEnd: (id: string) => void;
 }
 
 
-export function TransactionsTable({ dataSource }: TransactionsTableProps) {
+export function TransactionsTable({ dataSource, onSyncStart, onSyncEnd }: TransactionsTableProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -134,9 +136,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     finally { setIsClearing(false); }
   };
 
-  const handleSyncTransactions = async () => {
+  const handleSyncTransactions = useCallback(async () => {
     if (!user || !dataSource.plaidAccessToken) return;
     setIsSyncing(true);
+    onSyncStart(dataSource.id);
     toast({ title: 'Syncing...', description: 'Fetching data from bank...' });
     try {
         const result = await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
@@ -144,8 +147,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         refetch();
     } catch (error: any) {
         toast({ variant: "destructive", title: "Sync Failed", description: error.message });
-    } finally { setIsSyncing(false); }
-  };
+    } finally {
+        setIsSyncing(false);
+        onSyncEnd(dataSource.id);
+    }
+  }, [user, dataSource, onSyncStart, onSyncEnd, toast, refetch]);
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
     if (!user || !firestore) return;
@@ -369,7 +375,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     <TableCell className="align-top py-4">
                         <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
                     </TableCell>
-                    <TableCell className="align-top py-4 text-xs text-muted-foreground">
+                     <TableCell className="align-top py-4 text-xs text-muted-foreground">
                         {transaction.costCenter && propertyMap[transaction.costCenter] ? propertyMap[transaction.costCenter] : 'N/A'}
                     </TableCell>
                     <TableCell 
@@ -377,7 +383,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
                     >
                       {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
                     </TableCell>
-                    <TableCell className="align-top py-4 text-right">
+                     <TableCell className="align-top py-4 text-right">
                        <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
                     </TableCell>
                   </TableRow>

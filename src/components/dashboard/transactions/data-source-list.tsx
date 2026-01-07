@@ -9,7 +9,7 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag, Loader2 } from 'lucide-react';
+import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -30,9 +30,10 @@ interface DataSourceListProps {
   onEdit: (dataSource: DataSource) => void;
   onSelect: (dataSource: DataSource) => void;
   onDelete: (dataSource: DataSource) => void;
+  onSync: (dataSourceId: string) => void; // New prop for syncing
   selectedDataSourceId?: string | null;
   flagCounts: Record<string, { needsReview: number; incorrect: number }>;
-  autoSyncingId?: string | null;
+  syncingIds: Set<string>; // Changed to Set for better performance
 }
 
 const typeIcons = {
@@ -50,15 +51,21 @@ export function DataSourceList({
     onEdit, 
     onSelect, 
     onDelete, 
+    onSync,
     selectedDataSourceId,
     flagCounts,
-    autoSyncingId
+    syncingIds
 }: DataSourceListProps) {
 
   const handleDeleteClick = (e: React.MouseEvent, source: DataSource) => {
     e.stopPropagation();
     onDelete(source);
   };
+  
+  const handleSyncClick = (e: React.MouseEvent, source: DataSource) => {
+      e.stopPropagation();
+      onSync(source.id);
+  }
 
   if (isLoading) {
     return (
@@ -91,7 +98,7 @@ export function DataSourceList({
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {dataSources.map((source) => {
         const counts = flagCounts[source.id] || { needsReview: 0, incorrect: 0 };
-        const isAutoSyncing = autoSyncingId === source.id;
+        const isSyncingThis = syncingIds.has(source.id);
         return (
             <div key={source.id} className="relative group">
             <Card 
@@ -118,11 +125,7 @@ export function DataSourceList({
                 </CardContent>
                 <CardFooter className="p-3 pt-2 flex items-center justify-between">
                     <div>
-                        {isAutoSyncing ? (
-                          <Badge variant="outline" className="bg-blue-100 text-blue-800 border-blue-200 text-xs">
-                              <Loader2 className="mr-1 h-3 w-3 animate-spin"/> Syncing...
-                          </Badge>
-                        ) : source.historicalDataPending ? (
+                         {source.historicalDataPending ? (
                             <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-200 text-xs">
                                 <span className="animate-pulse mr-1">⏳</span> Syncing...
                             </Badge>
@@ -145,6 +148,17 @@ export function DataSourceList({
                 </CardFooter>
             </Card>
             <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {source.plaidAccessToken && (
+                     <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6"
+                        onClick={(e) => handleSyncClick(e, source)}
+                        disabled={isSyncingThis}
+                    >
+                        {isSyncingThis ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                    </Button>
+                )}
                 <Button
                     variant="ghost"
                     size="icon"

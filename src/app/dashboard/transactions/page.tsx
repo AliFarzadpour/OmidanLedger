@@ -1,14 +1,14 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, updateDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
-import { TransactionsTable } from '@/components/dashboard/transactions-table';
+import { TransactionsTable } from '@/components/dashboard/transactions/transactions-table';
 import { Card, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -29,6 +29,7 @@ interface DataSource {
   accountNumber?: string;
   plaidAccessToken?: string;
   lastSyncedAt?: { seconds: number; nanoseconds: number } | Date;
+  historicalDataPending?: boolean;
 }
 
 export default function TransactionsPage() {
@@ -45,11 +46,8 @@ export default function TransactionsPage() {
   const [deletingDataSource, setDeletingDataSource] = useState<DataSource | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
-  // State to track sync status for the auto-sync feature
   const [syncingIds, setSyncingIds] = useState<Set<string>>(new Set());
 
-
-  // New state for auto-sync toggle
   const userDocRef = useMemoFirebase(() => user ? doc(firestore, `users/${user.uid}`) : null, [user, firestore]);
   const { data: userData, isLoading: isLoadingUser } = useDoc(userDocRef);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
@@ -57,6 +55,8 @@ export default function TransactionsPage() {
   useEffect(() => {
     if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
       setAutoSyncEnabled(userData.plaidAutoSyncEnabled);
+    } else if (userData && userData.plaidAutoSyncEnabled === undefined) {
+      setAutoSyncEnabled(true);
     }
   }, [userData]);
 
@@ -87,50 +87,43 @@ export default function TransactionsPage() {
 
   const { data: dataSources, isLoading: isLoadingDataSources, refetch: refetchDataSources } = useCollection<DataSource>(bankAccountsQuery);
   
-  // --- AUTO-SYNC LOGIC (FIXED) ---
+  const handleSync = useCallback(async (accountId: string) => {
+    if (!user) return;
+    setSyncingIds(prev => new Set(prev).add(accountId));
+    try {
+      await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: accountId });
+      toast({ title: 'Sync Complete!', description: `Account successfully synced.` });
+      refetchDataSources();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: `Sync Failed`, description: error.message });
+    } finally {
+      setSyncingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(accountId);
+        return newSet;
+      });
+    }
+  }, [user, toast, refetchDataSources]);
+
   useEffect(() => {
     if (dataSources && dataSources.length > 0 && autoSyncEnabled && user) {
-      dataSources.forEach(source => {
-        // Skip if Plaid account, already syncing, or recently synced
+      const accountToSync = dataSources.find(source => {
         if (!source.plaidAccessToken || syncingIds.has(source.id)) {
-            return;
+          return false;
         }
-
         const now = new Date();
         const lastSyncedDate = source.lastSyncedAt 
           ? (source.lastSyncedAt as any).toDate ? (source.lastSyncedAt as any).toDate() : new Date((source.lastSyncedAt as any).seconds * 1000)
-          : new Date(0); // If never synced, use a very old date
-
+          : new Date(0);
         const hoursSinceLastSync = differenceInHours(now, lastSyncedDate);
-
-        if (hoursSinceLastSync > 12) {
-            console.log(`Auto-syncing account ${source.id} as it's been ${hoursSinceLastSync} hours.`);
-            
-            // Add to syncing set to prevent re-triggering
-            setSyncingIds(prev => new Set(prev).add(source.id));
-            
-            toast({ title: `Auto-Syncing ${source.accountName}`, description: 'Fetching latest transactions...' });
-            
-            syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: source.id })
-              .then(() => {
-                toast({ title: `Sync Complete for ${source.accountName}` });
-                refetchDataSources(); // Refetch to get the new `lastSyncedAt` timestamp
-              })
-              .catch(error => {
-                toast({ variant: "destructive", title: `Sync Failed for ${source.accountName}`, description: error.message });
-              })
-              .finally(() => {
-                // Remove from syncing set when done
-                setSyncingIds(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(source.id);
-                    return newSet;
-                });
-              });
-        }
+        return hoursSinceLastSync > 12 || source.historicalDataPending;
       });
+
+      if (accountToSync) {
+        handleSync(accountToSync.id);
+      }
     }
-  }, [dataSources, autoSyncEnabled, user, toast, refetchDataSources, syncingIds]); // Add syncingIds to dependencies
+  }, [dataSources, autoSyncEnabled, user, handleSync, syncingIds]);
 
 
   const allTransactionsQuery = useMemoFirebase(() => {
@@ -184,10 +177,10 @@ export default function TransactionsPage() {
         const batch = writeBatch(firestore);
         const accountRef = doc(firestore, `users/${user.uid}/bankAccounts`, deletingDataSource.id);
         
-        const transactionsToDelete = allTransactions?.filter(tx => tx.bankAccountId === deletingDataSource.id) || [];
-        transactionsToDelete.forEach(tx => {
-            const txRef = doc(accountRef, 'transactions', tx.id);
-            batch.delete(txRef);
+        const transactionsToDeleteQuery = query(collection(accountRef, 'transactions'));
+        const transactionsToDeleteSnap = await getDocs(transactionsToDeleteQuery);
+        transactionsToDeleteSnap.forEach(txDoc => {
+            batch.delete(txDoc.ref);
         });
 
         batch.delete(accountRef);
@@ -203,6 +196,7 @@ export default function TransactionsPage() {
         if (selectedDataSource?.id === deletingDataSource.id) {
             setSelectedDataSource(null);
         }
+        refetchDataSources();
         
     } catch (error) {
         console.error("Error deleting data source:", error);
@@ -220,6 +214,7 @@ export default function TransactionsPage() {
   const handleDialogClose = () => {
     setDialogOpen(false);
     setEditingDataSource(null);
+    refetchDataSources();
   };
 
   return (
@@ -262,12 +257,21 @@ export default function TransactionsPage() {
         onEdit={handleEdit}
         onSelect={handleSelectDataSource}
         onDelete={handleDeleteRequest}
+        onSync={handleSync}
         selectedDataSourceId={selectedDataSource?.id}
-        autoSyncingId={Array.from(syncingIds)[0]}
+        syncingIds={syncingIds}
       />
       
       {selectedDataSource ? (
-          <TransactionsTable dataSource={selectedDataSource} />
+          <TransactionsTable 
+            dataSource={selectedDataSource} 
+            onSyncStart={(id) => setSyncingIds(prev => new Set(prev).add(id))}
+            onSyncEnd={(id) => setSyncingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(id);
+                return newSet;
+            })}
+          />
       ) : (
         <Card className="flex items-center justify-center h-64 border-dashed">
             <CardContent className="pt-6 text-center">
@@ -298,7 +302,7 @@ export default function TransactionsPage() {
                 onClick={handleDeleteConfirm}
                 disabled={isDeleting}
             >
-              {isDeleting ? "Deleting..." : "Yes, Delete Everything"}
+              {isDeleting ? 'Deleting...' : 'Yes, Delete Everything'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
