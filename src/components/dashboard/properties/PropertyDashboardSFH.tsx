@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, collection, query, where, getDocs, deleteDoc, collectionGroup } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -310,17 +310,17 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     if (!property) {
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0 };
     }
-  
+
     const income = monthlyTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
     const expenses = monthlyTxs.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     const noi = income - expenses;
-    
+
     const debtPayment = (property.mortgage?.principalAndInterest || 0);
     const totalDebt = debtPayment + (property.mortgage?.escrowAmount || 0);
-    
+
     const cashFlow = noi - debtPayment - interestForMonth;
     const dscr = debtPayment > 0 ? noi / debtPayment : Infinity;
-    
+
     const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
     const economicOccupancyValue = potentialRentValue > 0 ? (income / potentialRentValue) * 100 : 0;
     
