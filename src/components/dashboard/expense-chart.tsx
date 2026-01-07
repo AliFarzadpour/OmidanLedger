@@ -1,3 +1,4 @@
+
 'use client';
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
@@ -70,7 +71,7 @@ export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
   const hasData = processedData && processedData.length > 0;
 
   return (
-    <Card className="col-span-1">
+    <Card className="col-span-1 h-full">
       <CardHeader>
         <CardTitle>Expense Breakdown</CardTitle>
         <CardDescription>
