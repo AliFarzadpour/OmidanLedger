@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, collectionGroup, format, getDoc } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, collectionGroup, format, getDoc, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -268,7 +268,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const monthKey = '2024-07'; // This should be dynamic based on user selection in a real app
   const monthlyStatsRef = useMemoFirebase(() => {
     if (!firestore || !property?.id) return null;
-    // Corrected path to the monthlyStats subcollection
     return doc(firestore, 'properties', property.id, 'monthlyStats', monthKey);
   }, [firestore, property, monthKey]);
   const { data: monthlyStats, isLoading: loadingTxs } = useDoc(monthlyStatsRef);
@@ -296,28 +295,27 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   }, [user, property]);
 
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
-    if (!property) {
-      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
-    }
-
-    const income = monthlyStats?.income || 0;
-    const expenses = Math.abs(monthlyStats?.expenses || 0);
-    const noiValue = income - expenses;
-
-    const debtPayment = (property.mortgage?.principalAndInterest || 0);
-    const totalDebt = debtPayment + (property.mortgage?.escrowAmount || 0);
-
+    const emptyResult = { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
+    if (!property) return emptyResult;
+  
+    const rentalIncome = monthlyStats?.income || 0;
+    const operatingExpenses = Math.abs(monthlyStats?.expenses || 0);
+    const noiValue = rentalIncome - operatingExpenses;
+  
+    const debtPayment = property.mortgage?.principalAndInterest || 0;
+    const totalDebtPayment = debtPayment + (property.mortgage?.escrowAmount || 0);
+  
     const cashFlowValue = noiValue - debtPayment - interestForMonth;
-    const dscrValue = debtPayment > 0 ? noiValue / debtPayment : Infinity;
-
+    const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
+  
     const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
-    const economicOccupancyValue = potentialRentValue > 0 ? (income / potentialRentValue) * 100 : 0;
+    const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
-    const breakEvenRentValue = expenses + totalDebt;
+    const breakEvenRentValue = operatingExpenses + totalDebtPayment;
     
     let verdictLabel = "Stable";
     let verdictColor = "bg-blue-100 text-blue-800";
-
+  
     if (cashFlowValue > 100 && dscrValue > 1.25) {
         verdictLabel = "Healthy Cash Flow";
         verdictColor = "bg-green-100 text-green-800";
@@ -328,14 +326,14 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         verdictLabel = "High Debt Ratio";
         verdictColor = "bg-amber-100 text-amber-800";
     }
-
+  
     return { 
       noi: noiValue, 
       cashFlow: cashFlowValue, 
       dscr: dscrValue, 
       economicOccupancy: economicOccupancyValue, 
       breakEvenRent: breakEvenRentValue, 
-      rentalIncome: income, 
+      rentalIncome: rentalIncome, 
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
@@ -461,7 +459,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     value={breakEvenRent} 
                     icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
                     isLoading={loadingTxs} 
-                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(currentRent - breakEvenRent)}` : 'No fixed costs'}
+                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'No fixed costs'}
                 />
             </div>
             
@@ -571,4 +569,3 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
-
