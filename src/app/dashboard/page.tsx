@@ -19,8 +19,8 @@ import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
 
-import { DollarSign, CreditCard, Activity, AlertCircle, Percent, ShoppingBag, Landmark, Banknote, TrendingDown } from 'lucide-react';
-import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays } from 'date-fns';
+import { DollarSign, CreditCard, Activity, AlertCircle, Percent, Banknote, Landmark } from 'lucide-react';
+import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays, subYears } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -47,14 +47,7 @@ type Transaction = {
   categoryHierarchy?: CategoryHierarchy;
   primaryCategory?: string; // Fallback
   bankAccountId?: string;
-  userId?: string; 
-};
-
-type BankAccount = {
-  id: string;
-  accountName?: string;
-  bankName?: string;
-  accountType?: string;
+  userId?: string;
 };
 
 type Property = {
@@ -69,40 +62,115 @@ type Property = {
     }
 }
 
-const getDateRange = (filter: FilterOption) => {
-  const now = new Date();
-  switch (filter) {
-    case 'this-month':
-      return {
-        startDate: format(startOfMonth(now), 'yyyy-MM-dd'),
-        endDate: format(endOfMonth(now), 'yyyy-MM-dd'),
-      };
-    case 'last-month': {
-      const lastMonth = subMonths(now, 1);
-      return {
-        startDate: format(startOfMonth(lastMonth), 'yyyy-MM-dd'),
-        endDate: format(endOfMonth(lastMonth), 'yyyy-MM-dd'),
-      };
+const getPeriodRanges = (filter: FilterOption) => {
+    const now = new Date();
+    let currentStart, currentEnd, prevStart, prevEnd;
+
+    switch (filter) {
+        case 'this-month':
+            currentStart = startOfMonth(now);
+            currentEnd = endOfMonth(now);
+            prevStart = startOfMonth(subMonths(now, 1));
+            prevEnd = endOfMonth(subMonths(now, 1));
+            break;
+        case 'last-month':
+            currentStart = startOfMonth(subMonths(now, 1));
+            currentEnd = endOfMonth(subMonths(now, 1));
+            prevStart = startOfMonth(subMonths(now, 2));
+            prevEnd = endOfMonth(subMonths(now, 2));
+            break;
+        case 'this-year':
+            currentStart = startOfYear(now);
+            currentEnd = endOfYear(now);
+            prevStart = startOfYear(subYears(now, 1));
+            prevEnd = endOfYear(subYears(now, 1));
+            break;
     }
-    case 'this-year':
-      return {
-        startDate: format(startOfYear(now), 'yyyy-MM-dd'),
-        endDate: format(endOfYear(now), 'yyyy-MM-dd'),
-      };
-  }
+
+    return {
+        currentRange: { startDate: format(currentStart, 'yyyy-MM-dd'), endDate: format(currentEnd, 'yyyy-MM-dd') },
+        previousRange: { startDate: format(prevStart, 'yyyy-MM-dd'), endDate: format(prevEnd, 'yyyy-MM-dd') }
+    };
 };
+
+const calculateStats = (transactions: Transaction[], properties: Property[], calculatedInterest: number) => {
+    let totalIncome = 0;
+    let operatingExpenses = 0;
+    let rentalIncome = 0;
+    let totalExpenses = 0;
+
+    const cashFlowMap = new Map<string, { income: number; expense: number }>();
+    const expenseBreakdownMap = new Map<string, number>();
+
+    for (const tx of transactions) {
+        const amount = Number(tx.amount || 0);
+        const dateKey = tx.date;
+        const l0 = (tx.categoryHierarchy?.l0 || tx.primaryCategory || '').toUpperCase();
+        
+        const isOpEx = l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
+
+        if (l0 === 'INCOME') {
+            totalIncome += amount;
+            if ((tx.categoryHierarchy?.l1 || '').toUpperCase().includes('RENTAL')) {
+                rentalIncome += amount;
+            }
+        } else if (isOpEx) {
+            operatingExpenses += Math.abs(amount);
+            expenseBreakdownMap.set(tx.categoryHierarchy?.l1 || 'Uncategorized', (expenseBreakdownMap.get(tx.categoryHierarchy?.l1 || 'Uncategorized') || 0) + Math.abs(amount));
+        }
+
+        if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
+        const dayStats = cashFlowMap.get(dateKey)!;
+        if (l0 === 'INCOME') dayStats.income += amount;
+        else if (isOpEx) dayStats.expense += Math.abs(amount);
+    }
+    
+    totalExpenses = operatingExpenses + calculatedInterest;
+    const netIncome = totalIncome - totalExpenses;
+
+    const totalDebtPayments = (properties || []).reduce((sum, prop) => {
+        return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
+    }, 0);
+
+    const noi = rentalIncome - operatingExpenses;
+    const dscr = totalDebtPayments > 0 ? noi / totalDebtPayments : 0;
+    const cashFlowAfterDebt = netIncome - totalDebtPayments;
+    
+    const expenseBreakdown = Array.from(expenseBreakdownMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const cashFlowData = Array.from(cashFlowMap.entries()).map(([date, val]) => ({ date, ...val })).sort((a, b) => (a.date > b.date ? 1 : -1));
+
+    return {
+        filteredTransactions: transactions.slice(0, 5),
+        totalIncome,
+        operatingExpenses,
+        netIncome,
+        noi,
+        dscr,
+        cashFlowAfterDebt,
+        expenseBreakdown,
+        cashFlowData,
+    };
+};
+
+const calculateDelta = (current: number, previous: number) => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+};
+
 
 export default function DashboardPage() {
   const { user } = useUser();
   const firestore = useFirestore();
 
   const [filter, setFilter] = useState<FilterOption>('this-month');
-  const { startDate, endDate } = useMemo(() => getDateRange(filter), [filter]);
+  const { currentRange, previousRange } = useMemo(() => getPeriodRanges(filter), [filter]);
 
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
+  const [prevPeriodTransactions, setPrevPeriodTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
   const [calculatedInterest, setCalculatedInterest] = useState(0);
+  const [prevCalculatedInterest, setPrevCalculatedInterest] = useState(0);
 
   const propertiesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -119,14 +187,26 @@ export default function DashboardPage() {
       try {
         const bankAccountsRef = collection(firestore, `users/${user.uid}/bankAccounts`);
         const bankAccountsSnap = await getDocs(bankAccountsRef);
-        const txPromises = bankAccountsSnap.docs.map(async (acct) => {
-          const txRef = collection(firestore, `users/${user.uid}/bankAccounts/${acct.id}/transactions`);
-          const txQ = query(txRef, where('date', '>=', startDate), where('date', '<=', endDate), orderBy('date', 'desc'), limit(5000));
-          const txSnap = await getDocs(txQ);
-          return txSnap.docs.map(doc => ({ id: doc.id, ...doc.data(), bankAccountId: acct.id } as Transaction));
-        });
-        const txNested = await Promise.all(txPromises);
-        if (!cancelled) setAllTransactions(txNested.flat());
+
+        const fetchTxsForPeriod = async (start: string, end: string) => {
+            const txPromises = bankAccountsSnap.docs.map(async (acct) => {
+              const txRef = collection(firestore, `users/${user.uid}/bankAccounts/${acct.id}/transactions`);
+              const txQ = query(txRef, where('date', '>=', start), where('date', '<=', end));
+              const txSnap = await getDocs(txQ);
+              return txSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction));
+            });
+            return (await Promise.all(txPromises)).flat();
+        };
+
+        const [currentTxs, previousTxs] = await Promise.all([
+            fetchTxsForPeriod(currentRange.startDate, currentRange.endDate),
+            fetchTxsForPeriod(previousRange.startDate, previousRange.endDate)
+        ]);
+        
+        if (!cancelled) {
+          setAllTransactions(currentTxs);
+          setPrevPeriodTransactions(previousTxs);
+        }
       } catch (e: any) {
         if (!cancelled) setError(e);
       } finally {
@@ -138,104 +218,42 @@ export default function DashboardPage() {
     else if (!isLoadingProperties) setIsLoading(false);
     
     return () => { cancelled = true; };
-  }, [user, firestore, startDate, endDate, properties, isLoadingProperties]);
+  }, [user, firestore, currentRange, previousRange, properties, isLoadingProperties]);
 
   useEffect(() => {
     async function calculateAllInterest() {
         if (!properties || properties.length === 0) return;
         
-        let totalInterest = 0;
+        const calculateInterestForPeriod = async (targetDate: Date) => {
+            const interestPromises = properties.map(async (prop) => {
+                const m = prop.mortgage;
+                if (m?.originalLoanAmount && m.interestRate && m.principalAndInterest && m.purchaseDate && m.loanTerm) {
+                    const result = await calculateAmortization({
+                        principal: m.originalLoanAmount,
+                        annualRate: m.interestRate,
+                        principalAndInterest: m.principalAndInterest,
+                        loanStartDate: m.purchaseDate,
+                        loanTermInYears: m.loanTerm,
+                        targetDate: targetDate.toISOString(),
+                    });
+                    return result.success ? (result.interestPaidForMonth || 0) : 0;
+                }
+                return 0;
+            });
+            return (await Promise.all(interestPromises)).reduce((sum, current) => sum + current, 0);
+        }
         
-        const interestPromises = properties.map(async (prop) => {
-            const m = prop.mortgage;
-            if (m?.originalLoanAmount && m.interestRate && m.principalAndInterest && m.purchaseDate && m.loanTerm) {
-                const result = await calculateAmortization({
-                    principal: m.originalLoanAmount,
-                    annualRate: m.interestRate,
-                    principalAndInterest: m.principalAndInterest,
-                    loanStartDate: m.purchaseDate,
-                    loanTermInYears: m.loanTerm,
-                    targetDate: new Date().toISOString(),
-                });
-                return result.success ? (result.interestPaidForMonth || 0) : 0;
-            }
-            return 0;
-        });
+        const currentInterest = await calculateInterestForPeriod(new Date(currentRange.startDate));
+        const prevInterest = await calculateInterestForPeriod(new Date(previousRange.startDate));
 
-        const interests = await Promise.all(interestPromises);
-        totalInterest = interests.reduce((sum, current) => sum + current, 0);
-        setCalculatedInterest(totalInterest);
+        setCalculatedInterest(currentInterest);
+        setPrevCalculatedInterest(prevInterest);
     }
     calculateAllInterest();
-  }, [properties, startDate]);
+  }, [properties, currentRange, previousRange]);
 
-  const stats = useMemo(() => {
-    const filtered = allTransactions;
-    
-    let totalIncome = 0;
-    let operatingExpenses = 0;
-    let rentalIncome = 0;
-    
-    const cashFlowMap = new Map<string, { income: number; expense: number }>();
-    const expenseBreakdownMap = new Map<string, number>();
-
-    for (const tx of filtered) {
-      const amount = Number(tx.amount || 0);
-      const dateKey = tx.date;
-      const l0 = (tx.categoryHierarchy?.l0 || tx.primaryCategory || '').toUpperCase();
-      
-      const isOpEx = l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
-
-      if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
-      const dayStats = cashFlowMap.get(dateKey)!;
-
-      if (l0 === 'INCOME') {
-        totalIncome += amount;
-        dayStats.income += amount;
-        if ((tx.categoryHierarchy?.l1 || '').toUpperCase().includes('RENTAL')) {
-            rentalIncome += amount;
-        }
-      } else if (isOpEx) {
-          operatingExpenses += Math.abs(amount);
-          dayStats.expense += Math.abs(amount);
-          
-          const breakdownKey = tx.categoryHierarchy?.l1 || 'Uncategorized';
-          expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
-      }
-    }
-    
-    const totalExpenses = operatingExpenses;
-    const netIncome = totalIncome - totalExpenses - calculatedInterest;
-
-    const totalDebtPayments = (properties || []).reduce((sum, prop) => {
-        return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
-    }, 0);
-
-    const noi = rentalIncome - operatingExpenses;
-    const dscr = totalDebtPayments > 0 ? noi / totalDebtPayments : 0;
-    const cashFlowAfterDebt = netIncome - totalDebtPayments;
-
-    const expenseBreakdown = Array.from(expenseBreakdownMap.entries())
-      .map(([name, value]) => ({ name, value }))
-      .sort((a, b) => b.value - a.value);
-      
-    const cashFlowData = Array.from(cashFlowMap.entries())
-      .map(([date, val]) => ({ date, ...val }))
-      .sort((a, b) => (a.date > b.date ? 1 : -1));
-
-    return {
-      filteredTransactions: filtered.slice(0, 5),
-      totalIncome,
-      totalExpenses,
-      netIncome,
-      noi,
-      dscr,
-      cashFlowAfterDebt,
-      expenseBreakdown,
-      cashFlowData,
-    };
-  }, [allTransactions, properties, calculatedInterest]);
-
+  const stats = useMemo(() => calculateStats(allTransactions, properties || [], calculatedInterest), [allTransactions, properties, calculatedInterest]);
+  const prevStats = useMemo(() => calculateStats(prevPeriodTransactions, properties || [], prevCalculatedInterest), [prevPeriodTransactions, properties, prevCalculatedInterest]);
 
   const filterOptions: { label: string; value: FilterOption }[] = [
     { label: 'This Month', value: 'this-month' },
@@ -250,6 +268,9 @@ export default function DashboardPage() {
   if (!properties || properties.length === 0) {
     return <OnboardingDashboard />;
   }
+  
+  const dscrBadge = stats.dscr >= 1.25 ? "default" : stats.dscr >= 1.0 ? "outline" : "destructive";
+  const dscrColor = stats.dscr >= 1.25 ? "bg-green-600" : stats.dscr >= 1.0 ? "border-amber-500 text-amber-500" : "bg-red-600";
 
   return (
     <TooltipProvider>
@@ -270,60 +291,41 @@ export default function DashboardPage() {
 
       {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} cardClassName="bg-green-50 border-green-200" /></div>
-          </TooltipTrigger>
-          <TooltipContent><p>Sum of all transactions where L0 is 'INCOME'.</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div><StatCard title="Operating Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} cardClassName="bg-red-50 border-red-200" /></div>
-          </TooltipTrigger>
-          <TooltipContent><p>Sum of all transactions where L0 is 'EXPENSE' or 'OPERATING EXPENSE'.</p></TooltipContent>
-        </Tooltip>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div><StatCard title="Interest Expense" value={calculatedInterest} icon={<Percent />} isLoading={isLoading} cardClassName="bg-amber-50 border-amber-200" /></div>
-          </TooltipTrigger>
-          <TooltipContent><p>The calculated interest portion of your mortgage payments for this period.</p></TooltipContent>
-        </Tooltip>
+      <div className="space-y-6">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Performance</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+            <StatCard title="Total Income" value={stats.totalIncome} delta={calculateDelta(stats.totalIncome, prevStats.totalIncome)} icon={<DollarSign />} isLoading={isLoading} cardClassName="bg-green-50 border-green-200" />
+            <StatCard title="Net Income" value={stats.netIncome} delta={calculateDelta(stats.netIncome, prevStats.netIncome)} icon={<Activity />} isLoading={isLoading} cardClassName="bg-blue-50 border-blue-200" />
+        </div>
         
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} cardClassName="bg-blue-50 border-blue-200" /></div>
-          </TooltipTrigger>
-          <TooltipContent><p>Total Income minus all expenses, including interest.</p></TooltipContent>
-        </Tooltip>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Costs</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+            <StatCard title="Operating Expenses" value={stats.operatingExpenses} delta={calculateDelta(stats.operatingExpenses, prevStats.operatingExpenses)} deltaInverted icon={<CreditCard />} isLoading={isLoading} cardClassName="bg-red-50 border-red-200" />
+            <StatCard title="Interest Expense" value={calculatedInterest} delta={calculateDelta(calculatedInterest, prevCalculatedInterest)} deltaInverted icon={<Percent />} isLoading={isLoading} cardClassName="bg-amber-50 border-amber-200" />
+        </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<Banknote />} isLoading={isLoading} cardClassName="bg-indigo-50 border-indigo-200" /></div>
-          </TooltipTrigger>
-          <TooltipContent><p>Net Income minus total mortgage payments (principal and escrow).</p></TooltipContent>
-        </Tooltip>
-        
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Card className="shadow-lg h-full flex flex-col">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
-              <CardContent className="flex-grow flex items-center">
-                {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
-                  <div className="flex items-baseline gap-2">
-                    <div className="text-2xl font-bold">{stats.dscr.toFixed(2)}x</div>
-                    <Badge variant={stats.dscr >= 1.25 ? 'default' : 'destructive'} className={cn(stats.dscr >= 1.25 && 'bg-green-600')}>{stats.dscr >= 1.25 ? 'Healthy' : 'Risk'}</Badge>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TooltipTrigger>
-          <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt Payments). A value above 1.25x is considered healthy.</p></TooltipContent>
-        </Tooltip>
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Cash &amp; Debt</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+            <StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} delta={calculateDelta(stats.cashFlowAfterDebt, prevStats.cashFlowAfterDebt)} icon={<Banknote />} isLoading={isLoading} cardClassName="bg-indigo-50 border-indigo-200" />
+             <Tooltip>
+                <TooltipTrigger asChild>
+                    <Card className="shadow-lg h-full flex flex-col border-2 border-slate-200">
+                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 min-h-[4.5rem]"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
+                      <CardContent className="flex-grow flex items-center">
+                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
+                          <div className="flex items-baseline gap-2">
+                            <div className="text-2xl font-bold">{stats.dscr.toFixed(2)}x</div>
+                            <Badge variant={dscrBadge} className={cn(dscrColor)}>{stats.dscr >= 1.25 ? 'Healthy' : stats.dscr >= 1.0 ? 'Watch' : 'Risk'}</Badge>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                </TooltipTrigger>
+                <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt Payments). A value above 1.25x is considered healthy.</p></TooltipContent>
+            </Tooltip>
+        </div>
       </div>
-      
+
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
         <div className="lg:col-span-3"><CashFlowChart data={stats.cashFlowData} isLoading={isLoading} /></div>
         <div className="lg:col-span-2 flex flex-col gap-8">
@@ -339,3 +341,5 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
+
+    
