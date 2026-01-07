@@ -95,7 +95,7 @@ export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
                 <Pie
                   data={processedData}
                   cx="50%"
-                  cy="50%"
+                  cy="45%"
                   labelLine={false}
                   innerRadius={60}
                   outerRadius={80}
