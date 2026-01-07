@@ -341,23 +341,24 @@ const syncAndCategorizePlaidTransactionsFlow = ai.defineFlow(
         const { plaidAccessToken, plaidItemId } = data;
         if (!plaidAccessToken || !plaidItemId) throw new Error("Plaid Token or Item ID missing.");
 
-        // 1. Find all accounts associated with this Plaid Item
         const itemAccountsSnap = await db.collection('users').doc(userId).collection('bankAccounts').where('plaidItemId', '==', plaidItemId).get();
         const itemAccountDocs = itemAccountsSnap.docs;
         if (itemAccountDocs.length === 0) throw new Error("No accounts found for this Plaid Item ID.");
 
-        // 2. FIX: Safest Cursor Logic
-        const anyAccountMissingCursor = itemAccountDocs.some(doc => !doc.data().plaidSyncCursor);
-        
-        let cursor: string | undefined = undefined;
-        
-        if (!anyAccountMissingCursor) {
-             cursor = itemAccountDocs.reduce((latestCursor, doc) => {
-                const docCursor = doc.data()?.plaidSyncCursor;
-                if (!latestCursor) return docCursor;
-                return (docCursor > latestCursor) ? docCursor : latestCursor;
-            }, data.plaidSyncCursor);
-        }
+        // CORRECTED CURSOR LOGIC:
+        // Find the most recent, valid cursor among all related accounts.
+        // Cursors are strings; a simple string comparison works for recency.
+        let cursor: string | undefined = itemAccountDocs.reduce((latestCursor: string | undefined, doc) => {
+            const docCursor = doc.data()?.plaidSyncCursor;
+            // Only consider non-empty, valid string cursors
+            if (docCursor && typeof docCursor === 'string') {
+                if (!latestCursor || docCursor > latestCursor) {
+                    return docCursor;
+                }
+            }
+            return latestCursor;
+        }, undefined);
+
 
         const userContext = await fetchUserContext(db, userId);
 
@@ -611,4 +612,6 @@ const CreateLinkTokenInputSchema = z.object({
   );
 
     
+    
+
     
