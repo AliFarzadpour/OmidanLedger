@@ -158,10 +158,10 @@ export default function DashboardPage() {
     const filtered = allTransactions;
     
     let totalIncome = 0;
-    let totalExpensesAbs = 0; // Corrected to only include operating expenses
+    let totalExpensesAbs = 0;
     let rentalIncome = 0;
     let operatingExpenses = 0;
-    let totalNetIncome = 0; // A separate variable for true net income
+    let netIncome = 0;
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -172,28 +172,33 @@ export default function DashboardPage() {
       const cat = normalizeCategory(tx);
       
       const isIncome = cat.l0 === 'INCOME';
-      const isOperatingExpense = cat.l0 === 'OPERATING EXPENSE' || cat.l0 === 'EXPENSE';
+      const isExpense = cat.l0 === 'EXPENSE';
+      const isOperatingExpense = cat.l0 === 'OPERATING EXPENSE';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
       if (isIncome) {
         totalIncome += amount;
-        totalNetIncome += amount;
+        netIncome += amount;
         dayStats.income += amount;
         if ((cat.l1 || '').toUpperCase().includes('RENTAL')) {
             rentalIncome += amount;
         }
-      } else if (isOperatingExpense) {
+      } else if (isExpense || isOperatingExpense) {
           totalExpensesAbs += Math.abs(amount);
-          operatingExpenses += Math.abs(amount); // This is for NOI calculation
-          totalNetIncome += amount; // Subtract from true net
+          netIncome += amount; // Subtract from true net
           dayStats.expense += Math.abs(amount);
+          
+          if (isOperatingExpense) {
+            operatingExpenses += Math.abs(amount);
+          }
+          
           const breakdownKey = cat.l1 || 'Uncategorized';
           expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
       } else if (amount < 0) {
         // This handles non-operating expenses like mortgage principal, equity draws for Net Income
-        totalNetIncome += amount;
+        netIncome += amount;
       }
     }
     
@@ -203,7 +208,7 @@ export default function DashboardPage() {
 
     const noi = rentalIncome - operatingExpenses;
     const dscr = totalDebtPayments > 0 ? noi / totalDebtPayments : 0;
-    const cashFlowAfterDebt = totalNetIncome - totalDebtPayments;
+    const cashFlowAfterDebt = netIncome - totalDebtPayments;
 
     const expenseBreakdown = Array.from(expenseBreakdownMap.entries())
       .map(([name, value]) => ({ name, value }))
@@ -217,8 +222,8 @@ export default function DashboardPage() {
       filteredTransactions: filtered.slice(0, 5),
       totalIncome,
       totalExpenses: totalExpensesAbs,
-      netIncome: totalNetIncome, // Use the true net income
-      profitMargin: totalIncome > 0 ? (totalNetIncome / totalIncome) * 100 : 0,
+      netIncome,
+      profitMargin: totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0,
       noi,
       dscr,
       cashFlowAfterDebt,
@@ -266,28 +271,28 @@ export default function DashboardPage() {
           <TooltipTrigger asChild>
             <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>All money that came into your accounts.</p></TooltipContent>
+          <TooltipContent><p>Sum of all transactions where L0 is 'Income'.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
             <div><StatCard title="Total Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>All money that left your accounts.</p></TooltipContent>
+          <TooltipContent><p>Sum of all transactions where L0 is 'Expense' or 'Operating Expense'.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
             <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Total Income minus Total Expenses.</p></TooltipContent>
+          <TooltipContent><p>Total Income minus all expenses, including financing and equity.</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
              <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<TrendingDown />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Net Income after all mortgage payments.</p></TooltipContent>
+          <TooltipContent><p>Net Income after all mortgage payments (P+I+E).</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
@@ -304,7 +309,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </TooltipTrigger>
-          <TooltipContent><p>Debt Service Coverage Ratio (NOI / Debt)</p></TooltipContent>
+          <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt)</p></TooltipContent>
         </Tooltip>
 
       </div>
