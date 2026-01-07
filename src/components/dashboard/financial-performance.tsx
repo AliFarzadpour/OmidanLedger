@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -115,19 +114,14 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       }
     });
 
-    const largestTenantPaid = tenantPayments.size > 0 ? Math.max(...Array.from(tenantPayments.values())) : 0;
-    
     const economicOccupancy = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     const rentCollectionRate = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
-    const rentConcentration = collectedRent > 0 ? (largestTenantPaid / collectedRent) * 100 : 0;
     
     return { 
         economicOccupancy, 
         rentCollectionRate,
         collectedRent,
         potentialRent,
-        largestTenantPaid,
-        rentConcentration,
     };
   }, [transactions, properties]);
 
@@ -152,14 +146,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       return 'text-red-600';
   }
   
-    const getConcentrationInfo = (rate: number) => {
-    if (rate > 60) return { icon: <AlertTriangle className="h-5 w-5 text-red-500" />, label: 'High Risk', color: 'text-red-600', cardClass: 'bg-red-50 border-red-200'};
-    if (rate > 40) return { icon: <AlertTriangle className="h-5 w-5 text-amber-500" />, label: 'Moderate Risk', color: 'text-amber-600', cardClass: 'bg-amber-50 border-amber-200' };
-    return { icon: <TrendingUp className="h-5 w-5 text-muted-foreground" />, label: 'Diversified', color: 'text-green-600', cardClass: 'bg-green-50 border-green-200' };
-  };
-
-  const concentrationInfo = getConcentrationInfo(stats.rentConcentration);
-
+  const outstandingRent = stats.potentialRent - stats.collectedRent;
 
   return (
     <>
@@ -170,46 +157,62 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         </Alert>
       )}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <StatCard 
-            title="Total Rent Due" 
-            value={stats.potentialRent}
-            icon={<DollarSign className="h-5 w-5 text-muted-foreground"/>}
-            tooltip="Total potential rent from all active leases for the month."
-            isLoading={isLoading}
-            cardClassName="bg-blue-50 border-blue-200"
-        />
-        <StatCard 
-            title="Total Rent Collected" 
-            value={stats.collectedRent}
-            icon={<DollarSign className="h-5 w-5 text-green-500"/>}
-            tooltip="Total actual rent collected in the selected month."
-            isLoading={isLoading}
-            colorClass="text-green-600"
-            cardClassName="bg-green-50 border-green-200"
-        />
-        <StatCard 
-            title="Economic Occupancy" 
-            value={stats.economicOccupancy}
-            format="percent"
-            icon={<Users className="h-5 w-5 text-muted-foreground"/>}
-            tooltip="Actual rent collected ÷ potential rent from all active leases."
-            isLoading={isLoading}
-            colorClass={getOccupancyColor(stats.economicOccupancy)}
-            cardClassName="bg-indigo-50 border-indigo-200"
-        >
-            <p className="text-xs text-muted-foreground">vs. potential rent</p>
-        </StatCard>
-        <StatCard 
-            title="Rent Collection Rate" 
-            value={stats.rentCollectionRate}
-            format="percent"
-            icon={<TrendingUp className="h-5 w-5 text-muted-foreground"/>}
-            tooltip="Percentage of billed rent that has been collected this period."
-            isLoading={isLoading}
-            cardClassName="bg-amber-50 border-amber-200"
-        >
-            <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
-        </StatCard>
+        <TooltipProvider>
+            <StatCard 
+                title="Total Rent Due" 
+                value={stats.potentialRent}
+                icon={<DollarSign className="h-5 w-5 text-muted-foreground"/>}
+                isLoading={isLoading}
+                cardClassName="bg-blue-50 border-blue-200"
+            />
+            <StatCard 
+                title="Total Rent Collected" 
+                value={stats.collectedRent}
+                icon={<DollarSign className="h-5 w-5 text-green-500"/>}
+                isLoading={isLoading}
+                colorClass="text-green-600"
+                cardClassName="bg-green-50 border-green-200"
+                description={outstandingRent > 0 ? `${formatCurrency(outstandingRent)} outstanding` : ''}
+            />
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <div>
+                        <StatCard 
+                            title="Rent Collection Rate" 
+                            value={stats.rentCollectionRate}
+                            format="percent"
+                            icon={<TrendingUp className="h-5 w-5 text-muted-foreground"/>}
+                            isLoading={isLoading}
+                            cardClassName="bg-amber-50 border-amber-200"
+                            description={outstandingRent > 0 ? `${(100 - stats.rentCollectionRate).toFixed(1)}% unpaid` : ''}
+                        >
+                            <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
+                        </StatCard>
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Percentage of billed rent collected this period</p>
+                </TooltipContent>
+            </Tooltip>
+             <Tooltip>
+                <TooltipTrigger asChild>
+                    <div>
+                        <StatCard 
+                            title="Economic Occupancy" 
+                            value={stats.economicOccupancy}
+                            format="percent"
+                            icon={<Users className="h-5 w-5 text-muted-foreground"/>}
+                            isLoading={isLoading}
+                            colorClass={getOccupancyColor(stats.economicOccupancy)}
+                            cardClassName="bg-indigo-50 border-indigo-200"
+                        />
+                    </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Actual rent collected ÷ potential rent (before concessions)</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
       </div>
     </>
   );
