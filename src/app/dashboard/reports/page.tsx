@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ArrowRight, BrainCircuit, BookUser, FileText, Building, Scale, ShieldAlert } from 'lucide-react';
+import { ArrowRight, BrainCircuit, BookUser, FileText, Building, Scale, ShieldAlert, Briefcase } from 'lucide-react';
 
 export default function ReportsPage() {
   const reports = [
@@ -41,6 +41,12 @@ export default function ReportsPage() {
       description: 'A summary of debits and credits for all accounts to verify balance.',
       href: '/dashboard/reports/trial-balance',
       icon: Scale,
+    },
+    {
+      title: 'CPA & Tax Reports',
+      description: 'Generate year-end reports for tax preparation and accounting.',
+      href: '/dashboard/reports/cpa',
+      icon: Briefcase,
     },
   ];
   return (
