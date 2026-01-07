@@ -344,11 +344,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
     if (cashFlow > 0 && economicOccupancy < 80 && economicOccupancy > 0) return `Insight: This property is cash-flowing, but collections are low. Improving the collection rate to 95% could increase monthly cash flow by approximately ${formatCurrency(potentialRent * 0.95 - rentalIncome)}.`;
-    if (dscr > 1.5 && property?.tenants?.length === 1) return "Insight: Debt coverage is strong, but be mindful of tenant concentration risk. Consider a lease renewal strategy.";
+    if (dscr > 1.5 && property?.tenants?.length === 1) return "Insight: Debt coverage is strong. Risk is tenant concentration (100% from one tenant). Consider a lease renewal reminder.";
     if (cashFlow < 0 && noi > 0) return "Insight: The property is profitable on an operating basis, but negative cash flow suggests the debt service is high. Consider refinancing options.";
     if (dscr < 1.2 && dscr > 0) return "Insight: The debt service coverage ratio is below the typical lender threshold of 1.25x. Focus on increasing NOI by reducing expenses or raising rent."
     return "Insight: Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.";
   }, [loadingTxs, cashFlow, economicOccupancy, dscr, property, potentialRent, rentalIncome, noi]);
+
 
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
@@ -421,131 +422,134 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   return (
     <>
-      <div className="space-y-8 p-6">
+      <div className="space-y-6 p-6">
         {header}
-
-        {/* --- Investor KPIs --- */}
-        <div className="grid grid-cols-4 gap-4">
-            <TooltipProvider>
-                <Tooltip><TooltipTrigger asChild><div>
-                    <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} />
-                </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
-
-                <Tooltip><TooltipTrigger asChild><div>
-                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"}/>
-                </div></TooltipTrigger><TooltipContent><p>NOI minus principal & interest payments. The cash left in your pocket.</p></TooltipContent></Tooltip>
-
-                <Tooltip><TooltipTrigger asChild><div>
-                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle></CardHeader><CardContent>
-                        <div className="text-2xl font-bold">{isFinite(dscr) ? `${dscr.toFixed(2)}x` : '∞'}</div>
-                        {getDscrBadge(dscr)}
-                    </CardContent></Card>
-                </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
-                
-                <Tooltip><TooltipTrigger asChild><div>
-                    <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} />
-                </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
-            </TooltipProvider>
-        </div>
         
-        {/* --- Operational KPIs --- */}
-        <div className="grid grid-cols-4 gap-4">
-            <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-            <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
-             <StatCard 
-                title="Break-Even Rent" 
-                value={breakEvenRent} 
-                icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
-                isLoading={loadingTxs} 
-                description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(currentRent - breakEvenRent)}` : 'No fixed costs'}
-             />
-        </div>
-        
-        {/* --- AI Insight --- */}
-         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3 mt-8">
-             <div className="bg-slate-200 p-2 rounded-full"><Bot className="h-5 w-5 text-slate-500 shrink-0" /></div>
-             <div>
-                <h4 className="font-semibold text-slate-800">Insight</h4>
-                <p className="text-sm text-slate-600">{getAiInsight}</p>
-             </div>
-         </div>
+        <div className="space-y-6 pt-4">
 
-        <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
+            {/* --- Investor KPIs --- */}
+            <div className="grid grid-cols-4 gap-4">
+                <TooltipProvider>
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} cardClassName="bg-green-50 border-green-200" />
+                    </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
-        <Tabs defaultValue="tenants" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
-            <TabsTrigger value="tenants">Tenants</TabsTrigger>
-            <TabsTrigger value="income">Income</TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-            <TabsTrigger value="deposits">Deposits</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="tenants" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cashFlow >= 0 ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}/>
+                    </div></TooltipTrigger><TooltipContent><p>NOI minus principal & interest payments. The cash left in your pocket.</p></TooltipContent></Tooltip>
+
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle></CardHeader><CardContent>
+                            <div className="text-2xl font-bold">{isFinite(dscr) ? `${dscr.toFixed(2)}x` : '∞'}</div>
+                            {getDscrBadge(dscr)}
+                        </CardContent></Card>
+                    </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
+                    
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} cardClassName="bg-indigo-50 border-indigo-200" />
+                    </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
+                </TooltipProvider>
+            </div>
+            
+            {/* --- Operational KPIs --- */}
+            <div className="grid grid-cols-4 gap-4">
+                <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+                <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+                <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
+                <StatCard 
+                    title="Break-Even Rent" 
+                    value={breakEvenRent} 
+                    icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
+                    isLoading={loadingTxs} 
+                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(currentRent - breakEvenRent)}` : 'No fixed costs'}
+                />
+            </div>
+            
+            {/* --- AI Insight --- */}
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
+                <div className="bg-slate-200 p-2 rounded-full"><Bot className="h-5 w-5 text-slate-500 shrink-0" /></div>
                 <div>
-                  <CardTitle>Current Residents</CardTitle>
-                  <CardDescription>Lease details for this property.</CardDescription>
+                    <h4 className="font-semibold text-slate-800">Insight</h4>
+                    <p className="text-sm text-slate-600">{getAiInsight}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
-                  <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
-                    <UserPlus className="h-4 w-4" /> Create Portal
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {property.tenants && property.tenants.length > 0 ? (
-                  <div className="space-y-4">
-                    {property.tenants.map((t: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center border-b pb-4 last:border-0 last:pb-0">
-                        <div>
-                          <p className="font-medium">{t.firstName} {t.lastName}</p>
-                          <p className="text-sm text-muted-foreground">{t.email}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">${(t.rentAmount || 0).toLocaleString()}/mo</p>
-                          <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <RecordPaymentModal
-                                tenant={{...t, id: t.email || `tenant_${i}`}} // Ensure a unique ID
-                                propertyId={property.id}
-                                landlordId={user.uid}
-                                onSuccess={onUpdate}
-                            />
-                            <Button variant="outline" size="sm" onClick={() => handleOpenLeaseAgent(t)} className="gap-1">
-                                <Bot className="h-4 w-4"/> Auto-Draft Lease
-                            </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No tenants recorded. Click "Create Portal" to add one.</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="income" className="mt-6">
-            <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
-          </TabsContent>
-          
-          <TabsContent value="expenses" className="mt-6">
-            <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
-          </TabsContent>
+            </div>
 
-          <TabsContent value="deposits" className="mt-6">
-             <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
-          </TabsContent>
+            <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
 
-          <TabsContent value="documents" className="mt-6">
-              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
-          </TabsContent>
-        </Tabs>
+            <Tabs defaultValue="tenants" className="w-full">
+            <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
+                <TabsTrigger value="tenants">Tenants</TabsTrigger>
+                <TabsTrigger value="income">Income</TabsTrigger>
+                <TabsTrigger value="expenses">Expenses</TabsTrigger>
+                <TabsTrigger value="deposits">Deposits</TabsTrigger>
+                <TabsTrigger value="documents">Documents</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="tenants" className="mt-6">
+                <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                    <CardTitle>Current Residents</CardTitle>
+                    <CardDescription>Lease details for this property.</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
+                    <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
+                        <UserPlus className="h-4 w-4" /> Create Portal
+                    </Button>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {property.tenants && property.tenants.length > 0 ? (
+                    <div className="space-y-4">
+                        {property.tenants.map((t: any, i: number) => (
+                        <div key={i} className="flex justify-between items-center border-b pb-4 last:border-0 last:pb-0">
+                            <div>
+                            <p className="font-medium">{t.firstName} {t.lastName}</p>
+                            <p className="text-sm text-muted-foreground">{t.email}</p>
+                            </div>
+                            <div className="text-right">
+                            <p className="font-medium">${(t.rentAmount || 0).toLocaleString()}/mo</p>
+                            <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <RecordPaymentModal
+                                    tenant={{...t, id: t.email || `tenant_${i}`}} // Ensure a unique ID
+                                    propertyId={property.id}
+                                    landlordId={user.uid}
+                                    onSuccess={onUpdate}
+                                />
+                                <Button variant="outline" size="sm" onClick={() => handleOpenLeaseAgent(t)} className="gap-1">
+                                    <Bot className="h-4 w-4"/> Auto-Draft Lease
+                                </Button>
+                            </div>
+                        </div>
+                        ))}
+                    </div>
+                    ) : (
+                    <p className="text-muted-foreground text-sm">No tenants recorded. Click "Create Portal" to add one.</p>
+                    )}
+                </CardContent>
+                </Card>
+            </TabsContent>
+            
+            <TabsContent value="income" className="mt-6">
+                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
+            </TabsContent>
+            
+            <TabsContent value="expenses" className="mt-6">
+                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
+            </TabsContent>
+
+            <TabsContent value="deposits" className="mt-6">
+                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
+            </TabsContent>
+
+            <TabsContent value="documents" className="mt-6">
+                <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
+            </TabsContent>
+            </Tabs>
+        </div>
       </div>
 
       {isInviteOpen && (
@@ -567,3 +571,4 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
+
