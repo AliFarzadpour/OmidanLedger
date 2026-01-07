@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, updateDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft, RefreshCw, DollarSign, Wallet } from 'lucide-react';
+import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft, RefreshCw, DollarSign, Wallet, Banknote } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions/transactions-table';
@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { getAndUpdatePlaidBalances } from '@/actions/plaid-actions';
-import { differenceInHours } from 'date-fns';
+import { differenceInHours, formatDistanceToNowStrict } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 
 // Define the shape of a data source for type safety
@@ -92,6 +92,7 @@ export default function TransactionsPage() {
   }, [user, toast]);
 
   useEffect(() => {
+    if (!user) return; // Don't run if user is not available
     const shouldRefresh = () => {
       if (Object.keys(balances).length === 0) return true; // No balances, fetch immediately
       
@@ -107,7 +108,7 @@ export default function TransactionsPage() {
     if (shouldRefresh()) {
       handleRefreshBalances();
     }
-  }, [balances, handleRefreshBalances]);
+  }, [balances, handleRefreshBalances, user]);
 
 
   useEffect(() => {
@@ -288,6 +289,20 @@ export default function TransactionsPage() {
     setEditingDataSource(null);
     refetchDataSources();
   };
+  
+  const lastSyncTime = useMemo(() => {
+      if (!dataSources || dataSources.length === 0) return null;
+      let mostRecent: Date | null = null;
+      dataSources.forEach(source => {
+          if (source.lastSyncedAt) {
+              const d = source.lastSyncedAt instanceof Date ? source.lastSyncedAt : new Date((source.lastSyncedAt as any).seconds * 1000);
+              if (!mostRecent || d > mostRecent) {
+                  mostRecent = d;
+              }
+          }
+      });
+      return mostRecent;
+  }, [dataSources]);
 
   return (
     <>
@@ -307,7 +322,14 @@ export default function TransactionsPage() {
             {isLoadingUser ? <Skeleton className="h-6 w-32" /> : (
               <div className="flex items-center space-x-2 bg-muted/60 p-2 rounded-lg">
                 {autoSyncEnabled ? <ToggleRight className="h-5 w-5 text-primary" /> : <ToggleLeft className="h-5 w-5 text-slate-400" />}
-                <Label htmlFor="autosync-toggle" className="text-sm font-medium">Plaid Auto-Sync</Label>
+                <div className="flex flex-col">
+                  <Label htmlFor="autosync-toggle" className="text-sm font-medium leading-none">Plaid Auto-Sync</Label>
+                  {lastSyncTime && (
+                    <span className="text-xs text-muted-foreground">
+                      Last: {formatDistanceToNowStrict(lastSyncTime, { addSuffix: true })}
+                    </span>
+                  )}
+                </div>
                 <Switch 
                   id="autosync-toggle"
                   checked={autoSyncEnabled} 
@@ -315,9 +337,9 @@ export default function TransactionsPage() {
                 />
               </div>
             )}
-            <Button onClick={handleAdd}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Data Source
+            <Button onClick={handleAdd} className="gap-2">
+                <Banknote className="h-4 w-4" />
+                Connect Bank or Card
             </Button>
         </div>
       </div>
@@ -336,6 +358,9 @@ export default function TransactionsPage() {
             <p className="text-xs text-muted-foreground max-w-xs">
                 This is the sum of all 'checking' and 'savings' accounts as reported by your bank. It may include pending transactions.
             </p>
+             <Button variant="ghost" size="sm" onClick={handleRefreshBalances} className="text-xs text-muted-foreground gap-2">
+                <RefreshCw className="h-3 w-3" /> Refresh Bank Balances (Plaid)
+            </Button>
         </CardContent>
       </Card>
 
@@ -371,7 +396,7 @@ export default function TransactionsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <strong>{deletingDataSource?.accountName}</strong> and all of its associated transactions. This action cannot be undone.
+              This will permanently delete <strong>{deletingDataSource?.accountName}</strong> and all of its transactions. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -113,6 +114,15 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: Merge
     setFromCategories(newFrom);
   };
 
+  const transactionsToUpdateCount = useMemo(() => {
+    return transactions.filter(tx => {
+        const h = tx.categoryHierarchy || {};
+        const catId = `${h.l0 || ''}>${h.l1 || ''}>${h.l2 || ''}>${h.l3 || ''}`;
+        return fromCategories.has(catId);
+    }).length;
+  }, [transactions, fromCategories]);
+
+
   const handleMerge = async () => {
     if (!toCategory || fromCategories.size === 0 || !firestore) {
       toast({ variant: 'destructive', title: 'Selection Missing', description: 'Please select categories to merge from and a category to merge to.' });
@@ -135,6 +145,7 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: Merge
 
     const batch = writeBatch(firestore);
     transactionsToUpdate.forEach(tx => {
+      if (!tx.bankAccountId) return;
       const txRef = doc(firestore, `users/${user!.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
       batch.update(txRef, {
         categoryHierarchy: {
@@ -264,7 +275,10 @@ export function MergeCategoriesDialog({ isOpen, onOpenChange, onSuccess }: Merge
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Warning</AlertTitle>
                 <AlertDescription>
-                    This action is permanent and cannot be undone.
+                    {transactionsToUpdateCount > 0 
+                        ? `This will permanently update ${transactionsToUpdateCount} transactions. `
+                        : 'This action is permanent and cannot be undone.'
+                    }
                 </AlertDescription>
             </Alert>
             <div>
