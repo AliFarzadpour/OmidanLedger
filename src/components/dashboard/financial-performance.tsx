@@ -19,7 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { KPICard } from './stat-card';
+import { StatCard } from './stat-card';
 
 
 function normalizeL0(tx: any): string {
@@ -100,6 +100,8 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         }
     });
     
+    const tenantPayments = new Map<string, number>();
+
     transactions.forEach(tx => {
       const amount = Number(tx.amount) || 0;
       const l0 = normalizeL0(tx);
@@ -107,17 +109,25 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
 
       if (l0 === 'INCOME' && isRentalIncome && amount > 0) {
         collectedRent += amount;
+        if (tx.tenantId) {
+            tenantPayments.set(tx.tenantId, (tenantPayments.get(tx.tenantId) || 0) + amount);
+        }
       }
     });
+
+    const largestTenantPaid = tenantPayments.size > 0 ? Math.max(...Array.from(tenantPayments.values())) : 0;
     
     const economicOccupancy = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     const rentCollectionRate = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
+    const rentConcentration = collectedRent > 0 ? (largestTenantPaid / collectedRent) * 100 : 0;
     
     return { 
         economicOccupancy, 
         rentCollectionRate,
         collectedRent,
         potentialRent,
+        largestTenantPaid,
+        rentConcentration,
     };
   }, [transactions, properties]);
 
@@ -141,6 +151,15 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       if (rate > 85) return 'text-amber-600';
       return 'text-red-600';
   }
+  
+    const getConcentrationInfo = (rate: number) => {
+    if (rate > 60) return { icon: <AlertTriangle className="h-5 w-5 text-red-500" />, label: 'High Risk', color: 'text-red-600', cardClass: 'bg-red-50 border-red-200'};
+    if (rate > 40) return { icon: <AlertTriangle className="h-5 w-5 text-amber-500" />, label: 'Moderate Risk', color: 'text-amber-600', cardClass: 'bg-amber-50 border-amber-200' };
+    return { icon: <TrendingUp className="h-5 w-5 text-muted-foreground" />, label: 'Diversified', color: 'text-green-600', cardClass: 'bg-green-50 border-green-200' };
+  };
+
+  const concentrationInfo = getConcentrationInfo(stats.rentConcentration);
+
 
   return (
     <>
@@ -151,7 +170,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         </Alert>
       )}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <KPICard 
+        <StatCard 
             title="Total Rent Due" 
             value={stats.potentialRent}
             icon={<DollarSign className="h-5 w-5 text-muted-foreground"/>}
@@ -159,7 +178,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
             isLoading={isLoading}
             cardClassName="bg-blue-50 border-blue-200"
         />
-        <KPICard 
+        <StatCard 
             title="Total Rent Collected" 
             value={stats.collectedRent}
             icon={<DollarSign className="h-5 w-5 text-green-500"/>}
@@ -168,7 +187,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
             colorClass="text-green-600"
             cardClassName="bg-green-50 border-green-200"
         />
-        <KPICard 
+        <StatCard 
             title="Economic Occupancy" 
             value={stats.economicOccupancy}
             format="percent"
@@ -179,8 +198,8 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
             cardClassName="bg-indigo-50 border-indigo-200"
         >
             <p className="text-xs text-muted-foreground">vs. potential rent</p>
-        </KPICard>
-        <KPICard 
+        </StatCard>
+        <StatCard 
             title="Rent Collection Rate" 
             value={stats.rentCollectionRate}
             format="percent"
@@ -190,7 +209,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
             cardClassName="bg-amber-50 border-amber-200"
         >
             <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
-        </KPICard>
+        </StatCard>
       </div>
     </>
   );
