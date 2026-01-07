@@ -199,25 +199,25 @@ export function PropertyForm({
   const [isCalculating, setIsCalculating] = useState(false);
   const [showPastTenants, setShowPastTenants] = useState(false);
 
-  const [currentPropertyId, setCurrentPropertyId] = useState<string | null>(initialData?.id || null);
-  const isEditMode = !!currentPropertyId;
-
-  const mergedValues = initialData ? {
-      ...DEFAULT_VALUES,
-      ...initialData,
-      utilities: initialData.utilities || DEFAULT_VALUES.utilities,
-      preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
-      tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active' })) || DEFAULT_VALUES.tenants,
-      access: initialData.access || DEFAULT_VALUES.access,
-      mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
-      management: { ...DEFAULT_VALUES.management, ...initialData.management },
-      taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
-      depreciation: { ...DEFAULT_VALUES.depreciation, ...initialData.depreciation },
-  } : DEFAULT_VALUES;
+  const isEditMode = !!initialData?.id;
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
-    defaultValues: mergedValues
+    defaultValues: useMemo(() => {
+      if (!initialData) return DEFAULT_VALUES;
+      return {
+        ...DEFAULT_VALUES,
+        ...initialData,
+        utilities: initialData.utilities || DEFAULT_VALUES.utilities,
+        preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
+        tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active' })) || DEFAULT_VALUES.tenants,
+        access: initialData.access || DEFAULT_VALUES.access,
+        mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
+        management: { ...DEFAULT_VALUES.management, ...initialData.management },
+        taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
+        depreciation: { ...DEFAULT_VALUES.depreciation, ...initialData.depreciation },
+      }
+    }, [initialData])
   });
   
   const watchedDepreciation = useWatch({ control: form.control, name: "depreciation" });
@@ -229,26 +229,6 @@ export function PropertyForm({
         form.setValue('depreciation.estimatedAnnualDepreciation', annual, { shouldDirty: true });
     }
   }, [watchedDepreciation, form]);
-
-
-  useEffect(() => {
-    if (initialData && initialData.id !== currentPropertyId) {
-      const merged = {
-          ...DEFAULT_VALUES,
-          ...initialData,
-          utilities: initialData.utilities || DEFAULT_VALUES.utilities,
-          preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
-          tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active' })) || DEFAULT_VALUES.tenants,
-          access: initialData.access || DEFAULT_VALUES.access,
-          mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
-          management: { ...DEFAULT_VALUES.management, ...initialData.management },
-          taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
-          depreciation: { ...DEFAULT_VALUES.depreciation, ...initialData.depreciation },
-      };
-      form.reset(merged);
-      setCurrentPropertyId(initialData.id);
-    }
-  }, [initialData, form, currentPropertyId]);
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
@@ -296,22 +276,20 @@ export function PropertyForm({
   };
 
   const onSubmit = async (data: PropertyFormValues) => {
-    if (!user || !firestore || !currentPropertyId) return;
+    if (!user || !firestore || !initialData?.id) return;
     setIsSaving(true);
     
-    // FIX: Sanitize data before sending to Firestore
     const sanitizedData = { ...data };
     if (sanitizedData.mortgage && sanitizedData.mortgage.hasMortgage === undefined) {
-      sanitizedData.mortgage.hasMortgage = null as any; // Convert undefined to null
+      sanitizedData.mortgage.hasMortgage = null as any; 
     }
 
     try {
-        const propertyRef = doc(firestore, 'properties', currentPropertyId);
+        const propertyRef = doc(firestore, 'properties', initialData.id);
         
-        const unitsCollection = collection(firestore, `properties/${currentPropertyId}/units`);
+        const unitsCollection = collection(firestore, `properties/${initialData.id}/units`);
         const unitsSnap = await getDocs(unitsCollection);
         
-        // 3. IMPORTANT: Sanitize the data to remove any non-plain objects like Timestamps
         const allUnitsData = unitsSnap.docs.map(doc => {
             const unitData = doc.data();
             const sanitizedUnit: { [key: string]: any } = {};
@@ -327,7 +305,7 @@ export function PropertyForm({
 
         const fullPropertyData = {
           ...sanitizedData,
-          id: currentPropertyId,
+          id: initialData.id,
           isMultiUnit: sanitizedData.type === 'multi-family' || sanitizedData.type === 'commercial' || sanitizedData.type === 'office',
           units: allUnitsData,
         };
@@ -335,7 +313,7 @@ export function PropertyForm({
         await updateDoc(propertyRef, sanitizedData);
         toast({ title: "Property Updated", description: "Building-level details have been saved." });
         
-        await generateRulesForProperty(currentPropertyId, fullPropertyData, user.uid);
+        await generateRulesForProperty(initialData.id, fullPropertyData, user.uid);
         toast({ title: "Smart Rules Synced", description: "Categorization rules have been updated with the new property info." });
         
         if (onSuccess) onSuccess();
@@ -367,7 +345,7 @@ export function PropertyForm({
     { id: 'access', label: 'Access Codes', icon: Fingerprint },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
-    { id: 'depreciation', label: 'Depreciation', icon: BarChart }, // NEW
+    { id: 'depreciation', label: 'Depreciation', icon: BarChart },
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
     { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
