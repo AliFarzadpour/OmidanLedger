@@ -161,11 +161,11 @@ export default function DashboardPage() {
 
   const stats = useMemo(() => {
     const filtered = allTransactions;
+    
     let totalIncome = 0;
-    let totalExpensesAbs = 0;
+    let totalExpensesAbs = 0; // All money out
     let rentalIncome = 0;
-    let operatingExpenses = 0;
-    let nonOperatingExpenses = 0;
+    let operatingExpenses = 0; // Only operating expenses for NOI
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -175,28 +175,25 @@ export default function DashboardPage() {
       const dateKey = tx.date;
       const cat = normalizeCategory(tx);
       const isOperatingExpense = cat.l0 === 'EXPENSE' || cat.l0 === 'OPERATING EXPENSE';
-      const isFinancingOrEquity = cat.l0 === 'LIABILITY' || cat.l0 === 'EQUITY';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
-      if (cat.l0 === 'INCOME') {
-        totalIncome += amount;
-        dayStats.income += amount;
-        if (cat.l1 === 'Rental Income') {
-          rentalIncome += amount;
-        }
-      } else if (isOperatingExpense) {
-        const absAmount = Math.abs(amount);
-        totalExpensesAbs += absAmount;
-        operatingExpenses += absAmount;
-        dayStats.expense += absAmount;
-
-        const breakdownKey = cat.l1 || 'Uncategorized';
-        expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + absAmount);
-      } else if (isFinancingOrEquity) {
+      if (amount > 0) {
+          totalIncome += amount;
+          dayStats.income += amount;
+          if (cat.l1.toUpperCase().includes('RENTAL')) {
+              rentalIncome += amount;
+          }
+      } else { // All negative amounts are expenses of some kind
           totalExpensesAbs += Math.abs(amount);
-          nonOperatingExpenses += Math.abs(amount);
+          dayStats.expense += Math.abs(amount);
+
+          if (isOperatingExpense) {
+              operatingExpenses += Math.abs(amount);
+              const breakdownKey = cat.l1 || 'Uncategorized';
+              expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
+          }
       }
     }
     
