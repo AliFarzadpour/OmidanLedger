@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Badge } from '@/components/ui/badge';
@@ -20,11 +21,15 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '../ui/skeleton';
 
 const primaryCategoryColors: Record<string, string> = {
-  'Income': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'Cost of Goods Sold': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'Expense': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'Balance Sheet': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  'Uncategorized': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'INCOME': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  'COST OF GOODS SOLD': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'EXPENSE': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'OPERATING EXPENSE': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  'BALANCE SHEET': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'EQUITY': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  'LIABILITY': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  'ASSET': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  'UNCATEGORIZED': 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
 };
 
 interface Transaction {
@@ -32,7 +37,7 @@ interface Transaction {
     date: string;
     description: string;
     categoryHierarchy?: { l0: string };
-    primaryCategory: string; // Fallback
+    primaryCategory?: string; // Fallback
     amount: number;
     bankAccountId?: string; 
 }
@@ -73,7 +78,7 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                  ))
             ) : recentTransactions.length > 0 ? (
               recentTransactions.map((transaction, index) => {
-                const category = transaction.categoryHierarchy?.l0 || transaction.primaryCategory || 'Uncategorized';
+                const category = (transaction.categoryHierarchy?.l0 || transaction.primaryCategory || 'Uncategorized').toUpperCase();
                 return (
                 <TableRow key={`${transaction.id}-${transaction.bankAccountId}-${index}`}>
                   <TableCell>
@@ -84,8 +89,8 @@ export function RecentTransactions({ transactions, isLoading }: RecentTransactio
                     <Badge
                       variant="outline"
                       className={cn(
-                        'border-0',
-                        primaryCategoryColors[category] || primaryCategoryColors['Uncategorized']
+                        'border-0 font-semibold',
+                        primaryCategoryColors[category] || primaryCategoryColors['UNCATEGORIZED']
                       )}
                     >
                       {category}
