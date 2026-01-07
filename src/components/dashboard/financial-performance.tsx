@@ -1,16 +1,24 @@
 
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
-import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2 } from 'lucide-react';
-import { format, startOfYear, endOfYear, startOfMonth, endOfMonth } from 'date-fns';
+import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2, Users, TrendingUp, AlertTriangle } from 'lucide-react';
+import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertTitle } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
+import { formatCurrency } from '@/lib/format';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 function normalizeL0(tx: any): string {
     const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase();
@@ -25,68 +33,127 @@ function normalizeL0(tx: any): string {
     return 'OPERATING EXPENSE';
 }
 
-export function FinancialPerformance({ propertyId, viewingDate }: { propertyId?: string, viewingDate: Date }) {
+function KPICard({ title, value, icon, tooltip, colorClass, children }: { title: string, value: string, icon: React.ReactNode, tooltip: string, colorClass?: string, children?: React.ReactNode }) {
+    return (
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Card className="shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
+                            {icon}
+                        </CardHeader>
+                        <CardContent>
+                            <div className={`text-2xl font-bold ${colorClass || ''}`}>{value}</div>
+                            {children}
+                        </CardContent>
+                    </Card>
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>{tooltip}</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+    );
+}
+
+
+export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
   const { user } = useUser();
   const db = useFirestore();
   const { toast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [properties, setProperties] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  const currentMonthStart = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
-  const currentMonthEnd = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
+  const currentMonthStart = useMemo(() => format(startOfMonth(viewingDate), 'yyyy-MM-dd'), [viewingDate]);
+  const currentMonthEnd = useMemo(() => format(endOfMonth(viewingDate), 'yyyy-MM-dd'), [viewingDate]);
 
-  const fetchTransactions = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!db || !user) return;
     setIsLoading(true);
     setError(null);
     
     try {
-        const txsQuery = query(
-            collectionGroup(db, `transactions`),
-            where('userId', '==', user.uid),
-            where('date', '>=', currentMonthStart),
-            where('date', '<=', currentMonthEnd)
-        );
-        const txsSnap = await getDocs(txsQuery);
+        const [txsSnap, propsSnap] = await Promise.all([
+             getDocs(query(
+                collectionGroup(db, 'transactions'),
+                where('userId', '==', user.uid),
+                where('date', '>=', currentMonthStart),
+                where('date', '<=', currentMonthEnd)
+            )),
+             getDocs(query(
+                collection(db, 'properties'),
+                where('userId', '==', user.uid)
+            ))
+        ]);
+
         const allTxs = txsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setTransactions(allTxs);
 
+        const allProps = propsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setProperties(allProps);
+
     } catch (e: any) {
         setError(e);
-        console.error("Failed to fetch transactions:", e);
+        console.error("Failed to fetch financial performance data:", e);
     } finally {
         setIsLoading(false);
     }
   }, [db, user, currentMonthStart, currentMonthEnd]);
 
   useEffect(() => {
-    fetchTransactions();
-  }, [fetchTransactions]);
+    fetchData();
+  }, [fetchData]);
 
 
   const stats = useMemo(() => {
-    const filteredTxs = propertyId
-      ? transactions.filter(tx => tx.costCenter === propertyId)
-      : transactions;
+    let collectedRent = 0;
+    let potentialRent = 0;
+    let rentByTenant: { [key: string]: number } = {};
 
-    let income = 0;
-    let expenses = 0;
-
-    filteredTxs.forEach(tx => {
+    properties.forEach(prop => {
+        if(prop.tenants) {
+            prop.tenants.forEach((tenant: any) => {
+                if(tenant.status === 'active') {
+                    potentialRent += Number(tenant.rentAmount || 0);
+                }
+            })
+        }
+    });
+    
+    transactions.forEach(tx => {
       const amount = Number(tx.amount) || 0;
       const l0 = normalizeL0(tx);
-      
-      if (l0 === 'INCOME') {
-        income += amount;
-      } else if (l0 === 'OPERATING EXPENSE' || l0 === 'EXPENSE') {
-        expenses += amount; // expenses are negative
+      const isRentalIncome = (tx.categoryHierarchy?.l1 || '').toLowerCase().includes('rental income');
+
+      if (l0 === 'INCOME' && isRentalIncome) {
+        collectedRent += amount;
+        const tenantId = tx.tenantId || 'unknown';
+        rentByTenant[tenantId] = (rentByTenant[tenantId] || 0) + amount;
       }
     });
+    
+    const economicOccupancy = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
+    const rentCollectionRate = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
+    
+    let largestTenantRent = 0;
+    if (Object.keys(rentByTenant).length > 0) {
+        largestTenantRent = Math.max(...Object.values(rentByTenant));
+    }
+    const rentConcentration = collectedRent > 0 ? (largestTenantRent / collectedRent) * 100 : 0;
 
-    return { income, expenses, netIncome: income + expenses };
-  }, [transactions, propertyId]);
+
+    return { 
+        economicOccupancy, 
+        rentCollectionRate,
+        rentConcentration,
+        collectedRent,
+        potentialRent,
+    };
+  }, [transactions, properties]);
 
 
   const handleRecalculate = async () => {
@@ -95,88 +162,56 @@ export function FinancialPerformance({ propertyId, viewingDate }: { propertyId?:
     try {
         const res = await recalculateAllStats(user.uid);
         toast({ title: "Financials Updated", description: `Scanned and updated ${res.count} monthly records.` });
-        await fetchTransactions();
+        await fetchData();
     } catch(e: any) {
         toast({ variant: 'destructive', title: "Error", description: e.message });
-        if (e.message.includes("requires an index")) {
-            console.error("INDEX LINK:", e.message);
-        }
     } finally {
         setIsRefreshing(false);
     }
   };
 
-  const fmt = (n: number) => Math.abs(n || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  const getOccupancyColor = (rate: number) => {
+      if (rate > 95) return 'text-green-600';
+      if (rate > 85) return 'text-amber-600';
+      return 'text-red-600';
+  }
 
   return (
     <>
       {error && (
-        <div className="mb-4 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
-          <h3 className="font-bold text-destructive">Firestore Query Error</h3>
-          <p className="text-sm text-destructive/80 mb-2">Please copy the full error message below to create the required index.</p>
-          <pre className="bg-white p-3 rounded-md text-xs font-mono whitespace-pre-wrap break-all">
-            {error.message}
-          </pre>
-        </div>
+        <Alert variant="destructive" className="mb-4">
+          <AlertTitle>Error Fetching KPIs</AlertTitle>
+          <pre className="text-xs font-mono whitespace-pre-wrap">{error.message}</pre>
+        </Alert>
       )}
-      <Card className="col-span-4 shadow-sm border-blue-100 mb-6">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <div className="space-y-1">
-              <CardTitle className="text-lg font-medium">
-                  {propertyId ? "Financial Performance" : "Portfolio Performance"}
-              </CardTitle>
-              <p className="text-xs text-muted-foreground">Live data for {format(viewingDate, 'MMMM yyyy')}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={handleRecalculate} disabled={isRefreshing} className="gap-2">
-              <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-              {isRefreshing ? "Calculating..." : "Recalculate All"}
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-              <div className="flex justify-center py-6"><Loader2 className="animate-spin text-muted-foreground" /></div>
-          ) : (
-              <div className="grid gap-4 md:grid-cols-3">
-              
-              {/* INCOME */}
-              <div className="p-4 border rounded-lg bg-green-50/40 border-green-100">
-                  <div className="flex items-center gap-2 text-sm font-medium text-green-800">
-                  <ArrowUpRight className="h-4 w-4" /> Total Income
-                  </div>
-                  <div className="mt-2 text-2xl font-bold text-green-700">
-                  {fmt(stats.income)}
-                  </div>
-              </div>
-
-              {/* EXPENSES */}
-              <div className="p-4 border rounded-lg bg-red-50/40 border-red-100">
-                  <div className="flex items-center gap-2 text-sm font-medium text-red-800">
-                  <ArrowDownRight className="h-4 w-4" /> Total Expenses
-                  </div>
-                  <div className="mt-2 text-2xl font-bold text-red-700">
-                  {fmt(stats.expenses)}
-                  </div>
-              </div>
-
-              {/* NET INCOME */}
-              <div className="p-4 border rounded-lg bg-blue-50/40 border-blue-100">
-                  <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
-                  <DollarSign className="h-4 w-4" /> Net Income
-                  </div>
-                  <div className={`mt-2 text-2xl font-bold ${stats.netIncome >= 0 ? 'text-blue-700' : 'text-red-700'}`}>
-                  {fmt(stats.netIncome)}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                      {stats.income > 0 
-                          ? `${Math.round((stats.netIncome / stats.income) * 100)}% Margin` 
-                          : '0% Margin'}
-                  </p>
-              </div>
-
-              </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <KPICard 
+            title="Economic Occupancy" 
+            value={`${stats.economicOccupancy.toFixed(1)}%`}
+            icon={<Users className="h-5 w-5 text-muted-foreground"/>}
+            tooltip="Collected Rent ÷ Potential Rent for all active leases."
+            colorClass={getOccupancyColor(stats.economicOccupancy)}
+        />
+        <KPICard 
+            title="Rent Collection Rate" 
+            value={`${stats.rentCollectionRate.toFixed(1)}%`}
+            icon={<TrendingUp className="h-5 w-5 text-muted-foreground"/>}
+            tooltip="Collected rent vs. Billed rent for the current period."
+        >
+            <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
+        </KPICard>
+        <KPICard 
+            title="Rent Concentration" 
+            value={`${stats.rentConcentration.toFixed(1)}%`}
+            icon={stats.rentConcentration > 30 ? <AlertTriangle className="h-5 w-5 text-red-500" /> : <Users className="h-5 w-5 text-muted-foreground"/>}
+            tooltip="Percentage of total collected rent coming from the largest single tenant."
+            colorClass={stats.rentConcentration > 30 ? 'text-red-600' : ''}
+        >
+             <p className="text-xs text-muted-foreground mt-1">
+                Largest tenant paid {formatCurrency(Object.values(stats).reduce((max, v) => Math.max(max, v), 0))}
+            </p>
+        </KPICard>
+      </div>
     </>
   );
 }
