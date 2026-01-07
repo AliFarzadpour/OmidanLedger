@@ -28,6 +28,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { OnboardingDashboard } from '@/components/dashboard/OnboardingDashboard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { calculateAmortization } from '@/actions/amortization-actions';
 
 type FilterOption = 'this-month' | 'last-month' | 'this-year';
 
@@ -61,6 +62,10 @@ type Property = {
     mortgage?: {
         principalAndInterest?: number;
         escrowAmount?: number;
+        originalLoanAmount?: number;
+        interestRate?: number;
+        purchaseDate?: string;
+        loanTerm?: number;
     }
 }
 
@@ -117,6 +122,7 @@ export default function DashboardPage() {
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<FirestoreError | null>(null);
+  const [calculatedInterest, setCalculatedInterest] = useState(0);
 
   const propertiesQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -154,6 +160,35 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [user, firestore, startDate, endDate, properties, isLoadingProperties]);
 
+  useEffect(() => {
+    async function calculateAllInterest() {
+        if (!properties || properties.length === 0) return;
+        
+        let totalInterest = 0;
+        
+        const interestPromises = properties.map(async (prop) => {
+            const m = prop.mortgage;
+            if (m?.originalLoanAmount && m.interestRate && m.principalAndInterest && m.purchaseDate && m.loanTerm) {
+                const result = await calculateAmortization({
+                    principal: m.originalLoanAmount,
+                    annualRate: m.interestRate,
+                    principalAndInterest: m.principalAndInterest,
+                    loanStartDate: m.purchaseDate,
+                    loanTermInYears: m.loanTerm,
+                    targetDate: new Date().toISOString(),
+                });
+                return result.success ? (result.interestPaidForMonth || 0) : 0;
+            }
+            return 0;
+        });
+
+        const interests = await Promise.all(interestPromises);
+        totalInterest = interests.reduce((sum, current) => sum + current, 0);
+        setCalculatedInterest(totalInterest);
+    }
+    calculateAllInterest();
+  }, [properties, startDate]);
+
   const stats = useMemo(() => {
     const filtered = allTransactions;
     
@@ -161,8 +196,7 @@ export default function DashboardPage() {
     let totalExpensesAbs = 0;
     let rentalIncome = 0;
     let operatingExpenses = 0;
-    let netIncome = 0;
-
+    
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
 
@@ -172,36 +206,33 @@ export default function DashboardPage() {
       const cat = normalizeCategory(tx);
       
       const isIncome = cat.l0 === 'INCOME';
+      const isOpEx = cat.l0 === 'OPERATING EXPENSE';
       const isExpense = cat.l0 === 'EXPENSE';
-      const isOperatingExpense = cat.l0 === 'OPERATING EXPENSE';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
       if (isIncome) {
         totalIncome += amount;
-        netIncome += amount;
         dayStats.income += amount;
         if ((cat.l1 || '').toUpperCase().includes('RENTAL')) {
             rentalIncome += amount;
         }
-      } else if (isExpense || isOperatingExpense) {
+      } else if (isOpEx || isExpense) {
           totalExpensesAbs += Math.abs(amount);
-          netIncome += amount; // Subtract from true net
           dayStats.expense += Math.abs(amount);
           
-          if (isOperatingExpense) {
+          if (isOpEx) {
             operatingExpenses += Math.abs(amount);
           }
           
           const breakdownKey = cat.l1 || 'Uncategorized';
           expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
-      } else if (amount < 0) {
-        // This handles non-operating expenses like mortgage principal, equity draws for Net Income
-        netIncome += amount;
       }
     }
     
+    const netIncome = totalIncome - totalExpensesAbs - calculatedInterest;
+
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
         return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
     }, 0);
@@ -223,14 +254,13 @@ export default function DashboardPage() {
       totalIncome,
       totalExpenses: totalExpensesAbs,
       netIncome,
-      profitMargin: totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0,
       noi,
       dscr,
       cashFlowAfterDebt,
       expenseBreakdown,
       cashFlowData,
     };
-  }, [allTransactions, properties]);
+  }, [allTransactions, properties, calculatedInterest]);
 
 
   const filterOptions: { label: string; value: FilterOption }[] = [
@@ -271,28 +301,28 @@ export default function DashboardPage() {
           <TooltipTrigger asChild>
             <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Sum of all transactions where L0 is 'Income'.</p></TooltipContent>
+          <TooltipContent><p>Sum of all transactions where L0 is 'INCOME'.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
             <div><StatCard title="Total Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Sum of all transactions where L0 is 'Expense' or 'Operating Expense'.</p></TooltipContent>
+          <TooltipContent><p>Sum of all transactions where L0 is 'EXPENSE' or 'OPERATING EXPENSE'.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
+            <div><StatCard title="Interest Expense" value={calculatedInterest} icon={<Percent />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Total Income minus all expenses, including financing and equity.</p></TooltipContent>
+          <TooltipContent><p>The calculated interest portion of your mortgage payments.</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
-             <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<TrendingDown />} isLoading={isLoading} /></div>
+            <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Net Income after all mortgage payments (P+I+E).</p></TooltipContent>
+          <TooltipContent><p>Total Income minus all expenses and interest.</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
@@ -329,3 +359,5 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
+
+    
