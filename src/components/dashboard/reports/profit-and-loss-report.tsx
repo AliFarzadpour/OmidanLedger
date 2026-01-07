@@ -4,7 +4,7 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, getDocs, query, collectionGroup, where, writeBatch, doc } from 'firebase/firestore';
-import { parseISO, isWithinInterval, startOfYear, endOfYear, eachMonthOfInterval, format, startOfQuarter, endOfQuarter, startOfMonth, endOfMonth, subYears, subQuarters, subMonths } from 'date-fns';
+import { parseISO, isWithinInterval, startOfYear, endOfYear, eachMonthOfInterval, format, startOfQuarter, endOfQuarter, startOfMonth, endOfMonth, subYears, subQuarters, subMonths, addDays } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -229,7 +229,7 @@ export function ProfitAndLossReport() {
     const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
     if (!allTransactions.length || !activeRange.from || !activeRange.to) return empty;
     const fromD = parseISO(activeRange.from);
-    const toD = parseISO(activeRange.to);
+    const toD = addDays(parseISO(activeRange.to), 1); // Make end date inclusive
     const incMap = new Map<string, { total: number; transactions: Transaction[] }>();
     const expMap = new Map<string, { total: number; transactions: Transaction[] }>();
     let totalInc = 0, totalExp = 0;
@@ -279,7 +279,7 @@ export function ProfitAndLossReport() {
     if (!allTransactions.length || !activeRange.from || !activeRange.to) return empty;
 
     const fromD = parseISO(activeRange.from);
-    const toD = parseISO(activeRange.to);
+    const toD = addDays(parseISO(activeRange.to), 1); // Make end date inclusive
     const months = eachMonthOfInterval({ start: fromD, end: toD }).map(d => format(d, 'yyyy-MM'));
 
     const incomeByCategory: Record<string, Record<string, number>> = {};
