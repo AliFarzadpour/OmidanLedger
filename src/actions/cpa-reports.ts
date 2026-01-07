@@ -40,7 +40,7 @@ export async function getScheduleESummary({ userId, startDate, endDate, property
 
 // --- 2. DEPRECIATION SCHEDULE ---
 export async function getDepreciationSchedule({ userId, propertyId }: ReportParams) {
-    let q: FirebaseFirestore.Query = db.collection('properties').where('userId', '==', userId);
+    let q = db.collection('properties').where('userId', '==', userId);
     if (propertyId && propertyId !== 'all') {
         q = q.where('id', '==', propertyId);
     }
@@ -67,7 +67,8 @@ export async function getMortgageInterestSummary({ userId, startDate, endDate, p
     
     // 1. Fetch all properties for the user to calculate interest for all of them
     const allPropertiesSnap = await db.collection('properties').where('userId', '==', userId).get();
-    const allProperties = allPropertiesSnap.docs.map(doc => doc.data());
+    // **FIX**: Map both the data AND the document ID
+    const allProperties = allPropertiesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     
     const summary: Record<string, { property: string; amount: number; lender: string }> = {};
 
@@ -105,7 +106,9 @@ export async function getMortgageInterestSummary({ userId, startDate, endDate, p
 
     // If a specific property was requested, filter the final result
     if (propertyId && propertyId !== 'all') {
-        return fullReport.filter(item => item.property === summary[propertyId]?.property);
+        const specificProperty = allProperties.find(p => p.id === propertyId);
+        if (!specificProperty) return [];
+        return fullReport.filter(item => item.property === specificProperty.name);
     }
     
     return fullReport;
@@ -156,7 +159,7 @@ export async function getEquityRollForward({ userId, startDate, endDate, propert
 
 // --- HELPER FUNCTION ---
 async function getFilteredTransactions(userId: string, startDate: string, endDate: string, propertyId?: string) {
-    let txQuery: FirebaseFirestore.Query = db.collectionGroup('transactions')
+    let txQuery = db.collectionGroup('transactions')
         .where('userId', '==', userId)
         .where('date', '>=', startDate)
         .where('date', '<=', endDate);
