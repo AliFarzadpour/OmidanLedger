@@ -193,7 +193,7 @@ export default function DashboardPage() {
     const filtered = allTransactions;
     
     let totalIncome = 0;
-    let totalExpensesAbs = 0;
+    let totalExpenses = 0;
     let rentalIncome = 0;
     let operatingExpenses = 0;
     
@@ -219,7 +219,7 @@ export default function DashboardPage() {
             rentalIncome += amount;
         }
       } else if (isOpEx || isExpense) {
-          totalExpensesAbs += Math.abs(amount);
+          totalExpenses += Math.abs(amount);
           dayStats.expense += Math.abs(amount);
           
           if (isOpEx) {
@@ -231,7 +231,7 @@ export default function DashboardPage() {
       }
     }
     
-    const netIncome = totalIncome - totalExpensesAbs - calculatedInterest;
+    const netIncome = totalIncome - totalExpenses - calculatedInterest;
 
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
         return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
@@ -252,7 +252,7 @@ export default function DashboardPage() {
     return {
       filteredTransactions: filtered.slice(0, 5),
       totalIncome,
-      totalExpenses: totalExpensesAbs,
+      totalExpenses,
       netIncome,
       noi,
       dscr,
@@ -296,7 +296,7 @@ export default function DashboardPage() {
 
       {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Tooltip>
           <TooltipTrigger asChild>
             <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} /></div>
@@ -323,6 +323,13 @@ export default function DashboardPage() {
             <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
           </TooltipTrigger>
           <TooltipContent><p>Total Income minus all expenses and interest.</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<Banknote />} isLoading={isLoading} /></div>
+          </TooltipTrigger>
+          <TooltipContent><p>Net Income minus principal and escrow debt payments.</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
@@ -359,5 +366,3 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
-
-    
