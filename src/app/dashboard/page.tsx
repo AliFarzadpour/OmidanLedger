@@ -161,6 +161,7 @@ export default function DashboardPage() {
     let totalExpensesAbs = 0;
     let rentalIncome = 0;
     let operatingExpenses = 0;
+    let netIncome = 0;
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -169,6 +170,7 @@ export default function DashboardPage() {
       const amount = Number(tx.amount || 0);
       const dateKey = tx.date;
       const cat = normalizeCategory(tx);
+      
       const isOperatingExpense = cat.l0 === 'EXPENSE' || cat.l0 === 'OPERATING EXPENSE';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
@@ -189,11 +191,12 @@ export default function DashboardPage() {
       }
     }
     
+    netIncome = totalIncome - totalExpensesAbs;
+
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
         return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
     }, 0);
 
-    const netIncome = totalIncome - totalExpensesAbs;
     const noi = rentalIncome - operatingExpenses;
     const dscr = totalDebtPayments > 0 ? noi / totalDebtPayments : 0;
     const cashFlowAfterDebt = netIncome - totalDebtPayments;
@@ -315,5 +318,4 @@ export default function DashboardPage() {
     </div>
     </TooltipProvider>
   );
-
-    
+}
