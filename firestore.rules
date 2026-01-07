@@ -49,6 +49,11 @@ service cloud.firestore {
             }
         }
         
+        match /bankBalances/{balanceId} {
+            // Allow user to read and write to their own bank balances
+            allow read, write, delete: if isOwner(userId);
+        }
+
         match /categoryMappings/{mappingId} {
             allow read, write, delete: if isOwner(userId);
         }
