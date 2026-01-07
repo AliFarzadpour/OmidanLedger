@@ -1,4 +1,6 @@
 
+'use client';
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ReactNode } from 'react';
 import { formatCurrency } from '@/lib/format';
@@ -26,7 +28,7 @@ export function StatCard({ title, value, icon, description, isLoading, format = 
 
   return (
     <Card className={cn("shadow-lg h-full flex flex-col", cardClassName)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 min-h-[4.5rem]">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         {icon}
       </CardHeader>
