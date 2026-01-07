@@ -71,14 +71,14 @@ export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
   const hasData = processedData && processedData.length > 0;
 
   return (
-    <Card className="col-span-1 h-full">
+    <Card className="col-span-1 h-full w-full">
       <CardHeader>
         <CardTitle>Expense Breakdown</CardTitle>
         <CardDescription>
           Where your money went during this period.
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="h-full flex-1 pb-8">
         <div className="h-[300px] w-full">
           {isLoading ? (
             <div className="flex h-full items-center justify-center text-muted-foreground">
