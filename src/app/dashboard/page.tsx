@@ -92,26 +92,6 @@ const getDateRange = (filter: FilterOption) => {
   }
 };
 
-function normalizeCategory(tx: Transaction): Required<CategoryHierarchy> {
-  const ch = tx.categoryHierarchy ?? {};
-  const rawL0 = (ch.l0 ?? tx.primaryCategory ?? '').toString().trim().toUpperCase();
-
-  let l0 = 'EXPENSE'; // Default
-  if (rawL0.includes('INCOME')) l0 = 'INCOME';
-  else if (rawL0.includes('OPERATING EXPENSE')) l0 = 'OPERATING EXPENSE';
-  else if (rawL0.includes('EXPENSE')) l0 = 'EXPENSE';
-  else if (rawL0.includes('LIABILITY')) l0 = 'LIABILITY';
-  else if (rawL0.includes('ASSET')) l0 = 'ASSET';
-  else if (rawL0.includes('EQUITY')) l0 = 'EQUITY';
-  
-  return {
-    l0: l0,
-    l1: (ch.l1 || '').trim(),
-    l2: (ch.l2 || '').trim(),
-    l3: (ch.l3 || '').trim(),
-  };
-}
-
 export default function DashboardPage() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -193,9 +173,8 @@ export default function DashboardPage() {
     const filtered = allTransactions;
     
     let totalIncome = 0;
-    let totalExpenses = 0;
-    let rentalIncome = 0;
     let operatingExpenses = 0;
+    let rentalIncome = 0;
     
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -203,11 +182,10 @@ export default function DashboardPage() {
     for (const tx of filtered) {
       const amount = Number(tx.amount || 0);
       const dateKey = tx.date;
-      const cat = normalizeCategory(tx);
+      const l0 = (tx.categoryHierarchy?.l0 || tx.primaryCategory || '').toUpperCase();
       
-      const isIncome = cat.l0 === 'INCOME';
-      const isOpEx = cat.l0 === 'OPERATING EXPENSE';
-      const isExpense = cat.l0 === 'EXPENSE';
+      const isIncome = l0 === 'INCOME';
+      const isOpEx = l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
@@ -215,22 +193,19 @@ export default function DashboardPage() {
       if (isIncome) {
         totalIncome += amount;
         dayStats.income += amount;
-        if ((cat.l1 || '').toUpperCase().includes('RENTAL')) {
+        if ((tx.categoryHierarchy?.l1 || '').toUpperCase().includes('RENTAL')) {
             rentalIncome += amount;
         }
-      } else if (isOpEx || isExpense) {
-          totalExpenses += Math.abs(amount);
+      } else if (isOpEx) {
+          operatingExpenses += Math.abs(amount);
           dayStats.expense += Math.abs(amount);
           
-          if (isOpEx) {
-            operatingExpenses += Math.abs(amount);
-          }
-          
-          const breakdownKey = cat.l1 || 'Uncategorized';
+          const breakdownKey = tx.categoryHierarchy?.l1 || 'Uncategorized';
           expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
       }
     }
     
+    const totalExpenses = operatingExpenses;
     const netIncome = totalIncome - totalExpenses - calculatedInterest;
 
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
@@ -306,7 +281,7 @@ export default function DashboardPage() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Total Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} /></div>
+            <div><StatCard title="Operating Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} /></div>
           </TooltipTrigger>
           <TooltipContent><p>Sum of all transactions where L0 is 'EXPENSE' or 'OPERATING EXPENSE'.</p></TooltipContent>
         </Tooltip>
@@ -315,26 +290,26 @@ export default function DashboardPage() {
           <TooltipTrigger asChild>
             <div><StatCard title="Interest Expense" value={calculatedInterest} icon={<Percent />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>The calculated interest portion of your mortgage payments.</p></TooltipContent>
+          <TooltipContent><p>The calculated interest portion of your mortgage payments for this period.</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
             <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Total Income minus all expenses and interest.</p></TooltipContent>
+          <TooltipContent><p>Total Income minus all expenses, including interest.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
             <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<Banknote />} isLoading={isLoading} /></div>
           </TooltipTrigger>
-          <TooltipContent><p>Net Income minus principal and escrow debt payments.</p></TooltipContent>
+          <TooltipContent><p>Net Income minus total mortgage payments (principal and escrow).</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
-            <Card className="shadow-lg">
+            <Card className="shadow-lg h-full">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
               <CardContent>
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
@@ -346,9 +321,8 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </TooltipTrigger>
-          <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt)</p></TooltipContent>
+          <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt Payments). A value above 1.25x is considered healthy.</p></TooltipContent>
         </Tooltip>
-
       </div>
       
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
