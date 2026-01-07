@@ -113,8 +113,6 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     let collectedRent = 0;
     let potentialRent = 0;
     
-    const rentByTenant = new Map<string, number>();
-
     properties.forEach(prop => {
         if(prop.tenants) {
             prop.tenants.forEach((tenant: any) => {
@@ -132,26 +130,17 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
 
       if (l0 === 'INCOME' && isRentalIncome && amount > 0) {
         collectedRent += amount;
-        const tenantId = tx.tenantId || 'unknown_tenant';
-        rentByTenant.set(tenantId, (rentByTenant.get(tenantId) || 0) + amount);
       }
     });
     
     const economicOccupancy = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     const rentCollectionRate = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     
-    const tenantTotals = Array.from(rentByTenant.values());
-    const largestTenantPaid = tenantTotals.length > 0 ? Math.max(0, ...tenantTotals) : 0;
-
-    const rentConcentration = collectedRent > 0 ? (largestTenantPaid / collectedRent) * 100 : 0;
-
     return { 
         economicOccupancy, 
         rentCollectionRate,
-        rentConcentration,
         collectedRent,
         potentialRent,
-        largestTenantPaid,
     };
   }, [transactions, properties]);
 
@@ -175,13 +164,6 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       if (rate > 85) return 'text-amber-600';
       return 'text-red-600';
   }
-  
-  const concentrationRisk = useMemo(() => {
-    if (stats.rentConcentration > 60) return { icon: <AlertTriangle className="h-5 w-5 text-red-500" />, color: 'text-red-600' };
-    if (stats.rentConcentration > 40) return { icon: <AlertTriangle className="h-5 w-5 text-amber-500" />, color: 'text-amber-600' };
-    return { icon: <Users className="h-5 w-5 text-muted-foreground" />, color: '' };
-  }, [stats.rentConcentration]);
-
 
   return (
     <>
@@ -191,7 +173,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
           <pre className="text-xs font-mono whitespace-pre-wrap">{error.message}</pre>
         </Alert>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <KPICard 
             title="Total Rent Due" 
             value={formatCurrency(stats.potentialRent)}
@@ -219,17 +201,6 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
             tooltip="Percentage of billed rent that has been collected this period."
         >
             <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
-        </KPICard>
-        <KPICard 
-            title="Rent Concentration" 
-            value={`${stats.rentConcentration.toFixed(1)}%`}
-            icon={concentrationRisk.icon}
-            tooltip="Share of collected rent coming from the largest single tenant."
-            colorClass={concentrationRisk.color}
-        >
-             <p className="text-xs text-muted-foreground mt-1">
-                Largest tenant paid {formatCurrency(stats.largestTenantPaid)}
-            </p>
         </KPICard>
       </div>
     </>
