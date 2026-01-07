@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -276,14 +276,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         const end = endOfMonth(today);
 
         const txsQuery = query(
-            collection(firestore, 'users', user.uid, 'bankAccounts'),
-            // This is a placeholder; a real implementation would need a collectionGroup query
-            // and proper filtering for transactions related to this property (costCenter).
-            // For now, we fetch all and filter client-side as a temporary measure.
-        );
-        
-        // This is a simplified fetch, a real app would use a more targeted query
-        const allTxQuery = query(
             collectionGroup(firestore, 'transactions'),
             where('userId', '==', user.uid),
             where('date', '>=', format(start, 'yyyy-MM-dd')),
@@ -291,7 +283,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             where('costCenter', '==', property.id)
         );
 
-        const txsSnapshot = await getDocs(allTxQuery);
+        const txsSnapshot = await getDocs(txsQuery);
         const txs = txsSnapshot.docs.map(doc => doc.data());
         setMonthlyTxs(txs);
         setLoadingTxs(false);
@@ -315,6 +307,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   }, [user, property, firestore]);
 
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome } = useMemo(() => {
+    // Add a guard clause to ensure property exists before calculations
+    if (!property) {
+      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0 };
+    }
+  
     const income = monthlyTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
     const expenses = monthlyTxs.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
     const noi = income - expenses;
@@ -410,7 +407,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             <TooltipProvider>
                 <Tooltip><TooltipTrigger asChild><div>
                     <StatCard title="NOI (Monthly)" value={noi} icon={<Building/>} isLoading={loadingTxs} />
-                </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excluding debt).</p></TooltipContent></Tooltip>
+                </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
                      <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<Wallet/>} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
