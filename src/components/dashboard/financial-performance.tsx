@@ -139,11 +139,10 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     const economicOccupancy = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     const rentCollectionRate = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     
-    let largestTenantRent = 0;
-    if (Object.keys(rentByTenant).length > 0) {
-        largestTenantRent = Math.max(0, ...Object.values(rentByTenant));
-    }
-    const rentConcentration = collectedRent > 0 ? (largestTenantRent / collectedRent) * 100 : 0;
+    const tenantTotals = Object.values(rentByTenant);
+    const largestTenantPaid = tenantTotals.length > 0 ? Math.max(0, ...tenantTotals) : 0;
+
+    const rentConcentration = collectedRent > 0 ? (largestTenantPaid / collectedRent) * 100 : 0;
 
 
     return { 
@@ -152,7 +151,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         rentConcentration,
         collectedRent,
         potentialRent,
-        largestTenantPaid: largestTenantRent,
+        largestTenantPaid,
     };
   }, [transactions, properties]);
 
