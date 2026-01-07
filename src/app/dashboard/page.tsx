@@ -124,8 +124,7 @@ const calculateStats = (transactions: Transaction[], properties: Property[], cal
         else if (isOpEx) dayStats.expense += Math.abs(amount);
     }
     
-    const totalExpenses = operatingExpenses + calculatedInterest;
-    const netIncome = totalIncome - totalExpenses;
+    const netIncome = totalIncome - operatingExpenses - calculatedInterest;
 
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
         return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
@@ -300,11 +299,11 @@ export default function DashboardPage() {
             <TooltipTrigger asChild>
                 <Card className="shadow-lg h-full flex flex-col border-2 border-slate-200">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 min-h-[4.5rem]"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
-                    <CardContent className="flex-grow flex items-center">
+                    <CardContent className="flex-grow flex flex-col justify-center">
                     {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
-                        <div className="flex items-baseline gap-2">
-                        <div className="text-2xl font-bold">{stats.dscr.toFixed(2)}x</div>
-                        <Badge variant={dscrBadge} className={cn(dscrColor)}>{stats.dscr >= 1.25 ? 'Healthy' : stats.dscr >= 1.0 ? 'Watch' : 'Risk'}</Badge>
+                        <div className="flex flex-col gap-1">
+                          <div className="text-xl font-bold">{stats.dscr.toFixed(2)}x</div>
+                          <Badge variant={dscrBadge} className={cn('w-fit', dscrColor)}>{stats.dscr >= 1.25 ? 'Healthy' : stats.dscr >= 1.0 ? 'Watch' : 'Risk'}</Badge>
                         </div>
                     )}
                     </CardContent>
