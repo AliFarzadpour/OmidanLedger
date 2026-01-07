@@ -19,6 +19,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { KPICard } from './stat-card';
+
 
 function normalizeL0(tx: any): string {
     const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase();
@@ -32,31 +34,6 @@ function normalizeL0(tx: any): string {
     if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
     return 'OPERATING EXPENSE';
 }
-
-function KPICard({ title, value, icon, tooltip, colorClass, children }: { title: string, value: string, icon: React.ReactNode, tooltip: string, colorClass?: string, children?: React.ReactNode }) {
-    return (
-        <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <Card className="shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">{title}</CardTitle>
-                            {icon}
-                        </CardHeader>
-                        <CardContent>
-                            <div className={`text-2xl font-bold ${colorClass || ''}`}>{value}</div>
-                            {children}
-                        </CardContent>
-                    </Card>
-                </TooltipTrigger>
-                <TooltipContent>
-                    <p>{tooltip}</p>
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
-    );
-}
-
 
 export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
   const { user } = useUser();
@@ -176,29 +153,41 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <KPICard 
             title="Total Rent Due" 
-            value={formatCurrency(stats.potentialRent)}
+            value={stats.potentialRent}
             icon={<DollarSign className="h-5 w-5 text-muted-foreground"/>}
             tooltip="Total potential rent from all active leases for the month."
+            isLoading={isLoading}
+            cardClassName="bg-blue-50 border-blue-200"
         />
         <KPICard 
             title="Total Rent Collected" 
-            value={formatCurrency(stats.collectedRent)}
+            value={stats.collectedRent}
             icon={<DollarSign className="h-5 w-5 text-green-500"/>}
             tooltip="Total actual rent collected in the selected month."
+            isLoading={isLoading}
             colorClass="text-green-600"
+            cardClassName="bg-green-50 border-green-200"
         />
         <KPICard 
             title="Economic Occupancy" 
-            value={`${stats.economicOccupancy.toFixed(1)}%`}
+            value={stats.economicOccupancy}
+            format="percent"
             icon={<Users className="h-5 w-5 text-muted-foreground"/>}
             tooltip="Actual rent collected ÷ potential rent from all active leases."
+            isLoading={isLoading}
             colorClass={getOccupancyColor(stats.economicOccupancy)}
-        />
+            cardClassName="bg-indigo-50 border-indigo-200"
+        >
+            <p className="text-xs text-muted-foreground">vs. potential rent</p>
+        </KPICard>
         <KPICard 
             title="Rent Collection Rate" 
-            value={`${stats.rentCollectionRate.toFixed(1)}%`}
+            value={stats.rentCollectionRate}
+            format="percent"
             icon={<TrendingUp className="h-5 w-5 text-muted-foreground"/>}
             tooltip="Percentage of billed rent that has been collected this period."
+            isLoading={isLoading}
+            cardClassName="bg-amber-50 border-amber-200"
         >
             <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
         </KPICard>
