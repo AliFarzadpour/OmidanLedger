@@ -27,6 +27,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { OnboardingDashboard } from '@/components/dashboard/OnboardingDashboard';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 type FilterOption = 'this-month' | 'last-month' | 'this-year';
 
