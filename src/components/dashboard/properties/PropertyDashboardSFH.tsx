@@ -324,6 +324,18 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue
     };
   }, [monthlyStats, property, interestForMonth]);
+  
+  const getAiInsight = useMemo(() => {
+    if (loadingTxs) return "Analyzing property performance...";
+    if (cashFlow > 0 && economicOccupancy < 80) return "This property generates positive cash flow but has elevated non-payment risk.";
+    if (dscr > 1.5 && property?.tenants?.length === 1) return "Debt coverage is strong, but rent concentration is high with a single tenant.";
+    if (economicOccupancy < 90 && potentialRent > 0) {
+        const improvement = potentialRent * 0.10;
+        return `Improving collection rate by 10% would increase cash flow by ~${formatCurrency(improvement)}/month.`
+    }
+    if (cashFlow < 0 && noi > 0) return "The property is profitable (NOI > 0) but cash flow is negative due to high debt service.";
+    return "Property financials appear stable for the current period.";
+  }, [loadingTxs, cashFlow, economicOccupancy, dscr, property, potentialRent, noi]);
 
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
@@ -356,18 +368,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     if (ratio >= 1.25) return <Badge variant="default" className="bg-green-600">Healthy</Badge>;
     if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-500">Watch</Badge>;
     return <Badge variant="destructive">Risk</Badge>;
-  }
-
-  const getAiInsight = () => {
-    if (loadingTxs) return "Analyzing property performance...";
-    if (cashFlow > 0 && economicOccupancy < 80) return "This property generates positive cash flow but has elevated non-payment risk.";
-    if (dscr > 1.5 && property.tenants?.length === 1) return "Debt coverage is strong, but rent concentration is high with a single tenant.";
-    if (economicOccupancy < 90 && potentialRent > 0) {
-        const improvement = potentialRent * 0.10;
-        return `Improving collection rate by 10% would increase cash flow by ~${formatCurrency(improvement)}/month.`
-    }
-    if (cashFlow < 0 && noi > 0) return "The property is profitable (NOI > 0) but cash flow is negative due to high debt service.";
-    return "Property financials appear stable for the current period.";
   }
 
   const header = (
@@ -432,14 +432,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
             </TooltipProvider>
         </div>
-
-        {/* --- AI Insight --- */}
-         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center gap-3">
-             <Bot className="h-5 w-5 text-slate-500 shrink-0" />
-             <p className="text-sm text-slate-600">{getAiInsight()}</p>
-         </div>
-
-
+        
         {/* --- Operational KPIs --- */}
         <div className="grid grid-cols-4 gap-4">
             <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
@@ -447,6 +440,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
              <StatCard title="Break-Even Rent" value={breakEvenRent} icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`Surplus: ${formatCurrency(currentRent - breakEvenRent)}`} />
         </div>
+        
+        {/* --- AI Insight --- */}
+         <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center gap-3">
+             <Bot className="h-5 w-5 text-slate-500 shrink-0" />
+             <p className="text-sm text-slate-600">{getAiInsight}</p>
+         </div>
 
         <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
 
