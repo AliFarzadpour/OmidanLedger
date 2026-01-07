@@ -525,6 +525,93 @@
         "uploadedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "propertyId", "userId", "fileName", "fileType", "downloadUrl", "storagePath", "uploadedAt"]
+    },
+    "OpsThread": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OpsThread",
+      "type": "object",
+      "description": "A communication thread for operations.",
+      "properties": {
+        "uid": { "type": "string" },
+        "subject": { "type": "string" },
+        "status": { "type": "string", "enum": ["open", "pending", "closed"] },
+        "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"] },
+        "propertyId": { "type": ["string", "null"] },
+        "unitId": { "type": ["string", "null"] },
+        "vendorId": { "type": ["string", "null"] },
+        "tenantId": { "type": ["string", "null"] },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "OpsMessage": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OpsMessage",
+      "type": "object",
+      "description": "A message within an operations thread.",
+      "properties": {
+        "uid": { "type": "string" },
+        "threadId": { "type": "string" },
+        "senderType": { "type": "string", "enum": ["landlord", "tenant", "vendor", "internal"] },
+        "senderName": { "type": "string" },
+        "senderEmail": { "type": "string", "format": "email" },
+        "body": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "OpsTask": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "OpsTask",
+      "type": "object",
+      "description": "A task for operations.",
+      "properties": {
+        "uid": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["todo", "in_progress", "blocked", "done", "canceled"] },
+        "priority": { "type": "string", "enum": ["low", "normal", "high", "urgent"] },
+        "dueDate": { "type": ["string", "null"], "format": "date-time" },
+        "propertyId": { "type": ["string", "null"] },
+        "unitId": { "type": ["string", "null"] },
+        "threadId": { "type": ["string", "null"] },
+        "vendorId": { "type": ["string", "null"] },
+        "tenantId": { "type": ["string", "null"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "WorkOrder": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "WorkOrder",
+      "type": "object",
+      "description": "Represents a work order for maintenance or repair.",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "propertyId": { "type": "string" },
+        "unitId": { "type": ["string", "null"] },
+        "tenantId": { "type": ["string", "null"] },
+        "vendorId": { "type": ["string", "null"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string", "enum": ["Plumbing", "HVAC", "Electrical", "Appliance", "Turnover", "Cleaning", "Landscaping", "Other"] },
+        "priority": { "type": "string", "enum": ["Low", "Normal", "High", "Emergency"] },
+        "status": { "type": "string", "enum": ["New", "Scheduled", "In Progress", "Waiting", "Completed", "Canceled"] },
+        "dueDate": { "type": ["string", "null"], "format": "date-time" },
+        "scheduledAt": { "type": ["string", "null"], "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" },
+        "estimatedCost": { "type": ["number", "null"] },
+        "actualCost": { "type": ["number", "null"] },
+        "paid": { "type": "boolean" },
+        "paymentSource": { "type": ["string", "null"] },
+        "notesInternal": { "type": "string" },
+        "visibility": { "type": "string", "enum": ["landlord_only", "shared_with_tenant", "shared_with_vendor"] }
+      },
+      "required": ["id", "userId", "propertyId", "title"]
     }
   },
   "auth": {
@@ -712,8 +799,67 @@
           "description": "Singleton document for platform-wide statistics. Should only be writable by admin-level server processes.",
           "params": []
         }
+      },
+      {
+        "path": "/users/{userId}/opsThreads/{threadId}",
+        "definition": {
+          "entityName": "OpsThread",
+          "schema": {
+            "$ref": "#/backend/entities/OpsThread"
+          },
+          "description": "User-specific communication threads for operations.",
+          "params": [
+            { "name": "userId", "description": "User ID" },
+            { "name": "threadId", "description": "Thread ID" }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/opsThreads/{threadId}/messages/{messageId}",
+        "definition": {
+          "entityName": "OpsMessage",
+          "schema": {
+            "$ref": "#/backend/entities/OpsMessage"
+          },
+          "description": "Messages within an operations thread.",
+          "params": [
+            { "name": "userId", "description": "User ID" },
+            { "name": "threadId", "description": "Thread ID" },
+            { "name": "messageId", "description": "Message ID" }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/opsTasks/{taskId}",
+        "definition": {
+          "entityName": "OpsTask",
+          "schema": {
+            "$ref": "#/backend/entities/OpsTask"
+          },
+          "description": "User-specific tasks for operations.",
+          "params": [
+            { "name": "userId", "description": "User ID" },
+            { "name": "taskId", "description": "Task ID" }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/opsWorkOrders/{workOrderId}",
+        "definition": {
+          "entityName": "WorkOrder",
+          "schema": {
+            "$ref": "#/backend/entities/WorkOrder"
+          },
+          "description": "User-specific work orders for operations.",
+          "params": [
+            { "name": "userId", "description": "User ID" },
+            { "name": "workOrderId", "description": "Work Order ID" }
+          ]
+        }
       }
     ],
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
+
+    
