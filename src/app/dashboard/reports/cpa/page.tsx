@@ -3,60 +3,100 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft } from 'lucide-react';
-import { ReportCard } from '@/components/dashboard/reports/cpa/ReportCard';
+import { ArrowLeft, Play, FileDown, Loader2 } from 'lucide-react';
 import { ScheduleEReport } from '@/components/dashboard/reports/cpa/ScheduleEReport';
 import { DepreciationSchedule } from '@/components/dashboard/reports/cpa/DepreciationSchedule';
 import { MortgageInterestReport } from '@/components/dashboard/reports/cpa/MortgageInterestReport';
 import { GeneralLedgerCPA } from '@/components/dashboard/reports/cpa/GeneralLedgerCPA';
 import { EquityRollForwardReport } from '@/components/dashboard/reports/cpa/EquityRollForwardReport';
+import * as cpaActions from '@/actions/cpa-reports';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { exportToCSV, exportToPDF } from '@/lib/report-exporter';
+
+const reportOptions = [
+    { label: "Schedule E Summary", value: "getScheduleESummary" },
+    { label: "Depreciation Schedule", value: "getDepreciationSchedule" },
+    { label: "Mortgage Interest Summary", value: "getMortgageInterestSummary" },
+    { label: "General Ledger (CPA)", value: "getGeneralLedger" },
+    { label: "Owner Equity Roll-Forward", value: "getEquityRollForward" },
+];
 
 export default function CpaReportsPage() {
     const router = useRouter();
-    
-    // State to hold the generated report data
+    const { user } = useUser();
+    const firestore = useFirestore();
+
+    // State for the generated report
     const [reportData, setReportData] = useState<any | null>(null);
     const [activeReport, setActiveReport] = useState<string | null>(null);
-    const [reportParams, setReportParams] = useState<any>({});
     const [isLoading, setIsLoading] = useState(false);
+    
+    // State for form inputs
+    const currentYear = new Date().getFullYear();
+    const [selectedReport, setSelectedReport] = useState(reportOptions[0].value);
+    const [startDate, setStartDate] = useState(`${currentYear}-01-01`);
+    const [endDate, setEndDate] = useState(`${currentYear}-12-31`);
+    const [scope, setScope] = useState('all');
 
+    const propertiesQuery = useMemoFirebase(() => {
+        if (!user || !firestore) return null;
+        return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+    }, [user, firestore]);
+    const { data: properties, isLoading: isLoadingProperties } = useCollection(propertiesQuery);
 
-    const handleGenerate = (reportName: string, data: any, params: any) => {
-        setActiveReport(reportName);
-        setReportData(data);
-        setReportParams(params);
+    const handleGenerate = async () => {
+        if (!user || !selectedReport) return;
+        setIsLoading(true);
+        setReportData(null); // Clear previous report
+        try {
+            const action = cpaActions[selectedReport as keyof typeof cpaActions] as Function;
+            const params = { userId: user.uid, startDate, endDate, propertyId: scope };
+            const data = await action(params);
+            setActiveReport(selectedReport);
+            setReportData(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleLoading = (loading: boolean) => {
-        setIsLoading(loading);
+    const handleExport = (format: 'pdf' | 'csv') => {
+        if (!reportData) return;
+        const reportTitle = reportOptions.find(r => r.value === activeReport)?.label || 'Report';
+        const propertyName = scope === 'all' ? 'All Properties' : properties?.find((p: any) => p.id === scope)?.name || 'Unknown Property';
+        const params = { startDate, endDate, property: propertyName };
+
+        if (format === 'pdf') {
+            exportToPDF(reportTitle, reportData, params);
+        } else {
+            exportToCSV(reportTitle, reportData);
+        }
     }
-    
-    const reports = [
-        { title: "Schedule E Summary", generator: "getScheduleESummary" },
-        { title: "Depreciation Schedule", generator: "getDepreciationSchedule" },
-        { title: "Mortgage Interest Summary", generator: "getMortgageInterestSummary" },
-        { title: "General Ledger (CPA)", generator: "getGeneralLedger" },
-        { title: "Owner Equity Roll-Forward", generator: "getEquityRollForward" },
-    ];
     
     const renderActiveReport = () => {
         if (isLoading) {
-             return <div className="text-center p-10">Loading report...</div>;
+             return <div className="text-center p-10"><Loader2 className="h-6 w-6 animate-spin mx-auto"/></div>;
         }
         if (!activeReport || !reportData) {
             return <div className="text-center p-10 text-muted-foreground">Select and generate a report to view it here.</div>;
         }
 
         switch (activeReport) {
-            case 'Schedule E Summary':
+            case 'getScheduleESummary':
                 return <ScheduleEReport data={reportData} />;
-            case 'Depreciation Schedule':
+            case 'getDepreciationSchedule':
                 return <DepreciationSchedule data={reportData} />;
-            case 'Mortgage Interest Summary':
+            case 'getMortgageInterestSummary':
                 return <MortgageInterestReport data={reportData} />;
-            case 'General Ledger (CPA)':
+            case 'getGeneralLedger':
                 return <GeneralLedgerCPA data={reportData} />;
-            case 'Owner Equity Roll-Forward':
+            case 'getEquityRollForward':
                 return <EquityRollForwardReport data={reportData} />;
             default:
                 return null;
@@ -76,19 +116,60 @@ export default function CpaReportsPage() {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {reports.map(report => (
-                    <ReportCard 
-                        key={report.title}
-                        title={report.title}
-                        reportGenerator={report.generator}
-                        onGenerate={(data, params) => handleGenerate(report.title, data, params)}
-                        onLoading={handleLoading}
-                    />
-                ))}
-            </div>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Report Generator</CardTitle>
+                    <CardDescription>Select a report type and filters, then generate your document.</CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div className="md:col-span-2 grid gap-1.5">
+                        <Label>Report Type</Label>
+                        <Select value={selectedReport} onValueChange={setSelectedReport}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {reportOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="grid gap-1.5">
+                        <Label>Start Date</Label>
+                        <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
+                    </div>
+                    <div className="grid gap-1.5">
+                        <Label>End Date</Label>
+                        <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
+                    </div>
+                     <div className="md:col-span-2 grid gap-1.5">
+                        <Label>Scope</Label>
+                        <Select value={scope} onValueChange={setScope} disabled={isLoadingProperties}>
+                            <SelectTrigger><SelectValue placeholder="Select property..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Properties (Portfolio)</SelectItem>
+                                {properties?.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </CardContent>
+                <CardFooter className="flex justify-end bg-slate-50/50 p-4 border-t">
+                    <Button size="sm" className="gap-2" onClick={handleGenerate} disabled={isLoading}>
+                        {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                        Generate Report
+                    </Button>
+                </CardFooter>
+            </Card>
+
             
             <div className="mt-8">
+                 {reportData && (
+                    <div className="flex justify-end gap-2 mb-4">
+                        <Button variant="outline" size="sm" className="gap-2" onClick={() => handleExport('pdf')}>
+                            <FileDown className="h-4 w-4" /> PDF
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-2" onClick={() => handleExport('csv')}>
+                            <FileDown className="h-4 w-4" /> CSV
+                        </Button>
+                    </div>
+                )}
                 {renderActiveReport()}
             </div>
         </div>
