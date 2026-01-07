@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, where, getDocs, deleteDoc, collectionGroup } from 'firebase/firestore';
-import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
+import { doc, collection, query, deleteDoc } from 'firebase/firestore';
+import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle } from 'lucide-react';
@@ -34,7 +35,7 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO, startOfMonth, endOfMonth, format } from 'date-fns';
+import { isPast, parseISO, format } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -412,11 +413,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         <div className="grid grid-cols-4 gap-4">
             <TooltipProvider>
                 <Tooltip><TooltipTrigger asChild><div>
-                    <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} />
+                    <StatCard title="NOI (Monthly)" value={noi} icon={<Building className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} />
                 </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
-                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
+                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<Wallet className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
                 </div></TooltipTrigger><TooltipContent><p>NOI minus total debt payment. The cash left in your pocket.</p></TooltipContent></Tooltip>
 
                 <Tooltip><TooltipTrigger asChild><div>
@@ -449,7 +450,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
         <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
 
-        <Tabs defaultValue="overview" className="w-full">
+        <Tabs defaultValue="tenants" className="w-full">
           <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
             <TabsTrigger value="tenants">Tenants</TabsTrigger>
             <TabsTrigger value="income">Income</TabsTrigger>
