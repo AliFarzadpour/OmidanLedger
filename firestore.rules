@@ -65,6 +65,22 @@ service cloud.firestore {
         match /charges/{chargeId} {
             allow read, list, write, delete: if isOwner(userId);
         }
+
+        // --- NEW: Operations Center Rules ---
+        match /opsThreads/{threadId} {
+          allow read, write: if isOwner(userId);
+          match /messages/{messageId} {
+            allow read, write: if isOwner(userId);
+          }
+        }
+
+        match /opsTasks/{taskId} {
+          allow read, write: if isOwner(userId);
+        }
+
+        match /opsWorkOrders/{workOrderId} {
+          allow read, write: if isOwner(userId);
+        }
     }
     
     match /properties/{propertyId} {
