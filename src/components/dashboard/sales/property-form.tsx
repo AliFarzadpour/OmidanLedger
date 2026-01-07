@@ -3,13 +3,13 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { 
   Building2, DollarSign, Key, Zap, Users, Save, Plus, Trash2, Home, Landmark, 
   FileText, Wrench, UserCheck, CalendarDays, Receipt, Clock, Mail, Phone, ShieldCheck, 
-  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History, Calculator, Loader2
+  BookOpen, Bot, Briefcase, Globe, MapPin, CreditCard, ArrowDownCircle, AlertTriangle, Fingerprint, History, Calculator, Loader2, BarChart, Percent
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -118,6 +118,17 @@ const propertySchema = z.object({
     name: z.string(),
     phone: z.string(),
   })).optional(),
+  depreciation: z.object({
+    inServiceDate: z.string().optional(),
+    purchasePrice: z.coerce.number().optional(),
+    landValue: z.coerce.number().optional(),
+    closingCosts: z.coerce.number().optional(),
+    improvementBasis: z.coerce.number().optional(),
+    method: z.enum(['SL', 'MACRS']).optional(),
+    usefulLife: z.coerce.number().optional(),
+    depreciableBasis: z.coerce.number().optional(),
+    estimatedAnnualDepreciation: z.coerce.number().optional(),
+  }).optional(),
   accounting: z.object({
     assetAccount: z.string().optional(),
     incomeAccount: z.string().optional(),
@@ -167,7 +178,8 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
     { type: 'Trash', responsibility: 'tenant', providerName: '', providerContact: '' },
     { type: 'Internet', responsibility: 'tenant', providerName: '', providerContact: '' },
   ],
-  preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }]
+  preferredVendors: [{ id: '1', role: 'Handyman', name: '', phone: '' }],
+  depreciation: { method: 'SL', usefulLife: 27.5 }
 };
 
 export function PropertyForm({ 
@@ -200,12 +212,24 @@ export function PropertyForm({
       mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
       management: { ...DEFAULT_VALUES.management, ...initialData.management },
       taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
+      depreciation: { ...DEFAULT_VALUES.depreciation, ...initialData.depreciation },
   } : DEFAULT_VALUES;
 
   const form = useForm<PropertyFormValues>({
     resolver: zodResolver(propertySchema),
     defaultValues: mergedValues
   });
+  
+  const watchedDepreciation = useWatch({ control: form.control, name: "depreciation" });
+  useEffect(() => {
+    if (watchedDepreciation) {
+        const basis = (watchedDepreciation.purchasePrice || 0) - (watchedDepreciation.landValue || 0) + (watchedDepreciation.closingCosts || 0) + (watchedDepreciation.improvementBasis || 0);
+        const annual = watchedDepreciation.usefulLife ? basis / watchedDepreciation.usefulLife : 0;
+        form.setValue('depreciation.depreciableBasis', basis, { shouldDirty: true });
+        form.setValue('depreciation.estimatedAnnualDepreciation', annual, { shouldDirty: true });
+    }
+  }, [watchedDepreciation, form]);
+
 
   useEffect(() => {
     if (initialData && initialData.id !== currentPropertyId) {
@@ -219,6 +243,7 @@ export function PropertyForm({
           mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
           management: { ...DEFAULT_VALUES.management, ...initialData.management },
           taxAndInsurance: { ...DEFAULT_VALUES.taxAndInsurance, ...initialData.taxAndInsurance },
+          depreciation: { ...DEFAULT_VALUES.depreciation, ...initialData.depreciation },
       };
       form.reset(merged);
       setCurrentPropertyId(initialData.id);
@@ -342,6 +367,7 @@ export function PropertyForm({
     { id: 'access', label: 'Access Codes', icon: Fingerprint },
     { id: 'management', label: 'Management Co.', icon: Briefcase },
     { id: 'mortgage', label: 'Mortgage & Loan', icon: Landmark },
+    { id: 'depreciation', label: 'Depreciation', icon: BarChart }, // NEW
     { id: 'tax', label: 'Tax & Insurance', icon: ShieldCheck },
     { id: 'hoa', label: 'HOA', icon: Users },
     { id: 'utilities', label: 'Utilities', icon: Zap },
@@ -645,6 +671,49 @@ export function PropertyForm({
                   </div>
                 </>
               )}
+            </CardContent>
+          </Card>
+        )}
+
+        {activeSection === 'depreciation' && (
+          <Card>
+            <CardHeader><CardTitle>Depreciation Details</CardTitle><CardDescription>Enter details to estimate annual depreciation for tax purposes.</CardDescription></CardHeader>
+            <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>In-Service Date (Closing Date)</Label><Input type="date" {...form.register('depreciation.inServiceDate')} /></div>
+                    <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" {...form.register('depreciation.purchasePrice')} /></div>
+                </div>
+                <div className="p-4 bg-slate-50 border rounded-lg">
+                    <Label className="font-semibold text-slate-700 mb-2 block">Basis Calculation</Label>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2"><Label>Land Value</Label><Input type="number" {...form.register('depreciation.landValue')} /></div>
+                        <div className="space-y-2"><Label>Closing Costs</Label><Input type="number" {...form.register('depreciation.closingCosts')} /></div>
+                    </div>
+                    <div className="space-y-2 mt-4"><Label>Capital Improvements</Label><Input type="number" {...form.register('depreciation.improvementBasis')} /></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2"><Label>Method</Label>
+                        <Select onValueChange={(val:any)=>form.setValue('depreciation.method',val)} value={form.watch('depreciation.method')}>
+                            <SelectTrigger><SelectValue/></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="SL">Straight-Line (SL)</SelectItem>
+                                <SelectItem value="MACRS">MACRS</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2"><Label>Useful Life (Years)</Label><Input type="number" step="0.5" {...form.register('depreciation.usefulLife')} /></div>
+                </div>
+                 <Separator />
+                 <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
+                    <div className="space-y-1">
+                        <Label className="text-blue-800">Depreciable Basis</Label>
+                        <Input disabled readOnly value={form.watch('depreciation.depreciableBasis')?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} />
+                    </div>
+                    <div className="space-y-1">
+                        <Label className="text-blue-800">Est. Annual Depreciation</Label>
+                        <Input disabled readOnly value={form.watch('depreciation.estimatedAnnualDepreciation')?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} />
+                    </div>
+                </div>
             </CardContent>
           </Card>
         )}
