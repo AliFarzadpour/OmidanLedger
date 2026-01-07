@@ -158,10 +158,10 @@ export default function DashboardPage() {
     const filtered = allTransactions;
     
     let totalIncome = 0;
-    let totalExpensesAbs = 0;
+    let totalExpensesAbs = 0; // Corrected to only include operating expenses
     let rentalIncome = 0;
     let operatingExpenses = 0;
-    let netIncome = 0;
+    let totalNetIncome = 0; // A separate variable for true net income
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -171,35 +171,39 @@ export default function DashboardPage() {
       const dateKey = tx.date;
       const cat = normalizeCategory(tx);
       
-      const isOperatingExpense = cat.l0 === 'EXPENSE' || cat.l0 === 'OPERATING EXPENSE';
+      const isIncome = cat.l0 === 'INCOME';
+      const isOperatingExpense = cat.l0 === 'OPERATING EXPENSE' || cat.l0 === 'EXPENSE';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
-      if (cat.l0 === 'INCOME') {
+      if (isIncome) {
         totalIncome += amount;
+        totalNetIncome += amount;
         dayStats.income += amount;
-        if (cat.l1.toUpperCase().includes('RENTAL')) {
+        if ((cat.l1 || '').toUpperCase().includes('RENTAL')) {
             rentalIncome += amount;
         }
       } else if (isOperatingExpense) {
           totalExpensesAbs += Math.abs(amount);
-          operatingExpenses += Math.abs(amount);
+          operatingExpenses += Math.abs(amount); // This is for NOI calculation
+          totalNetIncome += amount; // Subtract from true net
           dayStats.expense += Math.abs(amount);
           const breakdownKey = cat.l1 || 'Uncategorized';
           expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
+      } else if (amount < 0) {
+        // This handles non-operating expenses like mortgage principal, equity draws for Net Income
+        totalNetIncome += amount;
       }
     }
     
-    netIncome = totalIncome - totalExpensesAbs;
-
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
         return sum + (prop.mortgage?.principalAndInterest || 0) + (prop.mortgage?.escrowAmount || 0);
     }, 0);
 
     const noi = rentalIncome - operatingExpenses;
     const dscr = totalDebtPayments > 0 ? noi / totalDebtPayments : 0;
-    const cashFlowAfterDebt = netIncome - totalDebtPayments;
+    const cashFlowAfterDebt = totalNetIncome - totalDebtPayments;
 
     const expenseBreakdown = Array.from(expenseBreakdownMap.entries())
       .map(([name, value]) => ({ name, value }))
@@ -213,8 +217,8 @@ export default function DashboardPage() {
       filteredTransactions: filtered.slice(0, 5),
       totalIncome,
       totalExpenses: totalExpensesAbs,
-      netIncome,
-      profitMargin: totalIncome > 0 ? (netIncome / totalIncome) * 100 : 0,
+      netIncome: totalNetIncome, // Use the true net income
+      profitMargin: totalIncome > 0 ? (totalNetIncome / totalIncome) * 100 : 0,
       noi,
       dscr,
       cashFlowAfterDebt,
@@ -222,6 +226,7 @@ export default function DashboardPage() {
       cashFlowData,
     };
   }, [allTransactions, properties]);
+
 
   const filterOptions: { label: string; value: FilterOption }[] = [
     { label: 'This Month', value: 'this-month' },
