@@ -5,7 +5,7 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, updateDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft } from 'lucide-react';
+import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft, RefreshCw } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions/transactions-table';
@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
+import { getAndUpdatePlaidBalances } from '@/actions/plaid-actions';
 import { differenceInHours } from 'date-fns';
 
 // Define the shape of a data source for type safety
@@ -28,9 +29,18 @@ interface DataSource {
   accountType: 'checking' | 'savings' | 'credit-card' | 'cash';
   accountNumber?: string;
   plaidAccessToken?: string;
+  plaidAccountId?: string;
   lastSyncedAt?: { seconds: number; nanoseconds: number } | Date;
   historicalDataPending?: boolean;
 }
+
+interface BalanceData {
+    currentBalance: number | null;
+    availableBalance: number | null;
+    currency: string;
+    lastUpdatedAt: { seconds: number, nanoseconds: number } | Date;
+}
+
 
 export default function TransactionsPage() {
   const { user } = useUser();
@@ -51,6 +61,33 @@ export default function TransactionsPage() {
   const userDocRef = useMemoFirebase(() => user ? doc(firestore, `users/${user.uid}`) : null, [user, firestore]);
   const { data: userData, isLoading: isLoadingUser } = useDoc(userDocRef);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  
+  // Balances state
+  const balancesQuery = useMemoFirebase(() => {
+    if (!user || !firestore) return null;
+    return collection(firestore, `users/${user.uid}/bankBalances`);
+  }, [user, firestore]);
+  const { data: balanceDocs, isLoading: isLoadingBalances } = useCollection(balancesQuery);
+
+  const balances = useMemo(() => {
+      if (!balanceDocs) return {};
+      return balanceDocs.reduce((acc, doc) => {
+          acc[doc.id] = doc as BalanceData;
+          return acc;
+      }, {} as Record<string, BalanceData>);
+  }, [balanceDocs]);
+
+
+  const handleRefreshBalances = useCallback(async () => {
+    if (!user) return;
+    toast({ title: 'Refreshing Balances...', description: 'Fetching latest data from your banks.' });
+    try {
+        await getAndUpdatePlaidBalances(user.uid);
+        toast({ title: 'Balances Updated!', description: 'Your bank-reported balances are now up to date.' });
+    } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Refresh Failed', description: e.message });
+    }
+  }, [user, toast]);
 
   useEffect(() => {
     if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
@@ -104,6 +141,11 @@ export default function TransactionsPage() {
       });
     }
   }, [user, toast, refetchDataSources]);
+
+  // Initial load balances
+  useEffect(() => {
+      handleRefreshBalances();
+  }, [handleRefreshBalances]);
 
   useEffect(() => {
     if (dataSources && dataSources.length > 0 && autoSyncEnabled && user) {
@@ -252,12 +294,14 @@ export default function TransactionsPage() {
 
       <DataSourceList 
         dataSources={dataSources || []} 
-        isLoading={isLoadingDataSources || isLoadingTransactions}
+        balances={balances}
+        isLoading={isLoadingDataSources || isLoadingTransactions || isLoadingBalances}
         flagCounts={flagCounts}
         onEdit={handleEdit}
         onSelect={handleSelectDataSource}
         onDelete={handleDeleteRequest}
         onSync={handleSync}
+        onRefreshBalances={handleRefreshBalances}
         selectedDataSourceId={selectedDataSource?.id}
         syncingIds={syncingIds}
       />

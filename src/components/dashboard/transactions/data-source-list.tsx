@@ -13,6 +13,7 @@ import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag, Loader2, RefreshCw 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { formatCurrency } from '@/lib/format';
 
 interface DataSource {
   id: string;
@@ -21,19 +22,29 @@ interface DataSource {
   accountType: 'checking' | 'savings' | 'credit-card' | 'credit' | 'cash' | 'other';
   accountNumber?: string;
   plaidAccessToken?: string;
+  plaidAccountId?: string;
   historicalDataPending?: boolean;
+}
+
+interface BalanceData {
+    currentBalance: number | null;
+    availableBalance: number | null;
+    currency: string;
+    lastUpdatedAt: { seconds: number, nanoseconds: number } | Date;
 }
 
 interface DataSourceListProps {
   dataSources: DataSource[];
+  balances: Record<string, BalanceData>;
   isLoading: boolean;
   onEdit: (dataSource: DataSource) => void;
   onSelect: (dataSource: DataSource) => void;
   onDelete: (dataSource: DataSource) => void;
-  onSync: (dataSourceId: string) => void; // New prop for syncing
+  onSync: (dataSourceId: string) => void; 
+  onRefreshBalances: () => void;
   selectedDataSourceId?: string | null;
   flagCounts: Record<string, { needsReview: number; incorrect: number }>;
-  syncingIds: Set<string>; // Changed to Set for better performance
+  syncingIds: Set<string>; 
 }
 
 const typeIcons = {
@@ -47,11 +58,13 @@ const typeIcons = {
 
 export function DataSourceList({ 
     dataSources, 
+    balances,
     isLoading, 
     onEdit, 
     onSelect, 
     onDelete, 
     onSync,
+    onRefreshBalances,
     selectedDataSourceId,
     flagCounts,
     syncingIds
@@ -65,6 +78,24 @@ export function DataSourceList({
   const handleSyncClick = (e: React.MouseEvent, source: DataSource) => {
       e.stopPropagation();
       onSync(source.id);
+  }
+
+  const getBalanceDisplay = (source: DataSource) => {
+      const balance = balances[source.plaidAccountId!];
+      if (!balance) return null;
+
+      if (source.accountType === 'credit' || source.accountType === 'credit-card') {
+          return {
+              label: 'Available Credit',
+              value: balance.availableBalance,
+              color: 'text-green-600'
+          };
+      }
+      return {
+          label: 'Current Balance',
+          value: balance.currentBalance,
+          color: 'text-slate-800'
+      };
   }
 
   if (isLoading) {
@@ -95,10 +126,18 @@ export function DataSourceList({
   }
 
   return (
+    <>
+    <div className="flex justify-end mb-2 -mt-4">
+        <Button variant="ghost" size="sm" onClick={onRefreshBalances} className="text-xs text-muted-foreground gap-2">
+            <RefreshCw className="h-3 w-3" /> Refresh Bank Balances
+        </Button>
+    </div>
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
       {dataSources.map((source) => {
         const counts = flagCounts[source.id] || { needsReview: 0, incorrect: 0 };
         const isSyncingThis = syncingIds.has(source.id);
+        const balanceDisplay = source.plaidAccountId ? getBalanceDisplay(source) : null;
+
         return (
             <div key={source.id} className="relative group">
             <Card 
@@ -117,11 +156,14 @@ export function DataSourceList({
                     <p className="text-sm text-muted-foreground">{source.bankName}</p>
                     <Badge variant="outline" className="text-xs capitalize">{source.accountType.replace('-', ' ')}</Badge>
                   </div>
-                  {source.accountNumber && (
-                      <p className="text-xs text-muted-foreground">
-                      •••• {source.accountNumber.slice(-4)}
-                      </p>
-                  )}
+                   {balanceDisplay && (
+                        <div className="mt-2 pt-2 border-t">
+                            <p className="text-xs text-muted-foreground">{balanceDisplay.label}</p>
+                            <p className={cn("text-lg font-bold", balanceDisplay.color)}>
+                                {formatCurrency(balanceDisplay.value ?? 0)}
+                            </p>
+                        </div>
+                    )}
                 </CardContent>
                 <CardFooter className="p-3 pt-2 flex items-center justify-between">
                     <div>
@@ -180,5 +222,6 @@ export function DataSourceList({
         )
       })}
     </div>
+    </>
   );
 }
