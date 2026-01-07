@@ -16,6 +16,7 @@ export function MortgageInterestReport({ data }: { data: any[] }) {
           <TableHeader>
             <TableRow>
               <TableHead>Property</TableHead>
+              <TableHead>Lender</TableHead>
               <TableHead className="text-right">Total Interest Paid</TableHead>
             </TableRow>
           </TableHeader>
@@ -23,11 +24,12 @@ export function MortgageInterestReport({ data }: { data: any[] }) {
             {data.map((item, index) => (
               <TableRow key={index}>
                 <TableCell>{item.property}</TableCell>
+                <TableCell>{item.lender}</TableCell>
                 <TableCell className="text-right">{formatCurrency(item.amount)}</TableCell>
               </TableRow>
             ))}
             <TableRow className="font-bold bg-muted">
-                <TableCell>Total</TableCell>
+                <TableCell colSpan={2}>Total</TableCell>
                 <TableCell className="text-right">{formatCurrency(totalInterest)}</TableCell>
             </TableRow>
           </TableBody>

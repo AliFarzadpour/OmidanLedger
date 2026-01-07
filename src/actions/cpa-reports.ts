@@ -3,6 +3,7 @@
 
 import { db } from '@/lib/admin-db';
 import { calculateAmortization } from './amortization-actions';
+import { eachMonthOfInterval, parseISO } from 'date-fns';
 
 interface ReportParams {
     userId: string;
@@ -61,28 +62,53 @@ export async function getDepreciationSchedule({ userId, propertyId }: ReportPara
     });
 }
 
-// --- 3. MORTGAGE INTEREST SUMMARY ---
+// --- 3. MORTGAGE INTEREST SUMMARY (CORRECTED LOGIC) ---
 export async function getMortgageInterestSummary({ userId, startDate, endDate, propertyId }: ReportParams) {
-     const transactions = await getFilteredTransactions(userId, startDate, endDate, propertyId);
+    
+    // 1. Fetch all properties for the user to calculate interest for all of them
+    const allPropertiesSnap = await db.collection('properties').where('userId', '==', userId).get();
+    const allProperties = allPropertiesSnap.docs.map(doc => doc.data());
+    
+    const summary: Record<string, { property: string; amount: number; lender: string }> = {};
 
-    const interestPayments = transactions.filter((tx: any) => 
-        tx.categoryHierarchy?.l2?.toLowerCase().includes('mortgage interest')
-    );
+    const months = eachMonthOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-    const summary: Record<string, { lender: string; total: number }> = {};
+    for (const prop of allProperties) {
+        if (prop.mortgage?.hasMortgage === 'yes' && prop.mortgage.originalLoanAmount) {
+            let totalInterestForProperty = 0;
+            
+            for (const monthDate of months) {
+                const result = await calculateAmortization({
+                    principal: prop.mortgage.originalLoanAmount,
+                    annualRate: prop.mortgage.interestRate,
+                    principalAndInterest: prop.mortgage.principalAndInterest,
+                    loanStartDate: prop.mortgage.purchaseDate,
+                    loanTermInYears: prop.mortgage.loanTerm,
+                    targetDate: monthDate.toISOString(),
+                });
+                if (result.success && result.interestPaidForMonth) {
+                    totalInterestForProperty += result.interestPaidForMonth;
+                }
+            }
 
-    interestPayments.forEach((tx: any) => {
-        const propertyName = tx.costCenter || 'Unknown Property';
-         if (!summary[propertyName]) {
-            summary[propertyName] = { lender: 'Unknown Lender', total: 0 };
+            if (totalInterestForProperty > 0) {
+                 if (!summary[prop.id]) {
+                    summary[prop.id] = { property: prop.name, amount: 0, lender: prop.mortgage.lenderName || 'N/A' };
+                }
+                summary[prop.id].amount += totalInterestForProperty;
+            }
         }
-        summary[propertyName].total += Math.abs(tx.amount);
-    });
+    }
 
-    return Object.entries(summary).map(([property, data]) => ({
-        property,
-        amount: data.total
-    }));
+    // Convert to array
+    const fullReport = Object.values(summary);
+
+    // If a specific property was requested, filter the final result
+    if (propertyId && propertyId !== 'all') {
+        return fullReport.filter(item => item.property === summary[propertyId]?.property);
+    }
+    
+    return fullReport;
 }
 
 
