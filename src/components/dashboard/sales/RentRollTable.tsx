@@ -307,7 +307,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
     const visibleRows = combinedRows;
 
-    return visibleRows.map(row => {
+    const enrichedRows = visibleRows.map(row => {
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
       const balance = row.rentDue - amountPaid;
   
@@ -337,6 +337,21 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
         leaseStatus
       };
     });
+
+    // Sort the rows: Unpaid > Partial > Overpaid > Paid
+    enrichedRows.sort((a, b) => {
+        const statusSortOrder = {
+            unpaid: 1,
+            partial: 2,
+            overpaid: 3,
+            paid: 4,
+        };
+        const statusA = statusSortOrder[a.status];
+        const statusB = statusSortOrder[b.status];
+        return statusA - statusB;
+    });
+
+    return enrichedRows;
   
   }, [properties, allUnits, incomeByPropertyOrUnit]);
   
