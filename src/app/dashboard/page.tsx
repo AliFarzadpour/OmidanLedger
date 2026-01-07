@@ -97,7 +97,6 @@ const calculateStats = (transactions: Transaction[], properties: Property[], cal
     let totalIncome = 0;
     let operatingExpenses = 0;
     let rentalIncome = 0;
-    let totalExpenses = 0;
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -125,7 +124,7 @@ const calculateStats = (transactions: Transaction[], properties: Property[], cal
         else if (isOpEx) dayStats.expense += Math.abs(amount);
     }
     
-    totalExpenses = operatingExpenses + calculatedInterest;
+    const totalExpenses = operatingExpenses + calculatedInterest;
     const netIncome = totalIncome - totalExpenses;
 
     const totalDebtPayments = (properties || []).reduce((sum, prop) => {
@@ -291,39 +290,28 @@ export default function DashboardPage() {
 
       {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>}
 
-      <div className="space-y-6">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Performance</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-            <StatCard title="Total Income" value={stats.totalIncome} delta={calculateDelta(stats.totalIncome, prevStats.totalIncome)} icon={<DollarSign />} isLoading={isLoading} cardClassName="bg-green-50 border-green-200" />
-            <StatCard title="Net Income" value={stats.netIncome} delta={calculateDelta(stats.netIncome, prevStats.netIncome)} icon={<Activity />} isLoading={isLoading} cardClassName="bg-blue-50 border-blue-200" />
-        </div>
-        
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Costs</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-            <StatCard title="Operating Expenses" value={stats.operatingExpenses} delta={calculateDelta(stats.operatingExpenses, prevStats.operatingExpenses)} deltaInverted icon={<CreditCard />} isLoading={isLoading} cardClassName="bg-red-50 border-red-200" />
-            <StatCard title="Interest Expense" value={calculatedInterest} delta={calculateDelta(calculatedInterest, prevCalculatedInterest)} deltaInverted icon={<Percent />} isLoading={isLoading} cardClassName="bg-amber-50 border-amber-200" />
-        </div>
-
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Cash &amp; Debt</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-            <StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} delta={calculateDelta(stats.cashFlowAfterDebt, prevStats.cashFlowAfterDebt)} icon={<Banknote />} isLoading={isLoading} cardClassName="bg-indigo-50 border-indigo-200" />
-             <Tooltip>
-                <TooltipTrigger asChild>
-                    <Card className="shadow-lg h-full flex flex-col border-2 border-slate-200">
-                      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 min-h-[4.5rem]"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
-                      <CardContent className="flex-grow flex items-center">
-                        {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
-                          <div className="flex items-baseline gap-2">
-                            <div className="text-2xl font-bold">{stats.dscr.toFixed(2)}x</div>
-                            <Badge variant={dscrBadge} className={cn(dscrColor)}>{stats.dscr >= 1.25 ? 'Healthy' : stats.dscr >= 1.0 ? 'Watch' : 'Risk'}</Badge>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                </TooltipTrigger>
-                <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt Payments). A value above 1.25x is considered healthy.</p></TooltipContent>
-            </Tooltip>
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <StatCard title="Total Income" value={stats.totalIncome} delta={calculateDelta(stats.totalIncome, prevStats.totalIncome)} icon={<DollarSign />} isLoading={isLoading} cardClassName="bg-green-50 border-green-200" />
+        <StatCard title="Operating Expenses" value={stats.operatingExpenses} delta={calculateDelta(stats.operatingExpenses, prevStats.operatingExpenses)} deltaInverted icon={<CreditCard />} isLoading={isLoading} cardClassName="bg-red-50 border-red-200" />
+        <StatCard title="Interest Expense" value={calculatedInterest} delta={calculateDelta(calculatedInterest, prevCalculatedInterest)} deltaInverted icon={<Percent />} isLoading={isLoading} cardClassName="bg-amber-50 border-amber-200" />
+        <StatCard title="Net Income" value={stats.netIncome} delta={calculateDelta(stats.netIncome, prevStats.netIncome)} icon={<Activity />} isLoading={isLoading} cardClassName="bg-blue-50 border-blue-200" />
+        <StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} delta={calculateDelta(stats.cashFlowAfterDebt, prevStats.cashFlowAfterDebt)} icon={<Banknote />} isLoading={isLoading} cardClassName="bg-indigo-50 border-indigo-200" />
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Card className="shadow-lg h-full flex flex-col border-2 border-slate-200">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 min-h-[4.5rem]"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
+                    <CardContent className="flex-grow flex items-center">
+                    {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
+                        <div className="flex items-baseline gap-2">
+                        <div className="text-2xl font-bold">{stats.dscr.toFixed(2)}x</div>
+                        <Badge variant={dscrBadge} className={cn(dscrColor)}>{stats.dscr >= 1.25 ? 'Healthy' : stats.dscr >= 1.0 ? 'Watch' : 'Risk'}</Badge>
+                        </div>
+                    )}
+                    </CardContent>
+                </Card>
+            </TooltipTrigger>
+            <TooltipContent><p>Debt Service Coverage Ratio (NOI / Total Debt Payments). A value above 1.25x is considered healthy.</p></TooltipContent>
+        </Tooltip>
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-5">
@@ -341,5 +329,3 @@ export default function DashboardPage() {
     </TooltipProvider>
   );
 }
-
-    
