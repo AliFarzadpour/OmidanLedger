@@ -112,7 +112,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
   const stats = useMemo(() => {
     let collectedRent = 0;
     let potentialRent = 0;
-    let rentByTenant: { [key: string]: number } = {};
+    const rentByTenant: { [key: string]: number } = {};
 
     properties.forEach(prop => {
         if(prop.tenants) {
@@ -131,7 +131,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
 
       if (l0 === 'INCOME' && isRentalIncome) {
         collectedRent += amount;
-        const tenantId = tx.tenantId || 'unknown';
+        const tenantId = tx.tenantId || 'unknown_tenant';
         rentByTenant[tenantId] = (rentByTenant[tenantId] || 0) + amount;
       }
     });
@@ -141,7 +141,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     
     let largestTenantRent = 0;
     if (Object.keys(rentByTenant).length > 0) {
-        largestTenantRent = Math.max(...Object.values(rentByTenant));
+        largestTenantRent = Math.max(0, ...Object.values(rentByTenant));
     }
     const rentConcentration = collectedRent > 0 ? (largestTenantRent / collectedRent) * 100 : 0;
 
@@ -152,6 +152,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         rentConcentration,
         collectedRent,
         potentialRent,
+        largestTenantPaid: largestTenantRent,
     };
   }, [transactions, properties]);
 
@@ -175,6 +176,13 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       if (rate > 85) return 'text-amber-600';
       return 'text-red-600';
   }
+  
+  const concentrationRisk = useMemo(() => {
+    if (stats.rentConcentration > 60) return { icon: <AlertTriangle className="h-5 w-5 text-red-500" />, color: 'text-red-600' };
+    if (stats.rentConcentration > 40) return { icon: <AlertTriangle className="h-5 w-5 text-amber-500" />, color: 'text-amber-600' };
+    return { icon: <Users className="h-5 w-5 text-muted-foreground" />, color: '' };
+  }, [stats.rentConcentration]);
+
 
   return (
     <>
@@ -189,26 +197,26 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
             title="Economic Occupancy" 
             value={`${stats.economicOccupancy.toFixed(1)}%`}
             icon={<Users className="h-5 w-5 text-muted-foreground"/>}
-            tooltip="Collected Rent ÷ Potential Rent for all active leases."
+            tooltip="Actual rent collected ÷ potential rent from all active leases."
             colorClass={getOccupancyColor(stats.economicOccupancy)}
         />
         <KPICard 
             title="Rent Collection Rate" 
             value={`${stats.rentCollectionRate.toFixed(1)}%`}
             icon={<TrendingUp className="h-5 w-5 text-muted-foreground"/>}
-            tooltip="Collected rent vs. Billed rent for the current period."
+            tooltip="Percentage of billed rent that has been collected this period."
         >
             <Progress value={stats.rentCollectionRate} className="mt-2 h-2" />
         </KPICard>
         <KPICard 
             title="Rent Concentration" 
             value={`${stats.rentConcentration.toFixed(1)}%`}
-            icon={stats.rentConcentration > 30 ? <AlertTriangle className="h-5 w-5 text-red-500" /> : <Users className="h-5 w-5 text-muted-foreground"/>}
-            tooltip="Percentage of total collected rent coming from the largest single tenant."
-            colorClass={stats.rentConcentration > 30 ? 'text-red-600' : ''}
+            icon={concentrationRisk.icon}
+            tooltip="Share of collected rent coming from the largest single tenant."
+            colorClass={concentrationRisk.color}
         >
              <p className="text-xs text-muted-foreground mt-1">
-                Largest tenant paid {formatCurrency(Object.values(stats).reduce((max, v) => Math.max(max, v), 0))}
+                Largest tenant paid {formatCurrency(stats.largestTenantPaid)}
             </p>
         </KPICard>
       </div>
