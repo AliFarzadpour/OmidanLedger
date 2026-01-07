@@ -2,11 +2,11 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle, Users } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
@@ -301,13 +301,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
     const income = monthlyStats?.income || 0;
     const expenses = Math.abs(monthlyStats?.expenses || 0);
-    const noi = income - expenses;
+    const noiValue = income - expenses;
 
     const debtPayment = (property.mortgage?.principalAndInterest || 0);
     const totalDebt = debtPayment + (property.mortgage?.escrowAmount || 0);
 
-    const cashFlow = noi - debtPayment - interestForMonth;
-    const dscr = debtPayment > 0 ? noi / debtPayment : Infinity;
+    const cashFlowValue = noiValue - debtPayment - interestForMonth;
+    const dscrValue = debtPayment > 0 ? noiValue / debtPayment : Infinity;
 
     const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
     const economicOccupancyValue = potentialRentValue > 0 ? (income / potentialRentValue) * 100 : 0;
@@ -315,9 +315,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const breakEvenRentValue = expenses + totalDebt;
     
     return { 
-      noi, 
-      cashFlow, 
-      dscr, 
+      noi: noiValue, 
+      cashFlow: cashFlowValue, 
+      dscr: dscrValue, 
       economicOccupancy: economicOccupancyValue, 
       breakEvenRent: breakEvenRentValue, 
       rentalIncome: income, 
