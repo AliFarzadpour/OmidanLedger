@@ -92,6 +92,25 @@ export default function TransactionsPage() {
   }, [user, toast]);
 
   useEffect(() => {
+    const shouldRefresh = () => {
+      if (Object.keys(balances).length === 0) return true; // No balances, fetch immediately
+      
+      const oldestUpdate = Object.values(balances).reduce((oldest, current) => {
+        const currentDate = current.lastUpdatedAt instanceof Date ? current.lastUpdatedAt : new Date((current.lastUpdatedAt as any).seconds * 1000);
+        if (currentDate < oldest) return currentDate;
+        return oldest;
+      }, new Date());
+      
+      return differenceInHours(new Date(), oldestUpdate) > 4;
+    };
+
+    if (shouldRefresh()) {
+      handleRefreshBalances();
+    }
+  }, [balances, handleRefreshBalances]);
+
+
+  useEffect(() => {
     if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
       setAutoSyncEnabled(userData.plaidAutoSyncEnabled);
     } else if (userData && userData.plaidAutoSyncEnabled === undefined) {
@@ -138,16 +157,12 @@ export default function TransactionsPage() {
     } finally {
       setSyncingIds(prev => {
         const newSet = new Set(prev);
-        newSet.delete(id);
+        newSet.delete(accountId);
         return newSet;
       });
     }
   }, [user, toast, refetchDataSources]);
 
-  // Initial load balances
-  useEffect(() => {
-      handleRefreshBalances();
-  }, [handleRefreshBalances]);
 
   useEffect(() => {
     if (dataSources && dataSources.length > 0 && autoSyncEnabled && user) {
