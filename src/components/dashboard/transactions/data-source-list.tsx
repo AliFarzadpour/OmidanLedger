@@ -152,7 +152,7 @@ export function DataSourceList({
                 className={cn(
                     "flex flex-col shadow-sm hover:shadow-md transition-all h-full cursor-pointer border-t-4",
                     config.color,
-                    selectedDataSourceId === source.id && "ring-2 ring-primary"
+                    selectedDataSourceId === source.id && "ring-2 ring-primary bg-primary/5"
                 )}
                 onClick={() => onSelect(source)}
             >
@@ -163,6 +163,18 @@ export function DataSourceList({
                 <CardContent className="flex-grow p-3 pt-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-muted-foreground">{source.bankName}</p>
+                     <div className="flex items-center gap-1">
+                        {counts.incorrect > 0 && (
+                            <Badge variant="destructive" className="flex items-center gap-1 text-xs">
+                                <Flag className="h-3 w-3" /> {counts.incorrect}
+                            </Badge>
+                        )}
+                         {counts.needsReview > 0 && (
+                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1 text-xs">
+                                <Flag className="h-3 w-3" /> {counts.needsReview}
+                            </Badge>
+                        )}
+                    </div>
                   </div>
                    {balanceDisplay ? (
                         <div className="mt-2 pt-2 border-t">
@@ -200,49 +212,37 @@ export function DataSourceList({
                             <Badge variant="secondary" className="text-xs">Plaid</Badge>
                         )}
                     </div>
-                    <div className="flex items-center gap-2">
-                        {counts.incorrect > 0 && (
-                            <Badge variant="destructive" className="flex items-center gap-1 text-xs">
-                                <Flag className="h-3 w-3" /> {counts.incorrect}
-                            </Badge>
+                     <div className="flex gap-1">
+                        {source.plaidAccessToken && (
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={(e) => handleSyncClick(e, source)}
+                                disabled={isSyncingThis}
+                            >
+                                {isSyncingThis ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                            </Button>
                         )}
-                         {counts.needsReview > 0 && (
-                            <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-200 flex items-center gap-1 text-xs">
-                                <Flag className="h-3 w-3" /> {counts.needsReview}
-                            </Badge>
-                        )}
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => { e.stopPropagation(); onEdit(source); }}
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={(e) => handleDeleteClick(e, source)}
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
                     </div>
                 </CardFooter>
             </Card>
-            <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                {source.plaidAccessToken && (
-                     <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={(e) => handleSyncClick(e, source)}
-                        disabled={isSyncingThis}
-                    >
-                        {isSyncingThis ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                    </Button>
-                )}
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={(e) => { e.stopPropagation(); onEdit(source); }}
-                >
-                    <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    onClick={(e) => handleDeleteClick(e, source)}
-                >
-                    <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-            </div>
             </div>
         )
       })}
