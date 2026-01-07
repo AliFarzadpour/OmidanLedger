@@ -14,7 +14,7 @@ type StatCardProps = {
   icon: ReactNode;
   description?: string;
   isLoading?: boolean;
-  format?: 'currency' | 'percent';
+  format?: 'currency' | 'percent' | 'months';
   cardClassName?: string;
   delta?: number;
   deltaInverted?: boolean;
@@ -25,6 +25,9 @@ export function StatCard({ title, value, icon, description, isLoading, format = 
   const formattedValue = () => {
     if (format === 'percent') {
       return `${value.toFixed(1)}%`;
+    }
+     if (format === 'months') {
+        return `${value.toFixed(0)} mos`;
     }
     return formatCurrency(value);
   }
@@ -43,7 +46,7 @@ export function StatCard({ title, value, icon, description, isLoading, format = 
           <Skeleton className="h-8 w-3/4" />
         ) : (
             <>
-              <div className="text-2xl font-bold">{formattedValue()}</div>
+              <div className="text-xl font-bold">{formattedValue()}</div>
               {delta !== undefined && isFinite(delta) && (
                   <div className={cn(
                       "flex items-center gap-1 text-xs font-semibold",
