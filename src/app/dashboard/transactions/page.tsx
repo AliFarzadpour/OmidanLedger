@@ -5,11 +5,11 @@ import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, updateDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft, RefreshCw } from 'lucide-react';
+import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft, RefreshCw, DollarSign, Wallet } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions/transactions-table';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
 import { getAndUpdatePlaidBalances } from '@/actions/plaid-actions';
 import { differenceInHours } from 'date-fns';
+import { formatCurrency } from '@/lib/format';
 
 // Define the shape of a data source for type safety
 interface DataSource {
@@ -37,6 +38,7 @@ interface DataSource {
 interface BalanceData {
     currentBalance: number | null;
     availableBalance: number | null;
+    limit: number | null;
     currency: string;
     lastUpdatedAt: { seconds: number, nanoseconds: number } | Date;
 }
@@ -136,7 +138,7 @@ export default function TransactionsPage() {
     } finally {
       setSyncingIds(prev => {
         const newSet = new Set(prev);
-        newSet.delete(accountId);
+        newSet.delete(id);
         return newSet;
       });
     }
@@ -191,6 +193,19 @@ export default function TransactionsPage() {
         return acc;
     }, {} as Record<string, { needsReview: number; incorrect: number }>);
   }, [allTransactions]);
+  
+  const totalCash = useMemo(() => {
+    if (!dataSources || !balances) return 0;
+    return dataSources.reduce((sum, source) => {
+        if (source.accountType === 'checking' || source.accountType === 'savings') {
+            const balance = balances[source.plaidAccountId!]?.currentBalance;
+            if (typeof balance === 'number') {
+                return sum + balance;
+            }
+        }
+        return sum;
+    }, 0);
+  }, [dataSources, balances]);
 
   const handleAdd = () => {
     setEditingDataSource(null);
@@ -261,7 +276,7 @@ export default function TransactionsPage() {
 
   return (
     <>
-    <div className="space-y-8 p-8 max-w-7xl mx-auto">
+    <div className="space-y-6 p-8 max-w-7xl mx-auto">
       
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-2">
@@ -292,6 +307,23 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      <Card className="bg-slate-50 border-slate-200">
+        <CardContent className="p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+                <div className="p-3 bg-green-100 rounded-lg">
+                    <Wallet className="h-6 w-6 text-green-700" />
+                </div>
+                <div>
+                    <Label className="text-sm text-muted-foreground">Total Cash Balance</Label>
+                    <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalCash)}</p>
+                </div>
+            </div>
+            <p className="text-xs text-muted-foreground max-w-xs">
+                This is the sum of all 'checking' and 'savings' accounts as reported by your bank. It may include pending transactions.
+            </p>
+        </CardContent>
+      </Card>
+
       <DataSourceList 
         dataSources={dataSources || []} 
         balances={balances}
@@ -306,22 +338,10 @@ export default function TransactionsPage() {
         syncingIds={syncingIds}
       />
       
-      {selectedDataSource ? (
+      {selectedDataSource && (
           <TransactionsTable 
             dataSource={selectedDataSource} 
-            onSyncStart={(id) => setSyncingIds(prev => new Set(prev).add(id))}
-            onSyncEnd={(id) => setSyncingIds(prev => {
-                const newSet = new Set(prev);
-                newSet.delete(id);
-                return newSet;
-            })}
           />
-      ) : (
-        <Card className="flex items-center justify-center h-64 border-dashed">
-            <CardContent className="pt-6 text-center">
-                 <p className="text-muted-foreground">Select a data source above to view its transactions.</p>
-            </CardContent>
-        </Card>
       )}
 
       <DataSourceDialog

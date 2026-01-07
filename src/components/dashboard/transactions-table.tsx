@@ -1,14 +1,13 @@
-
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, PlusCircle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
@@ -66,12 +65,10 @@ type SortDirection = 'ascending' | 'descending';
 
 interface TransactionsTableProps {
   dataSource: DataSource;
-  onSyncStart: (id: string) => void;
-  onSyncEnd: (id: string) => void;
 }
 
 
-export function TransactionsTable({ dataSource, onSyncStart, onSyncEnd }: TransactionsTableProps) {
+export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
@@ -136,22 +133,10 @@ export function TransactionsTable({ dataSource, onSyncStart, onSyncEnd }: Transa
     finally { setIsClearing(false); }
   };
 
-  const handleSyncTransactions = useCallback(async () => {
-    if (!user || !dataSource.plaidAccessToken) return;
-    setIsSyncing(true);
-    onSyncStart(dataSource.id);
-    toast({ title: 'Syncing...', description: 'Fetching data from bank...' });
-    try {
-        const result = await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
-        toast({ title: 'Sync Complete', description: `${result.count} new transactions imported.` });
-        refetch();
-    } catch (error: any) {
-        toast({ variant: "destructive", title: "Sync Failed", description: error.message });
-    } finally {
-        setIsSyncing(false);
-        onSyncEnd(dataSource.id);
-    }
-  }, [user, dataSource, onSyncStart, onSyncEnd, toast, refetch]);
+  const handleSyncTransactions = async () => {
+    // This component no longer directly handles sync. It's done from the parent list.
+    toast({ title: 'Sync Triggered', description: 'Check the data source card for status.' });
+  };
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
     if (!user || !firestore) return;
@@ -271,13 +256,11 @@ export function TransactionsTable({ dataSource, onSyncStart, onSyncEnd }: Transa
       <Card className="h-full shadow-lg">
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <CardTitle>Transactions for {dataSource.accountName}</CardTitle>
-            <CardDescription>Showing all transactions from {dataSource.bankName}.</CardDescription>
+            <CardTitle>Transaction History</CardTitle>
+            <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
-            {isPlaidAccount ? (
-              <Button onClick={handleSyncTransactions} disabled={isSyncing}><RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} /> Sync</Button>
-            ) : (
+            {!isPlaidAccount && (
               <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
             )}
             <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>

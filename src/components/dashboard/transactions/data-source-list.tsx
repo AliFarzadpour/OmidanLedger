@@ -1,4 +1,3 @@
-
 'use client';
 
 import {
@@ -9,11 +8,12 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag, Loader2, RefreshCw } from 'lucide-react';
+import { Banknote, CreditCard, Wallet, Pencil, Trash2, Flag, Loader2, RefreshCw, Landmark, PiggyBank } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/format';
+import { formatDistanceToNow } from 'date-fns';
 
 interface DataSource {
   id: string;
@@ -29,6 +29,7 @@ interface DataSource {
 interface BalanceData {
     currentBalance: number | null;
     availableBalance: number | null;
+    limit: number | null;
     currency: string;
     lastUpdatedAt: { seconds: number, nanoseconds: number } | Date;
 }
@@ -47,13 +48,13 @@ interface DataSourceListProps {
   syncingIds: Set<string>; 
 }
 
-const typeIcons = {
-  checking: <Banknote className="h-5 w-5 text-primary" />,
-  savings: <Banknote className="h-5 w-5 text-green-500" />,
-  'credit-card': <CreditCard className="h-5 w-5 text-blue-500" />,
-  credit: <CreditCard className="h-5 w-5 text-blue-500" />,
-  cash: <Wallet className="h-5 w-5 text-yellow-500" />,
-  other: <Wallet className="h-5 w-5 text-gray-500" />,
+const typeConfig = {
+  checking: { icon: Landmark, color: 'border-t-green-500' },
+  savings: { icon: PiggyBank, color: 'border-t-blue-500' },
+  'credit-card': { icon: CreditCard, color: 'border-t-purple-500' },
+  credit: { icon: CreditCard, color: 'border-t-purple-500' },
+  cash: { icon: Wallet, color: 'border-t-yellow-500' },
+  other: { icon: Wallet, color: 'border-t-gray-400' },
 };
 
 export function DataSourceList({ 
@@ -84,17 +85,27 @@ export function DataSourceList({
       const balance = balances[source.plaidAccountId!];
       if (!balance) return null;
 
+      const lastUpdatedDate = balance.lastUpdatedAt ? (balance.lastUpdatedAt instanceof Date ? balance.lastUpdatedAt : new Date((balance.lastUpdatedAt as any).seconds * 1000)) : null;
+
       if (source.accountType === 'credit' || source.accountType === 'credit-card') {
           return {
-              label: 'Available Credit',
-              value: balance.availableBalance,
-              color: 'text-green-600'
+              label: 'Balance Owed',
+              value: balance.currentBalance,
+              sublabel: 'Available Credit',
+              subvalue: balance.availableBalance,
+              color: 'text-red-600',
+              subcolor: 'text-green-600',
+              lastUpdatedAt: lastUpdatedDate,
           };
       }
       return {
-          label: 'Current Balance',
+          label: 'Bank Balance',
           value: balance.currentBalance,
-          color: 'text-slate-800'
+          sublabel: 'Available',
+          subvalue: balance.availableBalance,
+          color: 'text-slate-800',
+          subcolor: 'text-slate-500',
+          lastUpdatedAt: lastUpdatedDate,
       };
   }
 
@@ -137,31 +148,50 @@ export function DataSourceList({
         const counts = flagCounts[source.id] || { needsReview: 0, incorrect: 0 };
         const isSyncingThis = syncingIds.has(source.id);
         const balanceDisplay = source.plaidAccountId ? getBalanceDisplay(source) : null;
+        const config = typeConfig[source.accountType as keyof typeof typeConfig] || typeConfig.other;
+        const Icon = config.icon;
 
         return (
             <div key={source.id} className="relative group">
             <Card 
                 className={cn(
-                    "flex flex-col shadow-sm hover:shadow-md transition-all h-full cursor-pointer",
+                    "flex flex-col shadow-sm hover:shadow-md transition-all h-full cursor-pointer border-t-4",
+                    config.color,
                     selectedDataSourceId === source.id && "ring-2 ring-primary"
                 )}
                 onClick={() => onSelect(source)}
             >
                 <CardHeader className="flex flex-row items-start justify-between space-y-0 p-3">
-                <CardTitle className="text-base font-semibold">{source.accountName}</CardTitle>
-                {typeIcons[source.accountType as keyof typeof typeIcons] || typeIcons.other}
+                    <CardTitle className="text-base font-semibold">{source.accountName}</CardTitle>
+                    <Icon className="h-5 w-5 text-muted-foreground" />
                 </CardHeader>
                 <CardContent className="flex-grow p-3 pt-0">
                   <div className="flex items-center gap-2">
                     <p className="text-sm text-muted-foreground">{source.bankName}</p>
-                    <Badge variant="outline" className="text-xs capitalize">{source.accountType.replace('-', ' ')}</Badge>
                   </div>
-                   {balanceDisplay && (
+                   {balanceDisplay ? (
                         <div className="mt-2 pt-2 border-t">
                             <p className="text-xs text-muted-foreground">{balanceDisplay.label}</p>
                             <p className={cn("text-lg font-bold", balanceDisplay.color)}>
                                 {formatCurrency(balanceDisplay.value ?? 0)}
                             </p>
+                            {balanceDisplay.sublabel && (
+                                <p className="text-xs mt-1">
+                                    <span className="text-muted-foreground">{balanceDisplay.sublabel}: </span>
+                                    <span className={cn("font-medium", balanceDisplay.subcolor)}>
+                                        {formatCurrency(balanceDisplay.subvalue ?? 0)}
+                                    </span>
+                                </p>
+                            )}
+                            {balanceDisplay.lastUpdatedAt && (
+                                <p className="text-[10px] text-muted-foreground/70 mt-1">
+                                    Updated {formatDistanceToNow(balanceDisplay.lastUpdatedAt, { addSuffix: true })}
+                                </p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="mt-2 pt-2 border-t">
+                             <p className="text-xs text-muted-foreground italic mt-2">Manual account</p>
                         </div>
                     )}
                 </CardContent>
