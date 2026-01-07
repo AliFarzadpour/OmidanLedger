@@ -78,8 +78,8 @@ export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
           Where your money went during this period.
         </CardDescription>
       </CardHeader>
-      <CardContent className="h-full flex-1 pb-8">
-        <div className="h-[300px] w-full">
+      <CardContent className="h-full flex-1 flex flex-col pb-8">
+        <div className="h-[300px] w-full pt-4">
           {isLoading ? (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               Loading chart...
@@ -95,7 +95,7 @@ export function ExpenseChart({ data, isLoading }: ExpenseChartProps) {
                 <Pie
                   data={processedData}
                   cx="50%"
-                  cy="45%"
+                  cy="50%"
                   labelLine={false}
                   innerRadius={60}
                   outerRadius={80}
