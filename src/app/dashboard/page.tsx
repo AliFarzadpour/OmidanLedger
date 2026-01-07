@@ -20,7 +20,7 @@ import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
 import { RecentTransactions } from '@/components/dashboard/recent-transactions';
 
 import { DollarSign, CreditCard, Activity, AlertCircle, Percent, Banknote, Landmark } from 'lucide-react';
-import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays, subYears } from 'date-fns';
+import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays, subYears, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -101,28 +101,32 @@ const calculateStats = (transactions: Transaction[], properties: Property[], cal
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
 
-    for (const tx of transactions) {
+    transactions.forEach(tx => {
         const amount = Number(tx.amount || 0);
         const dateKey = tx.date;
         const l0 = (tx.categoryHierarchy?.l0 || tx.primaryCategory || '').toUpperCase();
         
-        const isOpEx = l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
+        const isOpEx = l0 === 'OPERATING EXPENSE';
+        const isExpense = l0 === 'EXPENSE';
 
         if (l0 === 'INCOME') {
             totalIncome += amount;
             if ((tx.categoryHierarchy?.l1 || '').toUpperCase().includes('RENTAL')) {
                 rentalIncome += amount;
             }
-        } else if (isOpEx) {
+        } else if (isOpEx || isExpense) {
             operatingExpenses += Math.abs(amount);
             expenseBreakdownMap.set(tx.categoryHierarchy?.l1 || 'Uncategorized', (expenseBreakdownMap.get(tx.categoryHierarchy?.l1 || 'Uncategorized') || 0) + Math.abs(amount));
         }
 
         if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
         const dayStats = cashFlowMap.get(dateKey)!;
-        if (l0 === 'INCOME') dayStats.income += amount;
-        else if (isOpEx) dayStats.expense += Math.abs(amount);
-    }
+        if (l0 === 'INCOME') {
+            dayStats.income += amount;
+        } else if (isOpEx || isExpense) {
+            dayStats.expense += Math.abs(amount);
+        }
+    });
     
     const netIncome = totalIncome - operatingExpenses - calculatedInterest;
 
@@ -278,12 +282,21 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold tracking-tight">Welcome Back, {user?.email?.split('@')[0] || 'User'}!</h1>
           <p className="text-muted-foreground">Here&apos;s a summary of your financial activity.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg bg-muted p-1">
-          {filterOptions.map(opt => (
-            <Button key={opt.value} variant={filter === opt.value ? 'default' : 'ghost'} onClick={() => setFilter(opt.value)} className={cn('w-full transition-all', filter === opt.value && 'shadow-sm')}>
-              {opt.label}
-            </Button>
-          ))}
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center gap-2 rounded-lg bg-muted p-1">
+            {filterOptions.map(opt => (
+              <Button 
+                key={opt.value} 
+                variant={filter === opt.value ? 'default' : 'ghost'} 
+                onClick={() => setFilter(opt.value)} 
+                className={cn('w-full transition-all', filter === opt.value && 'shadow-sm')}>
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+           <p className="text-xs text-muted-foreground pr-1">
+                {format(parseISO(currentRange.startDate), 'MMM d, yyyy')} – {format(parseISO(currentRange.endDate), 'MMM d, yyyy')}
+            </p>
         </div>
       </div>
 
@@ -297,11 +310,11 @@ export default function DashboardPage() {
         <StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} delta={calculateDelta(stats.cashFlowAfterDebt, prevStats.cashFlowAfterDebt)} icon={<Banknote />} isLoading={isLoading} cardClassName="bg-indigo-50 border-indigo-200" />
         <Tooltip>
             <TooltipTrigger asChild>
-                <Card className="shadow-lg h-full flex flex-col border-2 border-slate-200">
+                <Card className="h-full flex flex-col shadow-lg border-2 border-slate-200">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 min-h-[4.5rem]"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
                     <CardContent className="flex-grow flex flex-col justify-center">
                     {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
-                        <div className="flex flex-col gap-1">
+                        <div className="flex flex-col items-start gap-1">
                           <div className="text-xl font-bold">{stats.dscr.toFixed(2)}x</div>
                           <Badge variant={dscrBadge} className={cn('w-fit', dscrColor)}>{stats.dscr >= 1.25 ? 'Healthy' : stats.dscr >= 1.0 ? 'Watch' : 'Risk'}</Badge>
                         </div>
