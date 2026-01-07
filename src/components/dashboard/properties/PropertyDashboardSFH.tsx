@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, collectionGroup, format, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, collectionGroup, getDoc, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -35,7 +35,7 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO } from 'date-fns';
+import { isPast, parseISO, format } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -296,24 +296,23 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   }, [user, property]);
 
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
-    const emptyResult = { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
-    if (!property) return emptyResult;
+    if (!property) {
+      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
+    }
   
-    // Corrected cash-basis calculations
-    const rentalIncome = monthlyStats?.income || 0; // This is RENT COLLECTED (cash basis)
+    const rentalIncome = monthlyStats?.income || 0;
     const operatingExpenses = Math.abs(monthlyStats?.expenses || 0);
     const noiValue = rentalIncome - operatingExpenses;
   
     const debtPayment = property.mortgage?.principalAndInterest || 0;
     const totalDebtPayment = debtPayment + (property.mortgage?.escrowAmount || 0);
   
-    const cashFlowValue = noiValue - debtPayment; // P&I is the debt service, not including interestForMonth again.
+    const cashFlowValue = noiValue - debtPayment;
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
     const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
     const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
-    // Corrected Break-Even and Surplus
     const breakEvenRentValue = operatingExpenses + totalDebtPayment;
     const surplus = rentalIncome - breakEvenRentValue;
     
@@ -337,7 +336,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       dscr: dscrValue, 
       economicOccupancy: economicOccupancyValue, 
       breakEvenRent: breakEvenRentValue,
-      surplus, // Keep surplus for use in description
+      surplus,
       rentalIncome: rentalIncome, 
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
@@ -347,12 +346,19 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
     
-    // Using the corrected, dynamic KPI values
-    if (cashFlow > 0 && economicOccupancy < 80 && economicOccupancy > 0) return `This property is cash-flowing. Improving the collection rate from ${economicOccupancy.toFixed(0)}% to 95% could increase monthly cash flow by approximately ${formatCurrency(potentialRent * 0.95 - rentalIncome)}.`;
-    if (dscr > 1.5 && property?.tenants?.length === 1) return "Insight: Debt coverage is strong. Risk is tenant concentration (100% from one tenant). Consider adding a lease renewal reminder.";
-    if (cashFlow < 0 && noi > 0) return "Insight: The property is profitable on an operating basis, but negative cash flow suggests the debt service is high. Consider refinancing options.";
-    if (dscr < 1.2 && dscr > 0 && isFinite(dscr)) return "Insight: The debt service coverage ratio is below the typical lender threshold of 1.25x. Focus on increasing NOI by reducing expenses or raising rent."
-    return "Insight: Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.";
+    if (cashFlow > 0 && economicOccupancy < 80 && economicOccupancy > 0) {
+        return `This property is cash-flowing. Improving the collection rate from ${economicOccupancy.toFixed(0)}% to 95% could increase monthly cash flow by approximately ${formatCurrency(potentialRent * 0.95 - rentalIncome)}.`;
+    }
+    if (dscr > 1.5 && property?.tenants?.length === 1) {
+        return "Risk is tenant concentration (100% from one tenant). Consider adding a lease renewal reminder.";
+    }
+    if (cashFlow < 0 && noi > 0) {
+        return "The property is profitable on an operating basis, but negative cash flow suggests the debt service is high. Consider refinancing options.";
+    }
+    if (dscr < 1.2 && dscr > 0 && isFinite(dscr)) {
+        return "The debt service coverage ratio is below the typical lender threshold of 1.25x. Focus on increasing NOI by reducing expenses or raising rent.";
+    }
+    return "Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.";
   }, [loadingTxs, cashFlow, economicOccupancy, dscr, property, potentialRent, rentalIncome, noi]);
 
 
@@ -440,7 +446,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
                     <Tooltip><TooltipTrigger asChild><div>
-                         <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200"}/>
+                         <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cn(cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} />
                     </div></TooltipTrigger><TooltipContent><p>NOI minus principal & interest payments. The cash left in your pocket.</p></TooltipContent></Tooltip>
 
                     <Tooltip><TooltipTrigger asChild><div>
@@ -466,11 +472,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     value={breakEvenRent} 
                     icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
                     isLoading={loadingTxs} 
-                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'Fully cash-flow positive'}
+                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'No fixed costs'}
                 />
             </div>
             
-            <div className="space-y-2 pt-4">
+             <div className="space-y-2 pt-4">
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
                     <div className="bg-slate-200 p-2 rounded-full"><Bot className="h-5 w-5 text-slate-500 shrink-0" /></div>
                     <div>
