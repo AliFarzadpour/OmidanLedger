@@ -17,6 +17,7 @@ import {
   Activity, // New Icon for Health
   BookOpenCheck, // Icon for Onboarding
   DollarSign, // Icon for Billing
+  Wrench, // Icon for Operations
 } from "lucide-react";
 
 import {
@@ -63,6 +64,12 @@ const data = {
       icon: Landmark,
       advanced: true,
     },
+    {
+      title: "Operations Center",
+      url: "/dashboard/operations",
+      icon: Wrench,
+      advanced: true,
+    },
   ],
   
   // Zone 2: The "Money" World (Bookkeeping)
@@ -89,12 +96,6 @@ const data = {
       title: "Invoices & Billing",
       url: "/dashboard/sales/services",
       icon: FileText,
-      advanced: true,
-    },
-    {
-      title: "Vendors",
-      url: "/dashboard/vendors",
-      icon: Users,
       advanced: true,
     },
     {
