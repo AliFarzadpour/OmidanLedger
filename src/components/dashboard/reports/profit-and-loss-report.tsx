@@ -153,8 +153,8 @@ export function ProfitAndLossReport() {
     const from = startOfMonth(today);
     const to = endOfMonth(today);
     const initialDates = {
-      from: from.toISOString().split('T')[0],
-      to: to.toISOString().split('T')[0]
+      from: format(from, 'yyyy-MM-dd'),
+      to: format(to, 'yyyy-MM-dd')
     };
     setDates(initialDates);
     setActiveRange(initialDates);
@@ -229,7 +229,7 @@ export function ProfitAndLossReport() {
     const empty = { income: [], expenses: [], totalInc: 0, totalExp: 0, net: 0 };
     if (!allTransactions.length || !activeRange.from || !activeRange.to) return empty;
     const fromD = parseISO(activeRange.from);
-    const toD = addDays(parseISO(activeRange.to), 1); // Make end date inclusive
+    const toD = addDays(parseISO(activeRange.to), 0); // Corrected: Use 0 to not include next day
     const incMap = new Map<string, { total: number; transactions: Transaction[] }>();
     const expMap = new Map<string, { total: number; transactions: Transaction[] }>();
     let totalInc = 0, totalExp = 0;
@@ -279,7 +279,7 @@ export function ProfitAndLossReport() {
     if (!allTransactions.length || !activeRange.from || !activeRange.to) return empty;
 
     const fromD = parseISO(activeRange.from);
-    const toD = addDays(parseISO(activeRange.to), 1); // Make end date inclusive
+    const toD = addDays(parseISO(activeRange.to), 0); // Corrected: Use 0 to not include next day
     const months = eachMonthOfInterval({ start: fromD, end: toD }).map(d => format(d, 'yyyy-MM'));
 
     const incomeByCategory: Record<string, Record<string, number>> = {};
