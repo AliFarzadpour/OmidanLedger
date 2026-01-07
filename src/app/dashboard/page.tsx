@@ -165,6 +165,7 @@ export default function DashboardPage() {
     let totalExpensesAbs = 0;
     let rentalIncome = 0;
     let operatingExpenses = 0;
+    let nonOperatingExpenses = 0;
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -174,6 +175,7 @@ export default function DashboardPage() {
       const dateKey = tx.date;
       const cat = normalizeCategory(tx);
       const isOperatingExpense = cat.l0 === 'EXPENSE' || cat.l0 === 'OPERATING EXPENSE';
+      const isFinancingOrEquity = cat.l0 === 'LIABILITY' || cat.l0 === 'EQUITY';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
@@ -192,6 +194,9 @@ export default function DashboardPage() {
 
         const breakdownKey = cat.l1 || 'Uncategorized';
         expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + absAmount);
+      } else if (isFinancingOrEquity) {
+          totalExpensesAbs += Math.abs(amount);
+          nonOperatingExpenses += Math.abs(amount);
       }
     }
     
@@ -260,10 +265,33 @@ export default function DashboardPage() {
       {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Error</AlertTitle><AlertDescription>{error.message}</AlertDescription></Alert>}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} />
-        <StatCard title="Total Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} />
-        <StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} />
-        <StatCard title="Net Operating Income (NOI)" value={stats.noi} icon={<Banknote />} isLoading={isLoading} />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} /></div>
+          </TooltipTrigger>
+          <TooltipContent><p>All money that came into your accounts.</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div><StatCard title="Total Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} /></div>
+          </TooltipTrigger>
+          <TooltipContent><p>All money that left your accounts.</p></TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
+          </TooltipTrigger>
+          <TooltipContent><p>Total Income minus Total Expenses.</p></TooltipContent>
+        </Tooltip>
+        
+        <Tooltip>
+          <TooltipTrigger asChild>
+             <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<TrendingDown />} isLoading={isLoading} /></div>
+          </TooltipTrigger>
+          <TooltipContent><p>Net Income after all mortgage payments.</p></TooltipContent>
+        </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
@@ -288,12 +316,6 @@ export default function DashboardPage() {
         <div className="lg:col-span-3"><CashFlowChart data={stats.cashFlowData} isLoading={isLoading} /></div>
         <div className="lg:col-span-2 flex flex-col gap-8">
             <ExpenseChart data={stats.expenseBreakdown} isLoading={isLoading} />
-            <Tooltip>
-                <TooltipTrigger asChild>
-                    <StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<TrendingDown />} isLoading={isLoading} />
-                </TooltipTrigger>
-                <TooltipContent><p>Net Income after all mortgage payments.</p></TooltipContent>
-            </Tooltip>
         </div>
       </div>
       
