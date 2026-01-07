@@ -113,8 +113,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     let collectedRent = 0;
     let potentialRent = 0;
     
-    // Group payments by tenant to find the largest contributor.
-    const rentByTenant: { [key: string]: number } = {};
+    const rentByTenant = new Map<string, number>();
 
     properties.forEach(prop => {
         if(prop.tenants) {
@@ -131,21 +130,20 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
       const l0 = normalizeL0(tx);
       const isRentalIncome = (tx.categoryHierarchy?.l1 || '').toLowerCase().includes('rental income');
 
-      if (l0 === 'INCOME' && isRentalIncome) {
+      if (l0 === 'INCOME' && isRentalIncome && amount > 0) {
         collectedRent += amount;
         const tenantId = tx.tenantId || 'unknown_tenant';
-        rentByTenant[tenantId] = (rentByTenant[tenantId] || 0) + amount;
+        rentByTenant.set(tenantId, (rentByTenant.get(tenantId) || 0) + amount);
       }
     });
     
     const economicOccupancy = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     const rentCollectionRate = potentialRent > 0 ? (collectedRent / potentialRent) * 100 : 0;
     
-    const tenantTotals = Object.values(rentByTenant);
+    const tenantTotals = Array.from(rentByTenant.values());
     const largestTenantPaid = tenantTotals.length > 0 ? Math.max(0, ...tenantTotals) : 0;
 
     const rentConcentration = collectedRent > 0 ? (largestTenantPaid / collectedRent) * 100 : 0;
-
 
     return { 
         economicOccupancy, 
