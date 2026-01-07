@@ -320,13 +320,21 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     
     const cashFlow = noi - debtPayment - interestForMonth;
     const dscr = debtPayment > 0 ? noi / debtPayment : Infinity;
-
-    const potentialRent = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
-    const economicOccupancy = potentialRent > 0 ? (income / potentialRent) * 100 : 0;
     
-    const breakEvenRent = expenses + totalDebt;
+    const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
+    const economicOccupancyValue = potentialRentValue > 0 ? (income / potentialRentValue) * 100 : 0;
     
-    return { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent };
+    const breakEvenRentValue = expenses + totalDebt;
+    
+    return { 
+      noi, 
+      cashFlow, 
+      dscr, 
+      economicOccupancy: economicOccupancyValue, 
+      breakEvenRent: breakEvenRentValue, 
+      rentalIncome: income, 
+      potentialRent: potentialRentValue
+    };
   }, [monthlyTxs, property, interestForMonth]);
 
   const handleOpenDialog = (tab: string) => {
