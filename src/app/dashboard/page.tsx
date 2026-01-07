@@ -91,18 +91,13 @@ function normalizeCategory(tx: Transaction): Required<CategoryHierarchy> {
   const ch = tx.categoryHierarchy ?? {};
   const rawL0 = (ch.l0 ?? tx.primaryCategory ?? '').toString().trim().toUpperCase();
 
-  const isExpense = rawL0.includes('EXPENSE');
-  const isIncome = rawL0.includes('INCOME');
-  const isLiability = rawL0.includes('LIABILITY');
-  const isAsset = rawL0.includes('ASSET');
-  const isEquity = rawL0.includes('EQUITY');
-
   let l0 = 'EXPENSE'; // Default
-  if (isIncome) l0 = 'INCOME';
-  else if (isExpense) l0 = 'EXPENSE';
-  else if (isLiability) l0 = 'LIABILITY';
-  else if (isAsset) l0 = 'ASSET';
-  else if (isEquity) l0 = 'EQUITY';
+  if (rawL0.includes('INCOME')) l0 = 'INCOME';
+  else if (rawL0.includes('OPERATING EXPENSE')) l0 = 'OPERATING EXPENSE';
+  else if (rawL0.includes('EXPENSE')) l0 = 'EXPENSE';
+  else if (rawL0.includes('LIABILITY')) l0 = 'LIABILITY';
+  else if (rawL0.includes('ASSET')) l0 = 'ASSET';
+  else if (rawL0.includes('EQUITY')) l0 = 'EQUITY';
   
   return {
     l0: l0,
@@ -163,9 +158,9 @@ export default function DashboardPage() {
     const filtered = allTransactions;
     
     let totalIncome = 0;
-    let totalExpensesAbs = 0; // All money out
+    let totalExpensesAbs = 0;
     let rentalIncome = 0;
-    let operatingExpenses = 0; // Only operating expenses for NOI
+    let operatingExpenses = 0;
 
     const cashFlowMap = new Map<string, { income: number; expense: number }>();
     const expenseBreakdownMap = new Map<string, number>();
@@ -179,21 +174,18 @@ export default function DashboardPage() {
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
-      if (amount > 0) {
-          totalIncome += amount;
-          dayStats.income += amount;
-          if (cat.l1.toUpperCase().includes('RENTAL')) {
-              rentalIncome += amount;
-          }
-      } else { // All negative amounts are expenses of some kind
+      if (cat.l0 === 'INCOME') {
+        totalIncome += amount;
+        dayStats.income += amount;
+        if (cat.l1.toUpperCase().includes('RENTAL')) {
+            rentalIncome += amount;
+        }
+      } else if (isOperatingExpense) {
           totalExpensesAbs += Math.abs(amount);
+          operatingExpenses += Math.abs(amount);
           dayStats.expense += Math.abs(amount);
-
-          if (isOperatingExpense) {
-              operatingExpenses += Math.abs(amount);
-              const breakdownKey = cat.l1 || 'Uncategorized';
-              expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
-          }
+          const breakdownKey = cat.l1 || 'Uncategorized';
+          expenseBreakdownMap.set(breakdownKey, (expenseBreakdownMap.get(breakdownKey) || 0) + Math.abs(amount));
       }
     }
     
@@ -323,4 +315,5 @@ export default function DashboardPage() {
     </div>
     </TooltipProvider>
   );
-}
+
+    
