@@ -1,13 +1,12 @@
 
-
 'use client';
 
-import { useState, useMemo } from 'react';
-import { doc, collection, query, deleteDoc } from 'firebase/firestore';
+import { useState, useMemo, useEffect } from 'react';
+import { doc, collection, query, where, getDocs } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins } from 'lucide-react';
+import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
@@ -28,7 +27,6 @@ import {
   CardTitle,
   CardDescription
 } from '@/components/ui/card';
-import { FinancialPerformance } from '@/components/dashboard/financial-performance';
 import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
@@ -37,9 +35,14 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO } from 'date-fns';
+import { isPast, parseISO, startOfMonth, endOfMonth, format } from 'date-fns';
+import { calculateAmortization } from '@/actions/amortization-actions';
+import { StatCard } from '@/components/dashboard/stat-card';
+import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
-
+// ... (LeaseAgentModal and PropertyDocuments components remain the same)
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -96,227 +99,6 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
       </DialogContent>
     </Dialog>
   )
-}
-
-
-export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [isLeaseAgentOpen, setLeaseAgentOpen] = useState(false);
-  const [selectedTenantForLease, setSelectedTenantForLease] = useState<any>(null);
-
-  const [formTab, setFormTab] = useState('general');
-
-  const handleOpenDialog = (tab: string) => {
-    setFormTab(tab);
-    setIsEditOpen(true);
-  }
-
-  const handleOpenLeaseAgent = (tenant: any) => {
-    setSelectedTenantForLease({...tenant });
-    setLeaseAgentOpen(true);
-  };
-  
-  const { user } = useUser();
-  if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
-  if (!property) return <div className="p-8">Property not found.</div>;
-  
-  const getPropertyStatus = () => {
-    const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
-    if (!activeTenant) return 'Vacant';
-    if (activeTenant.leaseEnd && isPast(parseISO(activeTenant.leaseEnd))) {
-      return 'Lease Expired';
-    }
-    return 'Occupied';
-  };
-
-  const status = getPropertyStatus();
-  const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
-  const rentAmount = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
-
-  
-  const header = (
-    <div className="flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard/properties">
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">{property.name}</h1>
-          <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-2">
-        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-            <DialogTrigger asChild>
-            <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-                <DialogTitle>Edit Property Settings</DialogTitle>
-                <DialogDescription>
-                Update tenants, mortgage details, and configuration for {property.name}.
-                </DialogDescription>
-            </DialogHeader>
-            <PropertyForm 
-                initialData={{ id: property.id, ...property }} 
-                onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
-                defaultTab={formTab} 
-            />
-            </DialogContent>
-        </Dialog>
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      <div className="space-y-6 p-6">
-        {header}
-
-        <FinancialPerformance propertyId={property.id} viewingDate={new Date()} />
-
-        <PropertySetupBanner
-          propertyId={property.id}
-          propertyData={property}
-          onOpenSettings={handleOpenDialog}
-        />
-
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="tenants">Tenants</TabsTrigger>
-            <TabsTrigger value="income">Income</TabsTrigger>
-            <TabsTrigger value="expenses">Expenses</TabsTrigger>
-            <TabsTrigger value="deposits">Deposits</TabsTrigger>
-            <TabsTrigger value="documents">Documents</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="mt-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription>Principal & Interest</CardDescription>
-                  <CardTitle className="text-2xl font-bold">
-                    {formatCurrency(property.mortgage?.principalAndInterest || 0)}
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-              <Card>
-                 <CardHeader className="pb-2">
-                  <CardDescription>Current Rent</CardDescription>
-                  <CardTitle className="text-2xl font-bold">
-                    {formatCurrency(rentAmount)}
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardDescription>Status</CardDescription>
-                  <CardTitle className="text-2xl font-bold capitalize">
-                    {status}
-                  </CardTitle>
-                </CardHeader>
-              </Card>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="tenants" className="mt-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div>
-                  <CardTitle>Current Residents</CardTitle>
-                  <CardDescription>Lease details for this property.</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
-                  <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
-                    <UserPlus className="h-4 w-4" /> Create Portal
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {property.tenants && property.tenants.length > 0 ? (
-                  <div className="space-y-4">
-                    {property.tenants.map((t: any, i: number) => (
-                      <div key={i} className="flex justify-between items-center border-b pb-4 last:border-0 last:pb-0">
-                        <div>
-                          <p className="font-medium">{t.firstName} {t.lastName}</p>
-                          <p className="text-sm text-muted-foreground">{t.email}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">${(t.rentAmount || 0).toLocaleString()}/mo</p>
-                          <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <RecordPaymentModal
-                                tenant={{...t, id: t.email || `tenant_${i}`}} // Ensure a unique ID
-                                propertyId={property.id}
-                                landlordId={user.uid}
-                                onSuccess={onUpdate}
-                            />
-                            <Button variant="outline" size="sm" onClick={() => handleOpenLeaseAgent(t)} className="gap-1">
-                                <Bot className="h-4 w-4"/> Auto-Draft Lease
-                            </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground text-sm">No tenants recorded. Click "Create Portal" to add one.</p>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-          
-          <TabsContent value="income" className="mt-6">
-            <PropertyFinancials
-              propertyId={property.id}
-              propertyName={property.name}
-              view="income"
-            />
-          </TabsContent>
-          
-          <TabsContent value="expenses" className="mt-6">
-            <PropertyFinancials
-              propertyId={property.id}
-              propertyName={property.name}
-              view="expenses"
-            />
-          </TabsContent>
-
-          <TabsContent value="deposits" className="mt-6">
-            <PropertyFinancials
-              propertyId={property.id}
-              propertyName={property.name}
-              view="deposits"
-            />
-          </TabsContent>
-
-          <TabsContent value="documents" className="mt-6">
-              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
-          </TabsContent>
-        </Tabs>
-      </div>
-
-      {isInviteOpen && (
-        <InviteTenantModal
-          isOpen={isInviteOpen}
-          onOpenChange={setIsInviteOpen}
-          propertyId={property.id}
-          landlordId={user.uid}
-        />
-      )}
-      {isLeaseAgentOpen && selectedTenantForLease && (
-        <LeaseAgentModal
-            isOpen={isLeaseAgentOpen}
-            onOpenChange={setLeaseAgentOpen}
-            tenant={selectedTenantForLease}
-            propertyId={property.id}
-        />
-      )}
-    </>
-  );
 }
 
 
@@ -469,4 +251,285 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
       )}
     </>
   )
+}
+
+export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [isLeaseAgentOpen, setLeaseAgentOpen] = useState(false);
+  const [selectedTenantForLease, setSelectedTenantForLease] = useState<any>(null);
+  const [formTab, setFormTab] = useState('general');
+
+  const { user } = useUser();
+  const firestore = useFirestore();
+  const [monthlyTxs, setMonthlyTxs] = useState<any[]>([]);
+  const [loadingTxs, setLoadingTxs] = useState(true);
+  const [interestForMonth, setInterestForMonth] = useState(0);
+
+  useEffect(() => {
+    if (!user || !property?.id) return;
+    
+    const fetchMonthlyData = async () => {
+        setLoadingTxs(true);
+        const today = new Date();
+        const start = startOfMonth(today);
+        const end = endOfMonth(today);
+
+        const txsQuery = query(
+            collection(firestore, 'users', user.uid, 'bankAccounts'),
+            // This is a placeholder; a real implementation would need a collectionGroup query
+            // and proper filtering for transactions related to this property (costCenter).
+            // For now, we fetch all and filter client-side as a temporary measure.
+        );
+        
+        // This is a simplified fetch, a real app would use a more targeted query
+        const allTxQuery = query(
+            collectionGroup(firestore, 'transactions'),
+            where('userId', '==', user.uid),
+            where('date', '>=', format(start, 'yyyy-MM-dd')),
+            where('date', '<=', format(end, 'yyyy-MM-dd')),
+            where('costCenter', '==', property.id)
+        );
+
+        const txsSnapshot = await getDocs(allTxQuery);
+        const txs = txsSnapshot.docs.map(doc => doc.data());
+        setMonthlyTxs(txs);
+        setLoadingTxs(false);
+
+        // Calculate interest for cash flow
+        if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
+            const result = await calculateAmortization({
+                principal: property.mortgage.originalLoanAmount,
+                annualRate: property.mortgage.interestRate,
+                principalAndInterest: property.mortgage.principalAndInterest,
+                loanStartDate: property.mortgage.purchaseDate,
+                loanTermInYears: property.mortgage.loanTerm,
+                targetDate: new Date().toISOString(),
+            });
+            if (result.success) {
+                setInterestForMonth(result.interestPaidForMonth || 0);
+            }
+        }
+    };
+    fetchMonthlyData();
+  }, [user, property, firestore]);
+
+  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome } = useMemo(() => {
+    const income = monthlyTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
+    const expenses = monthlyTxs.filter(tx => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+    const noi = income - expenses;
+    
+    const debtPayment = (property.mortgage?.principalAndInterest || 0);
+    const totalDebt = debtPayment + (property.mortgage?.escrowAmount || 0);
+    
+    const cashFlow = noi - debtPayment - interestForMonth;
+    const dscr = debtPayment > 0 ? noi / debtPayment : Infinity;
+
+    const potentialRent = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
+    const economicOccupancy = potentialRent > 0 ? (income / potentialRent) * 100 : 0;
+    
+    const breakEvenRent = expenses + totalDebt;
+    
+    return { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome: income };
+  }, [monthlyTxs, property, interestForMonth]);
+
+  const handleOpenDialog = (tab: string) => {
+    setFormTab(tab);
+    setIsEditOpen(true);
+  }
+  
+  const handleOpenLeaseAgent = (tenant: any) => {
+    setSelectedTenantForLease({...tenant });
+    setLeaseAgentOpen(true);
+  };
+  
+  if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
+  if (!property) return <div className="p-8">Property not found.</div>;
+  
+  const getPropertyStatus = () => {
+    const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
+    if (!activeTenant) return 'Vacant';
+    if (activeTenant.leaseEnd && isPast(parseISO(activeTenant.leaseEnd))) {
+      return 'Lease Expired';
+    }
+    return 'Occupied';
+  };
+
+  const status = getPropertyStatus();
+  const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
+  const currentRent = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
+  const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
+  
+  const header = (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard/properties">
+          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold">{property.name}</h1>
+          <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+            <DialogTrigger asChild>
+            <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+                <DialogTitle>Edit Property Settings</DialogTitle>
+                <DialogDescription>
+                Update tenants, mortgage details, and configuration for {property.name}.
+                </DialogDescription>
+            </DialogHeader>
+            <PropertyForm 
+                initialData={{ id: property.id, ...property }} 
+                onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
+                defaultTab={formTab} 
+            />
+            </DialogContent>
+        </Dialog>
+      </div>
+    </div>
+  );
+
+  const getDscrBadge = (ratio: number) => {
+    if (ratio >= 1.25) return <Badge variant="default" className="bg-green-600">Healthy</Badge>;
+    if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-500">Watch</Badge>;
+    return <Badge variant="destructive">Risk</Badge>;
+  }
+
+  return (
+    <>
+      <div className="space-y-6 p-6">
+        {header}
+
+        {/* --- Investor KPIs --- */}
+        <div className="grid grid-cols-4 gap-4">
+            <TooltipProvider>
+                <Tooltip><TooltipTrigger asChild><div>
+                    <StatCard title="NOI (Monthly)" value={noi} icon={<Building/>} isLoading={loadingTxs} />
+                </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excluding debt).</p></TooltipContent></Tooltip>
+
+                <Tooltip><TooltipTrigger asChild><div>
+                     <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<Wallet/>} isLoading={loadingTxs} colorClass={cashFlow > 0 ? "text-green-600" : "text-red-600"}/>
+                </div></TooltipTrigger><TooltipContent><p>NOI minus total debt payment. The cash left in your pocket.</p></TooltipContent></Tooltip>
+
+                <Tooltip><TooltipTrigger asChild><div>
+                     <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle></CardHeader><CardContent>
+                        <div className="text-2xl font-bold">{isFinite(dscr) ? `${dscr.toFixed(2)}x` : 'N/A'}</div>
+                        {isFinite(dscr) && getDscrBadge(dscr)}
+                    </CardContent></Card>
+                </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
+                
+                <Tooltip><TooltipTrigger asChild><div>
+                    <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<TrendingUp/>} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} />
+                </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
+            </TooltipProvider>
+        </div>
+
+        {/* --- Operational KPIs --- */}
+        <div className="grid grid-cols-4 gap-4">
+            <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark/>} isLoading={loadingTxs} />
+            <StatCard title="Current Rent" value={currentRent} icon={<FileText/>} isLoading={loadingTxs} />
+            <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
+             <StatCard title="Break-Even Rent" value={breakEvenRent} icon={<AlertTriangle/>} isLoading={loadingTxs} description={`Surplus: ${formatCurrency(currentRent - breakEvenRent)}`} />
+        </div>
+
+        <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
+
+        <Tabs defaultValue="overview" className="w-full">
+          <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
+            <TabsTrigger value="tenants">Tenants</TabsTrigger>
+            <TabsTrigger value="income">Income</TabsTrigger>
+            <TabsTrigger value="expenses">Expenses</TabsTrigger>
+            <TabsTrigger value="deposits">Deposits</TabsTrigger>
+            <TabsTrigger value="documents">Documents</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="tenants" className="mt-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle>Current Residents</CardTitle>
+                  <CardDescription>Lease details for this property.</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
+                  <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
+                    <UserPlus className="h-4 w-4" /> Create Portal
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {property.tenants && property.tenants.length > 0 ? (
+                  <div className="space-y-4">
+                    {property.tenants.map((t: any, i: number) => (
+                      <div key={i} className="flex justify-between items-center border-b pb-4 last:border-0 last:pb-0">
+                        <div>
+                          <p className="font-medium">{t.firstName} {t.lastName}</p>
+                          <p className="text-sm text-muted-foreground">{t.email}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">${(t.rentAmount || 0).toLocaleString()}/mo</p>
+                          <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <RecordPaymentModal
+                                tenant={{...t, id: t.email || `tenant_${i}`}} // Ensure a unique ID
+                                propertyId={property.id}
+                                landlordId={user.uid}
+                                onSuccess={onUpdate}
+                            />
+                            <Button variant="outline" size="sm" onClick={() => handleOpenLeaseAgent(t)} className="gap-1">
+                                <Bot className="h-4 w-4"/> Auto-Draft Lease
+                            </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-sm">No tenants recorded. Click "Create Portal" to add one.</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+          
+          <TabsContent value="income" className="mt-6">
+            <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
+          </TabsContent>
+          
+          <TabsContent value="expenses" className="mt-6">
+            <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
+          </TabsContent>
+
+          <TabsContent value="deposits" className="mt-6">
+             <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
+          </TabsContent>
+
+          <TabsContent value="documents" className="mt-6">
+              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {isInviteOpen && (
+        <InviteTenantModal
+          isOpen={isInviteOpen}
+          onOpenChange={setIsInviteOpen}
+          propertyId={property.id}
+          landlordId={user.uid}
+        />
+      )}
+      {isLeaseAgentOpen && selectedTenantForLease && (
+        <LeaseAgentModal
+            isOpen={isLeaseAgentOpen}
+            onOpenChange={setLeaseAgentOpen}
+            tenant={selectedTenantForLease}
+            propertyId={property.id}
+        />
+      )}
+    </>
+  );
 }
