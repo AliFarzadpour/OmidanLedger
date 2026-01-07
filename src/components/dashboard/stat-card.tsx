@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { ReactNode } from 'react';
 import { formatCurrency } from '@/lib/format';
@@ -11,9 +12,10 @@ type StatCardProps = {
   description?: string;
   isLoading?: boolean;
   format?: 'currency' | 'percent';
+  cardClassName?: string;
 };
 
-export function StatCard({ title, value, icon, description, isLoading, format = 'currency' }: StatCardProps) {
+export function StatCard({ title, value, icon, description, isLoading, format = 'currency', cardClassName }: StatCardProps) {
   
   const formattedValue = () => {
     if (format === 'percent') {
@@ -23,7 +25,7 @@ export function StatCard({ title, value, icon, description, isLoading, format = 
   }
 
   return (
-    <Card className="shadow-lg h-full flex flex-col">
+    <Card className={cn("shadow-lg h-full flex flex-col", cardClassName)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         {icon}

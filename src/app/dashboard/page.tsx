@@ -184,13 +184,12 @@ export default function DashboardPage() {
       const dateKey = tx.date;
       const l0 = (tx.categoryHierarchy?.l0 || tx.primaryCategory || '').toUpperCase();
       
-      const isIncome = l0 === 'INCOME';
       const isOpEx = l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
 
       if (!cashFlowMap.has(dateKey)) cashFlowMap.set(dateKey, { income: 0, expense: 0 });
       const dayStats = cashFlowMap.get(dateKey)!;
 
-      if (isIncome) {
+      if (l0 === 'INCOME') {
         totalIncome += amount;
         dayStats.income += amount;
         if ((tx.categoryHierarchy?.l1 || '').toUpperCase().includes('RENTAL')) {
@@ -274,44 +273,44 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} /></div>
+            <div><StatCard title="Total Income" value={stats.totalIncome} icon={<DollarSign />} isLoading={isLoading} cardClassName="bg-green-50 border-green-200" /></div>
           </TooltipTrigger>
           <TooltipContent><p>Sum of all transactions where L0 is 'INCOME'.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Operating Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} /></div>
+            <div><StatCard title="Operating Expenses" value={stats.totalExpenses} icon={<CreditCard />} isLoading={isLoading} cardClassName="bg-red-50 border-red-200" /></div>
           </TooltipTrigger>
           <TooltipContent><p>Sum of all transactions where L0 is 'EXPENSE' or 'OPERATING EXPENSE'.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Interest Expense" value={calculatedInterest} icon={<Percent />} isLoading={isLoading} /></div>
+            <div><StatCard title="Interest Expense" value={calculatedInterest} icon={<Percent />} isLoading={isLoading} cardClassName="bg-amber-50 border-amber-200" /></div>
           </TooltipTrigger>
           <TooltipContent><p>The calculated interest portion of your mortgage payments for this period.</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} /></div>
+            <div><StatCard title="Net Income" value={stats.netIncome} icon={<Activity />} isLoading={isLoading} cardClassName="bg-blue-50 border-blue-200" /></div>
           </TooltipTrigger>
           <TooltipContent><p>Total Income minus all expenses, including interest.</p></TooltipContent>
         </Tooltip>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<Banknote />} isLoading={isLoading} /></div>
+            <div><StatCard title="Cash Flow After Debt" value={stats.cashFlowAfterDebt} icon={<Banknote />} isLoading={isLoading} cardClassName="bg-indigo-50 border-indigo-200" /></div>
           </TooltipTrigger>
           <TooltipContent><p>Net Income minus total mortgage payments (principal and escrow).</p></TooltipContent>
         </Tooltip>
         
         <Tooltip>
           <TooltipTrigger asChild>
-            <Card className="shadow-lg h-full">
+            <Card className="shadow-lg h-full flex flex-col">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle><Landmark className="h-4 w-4 text-muted-foreground"/></CardHeader>
-              <CardContent>
+              <CardContent className="flex-grow flex items-center">
                 {isLoading ? <Skeleton className="h-8 w-3/4" /> : (
                   <div className="flex items-baseline gap-2">
                     <div className="text-2xl font-bold">{stats.dscr.toFixed(2)}x</div>
