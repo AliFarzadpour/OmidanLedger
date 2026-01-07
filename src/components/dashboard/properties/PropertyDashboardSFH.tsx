@@ -38,7 +38,7 @@ import { ref, deleteObject } from 'firebase/storage';
 import { isPast, parseISO, startOfMonth, endOfMonth, format } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
-import { Tooltip, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
@@ -306,10 +306,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     fetchMonthlyData();
   }, [user, property, firestore]);
 
-  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome } = useMemo(() => {
-    // Add a guard clause to ensure property exists before calculations
+  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent } = useMemo(() => {
     if (!property) {
-      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0 };
+      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0 };
     }
   
     const income = monthlyTxs.filter(tx => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
@@ -327,7 +326,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     
     const breakEvenRent = expenses + totalDebt;
     
-    return { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome: income };
+    return { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent };
   }, [monthlyTxs, property, interestForMonth]);
 
   const handleOpenDialog = (tab: string) => {
