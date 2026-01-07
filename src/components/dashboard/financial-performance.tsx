@@ -113,6 +113,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     let collectedRent = 0;
     let potentialRent = 0;
     
+    // Group payments by tenant to find the largest contributor.
     const rentByTenant: { [key: string]: number } = {};
 
     properties.forEach(prop => {
