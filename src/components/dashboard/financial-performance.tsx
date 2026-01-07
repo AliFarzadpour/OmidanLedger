@@ -112,6 +112,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
   const stats = useMemo(() => {
     let collectedRent = 0;
     let potentialRent = 0;
+    
     const rentByTenant: { [key: string]: number } = {};
 
     properties.forEach(prop => {
@@ -191,7 +192,20 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
           <pre className="text-xs font-mono whitespace-pre-wrap">{error.message}</pre>
         </Alert>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+        <KPICard 
+            title="Total Rent Due" 
+            value={formatCurrency(stats.potentialRent)}
+            icon={<DollarSign className="h-5 w-5 text-muted-foreground"/>}
+            tooltip="Total potential rent from all active leases for the month."
+        />
+        <KPICard 
+            title="Total Rent Collected" 
+            value={formatCurrency(stats.collectedRent)}
+            icon={<DollarSign className="h-5 w-5 text-green-500"/>}
+            tooltip="Total actual rent collected in the selected month."
+            colorClass="text-green-600"
+        />
         <KPICard 
             title="Economic Occupancy" 
             value={`${stats.economicOccupancy.toFixed(1)}%`}
