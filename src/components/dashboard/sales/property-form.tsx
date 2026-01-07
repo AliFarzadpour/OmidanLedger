@@ -220,15 +220,31 @@ export function PropertyForm({
     }, [initialData])
   });
   
-  const watchedDepreciation = useWatch({ control: form.control, name: "depreciation" });
+  // 1. Watch specific fields individually instead of the whole object
+  const purchasePrice = useWatch({ control: form.control, name: "depreciation.purchasePrice" });
+  const landValue = useWatch({ control: form.control, name: "depreciation.landValue" });
+  const closingCosts = useWatch({ control: form.control, name: "depreciation.closingCosts" });
+  const improvementBasis = useWatch({ control: form.control, name: "depreciation.improvementBasis" });
+  const usefulLife = useWatch({ control: form.control, name: "depreciation.usefulLife" });
+
   useEffect(() => {
-    if (watchedDepreciation) {
-        const basis = (watchedDepreciation.purchasePrice || 0) - (watchedDepreciation.landValue || 0) + (watchedDepreciation.closingCosts || 0) + (watchedDepreciation.improvementBasis || 0);
-        const annual = watchedDepreciation.usefulLife ? basis / watchedDepreciation.usefulLife : 0;
-        form.setValue('depreciation.depreciableBasis', basis, { shouldDirty: true });
-        form.setValue('depreciation.estimatedAnnualDepreciation', annual, { shouldDirty: true });
+    // 2. Perform calculation
+    const basis = (purchasePrice || 0) - (landValue || 0) + (closingCosts || 0) + (improvementBasis || 0);
+    const annual = usefulLife ? basis / usefulLife : 0;
+
+    // 3. Get current values to prevent redundant updates
+    const currentBasis = form.getValues('depreciation.depreciableBasis');
+    const currentAnnual = form.getValues('depreciation.estimatedAnnualDepreciation');
+
+    // 4. Only setValue if the result is different (Breaks the loop)
+    if (basis !== currentBasis) {
+        form.setValue('depreciation.depreciableBasis', basis, { shouldDirty: true, shouldValidate: true });
     }
-  }, [watchedDepreciation, form]);
+    
+    if (annual !== currentAnnual) {
+        form.setValue('depreciation.estimatedAnnualDepreciation', annual, { shouldDirty: true, shouldValidate: true });
+    }
+  }, [purchasePrice, landValue, closingCosts, improvementBasis, usefulLife, form]);
 
   const vendorFields = useFieldArray({ control: form.control, name: "preferredVendors" });
   const utilityFields = useFieldArray({ control: form.control, name: "utilities" });
@@ -882,3 +898,5 @@ export function PropertyForm({
     </div>
   );
 }
+
+    
