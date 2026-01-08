@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -44,9 +43,9 @@ export default function OperationsHubPage() {
   const firestore = useFirestore();
 
   // Fetch data for KPIs
-  const threadsQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsThreads`), where('status', '==', 'open')) : null, [user, firestore]);
-  const tasksQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsTasks`), where('status', '!=', 'done')) : null, [user, firestore]);
-  const workOrdersQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'completed')) : null, [user, firestore]);
+  const threadsQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'Completed'), where('status', '!=', 'Canceled')) : null, [user, firestore]);
+  const tasksQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'Completed'), where('status', '!=', 'Canceled')) : null, [user, firestore]);
+  const workOrdersQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'Completed'), where('status', '!=', 'Canceled')) : null, [user, firestore]);
   const vendorsQuery = useMemoFirebase(() => user ? query(collection(firestore, 'vendors'), where('userId', '==', user.uid)) : null, [user, firestore]);
   
   const { data: openThreads, isLoading: loadingThreads } = useCollection(threadsQuery);
@@ -59,18 +58,18 @@ export default function OperationsHubPage() {
   const hubItems = [
     {
       title: 'Inbox',
-      description: 'Manage all property-related communications.',
-      href: '/dashboard/operations/inbox',
+      description: 'View work orders with recent messages.',
+      href: '/dashboard/operations/work-orders?view=inbox',
       icon: Inbox,
-      kpi: { value: openThreads?.length ?? '—', label: 'open threads' },
+      kpi: { value: openThreads?.length ?? '—', label: 'active threads' },
       isLoading: loadingThreads,
     },
     {
       title: 'Tasks',
-      description: 'Track to-do items and recurring duties.',
-      href: '/dashboard/operations/tasks',
+      description: 'View work orders with open tasks.',
+      href: '/dashboard/operations/work-orders?view=tasks',
       icon: ListChecks,
-      kpi: { value: activeTasks?.length ?? '—', label: 'active tasks' },
+      kpi: { value: activeTasks?.length ?? '—', label: 'with open tasks' },
       isLoading: loadingTasks,
     },
     {

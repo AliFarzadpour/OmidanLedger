@@ -1,9 +1,9 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where, orderBy } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import {
   Table,
   TableBody,
@@ -17,9 +17,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, Search, Filter, Wrench } from 'lucide-react';
+import { Loader2, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
-import { format } from 'date-fns';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { format, formatDistanceToNowStrict } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -49,12 +50,16 @@ const getBadgeClass = (type: 'status' | 'priority', value: string) => {
 export function WorkOrdersList() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const view = searchParams.get('view');
 
   // State for filters
   const [searchTerm, setSearchTerm] = useState('');
   const [propertyFilter, setPropertyFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(view === 'inbox' ? 'active' : 'all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [workOrdersWithOpenTasks, setWorkOrdersWithOpenTasks] = useState<Set<string>>(new Set());
 
   // Fetch all user's properties for the filter dropdown
   const propertiesQuery = useMemoFirebase(() => {
@@ -66,9 +71,27 @@ export function WorkOrdersList() {
   // Fetch all user's work orders
   const workOrdersQuery = useMemoFirebase(() => {
     if (!user) return null;
-    return query(collection(firestore, `users/${user.uid}/opsWorkOrders`), orderBy('createdAt', 'desc'));
-  }, [user, firestore]);
+    const baseQuery = query(collection(firestore, `users/${user.uid}/opsWorkOrders`));
+    if (view === 'inbox') {
+        return query(baseQuery, orderBy('lastMessageAt', 'desc'));
+    }
+    return query(baseQuery, orderBy('updatedAt', 'desc'));
+  }, [user, firestore, view]);
   const { data: workOrders, isLoading: isLoadingWorkOrders } = useCollection(workOrdersQuery);
+  
+  // Fetch work orders with open tasks if the view is 'tasks'
+  useEffect(() => {
+    if (view === 'tasks' && user && firestore) {
+      const fetchTasks = async () => {
+        const tasksQuery = query(collection(firestore, `users/${user.uid}/opsTasks`), where('status', '!=', 'done'));
+        const tasksSnap = await getDocs(tasksQuery);
+        const woIds = new Set(tasksSnap.docs.map(doc => doc.data().workOrderId).filter(Boolean));
+        setWorkOrdersWithOpenTasks(woIds);
+      };
+      fetchTasks();
+    }
+  }, [view, user, firestore]);
+
 
   // Memoized filtering logic
   const filteredWorkOrders = useMemo(() => {
@@ -79,12 +102,25 @@ export function WorkOrdersList() {
         wo.description?.toLowerCase().includes(searchTerm.toLowerCase());
       
       const propertyMatch = propertyFilter === 'all' || wo.propertyId === propertyFilter;
-      const statusMatch = statusFilter === 'all' || wo.status?.toLowerCase() === statusFilter;
+
+      const baseStatusMatch = statusFilter === 'all' || 
+          (statusFilter === 'active' && !['Completed', 'Canceled'].includes(wo.status)) ||
+          wo.status?.toLowerCase() === statusFilter;
+
       const priorityMatch = priorityFilter === 'all' || wo.priority?.toLowerCase() === priorityFilter;
       
-      return searchMatch && propertyMatch && statusMatch && priorityMatch;
+      // View-specific filtering
+      let viewMatch = true;
+      if (view === 'tasks') {
+          viewMatch = workOrdersWithOpenTasks.has(wo.id);
+      }
+      if (view === 'inbox') {
+          viewMatch = !!wo.lastMessageAt;
+      }
+      
+      return searchMatch && propertyMatch && baseStatusMatch && priorityMatch && viewMatch;
     });
-  }, [workOrders, searchTerm, propertyFilter, statusFilter, priorityFilter]);
+  }, [workOrders, searchTerm, propertyFilter, statusFilter, priorityFilter, view, workOrdersWithOpenTasks]);
 
   const isLoading = isLoadingProperties || isLoadingWorkOrders;
 
@@ -116,37 +152,29 @@ export function WorkOrdersList() {
                 />
             </div>
             <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Filter by property..." />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="all">All Properties</SelectItem>
-                    {properties?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
+                <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by property..." /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All Properties</SelectItem>{properties?.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Filter by status..." />
-                </SelectTrigger>
+                <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by status..." /></SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="in progress">In Progress</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="canceled">Canceled</SelectItem>
+                    <SelectItem value="active">All Active</SelectItem>
+                    <SelectItem value="New">New</SelectItem>
+                    <SelectItem value="Scheduled">Scheduled</SelectItem>
+                    <SelectItem value="In Progress">In Progress</SelectItem>
+                    <SelectItem value="Completed">Completed</SelectItem>
+                    <SelectItem value="Canceled">Canceled</SelectItem>
                 </SelectContent>
             </Select>
              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue placeholder="Filter by priority..." />
-                </SelectTrigger>
+                <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Filter by priority..." /></SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">All Priorities</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="emergency">Emergency</SelectItem>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Normal">Normal</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                    <SelectItem value="Emergency">Emergency</SelectItem>
                 </SelectContent>
             </Select>
         </div>
@@ -159,37 +187,32 @@ export function WorkOrdersList() {
               <TableHead>Priority</TableHead>
               <TableHead>Title</TableHead>
               <TableHead>Property</TableHead>
-              <TableHead>Scheduled</TableHead>
               <TableHead>Due Date</TableHead>
-              <TableHead className="text-right">Est. Cost</TableHead>
-              <TableHead className="text-right">Actual Cost</TableHead>
+              <TableHead>Last Activity</TableHead>
+              <TableHead className="text-right">Costs (Est./Actual)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-                <TableRow><TableCell colSpan={8} className="text-center h-32"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center h-32"><Loader2 className="h-6 w-6 animate-spin mx-auto" /></TableCell></TableRow>
             ) : filteredWorkOrders.length === 0 ? (
                  <TableRow>
-                    <TableCell colSpan={8} className="text-center h-32">
-                        <Wrench className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
-                        No work orders found.
+                    <TableCell colSpan={7} className="text-center h-32 text-muted-foreground">
+                        No work orders match the current filters.
                     </TableCell>
                 </TableRow>
             ) : (
                 filteredWorkOrders.map((wo) => (
-                    <TableRow key={wo.id}>
+                    <TableRow key={wo.id} onClick={() => router.push(`/dashboard/operations/work-orders/${wo.id}`)} className="cursor-pointer">
                         <TableCell><Badge variant="outline" className={cn('capitalize', getBadgeClass('status', wo.status || ''))}>{wo.status || 'N/A'}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className={cn('capitalize', getBadgeClass('priority', wo.priority || ''))}>{wo.priority || 'N/A'}</Badge></TableCell>
-                        <TableCell>
-                            <Link href={`/dashboard/operations/work-orders/${wo.id}`} className="font-medium hover:underline text-primary">
-                                {wo.title}
-                            </Link>
-                        </TableCell>
+                        <TableCell className="font-medium">{wo.title}</TableCell>
                         <TableCell>{properties?.find(p => p.id === wo.propertyId)?.name || 'N/A'}</TableCell>
-                        <TableCell>{wo.scheduledAt ? format(wo.scheduledAt.toDate(), 'PPP') : 'N/A'}</TableCell>
                         <TableCell>{wo.dueDate ? format(wo.dueDate.toDate(), 'PPP') : 'N/A'}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(wo.estimatedCost || 0)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(wo.actualCost || 0)}</TableCell>
+                        <TableCell>{wo.updatedAt ? formatDistanceToNowStrict(wo.updatedAt.toDate(), {addSuffix: true}) : 'N/A'}</TableCell>
+                        <TableCell className="text-right font-mono">
+                            {formatCurrency(wo.estimatedCost || 0)} / {formatCurrency(wo.actualCost || 0)}
+                        </TableCell>
                     </TableRow>
                 ))
             )}
@@ -199,5 +222,3 @@ export function WorkOrdersList() {
     </Card>
   );
 }
-
-    
