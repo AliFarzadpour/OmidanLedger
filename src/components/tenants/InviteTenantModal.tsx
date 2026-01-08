@@ -42,12 +42,9 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
       
       toast({ title: "Account Created", description: userCreationResult.message });
 
-      // Step 2: On success, trigger the email from the client.
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-      if (!baseUrl) {
-          throw new Error("NEXT_PUBLIC_APP_URL environment variable is not set. Please add it to your .env file.");
-      }
-
+      // Step 2: On success, trigger the email from the client using a dynamic URL.
+      const baseUrl = window.location.origin;
+      
       const actionCodeSettings = {
         url: `${baseUrl}/tenant/accept`,
         handleCodeInApp: true,
