@@ -31,12 +31,14 @@ export function RecordPaymentModal({
   unitId,
   landlordId,
   onSuccess,
+  buttonText,
 }: {
   tenant: any;
   propertyId: string;
   unitId?: string;
   landlordId: string;
   onSuccess?: () => void;
+  buttonText?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState(tenant.rentAmount || '');
@@ -77,7 +79,7 @@ export function RecordPaymentModal({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button variant="default" size="sm" className="h-7 bg-green-600 hover:bg-green-700 text-white">
-          Record Payment
+          {buttonText || 'Record Payment'}
         </Button>
       </DialogTrigger>
       <DialogContent>

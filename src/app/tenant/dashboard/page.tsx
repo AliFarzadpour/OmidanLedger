@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
@@ -7,18 +8,52 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CreditCard, History, Home, AlertCircle, Wallet } from 'lucide-react';
 import { PayRentButton } from '@/components/tenant/PayRentButton';
 import TenantPaymentHistory from '../history/page';
+import { useEffect, useState } from 'react';
+import { getPaymentSettings } from '@/lib/getPaymentSettings';
+import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
+
+interface NormalizedSettings {
+    stripeEnabled: boolean;
+    zelleEnabled: boolean;
+    zelleRecipientName: string;
+    zelleRecipientHandle: string;
+    zelleMemoTemplate: string;
+    zelleNotes: string;
+}
 
 export default function TenantDashboard() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const [paymentSettings, setPaymentSettings] = useState<NormalizedSettings | null>(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
 
   const tenantDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
   }, [user, firestore]);
   
-  const { data: tenantData, isLoading } = useDoc(tenantDocRef);
+  const { data: tenantData, isLoading: isLoadingTenant } = useDoc(tenantDocRef);
 
+  useEffect(() => {
+    async function fetchSettings() {
+      if (!user || !tenantData?.associatedPropertyId) return;
+      setLoadingSettings(true);
+      try {
+        const settings = await getPaymentSettings(tenantData.landlordId, tenantData.associatedPropertyId);
+        setPaymentSettings(settings);
+      } catch (error) {
+        console.error("Failed to fetch payment settings:", error);
+      } finally {
+        setLoadingSettings(false);
+      }
+    }
+
+    if (tenantData) {
+      fetchSettings();
+    }
+  }, [tenantData, user]);
+
+  const isLoading = isLoadingTenant || loadingSettings;
   const billing = tenantData?.billing || { balance: 0, rentAmount: 0 };
   const isOverdue = billing.balance > 0;
 
@@ -81,16 +116,36 @@ export default function TenantDashboard() {
        <div className="grid gap-4 md:grid-cols-3">
          <Card className="md:col-span-2">
           <CardHeader><CardTitle className="flex items-center gap-2"><Wallet className="h-5 w-5"/>How to Pay</CardTitle></CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">Your landlord accepts payments via Zelle. To pay, send money to:<br/> <strong className="font-mono text-primary">landlord@email.com</strong></p>
-            <p className="text-xs text-muted-foreground mt-2">After paying, please report it on the dashboard so your landlord can verify it.</p>
+          <CardContent className="space-y-4">
+              {paymentSettings?.zelleEnabled && (
+                <div className="p-4 bg-slate-100 rounded-md">
+                    <h4 className="font-semibold">Pay with Zelle</h4>
+                    <p className="text-sm text-muted-foreground mt-1">To pay, send money to: <strong className="font-mono text-primary">{paymentSettings.zelleRecipientHandle || 'Not Provided'}</strong></p>
+                    {paymentSettings.zelleNotes && <p className="text-xs text-muted-foreground mt-2">{paymentSettings.zelleNotes}</p>}
+                </div>
+              )}
+
+              {!paymentSettings?.stripeEnabled && !paymentSettings?.zelleEnabled && (
+                  <p className="text-sm text-muted-foreground">Contact your landlord for payment instructions.</p>
+              )}
           </CardContent>
         </Card>
         {user && billing.balance > 0 && (
-          <PayRentButton amount={billing.balance} tenantId={user.uid} />
+          <div className="space-y-4">
+            {paymentSettings?.stripeEnabled && (
+              <PayRentButton amount={billing.balance} tenantId={user.uid} />
+            )}
+             {paymentSettings?.zelleEnabled && tenantData && (
+                <RecordPaymentModal
+                    tenant={{ id: user.uid, firstName: tenantData.name || user.email }}
+                    propertyId={tenantData.associatedPropertyId}
+                    landlordId={tenantData.landlordId}
+                    buttonText="I've Paid via Zelle/Check"
+                />
+            )}
+          </div>
         )}
       </div>
-
 
       {/* Recent Activity */}
       <TenantPaymentHistory />

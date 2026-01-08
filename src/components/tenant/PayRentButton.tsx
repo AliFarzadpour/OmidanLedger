@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -92,7 +93,7 @@ export function PayRentButton({ amount, tenantId }: { amount: number, tenantId: 
       className="w-full bg-blue-600 hover:bg-blue-700 h-16 text-lg gap-3"
     >
       {isLoading ? <Loader2 className="animate-spin" /> : <CreditCard />}
-      Pay ${amount.toLocaleString()} Now
+      Pay ${amount.toLocaleString()} Online
     </Button>
   );
 }
