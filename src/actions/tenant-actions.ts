@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db as adminDb } from '@/lib/admin-db';
+import { db as adminDb, adminApp } from '@/lib/admin-db';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { v4 as uuidv4 } from 'uuid';
@@ -19,7 +19,7 @@ export async function inviteTenant({
 }) {
 
   try {
-    const auth = getAuth();
+    const auth = getAuth(adminApp);
     let user;
 
     // 1. Create or get the Firebase Auth user
@@ -54,9 +54,17 @@ export async function inviteTenant({
     }, { merge: true });
     
     // 3. Generate the magic link for sign-in
-    const link = await auth.generateSignInWithEmailLink(email, {
-      url: `${process.env.NEXT_PUBLIC_APP_URL}/tenant/accept?uid=${user.uid}`,
-    });
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!baseUrl) {
+      throw new Error("NEXT_PUBLIC_APP_URL environment variable is not set.");
+    }
+
+    const actionCodeSettings = {
+      url: `${baseUrl}/tenant/accept`,
+      handleCodeInApp: true,
+    };
+    
+    const link = await auth.generateSignInWithEmailLink(email, actionCodeSettings);
 
     // In a real app, you would use an email service (e.g., SendGrid, Resend) here.
     // For this environment, we'll log it to the console.
