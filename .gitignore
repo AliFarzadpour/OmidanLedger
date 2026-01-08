@@ -52,3 +52,9 @@ scripts/service-account-key.json
 service-account.json
 *.pem
 *.key
+
+# Secrets / local env
+.env
+.env.local
+.env.*
+service-account.json
