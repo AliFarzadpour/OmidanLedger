@@ -9,7 +9,7 @@ import { inviteTenant } from '@/actions/tenant-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useAuth } from '@/firebase';
+import { useAuth, useUser } from '@/firebase'; // Using useUser to get landlord name
 import { sendSignInLinkToEmail } from 'firebase/auth';
 
 interface InviteTenantModalProps {
@@ -24,7 +24,8 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const auth = useAuth(); // Get the client-side auth instance
+  const auth = useAuth();
+  const { user: landlordUser } = useUser(); // Get landlord user data
 
   const handleInvite = async () => {
     if (!propertyId || !email) {
@@ -35,11 +36,17 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
 
     try {
       // Step 1: Create the user on the server.
-      await inviteTenant({ email, propertyId, unitId, landlordId });
+      await inviteTenant({
+        email,
+        propertyId,
+        unitId,
+        landlordId,
+        landlordName: landlordUser?.displayName || landlordUser?.email || 'Your Landlord',
+      });
 
       // Step 2: If server-side creation is successful, send the email from the client.
       const actionCodeSettings = {
-        // This URL must be absolute and must be in your authorized domains in Firebase Console.
+        // Use window.location.origin to get the correct absolute base URL
         url: `${window.location.origin}/tenant/accept`,
         handleCodeInApp: true,
       };
@@ -60,9 +67,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
 
     } catch (e: any) {
       console.error("Invitation process failed:", e);
-      // If any step fails, inform the user.
       toast({ variant: "destructive", title: "Invitation Failed", description: e.message });
-      // Clear local storage on failure to prevent issues.
       window.localStorage.removeItem('tenantInviteEmail');
     } finally {
       setLoading(false);

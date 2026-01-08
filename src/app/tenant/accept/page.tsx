@@ -8,13 +8,14 @@ import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/au
 export default function TenantAcceptPage() {
   const router = useRouter();
   const [status, setStatus] = useState('Verifying your invitation link...');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const auth = getAuth();
     const href = window.location.href;
 
     if (!isSignInWithEmailLink(auth, href)) {
-      setStatus('This sign-in link is invalid or has expired. Please request a new one.');
+      setError('This sign-in link is invalid or has expired. Please request a new one.');
       return;
     }
 
@@ -22,7 +23,7 @@ export default function TenantAcceptPage() {
     const storedEmail = window.localStorage.getItem('tenantInviteEmail');
     
     if (!storedEmail) {
-      setStatus('Your browser storage is missing the email address. Please try opening the link in the same browser you used to request it, or try again.');
+      setError('Your browser storage is missing the email address. Please try opening the link in the same browser you used to request it, or try again.');
       return;
     }
 
@@ -36,14 +37,18 @@ export default function TenantAcceptPage() {
       })
       .catch((err) => {
         console.error('Sign-in with email link error:', err);
-        setStatus(`Failed to sign in. The link may be expired or already used. Please request a new invitation from your landlord.`);
+        setError(`Failed to sign in. The link may be expired or already used. Please request a new invitation from your landlord.`);
       });
   }, [router]);
 
   return (
     <div style={{ padding: 24, fontFamily: 'sans-serif', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
       <h1 style={{ fontSize: '24px', fontWeight: 'bold' }}>Tenant Portal Sign-In</h1>
-      <p style={{ marginTop: '16px', color: '#666' }}>{status}</p>
+      {error ? (
+        <p style={{ marginTop: '16px', color: '#dc2626' }}>{error}</p>
+      ) : (
+        <p style={{ marginTop: '16px', color: '#666' }}>{status}</p>
+      )}
     </div>
   );
 }
