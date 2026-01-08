@@ -30,8 +30,12 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     }
     setLoading(true);
     try {
-      await inviteTenant({ email, propertyId, unitId, landlordId });
-      toast({ title: "Portal Account Created", description: `Tenant ${email} can now be invited to log in.` });
+      // Call the server action
+      const result = await inviteTenant({ email, propertyId, unitId, landlordId });
+      toast({ 
+        title: "Portal Account Created & Invite Link Generated", 
+        description: result.message
+      });
       setEmail('');
       onOpenChange(false);
     } catch (e: any) {
@@ -54,7 +58,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><UserPlus /> Create Tenant Portal</DialogTitle>
           <DialogDescription>
-            Create a user account and link them to this property. They will be able to log in and see their payment history once you share the login details.
+            This will create a user account and generate a magic login link for the tenant.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -65,8 +69,8 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={handleInvite} disabled={loading} className="min-w-[120px]">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Account"}
+          <Button onClick={handleInvite} disabled={loading || !email} className="min-w-[120px]">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create & Generate Link"}
           </Button>
         </DialogFooter>
       </DialogContent>
