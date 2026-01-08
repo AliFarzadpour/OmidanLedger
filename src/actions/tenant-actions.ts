@@ -2,6 +2,7 @@
 
 import { db } from '@/lib/admin-db';
 import { FieldValue } from 'firebase-admin/firestore';
+import { v4 as uuidv4 } from 'uuid';
 
 export async function inviteTenant({
   email,
@@ -16,47 +17,38 @@ export async function inviteTenant({
 }) {
 
   try {
-    // 1. Create the Tenant User document (Pre-auth)
-    const tenantRef = db.collection('users').doc(); 
-    const tenantId = tenantRef.id;
-    
-    await tenantRef.set({
-      id: tenantId, // Self-reference the ID
+    // 1. Generate a secure, unique token for the invitation
+    const token = uuidv4();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // Invitation valid for 7 days
+
+    // 2. Create an `invites` document
+    const inviteRef = doc(collection(db, 'invites'));
+    await inviteRef.set({
+      id: inviteRef.id,
       email: email.toLowerCase(),
+      landlordId,
+      propertyId,
+      ...(unitId && { unitId }),
       role: 'tenant',
-      landlordId: landlordId,
-      associatedPropertyId: propertyId,
-      ...(unitId && { associatedUnitId: unitId }),
       status: 'invited',
-      billing: {
-        balance: 0,
-        rentAmount: 0 // Will be set later
-      },
-      metadata: {
-        createdAt: FieldValue.serverTimestamp()
-      }
+      token,
+      expiresAt: Timestamp.fromDate(expiresAt),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
-    // 2. Link the tenant to the specific unit
-    if (unitId) {
-        const unitRef = db.collection('properties').doc(propertyId).collection('units').doc(unitId);
-        
-        // Atomically add the new tenant to the 'tenants' array in the unit document.
-        await unitRef.update({
-            tenants: FieldValue.arrayUnion({
-                id: tenantId,
-                email: email.toLowerCase(),
-                firstName: email.split('@')[0], // Default first name
-                lastName: '',
-                leaseStart: '',
-                leaseEnd: '',
-                rentAmount: 0,
-                deposit: 0
-            })
-        });
-    }
+    // 3. (Simulate) Send an email with the magic link
+    const acceptUrl = `${process.env.NEXT_PUBLIC_APP_URL}/tenant/accept?token=${token}`;
+    
+    // In a real app, you would use an email service (e.g., SendGrid, Resend) here.
+    // For this environment, we'll log it to the console.
+    console.log("--- TENANT INVITE: PLEASE SHARE THIS LINK ---");
+    console.log(`To: ${email}`);
+    console.log(`Subject: You're invited to your Tenant Portal`);
+    console.log(`Body: Click this link to access your portal: ${acceptUrl}`);
+    console.log("---------------------------------------------");
 
-    return { success: true, tenantId: tenantId };
+    return { success: true, message: `An invitation link has been generated for ${email}. Please check the server console for the link.` };
   } catch (error: any) {
     console.error("Error inviting tenant:", error);
     throw new Error(error.message);
