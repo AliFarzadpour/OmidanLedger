@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -8,7 +9,8 @@ import { inviteTenant } from '@/actions/tenant-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useAuth } from '@/firebase'; // Import the client-side auth hook
+import { useAuth } from '@/firebase';
+import { sendSignInLinkToEmail } from 'firebase/auth';
 
 interface InviteTenantModalProps {
   isOpen: boolean;
@@ -25,30 +27,43 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
   const auth = useAuth(); // Get the client-side auth instance
 
   const handleInvite = async () => {
-    if (!propertyId) {
-      toast({ variant: "destructive", title: "Error", description: "A property ID is required to invite a tenant." });
+    if (!propertyId || !email) {
+      toast({ variant: "destructive", title: "Error", description: "Email and property are required." });
       return;
     }
     setLoading(true);
 
-    // Store email in localStorage BEFORE calling the server action.
-    window.localStorage.setItem('tenantInviteEmail', email);
-
     try {
-      const result = await inviteTenant({ email, propertyId, unitId, landlordId });
+      // Step 1: Create the user on the server.
+      await inviteTenant({ email, propertyId, unitId, landlordId });
+
+      // Step 2: If server-side creation is successful, send the email from the client.
+      const actionCodeSettings = {
+        // This URL must be absolute and must be in your authorized domains in Firebase Console.
+        url: `${window.location.origin}/tenant/accept`,
+        handleCodeInApp: true,
+      };
+
+      // Store the email in localStorage so the /accept page can retrieve it.
+      window.localStorage.setItem('tenantInviteEmail', email);
+
+      // Trigger Firebase's built-in email sending.
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
       
       toast({ 
         title: "Invitation Sent!", 
-        description: `An invitation email has been sent to ${email}.`
+        description: `A secure sign-in link has been sent to ${email}.`
       });
 
       setEmail('');
       onOpenChange(false);
 
     } catch (e: any) {
-      // Clear local storage on failure
-      window.localStorage.removeItem('tenantInviteEmail');
+      console.error("Invitation process failed:", e);
+      // If any step fails, inform the user.
       toast({ variant: "destructive", title: "Invitation Failed", description: e.message });
+      // Clear local storage on failure to prevent issues.
+      window.localStorage.removeItem('tenantInviteEmail');
     } finally {
       setLoading(false);
     }

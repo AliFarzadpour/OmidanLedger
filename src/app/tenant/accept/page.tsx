@@ -7,41 +7,43 @@ import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/au
 
 export default function TenantAcceptPage() {
   const router = useRouter();
-  const [status, setStatus] = useState('Completing sign-in...');
+  const [status, setStatus] = useState('Verifying your invitation link...');
 
   useEffect(() => {
     const auth = getAuth();
     const href = window.location.href;
 
     if (!isSignInWithEmailLink(auth, href)) {
-      setStatus('Invalid or expired link.');
+      setStatus('This sign-in link is invalid or has expired. Please request a new one.');
       return;
     }
 
+    // The email must be stored in localStorage for this to work seamlessly
     const storedEmail = window.localStorage.getItem('tenantInviteEmail');
-    const email = storedEmail || window.prompt('Confirm your email to finish sign-in:') || '';
-
-    if (!email) {
-      setStatus('Email is required to finish sign-in.');
+    
+    if (!storedEmail) {
+      setStatus('Your browser storage is missing the email address. Please try opening the link in the same browser you used to request it, or try again.');
       return;
     }
 
-    signInWithEmailLink(auth, email, href)
-      .then(() => {
+    setStatus('Confirming your email and signing you in...');
+    signInWithEmailLink(auth, storedEmail, href)
+      .then((result) => {
         window.localStorage.removeItem('tenantInviteEmail');
-        setStatus('Signed in. Redirecting...');
-        router.replace('/tenant/dashboard'); // Redirect to tenant dashboard
+        setStatus('Success! Redirecting you to your tenant portal...');
+        // Redirect to the main tenant dashboard after successful sign-in
+        router.replace('/tenant/dashboard'); 
       })
       .catch((err) => {
-        console.error(err);
-        setStatus('Failed to sign in. The link may be expired or already used.');
+        console.error('Sign-in with email link error:', err);
+        setStatus(`Failed to sign in. The link may be expired or already used. Please request a new invitation from your landlord.`);
       });
   }, [router]);
 
   return (
-    <div style={{ padding: 24, fontFamily: 'sans-serif', textAlign: 'center' }}>
-      <h1>Tenant Portal</h1>
-      <p>{status}</p>
+    <div style={{ padding: 24, fontFamily: 'sans-serif', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <h1 style={{ fontSize: '24px', fontWeight: 'bold' }}>Tenant Portal Sign-In</h1>
+      <p style={{ marginTop: '16px', color: '#666' }}>{status}</p>
     </div>
   );
 }

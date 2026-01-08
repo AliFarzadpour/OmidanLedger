@@ -5,7 +5,6 @@ import { adminApp, db as adminDb } from '@/lib/admin-db';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue } from 'firebase-admin/firestore';
 import { z } from 'zod';
-import { sendTenantInviteEmail } from '@/lib/email';
 
 const InviteTenantSchema = z.object({
   email: z.string().email(),
@@ -20,29 +19,15 @@ export async function inviteTenant(input: z.infer<typeof InviteTenantSchema>) {
   const auth = getAuth(adminApp);
   let user;
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!baseUrl || !baseUrl.startsWith('http')) {
-    throw new Error("NEXT_PUBLIC_APP_URL is missing or invalid in your environment variables.");
-  }
-  const continueUrl = `${baseUrl}/tenant/accept`;
-
   try {
+    // This server action is now ONLY responsible for creating the Auth user
+    // and the Firestore user document. It does NOT send the email.
     user = await auth.getUserByEmail(email).catch(async (e) => {
       if (e.code === 'auth/user-not-found') {
         return await auth.createUser({ email, emailVerified: false });
       }
       throw e;
     });
-
-    const landlordDoc = await adminDb.collection('users').doc(landlordId).get();
-    const propertyDoc = await adminDb.collection('properties').doc(propertyId).get();
-    
-    if (!landlordDoc.exists || !propertyDoc.exists) {
-        throw new Error("Landlord or Property not found.");
-    }
-    
-    const landlordName = landlordDoc.data()?.businessProfile?.businessName || landlordDoc.data()?.name || 'Your Landlord';
-    const propertyName = propertyDoc.data()?.name || 'Your Property';
 
     await adminDb.collection('users').doc(user.uid).set({
       email: email,
@@ -55,22 +40,10 @@ export async function inviteTenant(input: z.infer<typeof InviteTenantSchema>) {
       billing: { balance: 0, rentAmount: 0 },
     }, { merge: true });
 
-    const link = await auth.generateSignInWithEmailLink(email, {
-      url: continueUrl,
-      handleCodeInApp: true,
-    });
-
-    await sendTenantInviteEmail({
-      to: email,
-      landlordName: landlordName,
-      propertyName: propertyName,
-      link: link
-    });
-
-    return { success: true, message: "Tenant invitation sent successfully." };
+    return { success: true, message: "Tenant user created successfully. Client will send email." };
 
   } catch (error: any) {
     console.error("Error in inviteTenant action:", error);
-    throw new Error(error.message || "Failed to invite tenant.");
+    throw new Error(error.message || "Failed to create tenant user.");
   }
 }
