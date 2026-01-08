@@ -45,7 +45,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
       // Step 2: On success, trigger the email from the client.
       const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
       if (!baseUrl) {
-          throw new Error("NEXT_PUBLIC_APP_URL environment variable is not set.");
+          throw new Error("NEXT_PUBLIC_APP_URL environment variable is not set. Please add it to your .env file.");
       }
 
       const actionCodeSettings = {
