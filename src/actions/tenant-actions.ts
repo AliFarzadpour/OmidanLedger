@@ -1,42 +1,45 @@
-
 'use server';
 
-import { db as adminDb, adminApp } from '@/lib/admin-db';
 import { getAuth } from 'firebase-admin/auth';
+import { adminApp, db as adminDb } from '@/lib/admin-db';
 import { FieldValue } from 'firebase-admin/firestore';
-import { v4 as uuidv4 } from 'uuid';
+import { z } from 'zod';
 
-export async function inviteTenant({
-  email,
-  propertyId,
-  unitId,
-  landlordId,
-}: {
-  email: string;
-  propertyId: string;
-  unitId?: string;
-  landlordId: string;
-}) {
 
+const InviteTenantSchema = z.object({
+  email: z.string().email(),
+  propertyId: z.string(),
+  unitId: z.string().optional(),
+  landlordId: z.string(),
+});
+
+/**
+ * This server action creates a Firebase Auth user and a corresponding Firestore user document.
+ * It NO LONGER generates the sign-in link. That is now handled by the client.
+ */
+export async function inviteTenant(input: z.infer<typeof InviteTenantSchema>) {
+  const { email, propertyId, unitId, landlordId } = InviteTenantSchema.parse(input);
+  
+  const auth = getAuth(adminApp);
+  let user;
+
+  // 1. Create or get the Firebase Auth user
   try {
-    const auth = getAuth(adminApp);
-    let user;
-
-    // 1. Create or get the Firebase Auth user
-    try {
-      user = await auth.getUserByEmail(email);
-    } catch (error: any) {
-      if (error.code === 'auth/user-not-found') {
-        user = await auth.createUser({
-          email: email,
-          emailVerified: false,
-        });
-      } else {
-        throw error; // Re-throw other auth errors
-      }
+    user = await auth.getUserByEmail(email);
+  } catch (error: any) {
+    if (error.code === 'auth/user-not-found') {
+      user = await auth.createUser({
+        email: email,
+        emailVerified: false, // Will be verified by magic link
+      });
+    } else {
+      console.error("Firebase Auth user creation/retrieval error:", error);
+      throw new Error(`Failed to process user account: ${error.message}`);
     }
-    
-    // 2. Create the Firestore user document
+  }
+  
+  // 2. Create the Firestore user document for the tenant role
+  try {
     await adminDb.collection('users').doc(user.uid).set({
       email: email,
       role: 'tenant',
@@ -52,31 +55,12 @@ export async function inviteTenant({
         rentAmount: 0,
       },
     }, { merge: true });
-    
-    // 3. Generate the magic link for sign-in
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-    if (!baseUrl) {
-      throw new Error("NEXT_PUBLIC_APP_URL environment variable is not set.");
-    }
 
-    const actionCodeSettings = {
-      url: `${baseUrl}/tenant/accept`,
-      handleCodeInApp: true,
-    };
-    
-    const link = await auth.generateSignInWithEmailLink(email, actionCodeSettings);
+    // 3. Return success, the client will now trigger the email.
+    return { success: true, message: "Tenant account created. Sending invitation email..." };
 
-    // In a real app, you would use an email service (e.g., SendGrid, Resend) here.
-    // For this environment, we'll log it to the console.
-    console.log("--- TENANT INVITE: PLEASE SHARE THIS LINK ---");
-    console.log(`To: ${email}`);
-    console.log(`Subject: You're invited to your Tenant Portal`);
-    console.log(`Body: Click this link to access your portal: ${link}`);
-    console.log("---------------------------------------------");
-
-    return { success: true, message: `An invitation link has been generated for ${email}. Please check the server console for the link.` };
   } catch (error: any) {
-    console.error("Error inviting tenant:", error);
-    throw new Error(error.message);
+    console.error("Firestore user creation error:", error);
+    throw new Error(`Failed to save tenant profile: ${error.message}`);
   }
 }

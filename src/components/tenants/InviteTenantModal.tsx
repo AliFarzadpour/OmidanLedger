@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -9,19 +8,22 @@ import { inviteTenant } from '@/actions/tenant-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
+import { useAuth } from '@/firebase'; // Import the client-side auth hook
+import { sendSignInLinkToEmail } from 'firebase/auth'; // Import the email sending function
 
 interface InviteTenantModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   landlordId: string;
   propertyId: string;
-  unitId?: string; // Optional unit ID
+  unitId?: string;
 }
 
 export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId, unitId }: InviteTenantModalProps) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const auth = useAuth(); // Get the client-side auth instance
 
   const handleInvite = async () => {
     if (!propertyId) {
@@ -29,17 +31,43 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
       return;
     }
     setLoading(true);
+
     try {
-      // Call the server action
-      const result = await inviteTenant({ email, propertyId, unitId, landlordId });
+      // Step 1: Create the user on the server.
+      const userCreationResult = await inviteTenant({ email, propertyId, unitId, landlordId });
+
+      if (!userCreationResult.success) {
+        throw new Error(userCreationResult.message);
+      }
+      
+      toast({ title: "Account Created", description: userCreationResult.message });
+
+      // Step 2: On success, trigger the email from the client.
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+      if (!baseUrl) {
+          throw new Error("NEXT_PUBLIC_APP_URL environment variable is not set.");
+      }
+
+      const actionCodeSettings = {
+        url: `${baseUrl}/tenant/accept`,
+        handleCodeInApp: true,
+      };
+
+      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+
+      // Store the email temporarily in local storage to be retrieved on the accept page.
+      window.localStorage.setItem('emailForSignIn', email);
+
       toast({ 
-        title: "Portal Account Created & Invite Link Generated", 
-        description: result.message
+        title: "Invitation Sent!", 
+        description: `An invitation email has been sent to ${email}.`
       });
+
       setEmail('');
       onOpenChange(false);
+
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Error", description: e.message });
+      toast({ variant: "destructive", title: "Invitation Failed", description: e.message });
     } finally {
       setLoading(false);
     }
@@ -58,7 +86,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><UserPlus /> Create Tenant Portal</DialogTitle>
           <DialogDescription>
-            This will create a user account and generate a magic login link for the tenant.
+            This will create a user account and send a magic login link to the tenant's email.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -70,7 +98,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleInvite} disabled={loading || !email} className="min-w-[120px]">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create & Generate Link"}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create & Send Invite"}
           </Button>
         </DialogFooter>
       </DialogContent>
