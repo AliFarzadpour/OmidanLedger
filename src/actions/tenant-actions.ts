@@ -1,3 +1,4 @@
+
 'use server';
 
 import { adminApp, db as adminDb } from '@/lib/admin-db';
@@ -36,7 +37,7 @@ export async function inviteTenant(input: z.infer<typeof InviteTenantSchema>) {
     const landlordDoc = await adminDb.collection('users').doc(landlordId).get();
     const propertyDoc = await adminDb.collection('properties').doc(propertyId).get();
     
-    if (!landlordDoc.exists() || !propertyDoc.exists()) {
+    if (!landlordDoc.exists || !propertyDoc.exists) {
         throw new Error("Landlord or Property not found.");
     }
     
