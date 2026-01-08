@@ -9,8 +9,8 @@ import { inviteTenant } from '@/actions/tenant-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
-import { useAuth, useUser } from '@/firebase'; // Using useUser to get landlord name
-import { sendSignInLinkToEmail } from 'firebase/auth';
+import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
 
 interface InviteTenantModalProps {
   isOpen: boolean;
@@ -24,8 +24,15 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const auth = useAuth();
-  const { user: landlordUser } = useUser(); // Get landlord user data
+  const { user: landlordUser } = useUser();
+  const firestore = useFirestore();
+
+  const propertyDocRef = useMemoFirebase(() => {
+    if (!firestore || !propertyId) return null;
+    return doc(firestore, 'properties', propertyId);
+  }, [firestore, propertyId]);
+  
+  const { data: propertyData } = useDoc(propertyDocRef);
 
   const handleInvite = async () => {
     if (!propertyId || !email) {
@@ -35,31 +42,22 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     setLoading(true);
 
     try {
-      // Step 1: Create the user on the server.
-      await inviteTenant({
+      // Store the email in localStorage BEFORE calling the server action.
+      // This is crucial for the magic link to work smoothly on the same device.
+      window.localStorage.setItem('tenantInviteEmail', email);
+
+      const result = await inviteTenant({
         email,
         propertyId,
         unitId,
         landlordId,
         landlordName: landlordUser?.displayName || landlordUser?.email || 'Your Landlord',
+        propertyName: propertyData?.name || 'your property',
       });
-
-      // Step 2: If server-side creation is successful, send the email from the client.
-      const actionCodeSettings = {
-        // Use window.location.origin to get the correct absolute base URL
-        url: `${window.location.origin}/tenant/accept`,
-        handleCodeInApp: true,
-      };
-
-      // Store the email in localStorage so the /accept page can retrieve it.
-      window.localStorage.setItem('tenantInviteEmail', email);
-
-      // Trigger Firebase's built-in email sending.
-      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
       
       toast({ 
         title: "Invitation Sent!", 
-        description: `A secure sign-in link has been sent to ${email}.`
+        description: result.message
       });
 
       setEmail('');
@@ -68,6 +66,7 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     } catch (e: any) {
       console.error("Invitation process failed:", e);
       toast({ variant: "destructive", title: "Invitation Failed", description: e.message });
+      // Clear storage if the server action fails
       window.localStorage.removeItem('tenantInviteEmail');
     } finally {
       setLoading(false);

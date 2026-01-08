@@ -19,20 +19,19 @@ export default function TenantAcceptPage() {
       return;
     }
 
-    // The email must be stored in localStorage for this to work seamlessly
     const storedEmail = window.localStorage.getItem('tenantInviteEmail');
+    const emailToUse = storedEmail || window.prompt("Please provide your email to complete sign-in:");
     
-    if (!storedEmail) {
-      setError('Your browser storage is missing the email address. Please try opening the link in the same browser you used to request it, or try again.');
+    if (!emailToUse) {
+      setError('Your email address is required to complete the sign-in process.');
       return;
     }
 
     setStatus('Confirming your email and signing you in...');
-    signInWithEmailLink(auth, storedEmail, href)
+    signInWithEmailLink(auth, emailToUse, href)
       .then((result) => {
         window.localStorage.removeItem('tenantInviteEmail');
         setStatus('Success! Redirecting you to your tenant portal...');
-        // Redirect to the main tenant dashboard after successful sign-in
         router.replace('/tenant/dashboard'); 
       })
       .catch((err) => {
