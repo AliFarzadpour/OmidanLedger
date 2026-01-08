@@ -21,6 +21,11 @@ service cloud.firestore {
       return isSignedIn() && get(/databases/$(database)/documents/users/$(tenantUserId)).data.landlordId == request.auth.uid;
     }
 
+    function isTenantOfProperty(propertyId) {
+        // Checks if the requesting user has an associatedPropertyId that matches the property they are trying to read.
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.associatedPropertyId == propertyId;
+    }
+
     // Allow the "transactions" Collection Group queries defined in your index
     match /{path=**}/transactions/{transactionId} {
         allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
@@ -66,6 +71,10 @@ service cloud.firestore {
             allow read, list, write, delete: if isOwner(userId);
         }
 
+        match /settings/{settingId} {
+          allow read, write: if isOwner(userId);
+        }
+
         // --- NEW: Operations Center Rules ---
         match /opsThreads/{threadId} {
           allow read, write: if isOwner(userId);
@@ -85,9 +94,11 @@ service cloud.firestore {
     
     match /properties/{propertyId} {
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn();
-
+      // UPDATED: Allow tenant to read the property doc, but not list all properties.
+      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isTenantOfProperty(propertyId));
+      allow list: if isSignedIn(); // Listing is restricted to landlords via query `where('userId', '==', user.uid)`
+      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
       match /monthlyStats/{monthId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
       }
