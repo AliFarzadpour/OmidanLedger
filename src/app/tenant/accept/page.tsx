@@ -4,41 +4,52 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
+import { useAuth } from '@/firebase'; // Import the useAuth hook
 
 export default function TenantAcceptPage() {
   const router = useRouter();
-  const [status, setStatus] = useState('Verifying your invitation link...');
+  const auth = useAuth(); // Use the hook to get the initialized Auth instance
+  const [status, setStatus] = useState('Initializing...');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const auth = getAuth();
-    const href = window.location.href;
-
-    if (!isSignInWithEmailLink(auth, href)) {
-      setError('This sign-in link is invalid or has expired. Please request a new one.');
+    // The effect will re-run when `auth` becomes available.
+    if (!auth) {
+      // Auth is not ready yet, wait for the provider.
       return;
     }
 
-    const storedEmail = window.localStorage.getItem('tenantInviteEmail');
-    const emailToUse = storedEmail || window.prompt("Please provide your email to complete sign-in:");
-    
-    if (!emailToUse) {
-      setError('Your email address is required to complete the sign-in process.');
+    const href = window.location.href;
+    setStatus('Verifying your invitation link...');
+
+    if (!isSignInWithEmailLink(auth, href)) {
+      setError('This sign-in link is invalid or has expired. Please request a new one from your landlord.');
+      return;
+    }
+
+    let email = window.localStorage.getItem('tenantInviteEmail');
+    if (!email) {
+      email = window.prompt('Please provide your email for confirmation:');
+    }
+
+    if (!email) {
+      setError('An email address is required to complete the sign-in process.');
       return;
     }
 
     setStatus('Confirming your email and signing you in...');
-    signInWithEmailLink(auth, emailToUse, href)
+    signInWithEmailLink(auth, email, href)
       .then((result) => {
         window.localStorage.removeItem('tenantInviteEmail');
         setStatus('Success! Redirecting you to your tenant portal...');
-        router.replace('/tenant/dashboard'); 
+        // Use router.replace to prevent the user from navigating back to the accept page
+        router.replace('/tenant/dashboard');
       })
       .catch((err) => {
         console.error('Sign-in with email link error:', err);
-        setError(`Failed to sign in. The link may be expired or already used. Please request a new invitation from your landlord.`);
+        setError(`Failed to sign in. The link may be expired, already used, or you may need to open it on the same device where the invitation was requested.`);
       });
-  }, [router]);
+  }, [auth, router]); // Dependency on `auth` ensures this runs when Firebase is ready.
 
   return (
     <div style={{ padding: 24, fontFamily: 'sans-serif', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
