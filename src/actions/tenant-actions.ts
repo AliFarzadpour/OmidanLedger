@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAuth } from 'firebase-admin/auth';
@@ -29,7 +30,8 @@ export async function inviteTenant(input: InviteTenantInput) {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
     '';
 
-  if (!baseUrl || !/^https?:\/\/.+/i.test(baseUrl) || baseUrl.includes('localhost')) {
+  // Allow localhost only in development, otherwise require a valid HTTPS URL.
+  if (!baseUrl || !/^https?:\/\/.+/i.test(baseUrl) || (baseUrl.includes('localhost') && process.env.NODE_ENV !== 'development')) {
     throw new Error(
       `APP_URL/NEXT_PUBLIC_APP_URL is missing/invalid. Got: "${baseUrl}". Set APP_URL to your public https domain (e.g. https://YOURPROJECT.web.app).`
     );
@@ -61,6 +63,7 @@ export async function inviteTenant(input: InviteTenantInput) {
       associatedPropertyId: propertyId,
       ...(unitId ? { associatedUnitId: unitId } : {}),
       landlordId,
+      role: 'tenant', // Explicitly set role
       metadata: {
         role: 'tenant',
         status: 'invited',
