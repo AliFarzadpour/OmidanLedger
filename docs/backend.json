@@ -292,6 +292,7 @@
             "notes": { "type": "string" }
           }
         },
+        "paymentSettings": { "$ref": "#/backend/entities/PaymentSettings" },
         "accounting": {
             "type": "object",
             "description": "Links the property to its dedicated suite of GL accounts.",
@@ -407,6 +408,37 @@
         }
       },
       "required": ["id", "userId", "name", "address"]
+    },
+    "PaymentSettings": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PaymentSettings",
+      "type": "object",
+      "description": "Defines the payment methods and instructions for a property or user.",
+      "properties": {
+        "stripe": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        },
+        "zelle": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "recipientName": { "type": "string" },
+            "recipientHandle": { "type": "string", "description": "Phone number or email for Zelle." },
+            "memoTemplate": { "type": "string" }
+          }
+        },
+        "offline": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "instructions": { "type": "string" }
+          }
+        },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
     },
     "Vendor": {
       "$schema": "http://json-schema.org/draft-07/schema#",
@@ -635,6 +667,19 @@
               "description": "The unique ID of the user."
             }
           ]
+        }
+      },
+      {
+        "path": "/users/{userId}/paymentSettings/defaults",
+        "definition": {
+            "entityName": "PaymentSettings",
+            "schema": {
+                "$ref": "#/backend/entities/PaymentSettings"
+            },
+            "description": "Stores the user's global default payment settings.",
+            "params": [
+                { "name": "userId", "description": "The unique ID of the user." }
+            ]
         }
       },
       {
