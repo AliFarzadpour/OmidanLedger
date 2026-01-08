@@ -4,6 +4,7 @@ import { BusinessProfileForm } from '@/components/dashboard/settings/business-pr
 import { AccountSettingsForm } from '@/components/dashboard/settings/account-settings-form';
 import { Separator } from '@/components/ui/separator';
 import { AdminPublishButton } from '@/components/dashboard/settings/admin-publish-button';
+import { PaymentSettingsForm } from '@/components/dashboard/settings/payment-settings-form';
 
 export default function SettingsPage() {
   return (
@@ -16,6 +17,8 @@ export default function SettingsPage() {
       </div>
       <Separator />
       <BusinessProfileForm />
+      <Separator />
+      <PaymentSettingsForm />
       <Separator />
       <AccountSettingsForm />
       
