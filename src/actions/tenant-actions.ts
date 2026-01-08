@@ -30,14 +30,16 @@ export async function inviteTenant(input: InviteTenantInput) {
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
     '';
 
-  // Allow localhost only in development, otherwise require a valid HTTPS URL.
-  if (!baseUrl || !/^https?:\/\/.+/i.test(baseUrl) || (baseUrl.includes('localhost') && process.env.NODE_ENV !== 'development')) {
+  console.log('[inviteTenant] baseUrl=', baseUrl); // DEBUG LOG
+  const continueUrl = `${baseUrl}/tenant/accept`;
+  console.log('[inviteTenant] continueUrl=', continueUrl); // DEBUG LOG
+
+  // Allow localhost only for development
+  if (process.env.NODE_ENV === 'production' && (!baseUrl || !baseUrl.startsWith('https'))) {
     throw new Error(
-      `APP_URL/NEXT_PUBLIC_APP_URL is missing/invalid. Got: "${baseUrl}". Set APP_URL to your public https domain (e.g. https://YOURPROJECT.web.app).`
+      `Production environment is missing a valid HTTPS APP_URL. Got: "${baseUrl}".`
     );
   }
-
-  const continueUrl = `${baseUrl}/tenant/accept`;
 
   const actionCodeSettings = {
     url: continueUrl,
@@ -107,3 +109,4 @@ export async function inviteTenant(input: InviteTenantInput) {
 
   return { message: `Invitation email was sent to ${email}.` };
 }
+
