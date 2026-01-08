@@ -8,9 +8,12 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
-import { Wrench, User, Building, Calendar, DollarSign, ListChecks } from 'lucide-react';
+import { Wrench, User, Building, Calendar, DollarSign, ListChecks, Receipt } from 'lucide-react';
 import { updateWorkOrderStatus } from '@/actions/work-order-actions';
 import { useToast } from '@/hooks/use-toast';
+import { CreateExpenseFromWorkOrderDialog } from './CreateExpenseFromWorkOrderDialog';
+import Link from 'next/link';
+import { formatCurrency } from '@/lib/format';
 
 function StatCard({ title, value, icon, action }: { title: string, value: React.ReactNode, icon: React.ReactNode, action?: React.ReactNode }) {
     return (
@@ -19,7 +22,7 @@ function StatCard({ title, value, icon, action }: { title: string, value: React.
                 <div className="flex items-start justify-between">
                     <div>
                         <p className="text-sm text-muted-foreground">{title}</p>
-                        <p className="text-2xl font-bold">{value || 'N/A'}</p>
+                        <div className="text-2xl font-bold">{value || 'N/A'}</div>
                     </div>
                     <div className="p-2 bg-muted rounded-md text-muted-foreground">{icon}</div>
                 </div>
@@ -96,11 +99,18 @@ export function WorkOrderDetailOverview({ workOrder, onUpdate }: { workOrder: an
             <div className="space-y-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Costs</CardTitle>
+                        <CardTitle>Costs & Accounting</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                       <StatCard title="Estimated Cost" value={`$${(workOrder.estimatedCost || 0).toFixed(2)}`} icon={<DollarSign />} />
-                       <StatCard title="Actual Cost" value={`$${(workOrder.actualCost || 0).toFixed(2)}`} icon={<DollarSign />} />
+                       <StatCard title="Estimated Cost" value={`${formatCurrency(workOrder.estimatedCost || 0)}`} icon={<DollarSign />} />
+                       <StatCard title="Actual Cost" value={`${formatCurrency(workOrder.actualCost || 0)}`} icon={<DollarSign />} />
+                        {workOrder.accounting?.expenseTransactionId ? (
+                            <Button variant="outline" asChild className="w-full">
+                                <Link href="/dashboard/transactions">View Linked Expense</Link>
+                            </Button>
+                        ) : (
+                            <CreateExpenseFromWorkOrderDialog workOrder={workOrder} onUpdate={onUpdate} />
+                        )}
                     </CardContent>
                 </Card>
             </div>
