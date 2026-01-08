@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -16,7 +15,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
+import InviteTenantModal from '@/components/tenants/InviteTenantModal';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ref, deleteObject } from 'firebase/storage';
@@ -279,18 +278,18 @@ export function UnitDetailDrawer({ propertyId, unit, isOpen, onOpenChange, onUpd
                                           <div className="space-y-1"><Label className="text-xs">First Name *</Label><Input {...register(`tenants.${index}.firstName`)} /></div>
                                           <div className="space-y-1"><Label className="text-xs">Last Name *</Label><Input {...register(`tenants.${index}.lastName`)} /></div>
                                       </div>
-                                      <div className="grid grid-cols-2 gap-4">
-                                          <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
-                                          <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-4 pt-2 border-t">
-                                          <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
-                                          <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
-                                      </div>
-                                      <div className="grid grid-cols-2 gap-4">
-                                          <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
-                                          <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
-                                      </div>
+                                       <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...register(`tenants.${index}.email`)} /></div>
+                                        <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...register(`tenants.${index}.phone`)} /></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                        <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...register(`tenants.${index}.leaseStart`)} /></div>
+                                        <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...register(`tenants.${index}.leaseEnd`)} /></div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...register(`tenants.${index}.rentAmount`)} /></div>
+                                        <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...register(`tenants.${index}.deposit`)} /></div>
+                                    </div>
                                        <div className="space-y-1"><Label className="text-xs">Status</Label>
                                             <Controller
                                                 control={control}
