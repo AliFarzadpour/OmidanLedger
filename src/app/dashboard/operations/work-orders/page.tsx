@@ -1,7 +1,6 @@
-
 'use client';
 
-import { WorkOrdersList } from '@/components/operations/WorkOrdersList';
+import { WorkOrdersList } from '@/components/operations/work-orders-list';
 
 export default function WorkOrdersPage() {
   return (
@@ -16,5 +15,3 @@ export default function WorkOrdersPage() {
     </div>
   );
 }
-
-    
