@@ -1,11 +1,14 @@
+
 'use client';
 
 import Link from 'next/link';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, Inbox, ListChecks, Wrench, Users, Loader2 } from 'lucide-react';
+import { ArrowRight, Inbox, ListChecks, Wrench, Users, Loader2, ArrowLeft } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
-import { collection, query, where } from 'firebase/firestore';
+import { collection, query, where, doc, getDocs } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 
 function HubCard({ title, description, href, kpi, icon: Icon, isLoading }: any) {
   return (
@@ -41,6 +44,10 @@ function HubCard({ title, description, href, kpi, icon: Icon, isLoading }: any) 
 export default function OperationsHubPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
+
+  const [taskCount, setTaskCount] = useState(0);
+  const [loadingTasks, setLoadingTasks] = useState(true);
 
   // Fetch data for KPIs
   const activeWorkOrdersQuery = useMemoFirebase(() => {
@@ -50,15 +57,32 @@ export default function OperationsHubPage() {
       where('status', 'not-in', ['Completed', 'Canceled'])
     );
   }, [user, firestore]);
+
+  const openThreadsQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return query(
+        collection(firestore, `users/${user.uid}/opsThreads`),
+        where('status', '!=', 'closed')
+    );
+  }, [user, firestore]);
   
-  const { data: openThreads, isLoading: loadingThreads } = useCollection(activeWorkOrdersQuery);
-  const { data: activeTasks, isLoading: loadingTasks } = useCollection(activeWorkOrdersQuery);
+  useEffect(() => {
+    if (!user || !firestore) return;
+    setLoadingTasks(true);
+    const fetchTasks = async () => {
+        const tasksQuery = query(collection(firestore, `users/${user.uid}/opsTasks`), where('status', '!=', 'done'));
+        const tasksSnap = await getDocs(tasksQuery);
+        setTaskCount(tasksSnap.size);
+        setLoadingTasks(false);
+    }
+    fetchTasks();
+  }, [user, firestore]);
+  
+  const { data: openThreads, isLoading: loadingThreads } = useCollection(openThreadsQuery);
   const { data: activeWorkOrders, isLoading: loadingWorkOrders } = useCollection(activeWorkOrdersQuery);
   
   const vendorsQuery = useMemoFirebase(() => user ? query(collection(firestore, 'vendors'), where('userId', '==', user.uid)) : null, [user, firestore]);
   const { data: vendors, isLoading: loadingVendors } = useCollection(vendorsQuery);
-
-  const isLoading = loadingThreads || loadingTasks || loadingWorkOrders || loadingVendors;
 
   const hubItems = [
     {
@@ -74,7 +98,7 @@ export default function OperationsHubPage() {
       description: 'View work orders with open tasks.',
       href: '/dashboard/operations/work-orders?view=tasks',
       icon: ListChecks,
-      kpi: { value: activeTasks?.length ?? '—', label: 'with open tasks' },
+      kpi: { value: taskCount ?? '—', label: 'open tasks' },
       isLoading: loadingTasks,
     },
     {
@@ -97,11 +121,16 @@ export default function OperationsHubPage() {
 
   return (
     <div className="flex flex-col gap-8 p-4 md:p-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Operations Center</h1>
-        <p className="text-muted-foreground">
-          Manage tasks, communication, vendors, and property work.
-        </p>
+      <div className="flex items-center gap-4">
+         <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="h-5 w-5" />
+         </Button>
+         <div>
+            <h1 className="text-3xl font-bold tracking-tight">Operations Center</h1>
+            <p className="text-muted-foreground">
+              Manage tasks, communication, vendors, and property work.
+            </p>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,8 +12,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Trash2, Phone, Mail, Loader2, Edit2, Tag } from 'lucide-react';
+import { Search, Plus, Trash2, Phone, Mail, Loader2, Edit2, Tag, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
+
 
 // --- EXPANDED MULTI-SECTOR TRADES LIST ---
 const VENDOR_ROLES = [
@@ -54,6 +57,7 @@ export default function VendorManager() {
   const { user } = useUser();
   const firestore = useFirestore();
   const { toast } = useToast();
+  const router = useRouter();
   
   const [vendors, setVendors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -137,9 +141,14 @@ export default function VendorManager() {
     <div className="p-8 space-y-8">
       
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Vendor Database</h1>
-          <p className="text-muted-foreground">Manage contractors and assign accounting rules.</p>
+        <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Vendor Database</h1>
+              <p className="text-muted-foreground">Manage contractors and assign accounting rules.</p>
+            </div>
         </div>
         <Button onClick={() => { setEditingVendor(null); setFormData({name:'', role:'', phone:'', email:'', company:'', defaultCategory:''}); setIsAddOpen(true); }} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="mr-2 h-4 w-4" /> Add Vendor
