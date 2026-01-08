@@ -2,6 +2,7 @@
 'use server';
 
 import { db } from '@/lib/admin-db';
+import { adminApp } from '@/lib/admin-db';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -20,12 +21,14 @@ const WorkOrderSchema = z.object({
   status: z.enum(['New', 'Scheduled', 'In Progress', 'Waiting', 'Completed', 'Canceled']),
   dueDate: z.date().optional().nullable(),
   scheduledAt: z.date().optional().nullable(),
-  estimatedCost: z.number().optional().nullable(),
-  actualCost: z.number().optional().nullable(),
-  paid: z.boolean().default(false),
-  paymentSource: z.string().optional(),
-  notesInternal: z.string().optional(),
+  estimatedCost: z.coerce.number().optional().nullable(),
+  actualCost: z.coerce.number().optional().nullable(),
   visibility: z.enum(['landlord_only', 'shared_with_tenant', 'shared_with_vendor']),
+  attachments: z.array(z.object({
+    name: z.string(),
+    url: z.string(),
+    storagePath: z.string(),
+  })).optional(),
 });
 
 type WorkOrderData = z.infer<typeof WorkOrderSchema>;
@@ -57,7 +60,20 @@ export async function saveWorkOrder(data: WorkOrderData) {
         ...payload,
         id: docRef.id,
         createdAt: FieldValue.serverTimestamp(),
+        createdBy: { type: 'landlord', id: userId, name: 'Owner' } // Add creator info
       });
+
+      // Add an initial "created" message to the timeline
+      const messageRef = docRef.collection('messages').doc();
+      await messageRef.set({
+          userId: userId,
+          workOrderId: docRef.id,
+          createdAt: FieldValue.serverTimestamp(),
+          author: { type: 'system', id: null, name: 'System' },
+          visibility: 'internal',
+          body: 'Work order created.'
+      });
+      
       revalidatePath('/dashboard/operations/work-orders');
       return { success: true, id: docRef.id };
     }
@@ -81,5 +97,3 @@ export async function deleteWorkOrder(userId: string, workOrderId: string) {
         throw new Error('Could not delete the work order.');
     }
 }
-
-    
