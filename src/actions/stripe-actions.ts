@@ -7,7 +7,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Stripe with the secret key from environment variables
 // Ensure STRIPE_SECRET_KEY is set in your .env file
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'dummy_key_for_build';
+const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-06-20',
 });
 

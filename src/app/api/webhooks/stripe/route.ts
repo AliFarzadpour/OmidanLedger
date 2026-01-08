@@ -5,7 +5,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { incrementPropertyStats } from '@/actions/update-property-stats';
 import Stripe from 'stripe';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'dummy_key_for_build';
+const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-06-20',
 });
 

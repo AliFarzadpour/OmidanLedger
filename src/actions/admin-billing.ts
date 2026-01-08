@@ -6,7 +6,8 @@ import { revalidatePath } from 'next/cache';
 import Stripe from 'stripe';
 import { FieldValue } from 'firebase-admin/firestore';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripeKey = process.env.STRIPE_SECRET_KEY || 'dummy_key_for_build';
+const stripe = new Stripe(stripeKey, {
   apiVersion: '2024-06-20',
 });
 
