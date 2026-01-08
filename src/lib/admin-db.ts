@@ -33,3 +33,4 @@ const adminApp = initializeAdminApp();
 const db = getFirestore(adminApp);
 
 export { db, adminApp };
+
