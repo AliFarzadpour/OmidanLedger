@@ -9,7 +9,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
 import { useAuth } from '@/firebase'; // Import the client-side auth hook
-import { sendSignInLinkToEmail } from 'firebase/auth'; // Import the email sending function
 
 interface InviteTenantModalProps {
   isOpen: boolean;
@@ -32,29 +31,12 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
     }
     setLoading(true);
 
+    // Store email in localStorage BEFORE calling the server action.
+    window.localStorage.setItem('tenantInviteEmail', email);
+
     try {
-      // Step 1: Create the user on the server.
-      const userCreationResult = await inviteTenant({ email, propertyId, unitId, landlordId });
-
-      if (!userCreationResult.success) {
-        throw new Error(userCreationResult.message);
-      }
+      const result = await inviteTenant({ email, propertyId, unitId, landlordId });
       
-      toast({ title: "Account Created", description: userCreationResult.message });
-
-      // Step 2: On success, trigger the email from the client using a dynamic URL.
-      const baseUrl = window.location.origin;
-      
-      const actionCodeSettings = {
-        url: `${baseUrl}/tenant/accept`,
-        handleCodeInApp: true,
-      };
-
-      await sendSignInLinkToEmail(auth, email, actionCodeSettings);
-
-      // Store the email temporarily in local storage to be retrieved on the accept page.
-      window.localStorage.setItem('emailForSignIn', email);
-
       toast({ 
         title: "Invitation Sent!", 
         description: `An invitation email has been sent to ${email}.`
@@ -64,6 +46,8 @@ export function InviteTenantModal({ isOpen, onOpenChange, landlordId, propertyId
       onOpenChange(false);
 
     } catch (e: any) {
+      // Clear local storage on failure
+      window.localStorage.removeItem('tenantInviteEmail');
       toast({ variant: "destructive", title: "Invitation Failed", description: e.message });
     } finally {
       setLoading(false);

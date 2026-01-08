@@ -1,0 +1,35 @@
+import { Resend } from "resend";
+
+export const resend = new Resend(process.env.RESEND_API_KEY!);
+
+export async function sendTenantInviteEmail(params: {
+  to: string;
+  landlordName: string;
+  propertyName: string;
+  link: string;
+}) {
+  const { to, landlordName, propertyName, link } = params;
+
+  const subject = `You're invited to OmidanLedger — ${propertyName}`;
+
+  const html = `
+  <div style="font-family:Arial,sans-serif;line-height:1.5;color:#333;max-width:600px;margin:auto;border:1px solid #e2e8f0;border-radius:8px;padding:24px;">
+    <h2 style="color:#1e293b;">Welcome to OmidanLedger</h2>
+    <p>${landlordName} has invited you to access your tenant portal for <b>${propertyName}</b>.</p>
+    <p>In the portal, you can view your balance and make payments online.</p>
+    <p style="margin:24px 0;">
+      <a href="${link}" style="display:inline-block;padding:12px 20px;background-color:#1E88E5;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">
+        Access Tenant Portal
+      </a>
+    </p>
+    <p style="color:#64748b;font-size:12px;">If you didn’t request this, you can safely ignore this email.</p>
+  </div>
+  `;
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM!,
+    to,
+    subject,
+    html,
+  });
+}
