@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm } from 'react-hook-form';
@@ -203,134 +202,132 @@ export function BusinessProfileForm() {
   const stripeStatus = userData?.billing?.stripeStatus;
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Payout Account</CardTitle>
-            <CardDescription>
-              Connect your bank account via Stripe to receive rent payments. Stripe handles all financial data securely.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ClientOnly>
-                {stripeStatus === 'active' ? (
-                     <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-md border border-green-200 text-sm font-medium">
-                        <CheckCircle2 className="h-5 w-5" />
-                        Your account is connected and ready to receive payments.
-                    </div>
-                ) : (
-                    <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button type="button" disabled={isConnectingStripe}>
-                                {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
-                                {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Stripe Processing Fees</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Omidan Ledger utilizes Stripe for secure invoicing and payment processing. Please be aware that payments made via the digital invoice link are subject to Stripe’s standard processing fees.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <div className="text-sm space-y-3 py-2">
-                                <div>
-                                    <h4 className="font-semibold">Credit/Debit Cards: ~2.9% + 30¢ per transaction.</h4>
-                                    <p className="text-xs text-muted-foreground">Example ($1,000 Invoice): You pay ~$33.00 in fees.</p>
-                                </div>
-                                <div>
-                                    <h4 className="font-semibold">Bank Transfers (ACH): 0.8% (capped at $5.00).</h4>
-                                    <p className="text-xs text-muted-foreground">Example ($1,000 Invoice): You pay only $5.00 in fees (because of the cap).</p>
-                                </div>
-                            </div>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleStripeConnect}>
-                                    Agree & Continue
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
-                )}
-                 {stripeStatus === 'incomplete' && <p className="text-sm text-destructive mt-2">Your Stripe account setup is incomplete. Please re-connect to finish.</p>}
-            </ClientOnly>
-          </CardContent>
-        </Card>
+    <ClientOnly>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Payout Account</CardTitle>
+              <CardDescription>
+                Connect your bank account via Stripe to receive rent payments. Stripe handles all financial data securely.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {stripeStatus === 'active' ? (
+                   <div className="flex items-center gap-3 bg-green-50 text-green-800 p-4 rounded-md border border-green-200 text-sm font-medium">
+                      <CheckCircle2 className="h-5 w-5" />
+                      Your account is connected and ready to receive payments.
+                  </div>
+              ) : (
+                  <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                          <Button type="button" disabled={isConnectingStripe}>
+                              {isConnectingStripe ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LinkIcon className="mr-2 h-4 w-4" />}
+                              {stripeStatus === 'incomplete' ? 'Re-connect with Stripe' : 'Connect with Stripe'}
+                          </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                          <AlertDialogHeader>
+                              <AlertDialogTitle>Stripe Processing Fees</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                  Omidan Ledger utilizes Stripe for secure invoicing and payment processing. Please be aware that payments made via the digital invoice link are subject to Stripe’s standard processing fees.
+                              </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <div className="text-sm space-y-3 py-2">
+                              <div>
+                                  <h4 className="font-semibold">Credit/Debit Cards: ~2.9% + 30¢ per transaction.</h4>
+                                  <p className="text-xs text-muted-foreground">Example ($1,000 Invoice): You pay ~$33.00 in fees.</p>
+                              </div>
+                              <div>
+                                  <h4 className="font-semibold">Bank Transfers (ACH): 0.8% (capped at $5.00).</h4>
+                                  <p className="text-xs text-muted-foreground">Example ($1,000 Invoice): You pay only $5.00 in fees (because of the cap).</p>
+                              </div>
+                          </div>
+                          <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={handleStripeConnect}>
+                                  Agree & Continue
+                              </AlertDialogAction>
+                          </AlertDialogFooter>
+                      </AlertDialogContent>
+                  </AlertDialog>
+              )}
+               {stripeStatus === 'incomplete' && <p className="text-sm text-destructive mt-2">Your Stripe account setup is incomplete. Please re-connect to finish.</p>}
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Business Logo</CardTitle>
-            <CardDescription>Upload your company logo to be used on reports.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-6">
-              <ClientOnly>
+          <Card>
+            <CardHeader>
+              <CardTitle>Business Logo</CardTitle>
+              <CardDescription>Upload your company logo to be used on reports.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-6">
                 <div className="w-24 h-24 rounded-lg border bg-muted/50 flex items-center justify-center overflow-hidden">
                   {logoUrl ? <Image src={logoUrl} alt="Logo" width={96} height={96} className="object-contain" /> : <Building2 className="h-10 w-10 text-muted-foreground" />}
                 </div>
-              </ClientOnly>
-              <div className="flex-1 space-y-2">
-                  <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
-                      <Upload className="mr-2 h-4 w-4" />
-                      {isUploading ? `Uploading... ${Math.round(progress)}%` : 'Upload Logo'}
-                  </Button>
-                  <input type="file" ref={fileInputRef} onChange={handleLogoUpload} className="hidden" accept="image/png, image/jpeg, image/gif, image/webp" />
-                  <p className="text-xs text-muted-foreground">PNG, JPG, or GIF up to 5MB.</p>
-                  {isUploading && <Progress value={progress} className="w-full" />}
+                <div className="flex-1 space-y-2">
+                    <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isUploading}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        {isUploading ? `Uploading... ${Math.round(progress)}%` : 'Upload Logo'}
+                    </Button>
+                    <input type="file" ref={fileInputRef} onChange={handleLogoUpload} className="hidden" accept="image/png, image/jpeg, image/gif, image/webp" />
+                    <p className="text-xs text-muted-foreground">PNG, JPG, or GIF up to 5MB.</p>
+                    {isUploading && <Progress value={progress} className="w-full" />}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Business Profile</CardTitle>
-            <CardDescription>This information will be used for generating reports.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-              <FormField control={form.control} name="businessName" render={({ field }) => (
-                <FormItem><FormLabel>Business Name</FormLabel><FormControl><Input placeholder="e.g., Acme Inc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+          <Card>
+            <CardHeader>
+              <CardTitle>Business Profile</CardTitle>
+              <CardDescription>This information will be used for generating reports.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                <FormField control={form.control} name="businessName" render={({ field }) => (
+                  <FormItem><FormLabel>Business Name</FormLabel><FormControl><Input placeholder="e.g., Acme Inc." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                )} />
+                <FormField control={form.control} name="businessType" render={({ field }) => (
+                  <FormItem><FormLabel>Business Type</FormLabel><RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2">
+                    {BUSINESS_OPTIONS.map(o => <FormItem key={o.value} className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value={o.value} /></FormControl><FormLabel className="font-normal">{o.label}</FormLabel></FormItem>)}
+                  </RadioGroup><FormMessage /></FormItem>
+                )} />
+              </div>
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
+                  <FormField control={form.control} name="industry" render={({ field }) => (
+                    <FormItem><FormLabel>Industry</FormLabel><FormControl><Input placeholder="e.g., Real Estate" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="taxId" render={({ field }) => (
+                    <FormItem><FormLabel>Tax ID / EIN</FormLabel><FormControl><Input placeholder="XX-XXXXXXX" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                  )} />
+              </div>
+              <FormField control={form.control} name="address" render={({ field }) => (
+                <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input placeholder="123 Main St" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
               )} />
-              <FormField control={form.control} name="businessType" render={({ field }) => (
-                <FormItem><FormLabel>Business Type</FormLabel><RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-2 gap-x-4 gap-y-2 pt-2">
-                  {BUSINESS_OPTIONS.map(o => <FormItem key={o.value} className="flex items-center space-x-3 space-y-0"><FormControl><RadioGroupItem value={o.value} /></FormControl><FormLabel className="font-normal">{o.label}</FormLabel></FormItem>)}
-                </RadioGroup><FormMessage /></FormItem>
-              )} />
-            </div>
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-                <FormField control={form.control} name="industry" render={({ field }) => (
-                  <FormItem><FormLabel>Industry</FormLabel><FormControl><Input placeholder="e.g., Real Estate" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="taxId" render={({ field }) => (
-                  <FormItem><FormLabel>Tax ID / EIN</FormLabel><FormControl><Input placeholder="XX-XXXXXXX" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-            </div>
-            <FormField control={form.control} name="address" render={({ field }) => (
-              <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input placeholder="123 Main St" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-            )} />
-            <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
-                 <FormField control={form.control} name="city" render={({ field }) => (
-                  <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="San Francisco" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="state" render={({ field }) => (
-                  <FormItem><FormLabel>State / Province</FormLabel><FormControl><Input placeholder="CA" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="zip" render={({ field }) => (
-                  <FormItem><FormLabel>ZIP / Postal Code</FormLabel><FormControl><Input placeholder="94103" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                )} />
-            </div>
+              <div className="grid grid-cols-1 gap-8 md:grid-cols-3">
+                   <FormField control={form.control} name="city" render={({ field }) => (
+                    <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="San Francisco" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="state" render={({ field }) => (
+                    <FormItem><FormLabel>State / Province</FormLabel><FormControl><Input placeholder="CA" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                  )} />
+                  <FormField control={form.control} name="zip" render={({ field }) => (
+                    <FormItem><FormLabel>ZIP / Postal Code</FormLabel><FormControl><Input placeholder="94103" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                  )} />
+              </div>
 
-            <div className="flex justify-end">
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </form>
-    </Form>
+              <div className="flex justify-end">
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  {form.formState.isSubmitting ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      </Form>
+    </ClientOnly>
   );
 }

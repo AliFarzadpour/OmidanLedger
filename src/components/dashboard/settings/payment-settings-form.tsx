@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -30,11 +29,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc, setDoc, writeBatch, collection, getDocs, query, where } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Banknote, Loader2, Save } from 'lucide-react';
+
+function ClientOnly({ children }: { children: React.ReactNode }) {
+  const [hasMounted, setHasMounted] = useState(false);
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  if (!hasMounted) {
+    return null;
+  }
+  return <>{children}</>;
+}
+
 
 const paymentSettingsSchema = z.object({
   enableStripe: z.boolean().default(false),
@@ -165,102 +177,104 @@ export function PaymentSettingsForm() {
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Payment Methods</CardTitle>
-            <CardDescription>
-              Set the default payment options you offer to your tenants. These can be overridden per property.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            
-            <FormField
-              control={form.control}
-              name="enableStripe"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Enable Stripe Payments</FormLabel>
-                    <FormDescription>Allow tenants to pay via credit card or ACH through Stripe (fees apply).</FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                      disabled={userData?.stripeStatus !== 'active'}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
-              name="enableZelle"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5">
-                    <FormLabel className="text-base">Enable Zelle / Manual Payments</FormLabel>
-                    <FormDescription>Provide instructions for tenants to pay manually via Zelle, check, or cash.</FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            
-            {form.watch('enableZelle') && (
-              <div className="space-y-4 pt-4 border-t animate-in fade-in-50">
-                  <h4 className="font-semibold">Default Zelle Instructions</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField control={form.control} name="zelleRecipientName" render={({ field }) => (
-                        <FormItem><FormLabel>Recipient Name</FormLabel><FormControl><Input placeholder="e.g., Jane Doe or Acme LLC" {...field} /></FormControl></FormItem>
+    <ClientOnly>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payment Methods</CardTitle>
+              <CardDescription>
+                Set the default payment options you offer to your tenants. These can be overridden per property.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              
+              <FormField
+                control={form.control}
+                name="enableStripe"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Enable Stripe Payments</FormLabel>
+                      <FormDescription>Allow tenants to pay via credit card or ACH through Stripe (fees apply).</FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={userData?.stripeStatus !== 'active'}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="enableZelle"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">Enable Zelle / Manual Payments</FormLabel>
+                      <FormDescription>Provide instructions for tenants to pay manually via Zelle, check, or cash.</FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              
+              {form.watch('enableZelle') && (
+                <div className="space-y-4 pt-4 border-t animate-in fade-in-50">
+                    <h4 className="font-semibold">Default Zelle Instructions</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField control={form.control} name="zelleRecipientName" render={({ field }) => (
+                          <FormItem><FormLabel>Recipient Name</FormLabel><FormControl><Input placeholder="e.g., Jane Doe or Acme LLC" {...field} /></FormControl></FormItem>
+                      )} />
+                      <FormField control={form.control} name="zelleRecipientHandle" render={({ field }) => (
+                          <FormItem><FormLabel>Recipient Phone or Email</FormLabel><FormControl><Input placeholder="e.g., landlord@email.com" {...field} /></FormControl></FormItem>
+                      )} />
+                    </div>
+                    <FormField control={form.control} name="zelleMemoTemplate" render={({ field }) => (
+                        <FormItem><FormLabel>Memo Template</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
                     )} />
-                    <FormField control={form.control} name="zelleRecipientHandle" render={({ field }) => (
-                        <FormItem><FormLabel>Recipient Phone or Email</FormLabel><FormControl><Input placeholder="e.g., landlord@email.com" {...field} /></FormControl></FormItem>
+                     <FormField control={form.control} name="zelleNotes" render={({ field }) => (
+                        <FormItem><FormLabel>Additional Notes</FormLabel><FormControl><Textarea placeholder="Optional notes for tenants..." {...field} /></FormControl></FormItem>
                     )} />
-                  </div>
-                  <FormField control={form.control} name="zelleMemoTemplate" render={({ field }) => (
-                      <FormItem><FormLabel>Memo Template</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>
-                  )} />
-                   <FormField control={form.control} name="zelleNotes" render={({ field }) => (
-                      <FormItem><FormLabel>Additional Notes</FormLabel><FormControl><Textarea placeholder="Optional notes for tenants..." {...field} /></FormControl></FormItem>
-                  )} />
-              </div>
-            )}
-            
-          </CardContent>
-          <CardFooter className="flex justify-between border-t p-6">
-            <AlertDialog>
-                <AlertDialogTrigger asChild>
-                    <Button type="button" variant="outline">Apply to All Properties</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This will overwrite the payment settings on all of your existing properties with these defaults. This action cannot be undone.
-                    </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleApplyToAll}>Continue</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
-              Save Defaults
-            </Button>
-          </CardFooter>
-        </Card>
-      </form>
-    </Form>
+                </div>
+              )}
+              
+            </CardContent>
+            <CardFooter className="flex justify-between border-t p-6">
+              <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                      <Button type="button" variant="outline">Apply to All Properties</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                      <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          This will overwrite the payment settings on all of your existing properties with these defaults. This action cannot be undone.
+                      </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleApplyToAll}>Continue</AlertDialogAction>
+                      </AlertDialogFooter>
+                  </AlertDialogContent>
+              </AlertDialog>
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                {form.formState.isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" />}
+                Save Defaults
+              </Button>
+            </CardFooter>
+          </Card>
+        </form>
+      </Form>
+    </ClientOnly>
   );
 }
