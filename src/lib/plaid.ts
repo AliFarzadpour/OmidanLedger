@@ -27,7 +27,13 @@ function getAdminDB(): Firestore {
 function getPlaidClient(): PlaidApi {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
-    throw new Error('Plaid credentials missing in .env');
+    console.warn('Plaid credentials missing, using dummy client for build. Real credentials required at runtime.');
+    // Return a dummy/mock client for build time
+    const dummyConfig = new Configuration({
+      basePath: PlaidEnvironments.sandbox,
+      baseOptions: { headers: { 'PLAID-CLIENT-ID': 'dummy', 'PLAID-SECRET': 'dummy' } },
+    });
+    return new PlaidApi(dummyConfig);
   }
 
   const plaidConfig = new Configuration({

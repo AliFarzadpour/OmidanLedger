@@ -8,7 +8,12 @@ import { FieldValue } from 'firebase-admin/firestore';
 function getPlaidClient() {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;
   if (!PLAID_CLIENT_ID || !PLAID_SECRET) {
-    throw new Error('Plaid API credentials are not configured in .env file.');
+    console.warn('Plaid credentials missing, using dummy client for build. Real credentials required at runtime.');
+    const dummyConfig = new Configuration({
+      basePath: PlaidEnvironments.sandbox,
+      baseOptions: { headers: { 'PLAID-CLIENT-ID': 'dummy', 'PLAID-SECRET': 'dummy' } },
+    });
+    return new PlaidApi(dummyConfig);
   }
 
   const configuration = new Configuration({
