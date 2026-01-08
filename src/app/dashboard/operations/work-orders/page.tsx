@@ -1,4 +1,4 @@
-
+export const dynamic = 'force-dynamic';
 'use client';
 
 import { WorkOrdersList } from '@/components/operations/work-orders-list';
