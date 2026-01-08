@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useForm, Controller } from 'react-hook-form';
@@ -53,12 +54,17 @@ export function PaymentSettingsForm() {
 
   const userDocRef = useMemoFirebase(() => {
     if (!firestore || !user) return null;
-    return doc(firestore, 'users', user.uid);
+    return doc(firestore, 'users', user.uid, 'settings', 'payments');
   }, [firestore, user]);
 
   const { data: userData, isLoading: isLoadingUser } = useDoc<{ 
-    paymentSettings?: PaymentSettingsFormValues, 
-    billing?: { stripeStatus?: string } 
+    stripeEnabled: boolean;
+    zelleEnabled: boolean;
+    zelleRecipientName?: string;
+    zelleRecipientHandle?: string;
+    zelleMemoTemplate?: string;
+    zelleNotes?: string;
+    stripeStatus?: string;
   }>(userDocRef);
 
   const form = useForm<PaymentSettingsFormValues>({
@@ -74,18 +80,22 @@ export function PaymentSettingsForm() {
   });
 
   useEffect(() => {
-    if (userData?.paymentSettings) {
-      form.reset(userData.paymentSettings);
-    } else if (userData?.billing?.stripeStatus === 'active') {
-      // If Stripe is connected but no settings are saved, default enableStripe to true
-      form.setValue('enableStripe', true);
+    if (userData) {
+      form.reset({
+        enableStripe: userData.stripeEnabled,
+        enableZelle: userData.zelleEnabled,
+        zelleRecipientName: userData.zelleRecipientName,
+        zelleRecipientHandle: userData.zelleRecipientHandle,
+        zelleMemoTemplate: userData.zelleMemoTemplate,
+        zelleNotes: userData.zelleNotes,
+      });
     }
   }, [userData, form]);
 
   const onSubmit = async (data: PaymentSettingsFormValues) => {
     if (!userDocRef) return;
     try {
-      await setDoc(userDocRef, { paymentSettings: data }, { merge: true });
+      await setDoc(userDocRef, data, { merge: true });
       toast({
         title: 'Payment Settings Saved',
         description: 'Your default payment preferences have been updated.',
@@ -112,7 +122,20 @@ export function PaymentSettingsForm() {
       const batch = writeBatch(firestore);
       propertiesSnap.forEach(propDoc => {
         const propRef = doc(firestore, 'properties', propDoc.id);
-        batch.update(propRef, { paymentSettings: currentSettings });
+        const settingsToApply = {
+          methods: {
+            stripe: { enabled: currentSettings.enableStripe },
+            zelle: { 
+              enabled: currentSettings.enableZelle,
+              recipientName: currentSettings.zelleRecipientName,
+              recipientContact: currentSettings.zelleRecipientHandle,
+              memoTemplate: currentSettings.zelleMemoTemplate,
+              notes: currentSettings.zelleNotes
+            }
+          },
+          updatedAt: new Date().toISOString()
+        };
+        batch.set(propRef, { paymentSettings: settingsToApply }, { merge: true });
       });
 
       await batch.commit();
@@ -166,7 +189,7 @@ export function PaymentSettingsForm() {
                     <Switch
                       checked={field.value}
                       onCheckedChange={field.onChange}
-                      disabled={userData?.billing?.stripeStatus !== 'active'}
+                      disabled={userData?.stripeStatus !== 'active'}
                     />
                   </FormControl>
                 </FormItem>
