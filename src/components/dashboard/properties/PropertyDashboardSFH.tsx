@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -27,7 +28,7 @@ import {
   CardTitle,
   CardDescription
 } from '@/components/ui/card';
-import { InviteTenantModal } from '@/components/tenants/InviteTenantModal';
+import InviteTenantModal from '@/components/tenants/InviteTenantModal';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
 import { useToast } from '@/hooks/use-toast';
