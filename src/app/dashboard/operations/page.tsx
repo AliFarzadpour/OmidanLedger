@@ -43,14 +43,19 @@ export default function OperationsHubPage() {
   const firestore = useFirestore();
 
   // Fetch data for KPIs
-  const threadsQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'Completed'), where('status', '!=', 'Canceled')) : null, [user, firestore]);
-  const tasksQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'Completed'), where('status', '!=', 'Canceled')) : null, [user, firestore]);
-  const workOrdersQuery = useMemoFirebase(() => user ? query(collection(firestore, `users/${user.uid}/opsWorkOrders`), where('status', '!=', 'Completed'), where('status', '!=', 'Canceled')) : null, [user, firestore]);
-  const vendorsQuery = useMemoFirebase(() => user ? query(collection(firestore, 'vendors'), where('userId', '==', user.uid)) : null, [user, firestore]);
+  const activeWorkOrdersQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return query(
+      collection(firestore, `users/${user.uid}/opsWorkOrders`), 
+      where('status', 'not-in', ['Completed', 'Canceled'])
+    );
+  }, [user, firestore]);
   
-  const { data: openThreads, isLoading: loadingThreads } = useCollection(threadsQuery);
-  const { data: activeTasks, isLoading: loadingTasks } = useCollection(tasksQuery);
-  const { data: activeWorkOrders, isLoading: loadingWorkOrders } = useCollection(workOrdersQuery);
+  const { data: openThreads, isLoading: loadingThreads } = useCollection(activeWorkOrdersQuery);
+  const { data: activeTasks, isLoading: loadingTasks } = useCollection(activeWorkOrdersQuery);
+  const { data: activeWorkOrders, isLoading: loadingWorkOrders } = useCollection(activeWorkOrdersQuery);
+  
+  const vendorsQuery = useMemoFirebase(() => user ? query(collection(firestore, 'vendors'), where('userId', '==', user.uid)) : null, [user, firestore]);
   const { data: vendors, isLoading: loadingVendors } = useCollection(vendorsQuery);
 
   const isLoading = loadingThreads || loadingTasks || loadingWorkOrders || loadingVendors;
