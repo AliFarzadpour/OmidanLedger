@@ -6,6 +6,11 @@ export async function syncTransactions() {
   return { added: [], modified: [], removed: [] };
 }
 
+export async function syncAndCategorizePlaidTransactions() {
+  console.log('Categorization sync is currently disabled');
+  return { success: true, message: 'Sync disabled' };
+}
+
 export async function createBankAccountFromPlaid() {
   console.log('Bank account creation disabled');
   return { success: false };
