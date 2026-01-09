@@ -65,7 +65,7 @@ const data = {
       advanced: true,
     },
     {
-      title: "Operations Center",
+      title: "Operations Center (New)",
       url: "/dashboard/operations",
       icon: Wrench,
       advanced: true,
