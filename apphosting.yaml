@@ -6,3 +6,9 @@ env:
     secret: RESEND_API_KEY
   - variable: APP_URL
     secret: APP_URL
+  - variable: PLAID_CLIENT_ID
+    secret: PLAID_CLIENT_ID
+  - variable: PLAID_SECRET
+    secret: PLAID_SECRET
+  - variable: PLAID_ENV
+    value: "sandbox" # Change to "development" or "production" when ready
