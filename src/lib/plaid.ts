@@ -16,7 +16,23 @@ const configuration = new Configuration({
   },
 });
 
-const plaidClient = new PlaidApi(configuration);
+export const plaidClient = new PlaidApi(configuration);
+
+export async function createLinkToken(userId: string) {
+  try {
+    const response = await plaidClient.linkTokenCreate({
+      user: { client_user_id: userId },
+      client_name: 'Omidan Ledger',
+      products: ['transactions'],
+      country_codes: ['US'],
+      language: 'en',
+    });
+    return response.data.link_token;
+  } catch (error) {
+    console.error('Error creating link token:', error);
+    throw new Error('Failed to create link token');
+  }
+}
 
 export async function exchangePublicToken(publicToken: string) {
   try {
@@ -53,20 +69,4 @@ export async function getCategoryFromDatabase(description: string) {
 export async function categorizeWithHeuristics(transaction: any) {
   console.log('Categorizing stub');
   return { category: 'Uncategorized', confidence: 0 };
-}
-
-export async function createLinkToken(userId: string) {
-  try {
-    const response = await plaidClient.linkTokenCreate({
-      user: { client_user_id: userId },
-      client_name: 'Omidan Ledger',
-      products: ['transactions'],
-      country_codes: ['US'],
-      language: 'en',
-    });
-    return response.data.link_token;
-  } catch (error) {
-    console.error('Error creating link token:', error);
-    throw new Error('Failed to create link token');
-  }
 }
