@@ -2,11 +2,23 @@
 
 import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/AuthContext';
 
-// 1. Create a child component for the logic
+// Standard client-side config check
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+};
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
+
 function AcceptHandler() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
@@ -22,7 +34,6 @@ function AcceptHandler() {
             role: 'tenant',
             tenantPropertyId: propertyId
           });
-          // After updating role, go to the actual dashboard
           router.push('/tenant/dashboard');
         } catch (error) {
           console.error("Error setting tenant role:", error);
@@ -34,13 +45,12 @@ function AcceptHandler() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
-      <h2 className="text-xl font-semibold">Setting up your portal...</h2>
-      <p className="text-gray-500">Please wait while we connect your account.</p>
+      <h2 className="text-xl font-semibold">Finalizing your portal...</h2>
+      <p className="text-gray-500">Connecting your account to your new home.</p>
     </div>
   );
 }
 
-// 2. The main page exports the component wrapped in Suspense
 export default function TenantAcceptPage() {
   return (
     <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
