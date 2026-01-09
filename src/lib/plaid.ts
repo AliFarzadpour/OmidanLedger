@@ -2,7 +2,6 @@
 
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 
-// --- 1. SAFE CONFIGURATION (Prevents Build Crashes) ---
 const plaidEnv = process.env.PLAID_ENV || 'sandbox';
 const clientId = process.env.PLAID_CLIENT_ID || 'dummy_client_id';
 const secret = process.env.PLAID_SECRET || 'dummy_secret';
@@ -17,26 +16,7 @@ const configuration = new Configuration({
   },
 });
 
-// We keep this local to avoid export errors
 const plaidClient = new PlaidApi(configuration);
-
-// --- 2. EXPORTED HELPER FUNCTIONS ---
-
-export async function createLinkToken(userId: string) {
-  try {
-    const response = await plaidClient.linkTokenCreate({
-      user: { client_user_id: userId },
-      client_name: 'Omidan Ledger',
-      products: ['transactions'],
-      country_codes: ['US'],
-      language: 'en',
-    });
-    return response.data.link_token;
-  } catch (error) {
-    console.error('Error creating link token:', error);
-    throw new Error('Failed to create link token');
-  }
-}
 
 export async function exchangePublicToken(publicToken: string) {
   try {
@@ -55,9 +35,38 @@ export async function createBankAccountFromPlaid(accessToken: string, accountId:
     return { success: true, id: 'bank_stub_' + Math.random().toString(36).substr(2, 9) };
 }
 
-// --- 3. THE MISSING FUNCTION (Added Here) ---
 export async function syncAndCategorizePlaidTransactions() {
     console.log('Syncing transactions stub...');
-    // Return a fake success response so the page doesn't crash
     return { success: true, count: 0 };
+}
+
+export async function fetchUserContext(userId: string) {
+  console.log('Fetching user context stub for:', userId);
+  return { recentTransactions: [], preferences: {} };
+}
+
+export async function getCategoryFromDatabase(description: string) {
+  console.log('Getting category stub for:', description);
+  return null;
+}
+
+export async function categorizeWithHeuristics(transaction: any) {
+  console.log('Categorizing stub');
+  return { category: 'Uncategorized', confidence: 0 };
+}
+
+export async function createLinkToken(userId: string) {
+  try {
+    const response = await plaidClient.linkTokenCreate({
+      user: { client_user_id: userId },
+      client_name: 'Omidan Ledger',
+      products: ['transactions'],
+      country_codes: ['US'],
+      language: 'en',
+    });
+    return response.data.link_token;
+  } catch (error) {
+    console.error('Error creating link token:', error);
+    throw new Error('Failed to create link token');
+  }
 }
