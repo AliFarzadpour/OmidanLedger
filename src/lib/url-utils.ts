@@ -1,15 +1,19 @@
 import { headers } from 'next/headers';
 
 export function getAppUrl() {
-  // 1. Try to get the URL from the browser request (Automatic)
-  const headersList = headers();
-  const host = headersList.get('host');
-  const protocol = headersList.get('x-forwarded-proto') || 'https';
-  
-  if (host) {
-    return `${protocol}://${host}`;
+  try {
+    const headersList = headers();
+    // Use a more compatible way to get the host
+    const host = headersList.get('host') || '';
+    const protocol = headersList.get('x-forwarded-proto') || 'https';
+    
+    if (host) {
+      return `${protocol}://${host}`;
+    }
+  } catch (e) {
+    console.warn("Could not determine URL from headers, using fallback.");
   }
 
-  // 2. Fallback (Safe default)
+  // Fallback to the environment variable we set earlier
   return process.env.APP_URL || 'https://omidanledger.com';
 }
