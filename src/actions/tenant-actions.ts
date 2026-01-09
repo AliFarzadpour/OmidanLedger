@@ -1,7 +1,6 @@
 'use server';
 import { getAppUrl } from "@/lib/url-utils";
 
-
 import { getAuth } from 'firebase-admin/auth';
 import { adminApp, db as adminDb } from '@/lib/admin-db';
 import { Resend } from 'resend';
