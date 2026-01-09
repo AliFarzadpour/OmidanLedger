@@ -1,5 +1,6 @@
-
 'use server';
+import { getAppUrl } from "@/lib/url-utils";
+
 
 import { getAuth } from 'firebase-admin/auth';
 import { adminApp, db as adminDb } from '@/lib/admin-db';
@@ -25,7 +26,7 @@ export async function inviteTenant(input: InviteTenantInput) {
 
   // ✅ Prefer server env var; forbid localhost in production links
   const baseUrl =
-    process.env.APP_URL ||
+    getAppUrl() ||
     process.env.NEXT_PUBLIC_APP_URL ||
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : '') ||
     '';
