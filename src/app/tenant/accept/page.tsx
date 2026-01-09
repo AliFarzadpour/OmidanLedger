@@ -1,56 +1,38 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { getAuth, isSignInWithEmailLink, signInWithEmailLink } from 'firebase/auth';
-import { initializeFirebase } from '@/firebase';
+import { useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '@/context/AuthContext';
 
 export default function TenantAcceptPage() {
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
   const router = useRouter();
-  const [msg, setMsg] = useState('Finishing sign-in...');
-  const { firebaseApp } = initializeFirebase();
+  
+  const propertyId = searchParams.get('propertyId');
 
   useEffect(() => {
-    const auth = getAuth(firebaseApp);
-    const url = window.location.href;
+    async function joinProperty() {
+      if (user && propertyId) {
+        // 1. Update the user role to "tenant" in Firestore
+        const userRef = doc(db, 'users', user.uid);
+        await updateDoc(userRef, {
+          role: 'tenant',
+          tenantPropertyId: propertyId
+        });
 
-    // email stored earlier on same device OR ask user
-    const savedEmail = window.localStorage.getItem('tenantInviteEmail') || '';
-
-    async function run() {
-      try {
-        if (!isSignInWithEmailLink(auth, url)) {
-          setMsg('Invalid or expired sign-in link.');
-          return;
-        }
-
-        let email = savedEmail;
-        if (!email) {
-          email = window.prompt('Please confirm your email to finish sign-in') || '';
-        }
-        if (!email) {
-          setMsg('Email is required to finish sign-in.');
-          return;
-        }
-
-        await signInWithEmailLink(auth, email, url);
-        window.localStorage.removeItem('tenantInviteEmail');
-
-        // send tenant to their portal
-        router.replace('/tenant/dashboard');
-      } catch (e: any) {
-        setMsg(e?.message || 'Sign-in failed.');
+        // 2. Take them to their new dashboard
+        router.push('/tenant/dashboard');
       }
     }
-
-    run();
-  }, [router, firebaseApp]);
+    joinProperty();
+  }, [user, propertyId, router]);
 
   return (
-    <div style={{ padding: 24, fontFamily: 'Arial, sans-serif' }}>
-      <h2>Tenant Portal</h2>
-      <p>{msg}</p>
+    <div className="flex items-center justify-center min-h-screen">
+      <p>Setting up your tenant portal... Please wait.</p>
     </div>
   );
 }
