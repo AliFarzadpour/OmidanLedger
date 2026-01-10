@@ -4,9 +4,9 @@ import { useEffect, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, updateDoc } from 'firebase/firestore';
-import { useAuth } from '@/context/AuthContext';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 
-// Standard client-side config check
+// Standard client-side config
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -18,15 +18,16 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 function AcceptHandler() {
-  const { user } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const propertyId = searchParams.get('propertyId');
 
   useEffect(() => {
-    async function updateTenantRole() {
+    // We use a direct Firebase Auth listener here to avoid the AuthContext import error
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user && propertyId) {
         try {
           const userRef = doc(db, 'users', user.uid);
@@ -38,10 +39,15 @@ function AcceptHandler() {
         } catch (error) {
           console.error("Error setting tenant role:", error);
         }
+      } else if (!user) {
+        // If not logged in, send them to login but keep the current URL so they come back here
+        const currentPath = window.location.pathname + window.location.search;
+        router.push(`/login?redirect=${encodeURIComponent(currentPath)}`);
       }
-    }
-    updateTenantRole();
-  }, [user, propertyId, router]);
+    });
+
+    return () => unsubscribe();
+  }, [propertyId, router]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen">
