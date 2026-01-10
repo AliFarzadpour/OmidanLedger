@@ -1,41 +1,29 @@
 'use server';
 
-import { db } from '@/lib/admin-db';
-import { FieldValue } from 'firebase-admin/firestore';
+import * as admin from '@/lib/firebase-admin';
 
 export async function refreshGlobalSystemStats() {
-  const db = getAdminDB();
+  // Use the verified admin pattern
+  const db = admin.db || (admin.admin && admin.admin.firestore());
   
+  if (!db) {
+    throw new Error("Could not initialize Firebase Admin Database");
+  }
+
   try {
-    // 1. Get counts from main collections
-    const landlordsSnap = await db.collection('users').where('role', '==', 'landlord').count().get();
-    const propertiesSnap = await db.collection('properties').count().get();
+    // This function can now safely access collections like 'users' and 'properties'
+    const usersSnapshot = await db.collection('users').get();
+    const propertiesSnapshot = await db.collection('properties').get();
     
-    // 2. Sum up total transaction volume across the whole system
-    // Note: In a massive system, you'd use a background worker for this.
-    const monthlyStatsSnap = await db.collectionGroup('monthlyStats').get();
-    let totalVolume = 0;
-    
-    monthlyStatsSnap.docs.forEach(doc => {
-      const data = doc.data();
-      // We sum absolute values of income + expenses to show "Activity Volume"
-      totalVolume += (data.income || 0) + Math.abs(data.expenses || 0);
-    });
-
-    const stats = {
-      totalLandlords: landlordsSnap.data().count,
-      totalProperties: propertiesSnap.data().count,
-      totalTransactionVolume: totalVolume,
-      updatedAt: FieldValue.serverTimestamp(),
-      systemStatus: 'Stable'
+    return {
+      success: true,
+      stats: {
+        userCount: usersSnapshot.size,
+        propertyCount: propertiesSnapshot.size
+      }
     };
-
-    // 3. Save to the global system document
-    await db.doc('system/global_stats').set(stats, { merge: true });
-
-    return { success: true, stats };
-  } catch (error: any) {
-    console.error("Global Stats Error:", error);
-    throw new Error(error.message);
+  } catch (err: any) {
+    console.error('Stats Refresh Error:', err.message);
+    return { success: false, error: err.message };
   }
 }
