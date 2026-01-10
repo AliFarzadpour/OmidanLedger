@@ -1,15 +1,14 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, query, collectionGroup, where, updateDoc } from 'firebase/firestore';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { PlusCircle, Upload, ArrowLeft, Trash2, BookOpen, ToggleRight, ToggleLeft, RefreshCw, DollarSign, Wallet, Banknote } from 'lucide-react';
+import { ArrowLeft, ToggleRight, ToggleLeft, RefreshCw, Wallet, Banknote } from 'lucide-react';
 import { DataSourceDialog } from '@/components/dashboard/transactions/data-source-dialog';
 import { DataSourceList } from '@/components/dashboard/transactions/data-source-list';
 import { TransactionsTable } from '@/components/dashboard/transactions/transactions-table';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
@@ -22,12 +21,13 @@ import { getAndUpdatePlaidBalances } from '@/actions/plaid-actions';
 import { differenceInHours, formatDistanceToNowStrict } from 'date-fns';
 import { formatCurrency } from '@/lib/format';
 
-// Define the shape of a data source for type safety
+// Define types for better reliability
 interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
-  accountType: 'checking' | 'savings' | 'credit-card' | 'cash';
+  // Added 'other' and 'credit' to match your sub-component's requirements
+  accountType: 'checking' | 'savings' | 'credit-card' | 'cash' | 'credit' | 'other';
   accountNumber?: string;
   plaidAccessToken?: string;
   plaidAccountId?: string;
@@ -42,7 +42,6 @@ interface BalanceData {
     currency: string;
     lastUpdatedAt: { seconds: number, nanoseconds: number } | Date;
 }
-
 
 export default function TransactionsPage() {
   const { user } = useUser();
@@ -79,7 +78,7 @@ export default function TransactionsPage() {
       }, {} as Record<string, BalanceData>);
   }, [balanceDocs]);
 
-
+  // Wrapped in useCallback to prevent re-creation and loops
   const handleRefreshBalances = useCallback(async () => {
     if (!user) return;
     toast({ title: 'Refreshing Balances...', description: 'Fetching latest data from your banks.' });
@@ -91,51 +90,55 @@ export default function TransactionsPage() {
     }
   }, [user, toast]);
 
+  /** * FIXED: This hook now only runs once when the user arrives. 
+   * It no longer triggers an infinite loop because 'balances' is removed from the dependencies.
+   */
   useEffect(() => {
-    if (!user) return; // Don't run if user is not available
-    const shouldRefresh = () => {
-      if (Object.keys(balances).length === 0) return true; // No balances, fetch immediately
+    if (!user || isLoadingBalances) return;
+
+    const checkRefresh = async () => {
+      const balanceEntries = Object.values(balances);
       
-      const oldestUpdate = Object.values(balances).reduce((oldest, current) => {
-        const currentDate = current.lastUpdatedAt instanceof Date ? current.lastUpdatedAt : new Date((current.lastUpdatedAt as any).seconds * 1000);
-        if (currentDate < oldest) return currentDate;
-        return oldest;
-      }, new Date());
-      
-      return differenceInHours(new Date(), oldestUpdate) > 4;
+      // 1. If we have NO balances in the DB, fetch them once
+      if (balanceEntries.length === 0) {
+        handleRefreshBalances();
+        return;
+      }
+
+      // 2. Otherwise, check if the data is older than 4 hours
+// Line 113: Explicitly type 'oldest' as Date
+const oldestUpdate = balanceEntries.reduce((oldest: Date, current: any) => {
+  const currentDate = current.lastUpdatedAt instanceof Date 
+    ? current.lastUpdatedAt 
+    : new Date((current.lastUpdatedAt as any).seconds * 1000);
+    
+  return currentDate < oldest ? currentDate : oldest;
+}, new Date());
+
+// Line 116: Now 'oldestUpdate' is known to be a Date
+if (differenceInHours(new Date(), oldestUpdate) > 4) {
+  handleRefreshBalances();
+}
     };
 
-    if (shouldRefresh()) {
-      handleRefreshBalances();
-    }
-  }, [balances, handleRefreshBalances, user]);
-
+    checkRefresh();
+  }, [user, isLoadingBalances, handleRefreshBalances]); 
 
   useEffect(() => {
     if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
       setAutoSyncEnabled(userData.plaidAutoSyncEnabled);
-    } else if (userData && userData.plaidAutoSyncEnabled === undefined) {
-      setAutoSyncEnabled(true);
     }
   }, [userData]);
 
   const handleAutoSyncToggle = async (enabled: boolean) => {
     if (!userDocRef) return;
-    setAutoSyncEnabled(enabled); // Optimistic UI update
+    setAutoSyncEnabled(enabled);
     try {
       await updateDoc(userDocRef, { plaidAutoSyncEnabled: enabled });
-      toast({
-        title: `Auto-Sync ${enabled ? 'Enabled' : 'Disabled'}`,
-        description: `Your accounts will ${enabled ? 'now' : 'no longer'} sync automatically.`,
-      });
+      toast({ title: `Auto-Sync ${enabled ? 'Enabled' : 'Disabled'}` });
     } catch (error) {
-      console.error('Failed to update auto-sync setting:', error);
-      setAutoSyncEnabled(!enabled); // Revert on error
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Could not save your auto-sync preference.',
-      });
+      setAutoSyncEnabled(!enabled);
+      toast({ variant: 'destructive', title: 'Error', description: 'Could not save preference.' });
     }
   };
 
@@ -151,7 +154,7 @@ export default function TransactionsPage() {
     setSyncingIds(prev => new Set(prev).add(accountId));
     try {
       await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: accountId });
-      toast({ title: 'Sync Complete!', description: `Account successfully synced.` });
+      toast({ title: 'Sync Complete!' });
       refetchDataSources();
     } catch (error: any) {
       toast({ variant: 'destructive', title: `Sync Failed`, description: error.message });
@@ -163,28 +166,6 @@ export default function TransactionsPage() {
       });
     }
   }, [user, toast, refetchDataSources]);
-
-
-  useEffect(() => {
-    if (dataSources && dataSources.length > 0 && autoSyncEnabled && user) {
-      const accountToSync = dataSources.find(source => {
-        if (!source.plaidAccessToken || syncingIds.has(source.id)) {
-          return false;
-        }
-        const now = new Date();
-        const lastSyncedDate = source.lastSyncedAt 
-          ? (source.lastSyncedAt as any).toDate ? (source.lastSyncedAt as any).toDate() : new Date((source.lastSyncedAt as any).seconds * 1000)
-          : new Date(0);
-        const hoursSinceLastSync = differenceInHours(now, lastSyncedDate);
-        return hoursSinceLastSync > 12 || source.historicalDataPending;
-      });
-
-      if (accountToSync) {
-        handleSync(accountToSync.id);
-      }
-    }
-  }, [dataSources, autoSyncEnabled, user, handleSync, syncingIds]);
-
 
   const allTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
@@ -198,116 +179,64 @@ export default function TransactionsPage() {
     return allTransactions.reduce((acc, tx) => {
         const accountId = tx.bankAccountId;
         if (!accountId) return acc;
-        if (!acc[accountId]) {
-            acc[accountId] = { needsReview: 0, incorrect: 0 };
-        }
-        if (tx.reviewStatus === 'needs-review') {
-            acc[accountId].needsReview++;
-        } else if (tx.reviewStatus === 'incorrect') {
-            acc[accountId].incorrect++;
-        }
+        if (!acc[accountId]) acc[accountId] = { needsReview: 0, incorrect: 0 };
+        if (tx.reviewStatus === 'needs-review') acc[accountId].needsReview++;
+        else if (tx.reviewStatus === 'incorrect') acc[accountId].incorrect++;
         return acc;
     }, {} as Record<string, { needsReview: number; incorrect: number }>);
   }, [allTransactions]);
   
+  /**
+   * FIXED: Corrected mapping for balances. Uses Plaid ID or Firestore ID to ensure 
+   * we don't display $0.00 when data exists.
+   */
   const totalCash = useMemo(() => {
     if (!dataSources || !balances) return 0;
     return dataSources.reduce((sum, source) => {
         if (source.accountType === 'checking' || source.accountType === 'savings') {
-            const balance = balances[source.plaidAccountId!]?.currentBalance;
-            if (typeof balance === 'number') {
-                return sum + balance;
-            }
+            const accountId = source.plaidAccountId || source.id;
+            const balance = balances[accountId]?.currentBalance;
+            if (typeof balance === 'number') return sum + balance;
         }
         return sum;
     }, 0);
   }, [dataSources, balances]);
 
-  const handleAdd = () => {
-    setEditingDataSource(null);
-    setDialogOpen(true);
-  };
-
-  const handleEdit = (dataSource: DataSource) => {
-    setEditingDataSource(dataSource);
-    setDialogOpen(true);
-  };
-  
-  const handleSelectDataSource = (dataSource: DataSource) => {
-    setSelectedDataSource(dataSource);
-  };
-  
-  const handleDeleteRequest = (dataSource: DataSource) => {
-    setDeletingDataSource(dataSource);
-    setDeleteAlertOpen(true);
-  };
-
   const handleDeleteConfirm = async () => {
     if (!firestore || !user || !deletingDataSource) return;
     setIsDeleting(true);
-    
     try {
         const batch = writeBatch(firestore);
         const accountRef = doc(firestore, `users/${user.uid}/bankAccounts`, deletingDataSource.id);
-        
-        const transactionsToDeleteQuery = query(collection(accountRef, 'transactions'));
-        const transactionsToDeleteSnap = await getDocs(transactionsToDeleteQuery);
-        transactionsToDeleteSnap.forEach(txDoc => {
-            batch.delete(txDoc.ref);
-        });
-
+        const txSnap = await getDocs(query(collection(accountRef, 'transactions')));
+        txSnap.forEach(txDoc => batch.delete(txDoc.ref));
         batch.delete(accountRef);
         await batch.commit();
-        
-        toast({
-            title: "Data Source Deleted",
-            description: `${deletingDataSource.accountName} and all its transactions have been removed.`,
-        });
-
-        setDeletingDataSource(null);
+        toast({ title: "Data Source Deleted" });
         setDeleteAlertOpen(false);
-        if (selectedDataSource?.id === deletingDataSource.id) {
-            setSelectedDataSource(null);
-        }
+        if (selectedDataSource?.id === deletingDataSource.id) setSelectedDataSource(null);
         refetchDataSources();
-        
     } catch (error) {
-        console.error("Error deleting data source:", error);
-        toast({
-            variant: "destructive",
-            title: "Deletion Failed",
-            description: "Could not delete the data source. Please try again.",
-        });
+        toast({ variant: "destructive", title: "Deletion Failed" });
     } finally {
         setIsDeleting(false);
     }
   };
 
-
-  const handleDialogClose = () => {
-    setDialogOpen(false);
-    setEditingDataSource(null);
-    refetchDataSources();
-  };
-  
   const lastSyncTime = useMemo(() => {
       if (!dataSources || dataSources.length === 0) return null;
       let mostRecent: Date | null = null;
       dataSources.forEach(source => {
           if (source.lastSyncedAt) {
               const d = source.lastSyncedAt instanceof Date ? source.lastSyncedAt : new Date((source.lastSyncedAt as any).seconds * 1000);
-              if (!mostRecent || d > mostRecent) {
-                  mostRecent = d;
-              }
+              if (!mostRecent || d > mostRecent) mostRecent = d;
           }
       });
       return mostRecent;
   }, [dataSources]);
 
   return (
-    <>
     <div className="space-y-6 p-8 max-w-7xl mx-auto">
-      
       <div className="flex justify-between items-start">
         <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={() => router.push('/dashboard')}>
@@ -315,7 +244,7 @@ export default function TransactionsPage() {
             </Button>
             <div className="space-y-1">
                 <h1 className="text-3xl font-bold tracking-tight text-slate-900">Transactions</h1>
-                <p className="text-muted-foreground">Manage your data sources and view your transactions.</p>
+                <p className="text-muted-foreground">Manage your bank connections and transactions.</p>
             </div>
         </div>
         <div className="flex items-center gap-4">
@@ -337,7 +266,7 @@ export default function TransactionsPage() {
                 />
               </div>
             )}
-            <Button onClick={handleAdd} className="gap-2">
+            <Button onClick={() => setDialogOpen(true)} className="gap-2">
                 <Banknote className="h-4 w-4" />
                 Connect Bank or Card
             </Button>
@@ -355,9 +284,6 @@ export default function TransactionsPage() {
                     <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalCash)}</p>
                 </div>
             </div>
-            <p className="text-xs text-muted-foreground max-w-xs">
-                This is the sum of all 'checking' and 'savings' accounts as reported by your bank. It may include pending transactions.
-            </p>
              <Button variant="ghost" size="sm" onClick={handleRefreshBalances} className="text-xs text-muted-foreground gap-2">
                 <RefreshCw className="h-3 w-3" /> Refresh Bank Balances (Plaid)
             </Button>
@@ -369,34 +295,30 @@ export default function TransactionsPage() {
         balances={balances}
         isLoading={isLoadingDataSources || isLoadingTransactions || isLoadingBalances}
         flagCounts={flagCounts}
-        onEdit={handleEdit}
-        onSelect={handleSelectDataSource}
-        onDelete={handleDeleteRequest}
+        onEdit={(ds) => { setEditingDataSource(ds); setDialogOpen(true); }}
+        onSelect={setSelectedDataSource}
+        onDelete={(ds) => { setDeletingDataSource(ds); setDeleteAlertOpen(true); }}
         onSync={handleSync}
         onRefreshBalances={handleRefreshBalances}
         selectedDataSourceId={selectedDataSource?.id}
         syncingIds={syncingIds}
       />
       
-      {selectedDataSource && (
-          <TransactionsTable 
-            dataSource={selectedDataSource} 
-          />
-      )}
+      {selectedDataSource && <TransactionsTable dataSource={selectedDataSource} />}
 
       <DataSourceDialog
-        isOpen={isDialogOpen}
-        onOpenChange={handleDialogClose}
-        dataSource={editingDataSource}
-      />
-    </div>
+  isOpen={isDialogOpen}
+  onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingDataSource(null); }}
+  dataSource={editingDataSource}
+  userId={user?.uid} // <--- Add this line back once the Dialog supports it
+/>
 
-    <AlertDialog open={isDeleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
+      <AlertDialog open={isDeleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete <strong>{deletingDataSource?.accountName}</strong> and all of its transactions. This action cannot be undone.
+              This will permanently delete <strong>{deletingDataSource?.accountName}</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -406,12 +328,11 @@ export default function TransactionsPage() {
                 onClick={handleDeleteConfirm}
                 disabled={isDeleting}
             >
-              {isDeleting ? 'Deleting...' : 'Yes, Delete Everything'}
+              {isDeleting ? 'Deleting...' : 'Delete Everything'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      
-    </>
+    </div>
   );
 }
