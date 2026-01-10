@@ -8,7 +8,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY || 'dummy_key_for_build';
 const stripe = new Stripe(stripeKey, {
-  apiVersion: '2024-06-20',
+  apiVersion: '2025-02-24.acacia',
 });
 
 
