@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -30,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { useUser, useFirestore } from '@/firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
 import { createBankAccountFromPlaid, exchangePublicToken, createLinkToken } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
@@ -84,32 +85,40 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
 
   const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
     const activeUserId = userId || user?.uid;
-    if (!activeUserId) return;
+    if (!activeUserId || !firestore) return;
   
     setIsSubmitting(true);
     try {
-      // 1. Exchange the public_token for an access_token
-      // CRITICAL: We pass accountId so the backend knows which record to update
-      await exchangePublicToken({ 
+      // 0) Ensure we have a bankAccountId (doc id)
+      let bankAccountId = dataSource?.id;
+  
+      // For NEW connections, create a placeholder bank account doc FIRST
+      if (!bankAccountId) {
+        const bankAccountsCol = collection(firestore, `users/${activeUserId}/bankAccounts`);
+        const newRef = doc(bankAccountsCol); // generates id
+        bankAccountId = newRef.id;
+  
+        await setDoc(newRef, {
+          userId: activeUserId,
+          accountName: metadata.institution?.name || 'Bank Account',
+          bankName: metadata.institution?.name || 'Plaid',
+          accountType: 'checking',
+          linkStatus: 'linking',
+          createdAt: serverTimestamp(),
+          lastUpdatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+  
+      // 1) Exchange public_token -> access_token and SAVE it on THIS bank account doc
+      await exchangePublicToken({
         publicToken: public_token,
         userId: activeUserId,
-        accountId: dataSource?.id // This bridges the connection to your real bank doc
+        accountId: bankAccountId,
       });
-      
-      // 2. Optional: Sync transactions immediately if you have a sync function
-      // If you use a separate 'saveAccount' step, ensure it also receives the accountId
-      if (!isEditMode) {
-        await createBankAccountFromPlaid({
-          userId: activeUserId,
-          accessToken: public_token, // The library usually handles the swap internally
-          metadata: metadata,
-        });
-      }
   
       toast({ title: "Success", description: "Account connected successfully." });
       onOpenChange(false);
     } catch (error) {
-      // This triggers the "Connection Failed" red box in your screenshots
       console.error("Exchange Error:", error);
       toast({ variant: 'destructive', title: 'Connection Failed', description: "Could not finalize the bank link." });
     } finally {
