@@ -2,6 +2,8 @@ kind: "bundle"
 apiVersion: "v1"
 
 env:
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY
   - variable: RESEND_API_KEY
     secret: RESEND_API_KEY
   - variable: APP_URL
@@ -11,4 +13,4 @@ env:
   - variable: PLAID_SECRET
     secret: PLAID_SECRET
   - variable: PLAID_ENV
-    value: "production" # Change to "development" or "production" when ready
+    value: "production"
