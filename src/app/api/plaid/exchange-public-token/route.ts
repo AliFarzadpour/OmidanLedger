@@ -46,7 +46,12 @@ export async function POST(req: NextRequest) {
         .collection('bankAccounts')
         .doc(accountId)
         .set({
-          plaidAccessToken: access_token, 
+          // ✅ canonical field going forward
+          accessToken: access_token,
+
+          // ✅ keep legacy field so older UI/components still work
+          plaidAccessToken: access_token,
+
           plaidItemId: item_id,
           linkStatus: 'connected',
           lastUpdatedAt: new Date(),
