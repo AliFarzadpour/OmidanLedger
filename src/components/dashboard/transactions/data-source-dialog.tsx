@@ -108,6 +108,30 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
           lastUpdatedAt: serverTimestamp(),
         }, { merge: true });
       }
+
+      // ✅ Save the REAL Plaid account id + details onto this bankAccount doc
+      const firstAccount = metadata.accounts?.[0];
+
+      if (firstAccount) {
+        const bankAccountRef = doc(firestore, `users/${activeUserId}/bankAccounts/${bankAccountId}`);
+
+        await setDoc(bankAccountRef, {
+          bankName: metadata.institution?.name || 'Plaid',
+          accountName: firstAccount.name || 'Bank Account',
+          accountNumber: firstAccount.mask || '',
+          // optional: map subtype to your accountType enums
+          accountType: (firstAccount.subtype === 'credit card' || firstAccount.type === 'credit')
+            ? 'credit-card'
+            : (firstAccount.subtype === 'savings' ? 'savings' : 'checking'),
+
+          // ✅ THIS is the one you need for correct sync filtering
+          plaidAccountId: firstAccount.id,
+
+          // helpful for debugging
+          plaidInstitutionId: metadata.institution?.institution_id || null,
+          lastUpdatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
   
       // 1) Exchange public_token -> access_token and SAVE it on THIS bank account doc
       await exchangePublicToken({
