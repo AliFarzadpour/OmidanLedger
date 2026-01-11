@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, PlusCircle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, PlusCircle, Loader2 } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './upload-transactions-dialog';
@@ -269,7 +269,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
-  const isPlaidAccount = (dataSource as any).linkStatus === 'connected' || !!(dataSource as any).accessToken;
+  const isPlaidAccount = (dataSource as any).linkStatus === 'connected' || !!(dataSource as any).plaidAccessToken;
 
   return (
     <>
@@ -586,3 +586,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
