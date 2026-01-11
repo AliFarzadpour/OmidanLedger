@@ -44,38 +44,77 @@
 
       const { added, modified, removed, next_cursor } = response.data;
 
-      // 3. Save transactions to Firestore using a batch for safety
+      // 3. Save transactions to Firestore under the bank account subcollection (matches UI)
       const batch = db.batch();
-      
-      added.forEach((txn) => {
-        // Create a unique doc per transaction to prevent duplicates
-        const txnRef = db.collection('users').doc(userId).collection('transactions').doc(txn.transaction_id);
+
+      const txCol = db
+        .collection('users')
+        .doc(userId)
+        .collection('bankAccounts')
+        .doc(bankAccountId)
+        .collection('transactions');
+
+      const upsert = (txn: any) => {
+        const txnRef = txCol.doc(txn.transaction_id);
         batch.set(txnRef, {
-          ...txn,
+          // required for collectionGroup query + analytics
+          userId,
+
+          // linking fields
           bankAccountId,
-          syncedAt: new Date(),
-          // Map fields to what your UI expects
+          plaidAccountId: txn.account_id,
+          plaidTransactionId: txn.transaction_id,
+
+          // UI fields
           amount: txn.amount,
           date: txn.date,
           description: txn.name,
-          category: txn.category?.[0] || 'Uncategorized'
+
+          // default categories (your UI expects this object)
+          categoryHierarchy: {
+            l0: 'EXPENSE',
+            l1: 'Uncategorized',
+            l2: 'Uncategorized',
+            l3: '',
+          },
+
+          status: 'review',
+          reviewStatus: 'needs-review',
+          confidence: 0.5,
+
+          // keep raw for troubleshooting
+          raw: txn,
+
+          syncedAt: new Date(),
         }, { merge: true });
+      };
+
+      added.forEach(upsert);
+      modified.forEach(upsert);
+
+      // Removed transactions
+      removed.forEach((r: any) => {
+        const txnRef = txCol.doc(r.transaction_id);
+        batch.delete(txnRef);
       });
 
-      // 4. Update the account with the new cursor and status
+      // 4. Update the account with the new cursor + last sync time (match UI)
       const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
       batch.update(accountRef, {
         plaidCursor: next_cursor,
-        lastSyncAt: new Date(),
+        lastSyncedAt: new Date(),
         linkStatus: 'connected'
       });
 
       await batch.commit();
 
-      return NextResponse.json({ 
-        success: true, 
+      return NextResponse.json({
+        success: true,
+        count: added.length,
         addedCount: added.length,
-        hasMore: response.data.has_more 
+        modifiedCount: modified.length,
+        removedCount: removed.length,
+        hasMore: response.data.has_more
       });
     } catch (error: any) {
       const plaidError = error.response?.data || error.message;
