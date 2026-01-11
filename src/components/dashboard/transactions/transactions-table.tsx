@@ -135,16 +135,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleSyncTransactions = async () => {
-    if (!user || !dataSource.plaidAccessToken) return;
-    setIsSyncing(true);
-    toast({ title: 'Syncing...', description: 'Fetching data from bank...' });
-    try {
-        const result = await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
-        toast({ title: 'Sync Complete', description: `${result.count} new transactions imported.` });
-        refetch();
-    } catch (error: any) {
-        toast({ variant: "destructive", title: "Sync Failed", description: error.message });
-    } finally { setIsSyncing(false); }
+    // This component no longer directly handles sync. It's done from the parent list.
+    toast({ title: 'Sync Triggered', description: 'Check the data source card for status.' });
   };
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
@@ -258,7 +250,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
-  const isPlaidAccount = !!dataSource.plaidAccessToken;
+  const isPlaidAccount = (dataSource as any).linkStatus === 'connected' || !!(dataSource as any).accessToken;
 
   return (
     <>
