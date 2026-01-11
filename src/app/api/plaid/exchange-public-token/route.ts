@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { db } from '@/lib/firebase-admin'; // Using your Admin SDK to bypass client restrictions
@@ -16,8 +17,6 @@ const plaidClient = new PlaidApi(
   })
 );
 
-// ... (imports and configuration remain the same)
-
 export async function POST(req: NextRequest) {
   try {
     const { publicToken, userId, accountId } = await req.json();
@@ -27,12 +26,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Missing required data' }, { status: 400 });
     }
 
+    if (!accountId) {
+      console.error('EXCHANGE_ERROR: Missing accountId (bankAccountId). Create the bank account doc first, then exchange.');
+      return NextResponse.json({ message: 'Missing accountId' }, { status: 400 });
+    }
+
     const response = await plaidClient.itemPublicTokenExchange({
       public_token: publicToken,
     });
 
     const { access_token, item_id } = response.data;
 
+    // This check is now implicitly handled by the guard clause above,
+    // but we'll keep it for absolute safety.
     if (accountId) {
       await db
         .collection('users')
@@ -40,8 +46,7 @@ export async function POST(req: NextRequest) {
         .collection('bankAccounts')
         .doc(accountId)
         .set({
-          // CHANGED: Use 'accessToken' to match what your sync logic is looking for
-          accessToken: access_token, 
+          plaidAccessToken: access_token, 
           plaidItemId: item_id,
           linkStatus: 'connected',
           lastUpdatedAt: new Date(),
