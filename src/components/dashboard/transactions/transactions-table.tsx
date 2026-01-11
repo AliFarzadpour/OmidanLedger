@@ -135,8 +135,27 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleSyncTransactions = async () => {
-    // This component no longer directly handles sync. It's done from the parent list.
-    toast({ title: 'Sync Triggered', description: 'Check the data source card for status.' });
+    if (!user) return;
+    setIsSyncing(true);
+    try {
+      const result = await syncAndCategorizePlaidTransactions({
+        userId: user.uid,
+        bankAccountId: dataSource.id,
+      });
+      toast({
+        title: 'Sync Complete!',
+        description: `Added ${result.count} new transactions.`,
+      });
+      refetch(); // Refetch data to update the UI
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: `Sync Failed for ${dataSource.accountName}`,
+        description: error.message,
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
@@ -261,6 +280,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
+            {isPlaidAccount && (
+              <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
+                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync Transactions
+              </Button>
+            )}
             {!isPlaidAccount && (
               <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
             )}
