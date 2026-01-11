@@ -29,6 +29,10 @@
         .doc(bankAccountId)
         .get();
 
+      if (!accountDoc.exists) {
+        return NextResponse.json({ message: `bankAccountId not found: ${bankAccountId}` }, { status: 404 });
+      }
+
       const accountData = accountDoc.data();
       const plaidAccountId = accountData?.plaidAccountId;
 
@@ -144,6 +148,7 @@
       return NextResponse.json({ message: 'Sync failed' }, { status: 500 });
     }
   }
+
 
 
 
