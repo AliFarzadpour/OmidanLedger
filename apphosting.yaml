@@ -11,4 +11,4 @@ env:
   - variable: PLAID_SECRET
     secret: PLAID_SECRET
   - variable: PLAID_ENV
-    value: "sandbox" # Change to "development" or "production" when ready
+    value: "production" # Change to "development" or "production" when ready
