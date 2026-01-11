@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, Wand2 } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './upload-transactions-dialog';
@@ -24,7 +24,7 @@ import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
@@ -134,7 +134,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         querySnapshot.forEach((doc) => batch.delete(doc.ref));
         
         const bankAccountRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}`);
-        batch.update(bankAccountRef, { plaidSyncCursor: null });
+        batch.update(bankAccountRef, { plaidCursor: null });
 
         await batch.commit();
         
@@ -516,7 +516,6 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
   );
 }
 
-
 function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   l0: string; setL0: (val: string) => void;
   l1: string; setL1: (val: string) => void;
@@ -631,3 +630,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
