@@ -38,8 +38,8 @@
           { status: 400 }
         );
       }
-      // Support both field names to avoid the "accessToken required" error
-      const token = accountData?.accessToken || accountData?.plaidAccessToken;
+      
+      const token = accountData?.accessToken;
 
       if (!token) {
         return NextResponse.json({ message: 'accessToken is required' }, { status: 400 });
@@ -64,6 +64,8 @@
         .collection('transactions');
 
       const upsert = (txn: any) => {
+        if (txn.account_id !== plaidAccountId) return;
+        
         const txnRef = txCol.doc(txn.transaction_id);
         batch.set(txnRef, {
           // required for collectionGroup query + analytics
@@ -131,4 +133,5 @@
       return NextResponse.json({ message: 'Sync failed' }, { status: 500 });
     }
   }
+
 
