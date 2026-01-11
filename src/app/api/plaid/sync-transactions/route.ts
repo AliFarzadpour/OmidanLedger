@@ -39,7 +39,18 @@
         );
       }
       
-      const token = accountData?.accessToken;
+      const token =
+        accountData?.accessToken ||
+        accountData?.plaidAccessToken ||
+        accountData?.plaid_access_token ||
+        accountData?.plaidToken;
+
+      console.log('SYNC token fields present:', {
+        hasAccessToken: !!accountData?.accessToken,
+        hasPlaidAccessToken: !!accountData?.plaidAccessToken,
+        bankAccountId,
+        userId
+      });
 
       if (!token) {
         return NextResponse.json({ message: 'accessToken is required' }, { status: 400 });
@@ -133,5 +144,6 @@
       return NextResponse.json({ message: 'Sync failed' }, { status: 500 });
     }
   }
+
 
 
