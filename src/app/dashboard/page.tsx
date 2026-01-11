@@ -30,7 +30,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { calculateAmortization } from '@/actions/amortization-actions';
 
-type FilterOption = 'this-month' | 'last-month' | 'this-year';
+type FilterOption = 'this-month' | 'last-month' | 'this-year' | 'last-year';
 
 type CategoryHierarchy = {
   l0?: string; // Income | Expense | Transfer | etc
@@ -84,6 +84,12 @@ const getPeriodRanges = (filter: FilterOption) => {
             currentEnd = endOfYear(now);
             prevStart = startOfYear(subYears(now, 1));
             prevEnd = endOfYear(subYears(now, 1));
+            break;
+        case 'last-year':
+            currentStart = startOfYear(subYears(now, 1));
+            currentEnd = endOfYear(subYears(now, 1));
+            prevStart = startOfYear(subYears(now, 2));
+            prevEnd = endOfYear(subYears(now, 2));
             break;
     }
 
@@ -261,6 +267,7 @@ export default function DashboardPage() {
     { label: 'This Month', value: 'this-month' },
     { label: 'Last Month', value: 'last-month' },
     { label: 'This Year', value: 'this-year' },
+    { label: 'Last Year', value: 'last-year' },
   ];
 
   if (isLoadingProperties) {
