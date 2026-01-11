@@ -110,3 +110,25 @@ export async function syncAndCategorizePlaidTransactions({
 
   return await response.json(); 
 }
+// Add these to the bottom of src/lib/plaid.ts
+
+/**
+ * Placeholder to satisfy AI repair flow imports
+ */
+export async function fetchUserContext(userId: string) {
+  return { userId };
+}
+
+/**
+ * Placeholder to satisfy AI repair flow imports
+ */
+export async function getCategoryFromDatabase(description: string) {
+  return 'Uncategorized';
+}
+
+/**
+ * Placeholder to satisfy AI repair flow imports
+ */
+export async function categorizeWithHeuristics(description: string) {
+  return ['Uncategorized'];
+}
