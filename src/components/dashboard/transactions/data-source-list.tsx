@@ -198,6 +198,7 @@ export function DataSourceList({
                         </div>
                     ) : (
                         <div className="mt-2 pt-2 border-t">
+                            <p className="text-sm font-medium">{source.accountNumber}</p>
                              <p className="text-xs text-muted-foreground italic mt-2">Manual account</p>
                         </div>
                     )}
