@@ -1,48 +1,17 @@
-// src/app/api/plaid/create-link-token/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  Configuration,
-  PlaidApi,
-  PlaidEnvironments,
-  Products,
-  CountryCode,
-} from 'plaid';
+import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 
-/**
- * Plaid Link Token Creation API Route.
- *
- * This server-only endpoint creates a Plaid Link token for initializing the Plaid Link flow
- * on the client. It validates that all required server-side environment variables are present.
- *
- * Required Environment Variables for Firebase App Hosting:
- * - PLAID_CLIENT_ID: Your Plaid client ID.
- * - PLAID_SECRET: Your Plaid secret for the corresponding environment.
- * - PLAID_ENV: The Plaid environment ('sandbox', 'development', or 'production').
- */
-
-// Helper to ensure environment variables are loaded
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
-
-const PLAID_ENV = (process.env.PLAID_ENV || 'sandbox') as 'sandbox' | 'development' | 'production';
-
-// Initialize Plaid client with validated credentials
-const plaidClient = new PlaidApi(
-  new Configuration({
-    basePath: PlaidEnvironments[PLAID_ENV],
-    baseOptions: {
-      headers: {
-        'PLAID-CLIENT-ID': requireEnv('PLAID_CLIENT_ID'),
-        'PLAID-SECRET': requireEnv('PLAID_SECRET'),
-      },
+const configuration = new Configuration({
+  basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
+  baseOptions: {
+    headers: {
+      'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
+      'PLAID-SECRET': process.env.PLAID_SECRET!,
     },
-  })
-);
+  },
+});
+
+const plaidClient = new PlaidApi(configuration);
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,24 +19,23 @@ export async function POST(req: NextRequest) {
     const { userId, accessToken, daysRequested } = body;
 
     if (!userId) {
-      return NextResponse.json(
-        { message: 'User ID is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ message: 'User ID is required' }, { status: 400 });
     }
 
     const configs: any = {
       user: { client_user_id: userId },
-      client_name: 'FiscalFlow',
+      client_name: 'OmidanLedger',
       country_codes: [CountryCode.Us],
       language: 'en',
     };
 
+    // Re-linking (Update Mode) logic
     if (accessToken) {
-      // Re-link (Update Mode) logic
       configs.access_token = accessToken;
+      // Products must be empty for Update Mode
+      configs.products = [];
     } else {
-      // New connection logic
+      // New Connection logic
       configs.products = [Products.Transactions];
       if (daysRequested) {
         configs.transactions = { days_requested: daysRequested };
@@ -75,21 +43,15 @@ export async function POST(req: NextRequest) {
     }
 
     const createTokenResponse = await plaidClient.linkTokenCreate(configs);
-    return NextResponse.json({
-      link_token: createTokenResponse.data.link_token,
-    });
+    return NextResponse.json({ link_token: createTokenResponse.data.link_token });
+    
   } catch (error: any) {
-    // Improved error logging for easier debugging
-    console.error(
-      'PLAID_CREATE_LINK_TOKEN_ERROR:',
-      error?.response?.data || error
+    const errorData = error.response?.data || error.message;
+    console.error('PLAID_API_ERROR:', errorData);
+    
+    return NextResponse.json(
+      { message: errorData.error_message || 'Failed to create link token' }, 
+      { status: 500 }
     );
-
-    const errorMessage =
-      error.response?.data?.error_message ||
-      error.message ||
-      'Failed to create Plaid link token due to a server error.';
-
-    return NextResponse.json({ message: errorMessage }, { status: 500 });
   }
-}
+} 

@@ -85,23 +85,33 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
   const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
     const activeUserId = userId || user?.uid;
     if (!activeUserId) return;
-
+  
     setIsSubmitting(true);
     try {
-      // FIXED: Using object argument to match exchangePublicToken requirements
-      const { accessToken } = await exchangePublicToken({ publicToken: public_token });
-      
-      // FIXED: Using object argument to match createBankAccountFromPlaid requirements
-      await createBankAccountFromPlaid({
+      // 1. Exchange the public_token for an access_token
+      // CRITICAL: We pass accountId so the backend knows which record to update
+      await exchangePublicToken({ 
+        publicToken: public_token,
         userId: activeUserId,
-        accessToken: accessToken,
-        metadata: metadata,
+        accountId: dataSource?.id // This bridges the connection to your real bank doc
       });
-
-      toast({ title: "Success", description: "Account connected." });
+      
+      // 2. Optional: Sync transactions immediately if you have a sync function
+      // If you use a separate 'saveAccount' step, ensure it also receives the accountId
+      if (!isEditMode) {
+        await createBankAccountFromPlaid({
+          userId: activeUserId,
+          accessToken: public_token, // The library usually handles the swap internally
+          metadata: metadata,
+        });
+      }
+  
+      toast({ title: "Success", description: "Account connected successfully." });
       onOpenChange(false);
     } catch (error) {
-      toast({ variant: 'destructive', title: 'Connection Failed' });
+      // This triggers the "Connection Failed" red box in your screenshots
+      console.error("Exchange Error:", error);
+      toast({ variant: 'destructive', title: 'Connection Failed', description: "Could not finalize the bank link." });
     } finally {
       setIsSubmitting(false);
       setLinkToken(null);

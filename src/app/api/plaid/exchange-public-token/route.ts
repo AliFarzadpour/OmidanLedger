@@ -1,52 +1,30 @@
-// src/app/api/plaid/exchange-public-token/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
-
-/**
- * Plaid Public Token Exchange API Route.
- *
- * This server-only endpoint securely exchanges a temporary public_token from Plaid Link
- * for a permanent access_token, which is required for making API calls on behalf of a user.
- *
- * Required Environment Variables for Firebase App Hosting:
- * - PLAID_CLIENT_ID: Your Plaid client ID.
- * - PLAID_SECRET: Your Plaid secret for the corresponding environment.
- * - PLAID_ENV: The Plaid environment ('sandbox', 'development', or 'production').
- */
-
-// Helper to ensure environment variables are loaded
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
-  }
-  return value;
-}
+import { db } from '@/lib/firebase-admin'; // Using your Admin SDK to bypass client restrictions
 
 const PLAID_ENV = (process.env.PLAID_ENV || 'sandbox') as 'sandbox' | 'development' | 'production';
 
-// Initialize Plaid client with validated credentials
 const plaidClient = new PlaidApi(
   new Configuration({
     basePath: PlaidEnvironments[PLAID_ENV],
     baseOptions: {
       headers: {
-        'PLAID-CLIENT-ID': requireEnv('PLAID_CLIENT_ID'),
-        'PLAID-SECRET': requireEnv('PLAID_SECRET'),
+        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
+        'PLAID-SECRET': process.env.PLAID_SECRET!,
       },
     },
   })
 );
 
+// ... (imports and configuration remain the same)
+
 export async function POST(req: NextRequest) {
   try {
-    const { publicToken } = await req.json();
+    const { publicToken, userId, accountId } = await req.json();
 
-    if (!publicToken) {
-      return NextResponse.json(
-        { message: 'publicToken is required' },
-        { status: 400 }
-      );
+    if (!publicToken || !userId) {
+      console.error('EXCHANGE_ERROR: Missing userId or publicToken');
+      return NextResponse.json({ message: 'Missing required data' }, { status: 400 });
     }
 
     const response = await plaidClient.itemPublicTokenExchange({
@@ -55,16 +33,30 @@ export async function POST(req: NextRequest) {
 
     const { access_token, item_id } = response.data;
 
-    return NextResponse.json({ accessToken: access_token, itemId: item_id });
+    if (accountId) {
+      await db
+        .collection('users')
+        .doc(userId)
+        .collection('bankAccounts')
+        .doc(accountId)
+        .set({
+          // CHANGED: Use 'accessToken' to match what your sync logic is looking for
+          accessToken: access_token, 
+          plaidItemId: item_id,
+          linkStatus: 'connected',
+          lastUpdatedAt: new Date(),
+        }, { merge: true });
+        
+      console.log(`Successfully updated account ${accountId} for user ${userId}`);
+    }
+
+    return NextResponse.json({ success: true });
   } catch (error: any) {
-    console.error(
-      'PLAID_EXCHANGE_PUBLIC_TOKEN_ERROR:',
-      error?.response?.data || error
+    const plaidError = error.response?.data || error.message;
+    console.error('PLAID_EXCHANGE_API_ERROR:', plaidError);
+    return NextResponse.json(
+      { message: plaidError.error_message || 'Bank link failed' }, 
+      { status: 500 }
     );
-    const errorMessage =
-      error.response?.data?.error_message ||
-      error.message ||
-      'Failed to exchange public token due to a server error.';
-    return NextResponse.json({ message: errorMessage }, { status: 500 });
   }
 }

@@ -1,19 +1,18 @@
-// src/lib/firebase-admin.ts
 import admin from 'firebase-admin';
-import { getApps } from 'firebase-admin/app';
+import { getApps, initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { firebaseConfig } from '@/firebase/config'; // Import client config to get bucket URL
 
-// Singleton Pattern: Initialize the app only if it hasn't been already.
+// 1. You must add FIREBASE_SERVICE_ACCOUNT_KEY to your .env.local
+// This should be the JSON string from your Firebase Settings -> Service Accounts
+const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY || '{}');
+
 if (!getApps().length) {
-  // Explicitly initialize with the storageBucket from your config.
-  // This is the correct way to ensure the Admin SDK knows where to upload files.
-  admin.initializeApp({
-    storageBucket: firebaseConfig.storageBucket
+  initializeApp({
+    credential: cert(serviceAccount),
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
   });
 }
 
-// Export the initialized Firestore database instance for use in server-side code.
 const db = getFirestore();
 
 export { db, admin };

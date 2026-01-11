@@ -1,31 +1,6 @@
 import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
 
 /**
- * Syncs and categorizes transactions for a specific bank account.
- * This calls your /api/plaid/sync-transactions endpoint.
- */
-export async function syncAndCategorizePlaidTransactions({ 
-  userId, 
-  bankAccountId 
-}: { 
-  userId: string; 
-  bankAccountId: string; 
-}) {
-  const response = await fetch('/api/plaid/sync-transactions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, bankAccountId }),
-  });
-
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to sync transactions');
-  }
-
-  return await response.json();
-}
-
-/**
  * Creates a Plaid Link Token.
  * Supports both NEW connections and UPDATE mode (Re-linking) if an accessToken is provided.
  */
@@ -43,7 +18,7 @@ export async function createLinkToken({
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
       userId, 
-      accessToken, // Sent to backend to trigger Update Mode if present
+      accessToken, 
       daysRequested 
     }),
   });
@@ -54,19 +29,26 @@ export async function createLinkToken({
   }
 
   const data = await response.json();
-  
-  // Returns the string token directly for usePlaidLink
   return data.link_token;
 }
 
 /**
- * Exchanges a public_token for a permanent access_token.
+ * FIXED: Exchanges a public_token for a permanent access_token.
+ * Now correctly typed to accept userId and accountId for database updates.
  */
-export async function exchangePublicToken({ publicToken }: { publicToken: string }) {
+export async function exchangePublicToken({ 
+  publicToken,
+  userId,
+  accountId
+}: { 
+  publicToken: string;
+  userId: string;
+  accountId?: string;
+}) {
   const response = await fetch('/api/plaid/exchange-public-token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ publicToken }),
+    body: JSON.stringify({ publicToken, userId, accountId }),
   });
 
   if (!response.ok) {
@@ -100,5 +82,31 @@ export async function createBankAccountFromPlaid({
     throw new Error(error.message || 'Failed to save account to database');
   }
   
-  return await response.json();
+  const data = await response.json();
+  return { accessToken: data.access_token };
+}
+
+/**
+ * Syncs and categorizes transactions for a specific bank account.
+ * UPDATED: Returns the count of added transactions for UI assurance.
+ */
+export async function syncAndCategorizePlaidTransactions({ 
+  userId, 
+  bankAccountId 
+}: { 
+  userId: string; 
+  bankAccountId: string; 
+}) {
+  const response = await fetch('/api/plaid/sync-transactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userId, bankAccountId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to sync transactions');
+  }
+
+  return await response.json(); 
 }
