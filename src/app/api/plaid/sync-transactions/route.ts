@@ -1,3 +1,4 @@
+
   import { NextRequest, NextResponse } from 'next/server';
   import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
   import { db } from '@/lib/firebase-admin'; // Using your Admin SDK
@@ -29,6 +30,14 @@
         .get();
 
       const accountData = accountDoc.data();
+      const plaidAccountId = accountData?.plaidAccountId;
+
+      if (!plaidAccountId) {
+        return NextResponse.json(
+          { message: 'plaidAccountId missing on bank account. Re-link required.' },
+          { status: 400 }
+        );
+      }
       // Support both field names to avoid the "accessToken required" error
       const token = accountData?.accessToken || accountData?.plaidAccessToken;
 
@@ -122,3 +131,4 @@
       return NextResponse.json({ message: 'Sync failed' }, { status: 500 });
     }
   }
+
