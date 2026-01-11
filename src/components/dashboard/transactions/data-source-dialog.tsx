@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -150,7 +151,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         // FIXED: Using single object argument for createLinkToken
         const tokenData = await createLinkToken({ 
             userId: activeUserId,
-            accessToken: dataSource?.plaidAccessToken 
+            accessToken: (dataSource as any)?.accessToken 
         });
         
         // Handle cases where the library might return an object or a direct string
