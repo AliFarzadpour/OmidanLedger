@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, PlusCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './upload-transactions-dialog';
@@ -24,14 +24,14 @@ import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const primaryCategoryColors: Record<string, string> = {
-  'INCOME': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  'EXPENSE': 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  'ASSET': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  'LIABILITY': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  'EQUITY': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
+  'INCOME': 'bg-green-100 text-green-800',
+  'EXPENSE': 'bg-red-100 text-red-800',
+  'ASSET': 'bg-blue-100 text-blue-800',
+  'LIABILITY': 'bg-orange-100 text-orange-800',
+  'EQUITY': 'bg-gray-200 text-gray-800',
 };
 
 interface DataSource {
@@ -68,16 +68,6 @@ interface TransactionsTableProps {
   dataSource: DataSource;
 }
 
-const QuickFilterChip = ({ label, active, ...props }: { label: string, active: boolean } & React.ComponentProps<typeof Button>) => (
-    <Button
-        variant={active ? "default" : "outline"}
-        size="sm"
-        className={cn("h-8", active && "bg-primary text-primary-foreground")}
-        {...props}
-    >
-        {label}
-    </Button>
-)
 
 export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const { user } = useUser();
@@ -96,9 +86,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [filterCategory, setFilterCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  
-  // New state for quick filters
-  const [activeQuickFilter, setActiveQuickFilter] = useState<string | null>(null);
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -221,39 +208,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     }
   };
   
-  const handleQuickFilter = (filter: string) => {
-    // Reset other filters for clarity
-    setFilterTerm('');
-    setFilterDate(undefined);
-    setFilterCategory('all');
-    setStatusFilter([]);
-
-    setActiveQuickFilter(filter);
-    
-    switch(filter) {
-        case 'uncategorized':
-            setStatusFilter([]);
-            setFilterTerm('Uncategorized');
-            break;
-        case 'needs-review':
-            setFilterTerm('');
-            setStatusFilter(['needs-review']);
-            break;
-        case 'ai-suggested':
-            setFilterTerm('');
-            // Assuming confidence < 0.9 is a good proxy for "AI suggested"
-            // This is a client-side filter only for now.
-            break;
-        case 'possible-transfer':
-            setStatusFilter([]);
-            setFilterTerm('Transfer');
-            break;
-        default:
-            setActiveQuickFilter(null);
-            break;
-    }
-  };
-
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
@@ -262,10 +216,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
        const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
-
-       // Apply quick filters
-       if (activeQuickFilter === 'ai-suggested' && (t.confidence || 1) >= 0.9) return false;
-
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
     });
 
@@ -296,7 +246,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory, statusFilter, activeQuickFilter]);
+  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory, statusFilter]);
   
   const selectedTransactions = useMemo(() => {
     return sortedTransactions.filter(tx => selectedIds.includes(tx.id));
@@ -315,8 +265,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       <Card className="h-full shadow-lg">
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <CardTitle>Transactions for: <span className="text-primary">{dataSource.accountName}</span></CardTitle>
-            <CardDescription>{dataSource.bankName}</CardDescription>
+            <CardTitle>Transaction History</CardTitle>
+            <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
             {!isPlaidAccount && (
@@ -329,23 +279,13 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         <CardContent>
           <div className="flex flex-col gap-4">
             <TransactionToolbar 
-                onSearch={(term) => { setActiveQuickFilter(null); setFilterTerm(term); }}
-                onDateChange={(date) => { setActiveQuickFilter(null); setFilterDate(date); }}
-                onCategoryFilter={(cat) => { setActiveQuickFilter(null); setFilterCategory(cat); }}
-                onStatusFilterChange={(statuses) => { setActiveQuickFilter(null); setStatusFilter(statuses); }}
-                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory('all'); setStatusFilter([]); setActiveQuickFilter(null); }}
+                onSearch={setFilterTerm}
+                onDateChange={setFilterDate}
+                onCategoryFilter={setFilterCategory}
+                onStatusFilterChange={setStatusFilter}
+                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory('all'); setStatusFilter([]); }}
                 onRefresh={refetch}
             />
-            
-            {/* Quick Filters */}
-            <div className="flex items-center gap-2 border-t pt-4">
-                <span className="text-sm font-medium text-muted-foreground">Needs Attention:</span>
-                <QuickFilterChip label="Uncategorized" active={activeQuickFilter==='uncategorized'} onClick={() => handleQuickFilter('uncategorized')} />
-                <QuickFilterChip label="Needs Review" active={activeQuickFilter==='needs-review'} onClick={() => handleQuickFilter('needs-review')} />
-                <QuickFilterChip label="AI Suggested" active={activeQuickFilter==='ai-suggested'} onClick={() => handleQuickFilter('ai-suggested')} />
-                <QuickFilterChip label="Possible Transfer" active={activeQuickFilter==='possible-transfer'} onClick={() => handleQuickFilter('possible-transfer')} />
-            </div>
-
             {selectedIds.length > 0 && (
               <div className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-50">
                 <div className="flex-grow">
@@ -631,4 +571,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     );
 }
 
-    
