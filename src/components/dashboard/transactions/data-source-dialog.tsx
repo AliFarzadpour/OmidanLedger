@@ -89,55 +89,11 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
   
     setIsSubmitting(true);
     try {
-      // 0) Ensure we have a bankAccountId (doc id)
-      let bankAccountId = dataSource?.id;
-  
-      // For NEW connections, create a placeholder bank account doc FIRST
-      if (!bankAccountId) {
-        const bankAccountsCol = collection(firestore, `users/${activeUserId}/bankAccounts`);
-        const newRef = doc(bankAccountsCol); // generates id
-        bankAccountId = newRef.id;
-  
-        await setDoc(newRef, {
-          userId: activeUserId,
-          accountName: metadata.institution?.name || 'Bank Account',
-          bankName: metadata.institution?.name || 'Plaid',
-          accountType: 'checking',
-          linkStatus: 'linking',
-          createdAt: serverTimestamp(),
-          lastUpdatedAt: serverTimestamp(),
-        }, { merge: true });
-      }
-
-      // ✅ Save the REAL Plaid account id + details onto this bankAccount doc
-      const firstAccount = metadata.accounts?.[0];
-
-      if (firstAccount) {
-        const bankAccountRef = doc(firestore, `users/${activeUserId}/bankAccounts/${bankAccountId}`);
-
-        await setDoc(bankAccountRef, {
-          bankName: metadata.institution?.name || 'Plaid',
-          accountName: firstAccount.name || 'Bank Account',
-          accountNumber: firstAccount.mask || '',
-          // optional: map subtype to your accountType enums
-          accountType: (firstAccount.subtype === 'credit card' || firstAccount.type === 'credit')
-            ? 'credit-card'
-            : (firstAccount.subtype === 'savings' ? 'savings' : 'checking'),
-
-          // ✅ THIS is the one you need for correct sync filtering
-          plaidAccountId: firstAccount.id,
-
-          // helpful for debugging
-          plaidInstitutionId: metadata.institution?.institution_id || null,
-          lastUpdatedAt: serverTimestamp(),
-        }, { merge: true });
-      }
-  
-      // 1) Exchange public_token -> access_token and SAVE it on THIS bank account doc
+      // The backend now handles all account creation and updates.
+      // We just need to send the public token and user ID.
       await exchangePublicToken({
         publicToken: public_token,
         userId: activeUserId,
-        accountId: bankAccountId,
       });
   
       toast({ title: "Success", description: "Account connected successfully." });
@@ -172,13 +128,11 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
 
     setIsSubmitting(true);
     try {
-        // FIXED: Using single object argument for createLinkToken
         const tokenData = await createLinkToken({ 
             userId: activeUserId,
             accessToken: (dataSource as any)?.accessToken 
         });
         
-        // Handle cases where the library might return an object or a direct string
         const token = typeof tokenData === 'string' ? tokenData : (tokenData as any).link_token;
         setLinkToken(token);
     } catch (e: any) {
