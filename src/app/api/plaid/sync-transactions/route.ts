@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { db } from '@/lib/firebase-admin';
@@ -25,143 +24,120 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'userId and bankAccountId are required' }, { status: 400 });
     }
 
+    // 1) Load the selected bank account doc
     const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
-    const accountSnap = await accountRef.get();
+    const accountDoc = await accountRef.get();
+    const accountData = accountDoc.data();
 
-    if (!accountSnap.exists) {
+    if (!accountData) {
       return NextResponse.json({ message: 'Bank account not found' }, { status: 404 });
     }
 
-    const accountData = accountSnap.data() || {};
-    const accessToken = accountData.accessToken || accountData.plaidAccessToken;
+    // This is the CRITICAL field used to keep transactions inside THIS card
+    const selectedPlaidAccountId: string | undefined = accountData.plaidAccountId;
+    if (!selectedPlaidAccountId) {
+      return NextResponse.json(
+        { message: 'This card is missing plaidAccountId. Re-link this account.' },
+        { status: 400 }
+      );
+    }
 
-    if (!accessToken) {
+    // Use whatever token you have (you currently store it on the bankAccount doc)
+    const token: string | undefined = accountData.accessToken || accountData.plaidAccessToken;
+    if (!token) {
       return NextResponse.json({ message: 'accessToken is required' }, { status: 400 });
     }
-    
-    // Build a map: Plaid account_id -> Firestore bankAccount docId
-    const allAccountsSnap = await db
-      .collection('users')
-      .doc(userId)
-      .collection('bankAccounts')
-      .where('plaidItemId', '==', accountData.plaidItemId)
-      .get();
 
-    const plaidAccountIdToDocId: Record<string, string> = {};
-    allAccountsSnap.forEach((docSnap) => {
-      const d = docSnap.data() as any;
-      if (d?.plaidAccountId) {
-        plaidAccountIdToDocId[d.plaidAccountId] = docSnap.id;
-      }
-    });
-
+    // Use ONE cursor field consistently (this matches your Clear behavior if you reset plaidSyncCursor)
     let cursor: string | undefined = accountData.plaidSyncCursor || undefined;
+
+    // 2) Pull ALL pages (Plaid returns in chunks; has_more indicates more pages)
+    let addedCount = 0;
+    let totalFetched = 0;
     let hasMore = true;
 
-    let addedCount = 0;
-    let modifiedCount = 0;
-    let removedCount = 0;
-
-    // Loop until Plaid says there is no more data
     while (hasMore) {
       const resp = await plaidClient.transactionsSync({
-        access_token: accessToken,
+        access_token: token,
         cursor,
       });
 
-      const { added, modified, removed, next_cursor } = resp.data;
+      const { added, modified, removed, next_cursor, has_more } = resp.data;
 
+      cursor = next_cursor;
+      hasMore = has_more;
+
+      // 3) Filter to ONLY transactions that belong to the selected account_id
+      const mineAdded = (added || []).filter(t => t.account_id === selectedPlaidAccountId);
+      const mineModified = (modified || []).filter(t => t.account_id === selectedPlaidAccountId);
+
+      totalFetched += (added?.length || 0) + (modified?.length || 0) + (removed?.length || 0);
+
+      // 4) Write ONLY into users/{uid}/bankAccounts/{bankAccountId}/transactions
       const batch = db.batch();
 
-      for (const txn of added) {
-        const targetBankAccountDocId = plaidAccountIdToDocId[txn.account_id] || bankAccountId;
-        const txnRef = db
-          .collection('users')
-          .doc(userId)
-          .collection('bankAccounts')
-          .doc(targetBankAccountDocId)
-          .collection('transactions')
-          .doc(txn.transaction_id);
-
-        batch.set(
-          txnRef,
-          {
-            userId,
-            bankAccountId: targetBankAccountDocId,
-            plaidAccountId: txn.account_id,
-            transaction_id: txn.transaction_id,
-            date: txn.date,
-            description: txn.name,
-            amount: txn.amount,
-            syncedAt: new Date(),
-          },
-          { merge: true }
-        );
+      for (const txn of mineAdded) {
+        const txnRef = accountRef.collection('transactions').doc(txn.transaction_id);
+        batch.set(txnRef, {
+          userId,
+          bankAccountId,
+          plaidAccountId: txn.account_id,
+          transaction_id: txn.transaction_id,
+          date: txn.date,
+          description: txn.name,
+          amount: txn.amount,
+          raw: txn, // keep full Plaid payload
+          syncedAt: new Date(),
+        }, { merge: true });
       }
 
-      for (const txn of modified) {
-        const targetBankAccountDocId = plaidAccountIdToDocId[txn.account_id] || bankAccountId;
-        const txnRef = db
-          .collection('users')
-          .doc(userId)
-          .collection('bankAccounts')
-          .doc(targetBankAccountDocId)
-          .collection('transactions')
-          .doc(txn.transaction_id);
-        
-        batch.set(
-          txnRef,
-          {
-            userId,
-            bankAccountId: targetBankAccountDocId,
-            plaidAccountId: txn.account_id,
-            transaction_id: txn.transaction_id,
-            date: txn.date,
-            description: txn.name,
-            amount: txn.amount,
-            syncedAt: new Date(),
-          },
-          { merge: true }
-        );
-      }
-      
-      for (const r of removed) {
-        // Since we don't know which account it belonged to, we might need a collectionGroup query to find it.
-        // For simplicity, we'll assume it's from the primary account for now.
-        const txRef = accountRef.collection('transactions').doc(r.transaction_id);
-        batch.delete(txRef);
+      for (const txn of mineModified) {
+        const txnRef = accountRef.collection('transactions').doc(txn.transaction_id);
+        batch.set(txnRef, {
+          userId,
+          bankAccountId,
+          plaidAccountId: txn.account_id,
+          transaction_id: txn.transaction_id,
+          date: txn.date,
+          description: txn.name,
+          amount: txn.amount,
+          raw: txn,
+          syncedAt: new Date(),
+        }, { merge: true });
       }
 
-      // Update cursor on the bank account doc each loop
-      batch.set(
-        accountRef,
-        {
-          plaidSyncCursor: next_cursor,
-          lastSyncAt: new Date(),
-          linkStatus: 'connected',
-        },
-        { merge: true }
-      );
+      // Remove (only if those removed belong to this account — often you don’t need to delete, but this keeps it clean)
+      for (const r of (removed || [])) {
+        // Plaid removed entries sometimes don’t include account_id; safe delete by transaction_id if it exists
+        if (r.transaction_id) {
+          const txnRef = accountRef.collection('transactions').doc(r.transaction_id);
+          batch.delete(txnRef);
+        }
+      }
+
+      // Update THIS card’s cursor + sync timestamp
+      batch.set(accountRef, {
+        plaidSyncCursor: cursor,
+        lastSyncAt: new Date(),
+        linkStatus: 'connected',
+      }, { merge: true });
 
       await batch.commit();
 
-      addedCount += added.length;
-      modifiedCount += modified.length;
-      removedCount += removed.length;
-
-      cursor = next_cursor;
-      hasMore = resp.data.has_more === true;
+      addedCount += mineAdded.length;
     }
 
     return NextResponse.json({
       success: true,
       addedCount,
-      modifiedCount,
-      removedCount,
+      totalFetchedFromPlaid: totalFetched,
     });
   } catch (error: any) {
     const plaidError = error.response?.data || error.message;
     console.error('PLAID_SYNC_ERROR:', plaidError);
-    return NextResponse.json({ message: plaidError?.error_message || 'Sync failed' }, { status: 500 });
+    return NextResponse.json(
+      { message: plaidError?.error_message || plaidError || 'Sync failed' },
+      { status: 500 }
+    );
   }
 }
