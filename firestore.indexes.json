@@ -58,6 +58,20 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "opsTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dueDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "properties",
       "queryScope": "COLLECTION",
       "fields": [
