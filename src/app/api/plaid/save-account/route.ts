@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
           plaidItemId: itemId,
           linkStatus: 'connected',
           historicalDataPending: false,
-          lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          lastUpdatedAt: new Date(),
         },
         { merge: true }
       );

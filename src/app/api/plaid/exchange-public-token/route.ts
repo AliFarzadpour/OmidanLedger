@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         accessToken: accessToken, // keep both fields aligned
         plaidItemId: itemId,
         linkStatus: 'connected',
-        lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastUpdatedAt: new Date(),
       },
       { merge: true }
     );
