@@ -75,26 +75,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [linkToken, setLinkToken] = useState<string | null>(null);
-  const [rebuildHistory, setRebuildHistory] = useState(false);
-
-  // default to previous year start (what most users want)
-  const [importFrom, setImportFrom] = useState<'thisYear' | 'lastYear'>('lastYear');
-
-  function daysSince(date: Date) {
-    const ms = Date.now() - date.getTime();
-    return Math.max(1, Math.ceil(ms / (1000 * 60 * 60 * 24)));
-  }
-
-  function getDaysRequested() {
-    const now = new Date();
-    const year = now.getFullYear();
-    const start =
-      importFrom === 'thisYear'
-        ? new Date(year, 0, 1)
-        : new Date(year - 1, 0, 1);
-
-    return daysSince(start);
-  }
   
   const isEditMode = !!dataSource;
   const isPlaidAccount = (dataSource as any)?.linkStatus === 'connected' || !!(dataSource as any)?.accessToken;
@@ -117,12 +97,14 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     setIsSubmitting(true);
   
     try {
-      // ✅ ALWAYS exchange token and update the *existing* bankAccount doc when re-linking
+      // In EDIT mode, we are only ever RE-LINKING an existing item.
+      // We exchange the public token to refresh the item's access token.
+      // We do NOT need the account metadata because we are not creating new accounts.
       if (isEditMode && dataSource?.id) {
         await exchangePublicToken({
           publicToken: public_token,
           userId: activeUserId,
-          accountId: dataSource.id, // update THIS doc, do not create a new one
+          accountId: dataSource.id,
         });
   
         toast({ title: "Re-linked", description: "Bank connection refreshed." });
@@ -130,8 +112,8 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         return;
       }
   
-      // ✅ New connection: create/update accounts using /api/plaid/save-account
-      // IMPORTANT: save-account must exchange the public_token internally
+      // In NEW connection mode, we create new accounts from the Plaid metadata.
+      // The /api/plaid/save-account route handles the token exchange internally.
       await createBankAccountFromPlaid({
         userId: activeUserId,
         publicToken: public_token,
@@ -152,6 +134,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
       setLinkToken(null);
     }
   };
+  
 
   const { open: openPlaid, ready: isPlaidReady } = usePlaidLink({
     token: linkToken || '', 
@@ -176,8 +159,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     try {
         const token = await createLinkToken({
           userId: activeUserId,
-          accessToken: (dataSource as any)?.plaidAccessToken, // update-mode token (re-link)
-          daysRequested: rebuildHistory ? getDaysRequested() : undefined,
+          accessToken: isEditMode ? (dataSource as any)?.plaidAccessToken : undefined,
         });
         setLinkToken(token);
     } catch (e: any) {
@@ -229,47 +211,13 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         </DialogHeader>
         
         <div className="space-y-3 pt-4">
-          {/* Option 1: Re-link only */}
           <Button
-            onClick={async () => {
-              setRebuildHistory(false);
-              await handleContinueToPlaid();
-            }}
+            onClick={handleContinueToPlaid}
             className="w-full bg-blue-600 hover:bg-blue-700"
             disabled={isSubmitting}
           >
-            {isSubmitting ? 'Launching...' : 'Re-link Bank Account'}
+            {isSubmitting ? 'Launching...' : isEditMode ? 'Re-link with Plaid' : 'Connect with Plaid'}
           </Button>
-        
-          {/* Option 2: Re-link + rebuild history */}
-          <div className="rounded-lg border p-3 space-y-2">
-            <div className="text-sm font-medium">Re-link + Rebuild History</div>
-            <div className="text-xs text-muted-foreground">
-              Choose how far back to re-import transactions after re-linking.
-            </div>
-        
-            <Select value={importFrom} onValueChange={(v: any) => setImportFrom(v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Import starting..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="thisYear">From Jan 1 (this year)</SelectItem>
-                <SelectItem value="lastYear">From Jan 1 (last year)</SelectItem>
-              </SelectContent>
-            </Select>
-        
-            <Button
-              onClick={async () => {
-                setRebuildHistory(true);
-                await handleContinueToPlaid();
-              }}
-              className="w-full"
-              variant="outline"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Launching...' : 'Re-link + Rebuild'}
-            </Button>
-          </div>
         </div>
 
         {!isPlaidAccount && (
