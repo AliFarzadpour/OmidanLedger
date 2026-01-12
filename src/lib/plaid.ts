@@ -60,51 +60,49 @@ export async function exchangePublicToken({
 }
 
 /**
- * Saves bank account details and initial metadata to Firestore.
+ * Saves bank account details to Firestore via backend.
+ * IMPORTANT: This sends a *publicToken* (NOT accessToken).
  */
 export async function createBankAccountFromPlaid({
   userId,
-  accessToken,
+  publicToken,
   metadata,
 }: {
   userId: string;
-  accessToken: string;
+  publicToken: string;
   metadata: PlaidLinkOnSuccessMetadata;
 }) {
   const response = await fetch('/api/plaid/save-account', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, accessToken, metadata }),
+    body: JSON.stringify({ userId, publicToken, metadata }),
   });
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.message || 'Failed to save account to database');
   }
-  
-  const data = await response.json();
-  return { accessToken: data.access_token };
+
+  return await response.json();
 }
 
 /**
- * Syncs and categorizes transactions for a specific bank account.
- * UPDATED: Returns the count of added transactions for UI assurance.
+ * Syncs transactions for a specific bank account.
+ * Optional: pass startDate for backfill (YYYY-MM-DD).
  */
 export async function syncAndCategorizePlaidTransactions({
   userId,
   bankAccountId,
-  fullSync,
   startDate,
 }: {
   userId: string;
   bankAccountId: string;
-  fullSync?: boolean;
-  startDate?: string; // YYYY-MM-DD
+  startDate?: string;
 }) {
   const response = await fetch('/api/plaid/sync-transactions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, bankAccountId, fullSync, startDate }),
+    body: JSON.stringify({ userId, bankAccountId, startDate }),
   });
 
   if (!response.ok) {
