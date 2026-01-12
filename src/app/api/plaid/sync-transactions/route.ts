@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ✅ INCREMENTAL SYNC MODE
-    let cursor: string | null = acct.plaidSyncCursor ?? null;
+    let cursor: string | null = acct.plaidCursor ?? null;
     let hasMore = true;
 
     while (hasMore) {
