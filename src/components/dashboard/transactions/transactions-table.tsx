@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, Loader2, PlusCircle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Loader2, PlusCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './upload-transactions-dialog';
@@ -88,6 +88,12 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [filterDate, setFilterDate] = useState<Date | undefined>();
   const [filterCategory, setFilterCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [isRebuildOpen, setIsRebuildOpen] = useState(false);
+  const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
+    // default = Jan 1 of current year
+    const now = new Date();
+    return `${now.getFullYear()}-01-01`;
+  });
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
