@@ -38,7 +38,8 @@ export async function POST(req: NextRequest) {
     } else {
       // New Connection logic
       configs.products = [Products.Transactions];
-      const days = typeof daysRequested === 'number' ? daysRequested : 400; // sensible default
+      // Set a long history. Plaid will provide up to 24 months or whatever the bank supports.
+      const days = typeof daysRequested === 'number' ? daysRequested : 730; 
       configs.transactions = { days_requested: days };
     }
 
