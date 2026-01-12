@@ -90,17 +90,21 @@ export async function createBankAccountFromPlaid({
  * Syncs and categorizes transactions for a specific bank account.
  * UPDATED: Returns the count of added transactions for UI assurance.
  */
-export async function syncAndCategorizePlaidTransactions({ 
-  userId, 
-  bankAccountId 
-}: { 
-  userId: string; 
-  bankAccountId: string; 
+export async function syncAndCategorizePlaidTransactions({
+  userId,
+  bankAccountId,
+  fullSync,
+  startDate,
+}: {
+  userId: string;
+  bankAccountId: string;
+  fullSync?: boolean;
+  startDate?: string; // 'YYYY-MM-DD' (ex: '2025-01-01')
 }) {
   const response = await fetch('/api/plaid/sync-transactions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, bankAccountId }),
+    body: JSON.stringify({ userId, bankAccountId, fullSync, startDate }),
   });
 
   if (!response.ok) {
@@ -108,7 +112,7 @@ export async function syncAndCategorizePlaidTransactions({
     throw new Error(error.message || 'Failed to sync transactions');
   }
 
-  return await response.json(); 
+  return await response.json();
 }
 // Add these to the bottom of src/lib/plaid.ts
 
