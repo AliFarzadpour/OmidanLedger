@@ -130,7 +130,8 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     try {
         const tokenData = await createLinkToken({ 
             userId: activeUserId,
-            accessToken: (dataSource as any)?.accessToken 
+            accessToken: (dataSource as any)?.accessToken,
+            daysRequested: 730,
         });
         
         const token = typeof tokenData === 'string' ? tokenData : (tokenData as any).link_token;

@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 
@@ -37,9 +38,9 @@ export async function POST(req: NextRequest) {
     } else {
       // New Connection logic
       configs.products = [Products.Transactions];
-      if (daysRequested) {
-        configs.transactions = { days_requested: daysRequested };
-      }
+      // default to 730 days (~2 years) if not provided
+      const days = typeof daysRequested === 'number' ? daysRequested : 730;
+      configs.transactions = { days_requested: days };
     }
 
     const createTokenResponse = await plaidClient.linkTokenCreate(configs);
@@ -54,4 +55,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
