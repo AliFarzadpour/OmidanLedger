@@ -261,7 +261,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
-  const isPlaidAccount = !!(dataSource.plaidAccessToken || dataSource.accessToken);
+  const isPlaidAccount = !!(dataSource.plaidAccessToken || (dataSource as any).accessToken);
 
   return (
     <>
@@ -272,10 +272,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
-            <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
+            {isPlaidAccount && <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
               {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
               Sync Transactions
-            </Button>
+            </Button>}
             <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
             <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>
           </div>
@@ -575,5 +575,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    
