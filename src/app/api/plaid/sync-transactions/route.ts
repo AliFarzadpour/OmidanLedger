@@ -1,265 +1,210 @@
+import { NextRequest, NextResponse } from "next/server";
+import { Configuration, PlaidApi, PlaidEnvironments } from "plaid";
+import admin from "firebase-admin";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
-import { NextRequest, NextResponse } from 'next/server';
-import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
-import admin from 'firebase-admin';
+// ---------- Firebase Admin init ----------
+function initAdmin() {
+  if (admin.apps.length) return admin.app();
 
-function ensureAdmin() {
-  if (!admin.apps.length) {
-    const json = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-    if (!json) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY');
-    const serviceAccount = JSON.parse(json);
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  }
-  return admin.firestore();
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  if (!raw) throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_KEY env var");
+
+  const serviceAccount = JSON.parse(raw);
+
+  return admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
 }
 
+// ---------- Plaid init ----------
 const plaidClient = new PlaidApi(
   new Configuration({
-    basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
+    basePath: PlaidEnvironments[process.env.PLAID_ENV || "sandbox"],
     baseOptions: {
       headers: {
-        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
-        'PLAID-SECRET': process.env.PLAID_SECRET!,
+        "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID!,
+        "PLAID-SECRET": process.env.PLAID_SECRET!,
       },
     },
   })
 );
 
-function toISODate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-// Plaid amounts are typically positive for outflow. We store bookkeeping-friendly:
-// outflow = negative, inflow = positive.
-function normalizeAmount(plaidAmount: number) {
-  return -1 * Number(plaidAmount || 0);
-}
+type SyncBody = {
+  userId: string;
+  bankAccountId: string; // your Firestore doc id under users/{uid}/bankAccounts/{bankAccountId}
+  // optional: force rebuild from scratch for THIS account stream
+  resetCursor?: boolean;
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { userId, bankAccountId, fullSync, startDate } = body as {
-      userId: string;
-      bankAccountId: string;
-      fullSync?: boolean;
-      startDate?: string; // YYYY-MM-DD
-    };
+    const body = (await req.json()) as SyncBody;
+    const { userId, bankAccountId, resetCursor } = body;
 
     if (!userId || !bankAccountId) {
-      return NextResponse.json({ message: 'userId and bankAccountId are required' }, { status: 400 });
+      return NextResponse.json(
+        { message: "userId and bankAccountId are required" },
+        { status: 400 }
+      );
     }
 
-    const db = ensureAdmin();
+    initAdmin();
+    const db = getFirestore();
 
-    // 🔑 Load the ONE bank account doc the user selected
     const bankRef = db.doc(`users/${userId}/bankAccounts/${bankAccountId}`);
     const bankSnap = await bankRef.get();
+
     if (!bankSnap.exists) {
-      return NextResponse.json({ message: 'Bank account not found' }, { status: 404 });
+      return NextResponse.json(
+        { message: "Bank account doc not found" },
+        { status: 404 }
+      );
     }
 
-    const bank = bankSnap.data() || {};
-    const accessToken: string | undefined = bank.plaidAccessToken || bank.accessToken;
+    const bank = bankSnap.data() as any;
+
+    // Accept either field name (you have both in your DB mess)
+    const accessToken: string | undefined =
+      bank.plaidAccessToken || bank.accessToken;
+
     const plaidAccountId: string | undefined = bank.plaidAccountId;
 
     if (!accessToken) {
-      return NextResponse.json({ message: 'accessToken is required (missing plaidAccessToken/accessToken on this bankAccount doc)' }, { status: 400 });
+      return NextResponse.json(
+        { message: "accessToken is required (missing plaidAccessToken/accessToken)" },
+        { status: 400 }
+      );
     }
     if (!plaidAccountId) {
-      return NextResponse.json({ message: 'plaidAccountId is required on this bankAccount doc' }, { status: 400 });
-    }
-
-    const txCol = db.collection(`users/${userId}/bankAccounts/${bankAccountId}/transactions`);
-
-    // ---------------------------------------------
-    // A) FULL REBUILD (historical backfill)
-    // Uses /transactions/get (supports options.account_ids)
-    // ---------------------------------------------
-    if (fullSync) {
-      const start = startDate && /^\d{4}-\d{2}-\d{2}$/.test(startDate) ? startDate : `${new Date().getFullYear()}-01-01`;
-      const end = toISODate(new Date());
-
-      // Optional: clear existing transactions for this account
-      // (You can skip clearing if you prefer upsert-only.)
-      // We'll clear in manageable batches.
-      const existing = await txCol.limit(500).get();
-      let cleared = 0;
-      while (!existing.empty) {
-        const batch = db.batch();
-        existing.docs.forEach((d) => batch.delete(d.ref));
-        await batch.commit();
-        cleared += existing.size;
-        const next = await txCol.limit(500).get();
-        if (next.empty) break;
-      }
-
-      let offset = 0;
-      const count = 500;
-      let saved = 0;
-
-      while (true) {
-        const resp = await plaidClient.transactionsGet({
-          access_token: accessToken,
-          start_date: start,
-          end_date: end,
-          options: {
-            account_ids: [plaidAccountId], // ✅ valid for transactions/get
-            count,
-            offset,
-          },
-        });
-
-        const txns = resp.data.transactions || [];
-        if (txns.length === 0) break;
-
-        const batch = db.batch();
-        for (const t of txns) {
-          // Extra safety: only save this account
-          if (t.account_id !== plaidAccountId) continue;
-
-          const ref = txCol.doc(t.transaction_id);
-          batch.set(
-            ref,
-            {
-              id: t.transaction_id,
-              userId,
-              bankAccountId,
-              plaidAccountId: t.account_id,
-              date: t.date,
-              description: t.name ?? t.merchant_name ?? 'Transaction',
-              amount: -1 * Number(t.amount ?? 0), // Plaid amount is usually positive for outflow; normalize if you want
-              category: t.category ?? [],
-              merchantName: t.merchant_name ?? null,
-              pending: t.pending ?? false,
-              raw: t, // keep raw for debugging
-              // your app fields (optional defaults)
-              reviewStatus: 'needs-review',
-              status: 'posted',
-              confidence: 0.5,
-              lastUpdatedAt: new Date(),
-            },
-            { merge: true }
-          );
-          saved++;
-        }
-
-        await batch.commit();
-
-        offset += txns.length;
-        const total = resp.data.total_transactions ?? 0;
-        if (offset >= total) break;
-      }
-
-      await bankRef.set(
-        {
-          lastSyncAt: new Date(),
-          lastSyncedAt: new Date(),
-          historicalDataPending: false,
-          // after rebuild, reset incremental cursor to null so future sync starts clean
-          plaidSyncCursor: null,
-        },
-        { merge: true }
+      return NextResponse.json(
+        { message: "plaidAccountId is required on the bankAccounts doc" },
+        { status: 400 }
       );
-
-      return NextResponse.json({ count: saved, start_date: start, cleared });
     }
 
-    // ---------------------------------------------
-    // B) NORMAL SYNC (incremental)
-    // Uses /transactions/sync (does NOT support options.account_ids)
-    // We FILTER locally by tx.account_id === plaidAccountId
-    // ---------------------------------------------
-    let cursor: string | null = bank.plaidSyncCursor ?? null;
-    let hasMore = true;
-    let addedCount = 0;
+    // IMPORTANT:
+    // /transactions/sync uses "account_id" (singular) to limit results to ONE account.
+    // Cursor is ALSO per account_id stream. Do NOT reuse a cursor from an unfiltered stream.
+    let cursor: string | null = resetCursor ? null : (bank.plaidCursor ?? null);
 
+    let added: any[] = [];
+    let modified: any[] = [];
+    let removed: any[] = [];
+    let hasMore = true;
+
+    // Pull all pages (Plaid default count is 100; max 500).
     while (hasMore) {
       const resp = await plaidClient.transactionsSync({
         access_token: accessToken,
-        cursor: cursor,
+        cursor: cursor ?? undefined,
         count: 500,
-        // ✅ NO options.account_ids here (Plaid rejects it)
+        options: {
+          include_original_description: true,
+        },
       });
 
       const data = resp.data;
+      
+      // Filter here since account_ids is not an option in transactionsSync
+      added = added.concat((data.added || []).filter(t => t.account_id === plaidAccountId));
+      modified = modified.concat((data.modified || []).filter(t => t.account_id === plaidAccountId));
+      removed = removed.concat((data.removed || []).filter(t => t.account_id === plaidAccountId));
 
+      hasMore = !!data.has_more;
+      cursor = data.next_cursor;
+    }
+
+    const txCol = db.collection(
+      `users/${userId}/bankAccounts/${bankAccountId}/transactions`
+    );
+
+    // Write in batches of 400 (Firestore limit safety)
+    const upserts = [...added, ...modified];
+    let written = 0;
+
+    for (let i = 0; i < upserts.length; i += 400) {
+      const chunk = upserts.slice(i, i + 400);
       const batch = db.batch();
 
-      // Save only the selected account’s transactions
-      for (const t of data.added || []) {
-        if (t.account_id !== plaidAccountId) continue;
+      for (const t of chunk) {
+        const txId = t.transaction_id; // Plaid stable id
+        const txRef = txCol.doc(txId);
+
+        // Minimal schema that your UI expects
         batch.set(
-          txCol.doc(t.transaction_id),
+          txRef,
           {
-            id: t.transaction_id,
+            id: txId,
+            plaidTransactionId: txId,
             userId,
             bankAccountId,
-            plaidAccountId: t.account_id,
-            date: t.date,
-            description: t.name ?? t.merchant_name ?? 'Transaction',
-            amount: -1 * Number(t.amount ?? 0),
-            category: t.category ?? [],
-            merchantName: t.merchant_name ?? null,
-            pending: t.pending ?? false,
-            raw: t,
-            reviewStatus: 'needs-review',
-            status: 'posted',
+            accountId: plaidAccountId,
+
+            date: t.date, // YYYY-MM-DD
+            description: t.name || t.merchant_name || t.original_description || "",
+            amount: typeof t.amount === "number" ? t.amount * -1 : 0, // Normalize amount
+
+            // keep your UI from crashing
+            categoryHierarchy: {
+              l0: "Uncategorized",
+              l1: "",
+              l2: "",
+              l3: "",
+            },
             confidence: 0.5,
-            lastUpdatedAt: new Date(),
-          },
-          { merge: true }
-        );
-        addedCount++;
-      }
+            status: "review",
+            reviewStatus: "needs-review",
 
-      for (const t of data.modified || []) {
-        if (t.account_id !== plaidAccountId) continue;
-        batch.set(
-          txCol.doc(t.transaction_id),
-          {
-            id: t.transaction_id,
-            userId,
-            bankAccountId,
-            plaidAccountId: t.account_id,
-            date: t.date,
-            description: t.name ?? t.merchant_name ?? 'Transaction',
-            amount: -1 * Number(t.amount ?? 0),
-            category: t.category ?? [],
+            // optional Plaid context
             merchantName: t.merchant_name ?? null,
             pending: t.pending ?? false,
-            raw: t,
-            lastUpdatedAt: new Date(),
+
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
-      }
-
-      for (const r of data.removed || []) {
-        // removed items can come from other accounts too; safe to delete by id only if it exists here
-        batch.delete(txCol.doc(r.transaction_id));
       }
 
       await batch.commit();
-
-      cursor = data.next_cursor;
-      hasMore = !!data.has_more;
+      written += chunk.length;
     }
 
+    // Handle removed
+    if (removed.length) {
+      for (let i = 0; i < removed.length; i += 400) {
+        const chunk = removed.slice(i, i + 400);
+        const batch = db.batch();
+
+        for (const r of chunk) {
+          const txRef = txCol.doc(r.transaction_id);
+          batch.delete(txRef);
+        }
+
+        await batch.commit();
+      }
+    }
+
+    // Persist cursor ON THE BANK ACCOUNT DOC (per-account stream)
     await bankRef.set(
       {
-        plaidSyncCursor: cursor,
-        lastSyncAt: new Date(),
-        lastSyncedAt: new Date(),
+        plaidCursor: cursor,
+        lastSyncAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
 
-    return NextResponse.json({ count: addedCount });
-  } catch (error: any) {
-    const errorData = error?.response?.data || error?.message || String(error);
-    console.error('PLAID_SYNC_ERROR:', errorData);
-    return NextResponse.json({ message: errorData?.error_message || errorData }, { status: 500 });
+    return NextResponse.json({
+      count: (added?.length || 0),
+      written,
+      modified: (modified?.length || 0),
+      removed: (removed?.length || 0),
+    });
+  } catch (err: any) {
+    console.error("SYNC_TRANSACTIONS_ERROR:", err?.response?.data || err);
+    return NextResponse.json(
+      { message: err?.response?.data?.error_message || err.message || "Sync failed" },
+      { status: 500 }
+    );
   }
 }
