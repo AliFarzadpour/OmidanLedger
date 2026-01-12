@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     if (!accessToken) {
       return NextResponse.json({ message: 'accessToken is required' }, { status: 400 });
     }
-
+    
     // Build a map: Plaid account_id -> Firestore bankAccount docId
     const allAccountsSnap = await db
       .collection('users')
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    let cursor: string | undefined = accountData.plaidCursor || undefined;
+    let cursor: string | undefined = accountData.plaidSyncCursor || undefined;
     let hasMore = true;
 
     let addedCount = 0;
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
       batch.set(
         accountRef,
         {
-          plaidCursor: next_cursor,
+          plaidSyncCursor: next_cursor,
           lastSyncAt: new Date(),
           linkStatus: 'connected',
         },
