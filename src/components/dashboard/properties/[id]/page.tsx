@@ -456,5 +456,3 @@ export default function PropertyDetailPage() {
   // Otherwise, return your original Single Family interface
   return <PropertyDashboardSFH property={property} onUpdate={() => setRefreshKey(k => k + 1)} />;
 }
-
-    

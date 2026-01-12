@@ -310,5 +310,3 @@ export function UnitMatrix({ propertyId, units, onUpdate }: { propertyId: string
     </>
   );
 }
-
-    
