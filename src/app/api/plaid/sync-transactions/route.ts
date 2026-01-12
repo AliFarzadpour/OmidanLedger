@@ -4,6 +4,7 @@ import { Configuration, PlaidApi, PlaidEnvironments, RemovedTransaction, Transac
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { fetchUserContext, categorizeWithHeuristics } from '@/lib/plaid';
+import { normalizeCategoryHierarchy, removeUndefinedDeep } from "@/lib/firestore-sanitize";
 
 // ---------- Firebase Admin init ----------
 function initAdmin() {
@@ -117,12 +118,16 @@ export async function POST(req: NextRequest) {
           const docId = t.transaction_id;
           const txRef = txCol.doc(docId);
           
-          // **CATEGORIZATION LOGIC RE-INTRODUCED**
           const categoryResult = await categorizeWithHeuristics(t.name, normalizeAmount(t.amount), t.personal_finance_category, userContext);
           
-          batch.set(
-            txRef,
-            {
+          const categoryHierarchy = normalizeCategoryHierarchy({
+            l0: categoryResult.primaryCategory,
+            l1: categoryResult.secondaryCategory,
+            l2: categoryResult.subcategory,
+            l3: categoryResult.details || '',
+          });
+
+          const updateData = removeUndefinedDeep({
               id: docId,
               plaidTransactionId: docId,
               userId,
@@ -131,21 +136,16 @@ export async function POST(req: NextRequest) {
               date: t.date,
               description: t.merchant_name || t.name || t.original_description || '',
               amount: normalizeAmount(t.amount),
-              categoryHierarchy: {
-                l0: categoryResult.primary,
-                l1: categoryResult.secondary,
-                l2: categoryResult.sub,
-                l3: categoryResult.details || '',
-              },
+              categoryHierarchy,
               confidence: categoryResult.confidence,
-              reviewStatus: categoryResult.confidence < 0.7 ? 'needs-review' : 'approved',
+              reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
               aiExplanation: categoryResult.explanation,
               merchantName: t.merchant_name ?? null,
               pending: t.pending ?? false,
               lastUpdatedAt: new Date(),
-            },
-            { merge: true }
-          );
+          });
+          
+          batch.set(txRef, updateData, { merge: true });
         }
         await batch.commit();
         savedCount += txs.length;
@@ -198,10 +198,16 @@ export async function POST(req: NextRequest) {
         const docId = t.transaction_id;
         const txRef = txCol.doc(docId);
         
-        // **CATEGORIZATION LOGIC RE-INTRODUCED**
         const categoryResult = await categorizeWithHeuristics(t.name, normalizeAmount(t.amount), t.personal_finance_category, userContext);
         
-        batch.set(txRef, {
+        const categoryHierarchy = normalizeCategoryHierarchy({
+          l0: categoryResult.primaryCategory,
+          l1: categoryResult.secondaryCategory,
+          l2: categoryResult.subcategory,
+          l3: categoryResult.details || '',
+        });
+
+        const updateData = removeUndefinedDeep({
             id: docId,
             plaidTransactionId: docId,
             userId,
@@ -210,19 +216,16 @@ export async function POST(req: NextRequest) {
             date: t.date,
             description: t.merchant_name || t.name || t.original_description || "",
             amount: normalizeAmount(t.amount),
-            categoryHierarchy: {
-              l0: categoryResult.primary,
-              l1: categoryResult.secondary,
-              l2: categoryResult.sub,
-              l3: categoryResult.details || '',
-            },
+            categoryHierarchy,
             confidence: categoryResult.confidence,
-            reviewStatus: categoryResult.confidence < 0.7 ? 'needs-review' : 'approved',
+            reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
             aiExplanation: categoryResult.explanation,
             merchantName: t.merchant_name ?? null,
             pending: t.pending ?? false,
             lastUpdatedAt: new Date(),
-        }, { merge: true });
+        });
+
+        batch.set(txRef, updateData, { merge: true });
       }
       await batch.commit();
       savedCount += upserts.length;
