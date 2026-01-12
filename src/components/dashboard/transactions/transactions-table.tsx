@@ -11,7 +11,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon, Loader2, PlusCircle } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
-import { UploadTransactionsDialog } from './upload-transactions-dialog';
+import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,11 +20,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
-import { TransactionToolbar } from './transaction-toolbar';
+import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BatchEditDialog } from './batch-edit-dialog';
+import { BatchEditDialog } from './transactions/batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800',
@@ -39,6 +39,8 @@ interface DataSource {
   accountName: string;
   bankName: string;
   plaidAccessToken?: string;
+  accessToken?: string;
+  plaidAccountId?: string;
 }
 
 export interface Transaction {
@@ -250,7 +252,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
-  const isPlaidAccount = !!dataSource.plaidAccessToken;
+  const isPlaidAccount = !!(dataSource.plaidAccessToken || dataSource.accessToken);
 
   return (
     <>
