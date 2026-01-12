@@ -40,7 +40,7 @@ const generateUnitBatch = (firestore: any, propertyRef: any, count: number, user
     units.push({
       ref: unitRef,
       data: {
-        userId,
+        userId: userId, // Ensure userId is always included
         propertyId: propertyRef.id, // Denormalize propertyId
         unitNumber: `${100 + i}`,
         status: 'vacant',
