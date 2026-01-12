@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -9,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { Label } from '../ui/label';
+import { Label } from '@/components/ui/label';
 
 export function BatchEditDialog({
   isOpen,
