@@ -38,8 +38,7 @@ export async function POST(req: NextRequest) {
     } else {
       // New Connection logic
       configs.products = [Products.Transactions];
-      // default to 730 days (~2 years) if not provided
-      const days = typeof daysRequested === 'number' ? daysRequested : 730;
+      const days = typeof daysRequested === 'number' ? daysRequested : 400; // sensible default
       configs.transactions = { days_requested: days };
     }
 
