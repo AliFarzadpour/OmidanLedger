@@ -145,6 +145,8 @@ export function DataSourceList({
         const balanceDisplay = source.plaidAccountId ? getBalanceDisplay(source) : null;
         const config = typeConfig[source.accountType as keyof typeof typeConfig] || typeConfig.other;
         const Icon = config.icon;
+        const last4 = (source.accountNumber || '').slice(-4);
+        const bankLine = `${source.bankName || 'Bank'}${last4 ? ` • ${last4}` : ''}`;
 
         return (
             <div key={source.id} className="relative group">
@@ -162,7 +164,7 @@ export function DataSourceList({
                 </CardHeader>
                 <CardContent className="flex-grow p-3 pt-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm text-muted-foreground">{source.bankName}</p>
+                    <p className="text-sm text-muted-foreground">{bankLine}</p>
                      <div className="flex items-center gap-1">
                         {counts.incorrect > 0 && (
                             <Badge variant="destructive" className="flex items-center gap-1 text-xs">
