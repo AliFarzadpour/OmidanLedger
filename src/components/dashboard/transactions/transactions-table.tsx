@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { cn } from '@/lib/utils';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Loader2, PlusCircle } from 'lucide-react';
+import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
 import { UploadTransactionsDialog } from './upload-transactions-dialog';
@@ -24,7 +24,8 @@ import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Loader2, PlusCircle } from 'lucide-react';
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800',
@@ -39,8 +40,6 @@ interface DataSource {
   accountName: string;
   bankName: string;
   plaidAccessToken?: string;
-  accessToken?: string;
-  plaidAccountId?: string;
 }
 
 export interface Transaction {
@@ -157,30 +156,30 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
   };
 
   const handleFullRebuild = async () => {
-  if (!user) return;
+    if (!user) return;
 
-  setIsSyncing(true);
-  try {
-    const result = await syncAndCategorizePlaidTransactions({
-      userId: user.uid,
-      bankAccountId: dataSource.id,
-      fullSync: true,
-      startDate: rebuildStartDate,
-    });
+    setIsSyncing(true);
+    try {
+      const result = await syncAndCategorizePlaidTransactions({
+        userId: user.uid,
+        bankAccountId: dataSource.id,
+        fullSync: true,
+        startDate: rebuildStartDate,
+      });
 
-    toast({
-      title: 'Rebuild Complete',
-      description: `Backfilled ${result.count ?? 0} transactions from ${result.start_date ?? rebuildStartDate}.`,
-    });
+      toast({
+        title: 'Rebuild Complete',
+        description: `Backfilled ${result.count ?? 0} transactions from ${result.start_date ?? rebuildStartDate}.`,
+      });
 
-    setIsRebuildOpen(false);
-    refetch();
-  } catch (error: any) {
-    toast({ variant: 'destructive', title: 'Rebuild Failed', description: error.message });
-  } finally {
-    setIsSyncing(false);
-  }
-};
+      setIsRebuildOpen(false);
+      refetch();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Rebuild Failed', description: error.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
     if (!user || !firestore) return;
@@ -293,7 +292,7 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
-  const isPlaidAccount = !!(dataSource.plaidAccessToken || (dataSource as any).accessToken);
+  const isPlaidAccount = !!dataSource.plaidAccessToken;
 
   return (
     <>
@@ -459,50 +458,47 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
         </AlertDialogContent>
       </AlertDialog>
       <AlertDialog open={isRebuildOpen} onOpenChange={setIsRebuildOpen}>
-  <AlertDialogContent>
-    <AlertDialogHeader>
-      <AlertDialogTitle>Rebuild transactions from a start date</AlertDialogTitle>
-      <AlertDialogDescription>
-        This will delete existing transactions for this account and re-download from the selected date.
-        Use this if you want a full year (example: 01/01/2025).
-      </AlertDialogDescription>
-    </AlertDialogHeader>
-
-    <div className="grid gap-3 py-2">
-      <Label htmlFor="rebuildStart">Start date (YYYY-MM-DD)</Label>
-      <Input
-        id="rebuildStart"
-        value={rebuildStartDate}
-        onChange={(e) => setRebuildStartDate(e.target.value)}
-        placeholder="2025-01-01"
-      />
-
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setRebuildStartDate(`${new Date().getFullYear()}-01-01`)}
-        >
-          This year
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setRebuildStartDate(`${new Date().getFullYear() - 1}-01-01`)}
-        >
-          Last year
-        </Button>
-      </div>
-    </div>
-
-    <AlertDialogFooter>
-      <AlertDialogCancel>Cancel</AlertDialogCancel>
-      <AlertDialogAction onClick={handleFullRebuild}>
-        Rebuild Now
-      </AlertDialogAction>
-    </AlertDialogFooter>
-  </AlertDialogContent>
-</AlertDialog>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rebuild transactions from a start date</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete existing transactions for this account and re-download from the selected date.
+              Use this if you want a full year (example: 01/01/2025).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="grid gap-3 py-2">
+            <Label htmlFor="rebuildStart">Start date (YYYY-MM-DD)</Label>
+            <Input
+              id="rebuildStart"
+              value={rebuildStartDate}
+              onChange={(e) => setRebuildStartDate(e.target.value)}
+              placeholder="2025-01-01"
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRebuildStartDate(`${new Date().getFullYear()}-01-01`)}
+              >
+                This year
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setRebuildStartDate(`${new Date().getFullYear() - 1}-01-01`)}
+              >
+                Last year
+              </Button>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleFullRebuild}>
+              Rebuild Now
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

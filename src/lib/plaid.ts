@@ -93,16 +93,18 @@ export async function createBankAccountFromPlaid({
 export async function syncAndCategorizePlaidTransactions({
   userId,
   bankAccountId,
+  fullSync,
   startDate,
 }: {
   userId: string;
   bankAccountId: string;
-  startDate?: string;
+  fullSync?: boolean;
+  startDate?: string; // YYYY-MM-DD
 }) {
   const response = await fetch('/api/plaid/sync-transactions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, bankAccountId, startDate }),
+    body: JSON.stringify({ userId, bankAccountId, fullSync, startDate }),
   });
 
   if (!response.ok) {
