@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -34,19 +33,18 @@ import { Button } from '@/components/ui/button';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
-import { exchangePublicToken, createLinkToken, createBankAccountFromPlaid } from '@/lib/plaid';
+import { createLinkToken, createBankAccountFromPlaid } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
 import { PlaidLinkOnSuccessMetadata, usePlaidLink } from 'react-plaid-link';
 import { Label } from '@/components/ui/label';
+import { exchangePublicToken } from '@/lib/plaid';
 
 const dataSourceSchema = z.object({
   accountName: z.string().min(1, 'Account name is required.'),
   bankName: z.string().min(1, 'Bank name is required.'),
   accountType: z.enum(['checking', 'savings', 'credit-card', 'cash', 'credit', 'other']),
   accountNumber: z.string().optional(),
-
-  // NEW:
-  importStart: z.enum(['thisYear', 'lastYear']).default('lastYear'),
+  importStart: z.enum(['thisYear', 'lastYear', 'allTime']).default('lastYear'),
 });
 
 type DataSourceFormValues = z.infer<typeof dataSourceSchema>;
@@ -89,6 +87,8 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
       importStart: 'lastYear',
     },
   });
+  
+  const importStartValue = form.watch('importStart');
 
   const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
     const activeUserId = userId || user?.uid;
@@ -97,9 +97,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     setIsSubmitting(true);
   
     try {
-      // In EDIT mode, we are only ever RE-LINKING an existing item.
-      // We exchange the public token to refresh the item's access token.
-      // We do NOT need the account metadata because we are not creating new accounts.
       if (isEditMode && dataSource?.id) {
         await exchangePublicToken({
           publicToken: public_token,
@@ -112,8 +109,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         return;
       }
   
-      // In NEW connection mode, we create new accounts from the Plaid metadata.
-      // The /api/plaid/save-account route handles the token exchange internally.
       await createBankAccountFromPlaid({
         userId: activeUserId,
         publicToken: public_token,
@@ -135,7 +130,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     }
   };
   
-
   const { open: openPlaid, ready: isPlaidReady } = usePlaidLink({
     token: linkToken || '', 
     onSuccess: handlePlaidSuccess,
@@ -157,9 +151,11 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
 
     setIsSubmitting(true);
     try {
+        const daysRequested = importStartValue === 'thisYear' ? 365 : importStartValue === 'lastYear' ? 730 : 730;
         const token = await createLinkToken({
           userId: activeUserId,
           accessToken: isEditMode ? (dataSource as any)?.plaidAccessToken : undefined,
+          daysRequested,
         });
         setLinkToken(token);
     } catch (e: any) {
@@ -211,6 +207,28 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         </DialogHeader>
         
         <div className="space-y-3 pt-4">
+            <FormField
+              control={form.control}
+              name="importStart"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Import Transactions From</FormLabel>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
+                      <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
+                      <SelectItem value="allTime">All available time</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           <Button
             onClick={handleContinueToPlaid}
             className="w-full bg-blue-600 hover:bg-blue-700"
@@ -220,7 +238,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
           </Button>
         </div>
 
-        {!isPlaidAccount && (
+        {!isPlaidAccount && !isEditMode && (
           <>
             <div className="flex items-center gap-4 my-2">
                 <Separator className="flex-1" />
@@ -250,27 +268,6 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
                     </Select>
                   </FormItem>
                 )} />
-                 <FormField
-                  control={form.control}
-                  name="importStart"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Import Transactions From</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
-                          <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <DialogFooter>
                   <Button type="submit" disabled={isSubmitting} variant="outline" className="w-full">
                     {isSubmitting ? 'Saving...' : 'Save Manual Account'}
