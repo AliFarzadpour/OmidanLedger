@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -57,6 +58,8 @@ interface DataSource {
   accountType: 'checking' | 'savings' | 'credit-card' | 'credit' | 'cash' | 'other';
   accountNumber?: string;
   plaidAccessToken?: string;
+  accessToken?: string;
+  plaidAccountId?: string;
 }
 
 interface DataSourceDialogProps {
@@ -132,12 +135,12 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
       await createBankAccountFromPlaid({
         userId: activeUserId,
         publicToken: public_token,
-        metadata,
+        metadata: metadata,
       });
   
       toast({ title: "Connected", description: "Account(s) added successfully." });
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Plaid Success Error:", error);
       toast({
         variant: "destructive",

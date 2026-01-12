@@ -1,7 +1,9 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { getApps, initializeApp, cert } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
+import admin from 'firebase-admin';
 
 function getAdminDb() {
   if (!getApps().length) {
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
           plaidItemId: itemId,
           linkStatus: 'connected',
           historicalDataPending: false,
-          lastUpdatedAt: FieldValue.serverTimestamp(),
+          lastUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         { merge: true }
       );
