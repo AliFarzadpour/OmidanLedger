@@ -131,7 +131,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
       // IMPORTANT: save-account must exchange the public_token internally
       await createBankAccountFromPlaid({
         userId: activeUserId,
-        accessToken: public_token as any, // TEMP: we will fix plaid.ts + backend next step
+        publicToken: public_token,
         metadata,
       });
   
