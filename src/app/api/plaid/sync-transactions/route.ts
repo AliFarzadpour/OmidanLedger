@@ -137,6 +137,7 @@ export async function POST(req: NextRequest) {
               description: t.merchant_name || t.name || t.original_description || '',
               amount: normalizeAmount(t.amount),
               categoryHierarchy,
+              costCenter: categoryResult.costCenter, // Apply cost center from rule
               confidence: categoryResult.confidence,
               reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
               aiExplanation: categoryResult.explanation,
@@ -217,6 +218,7 @@ export async function POST(req: NextRequest) {
             description: t.merchant_name || t.name || t.original_description || "",
             amount: normalizeAmount(t.amount),
             categoryHierarchy,
+            costCenter: categoryResult.costCenter, // Apply cost center from rule
             confidence: categoryResult.confidence,
             reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
             aiExplanation: categoryResult.explanation,

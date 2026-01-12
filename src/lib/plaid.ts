@@ -151,7 +151,8 @@ export async function getCategoryFromDatabase(description: string, context: User
       return { 
         ...rule.categoryHierarchy,
         confidence: 0.99, // User rule match is very high confidence
-        explanation: `Matched user rule: '${keyword}'`
+        explanation: `Matched user rule: '${keyword}'`,
+        costCenter: rule.propertyId, // Return the cost center
       };
     }
   }
@@ -180,7 +181,7 @@ export async function categorizeWithHeuristics(
   amount: number,
   plaidCategory: any | null,
   userContext: UserContext
-): Promise<Partial<TransactionCategorySchema>> {
+): Promise<Partial<TransactionCategorySchema & { costCenter?: string }>> {
   
   // 1. Database-driven rules (Highest Priority)
   const dbResult = await getCategoryFromDatabase(description, userContext);
@@ -191,7 +192,8 @@ export async function categorizeWithHeuristics(
       subcategory: dbResult.l2,
       confidence: dbResult.confidence,
       explanation: dbResult.explanation,
-    } as Partial<TransactionCategorySchema>;
+      costCenter: dbResult.costCenter,
+    } as Partial<TransactionCategorySchema & { costCenter?: string }>;
   }
 
   // 2. Heuristic Rules (Keyword-based)

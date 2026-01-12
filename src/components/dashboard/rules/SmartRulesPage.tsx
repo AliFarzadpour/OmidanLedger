@@ -2,8 +2,8 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useUser, useFirestore } from '@/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, query } from 'firebase/firestore';
+import { useUser, useFirestore, useCollection, useMemoFirebase } from '@/firebase';
+import { collection, getDocs, doc, setDoc, deleteDoc, serverTimestamp, query, where } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,15 +11,59 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search, Wand2, AlertCircle } from 'lucide-react';
+import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search, Wand2, AlertCircle, Building } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { repairTransactionsAction } from '@/ai/flows/repair-transactions';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
+import { CATEGORY_MAP, L0Category } from '@/lib/categories';
+import { PlusCircle } from 'lucide-react';
+
+function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
+  l0: string; setL0: (val: string) => void;
+  l1: string; setL1: (val: string) => void;
+  l2: string; setL2: (val: string) => void;
+}) {
+  const l1Options = l0 && CATEGORY_MAP[l0 as L0Category] ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
+  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category] && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
+
+  return (
+    <div className="space-y-2 p-3 border rounded-md bg-slate-50">
+      <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="l0">Category (L0)</Label>
+        <Select value={l0} onValueChange={val => { setL0(val); setL1(''); setL2(''); }}>
+            <SelectTrigger id="l0" className="col-span-3 h-8 bg-white"><SelectValue /></SelectTrigger>
+            <SelectContent>
+                {Object.keys(CATEGORY_MAP).map(key => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+            </SelectContent>
+        </Select>
+      </div>
+       <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="l1">Group (L1)</Label>
+        <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0} className="col-span-3">
+            <SelectTrigger id="l1" className="h-8 bg-white"><SelectValue placeholder="Select..." /></SelectTrigger>
+            <SelectContent>
+                {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+            </SelectContent>
+        </Select>
+      </div>
+       <div className="grid grid-cols-4 items-center gap-4">
+        <Label htmlFor="l2">Tax Line (L2)</Label>
+        <Select value={l2} onValueChange={setL2} disabled={!l1} className="col-span-3">
+            <SelectTrigger id="l2" className="h-8 bg-white"><SelectValue placeholder="Select..." /></SelectTrigger>
+            <SelectContent>
+                {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+            </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
 
 
-type SortKey = 'originalKeyword' | 'category' | 'source';
+type SortKey = 'originalKeyword' | 'category' | 'source' | 'propertyId';
 type SortDirection = 'ascending' | 'descending';
 
 export default function SmartRulesPage() {
@@ -41,40 +85,43 @@ export default function SmartRulesPage() {
 
   // Form state
   const [merchant, setMerchant] = useState('');
-  const [primaryCategory, setPrimaryCategory] = useState('Operating Expenses');
-  const [secondaryCategory, setSecondaryCategory] = useState('');
-  const [subcategory, setSubcategory] = useState('');
-
-  // Filtering and Sorting State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sourceFilter, setSourceFilter] = useState('all');
-  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'originalKeyword', direction: 'ascending' });
+  const [l0, setL0] = useState('');
+  const [l1, setL1] = useState('');
+  const [l2, setL2] = useState('');
+  const [propertyId, setPropertyId] = useState('');
+  
+  const propertiesQuery = useMemoFirebase(() => {
+    if (!user) return null;
+    return query(collection(firestore, 'properties'), where('userId', '==', user.uid));
+  }, [user, firestore]);
+  const { data: properties, isLoading: isLoadingProperties } = useCollection(propertiesQuery);
+  const propertyMap = useMemo(() => properties?.reduce((map, p) => ({...map, [p.id]: p.name}), {}) || {}, [properties]);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
-
 
   const fetchRules = async () => {
     if (!user || !firestore) return;
     setLoading(true);
     setFetchError(null);
     try {
-      const collectionPath = isAdminMode 
-        ? 'globalVendorMap' 
-        : `users/${user.uid}/categoryMappings`;
-      
+      const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
       const q = query(collection(firestore, collectionPath));
       const snapshot = await getDocs(q);
       
-      const fetchedRules = snapshot.docs.map(d => ({ 
+      const fetchedRules = snapshot.docs.map(d => {
+        const data = d.data();
+        const cats = data.categoryHierarchy || {};
+        return { 
           id: d.id, 
-          primaryCategory: d.data().primaryCategory || d.data().primary,
-          secondaryCategory: d.data().secondaryCategory || d.data().secondary,
-          subcategory: d.data().subcategory || d.data().sub,
-          originalKeyword: d.data().originalKeyword || d.data().transactionDescription || d.id,
-          ...d.data() 
-      }));
+          primaryCategory: cats.l0 || data.primary,
+          secondaryCategory: cats.l1 || data.secondary,
+          subcategory: cats.l2 || data.sub,
+          originalKeyword: data.transactionDescription || data.originalKeyword || d.id,
+          ...data 
+        }
+      });
       setRules(fetchedRules);
     } catch (error: any) {
       console.error("Error fetching rules:", error);
@@ -93,65 +140,44 @@ export default function SmartRulesPage() {
     if (rule) {
         setEditingRule(rule);
         setMerchant(rule.originalKeyword);
-        setPrimaryCategory(rule.primaryCategory);
-        setSecondaryCategory(rule.secondaryCategory);
-        setSubcategory(rule.subcategory);
+        const cats = rule.categoryHierarchy || {};
+        setL0(cats.l0 || rule.primaryCategory);
+        setL1(cats.l1 || rule.secondaryCategory);
+        setL2(cats.l2 || rule.subcategory);
+        setPropertyId(rule.propertyId || '');
     } else {
         setEditingRule(null);
         setMerchant('');
-        setPrimaryCategory('Operating Expenses');
-        setSecondaryCategory('');
-        setSubcategory('');
+        setL0('OPERATING EXPENSE');
+        setL1('');
+        setL2('');
+        setPropertyId('');
     }
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
-    if (!merchant || !primaryCategory || !secondaryCategory || !subcategory || !user || !firestore) {
+    if (!merchant || !l0 || !l1 || !l2 || !user) {
         toast({ variant: 'destructive', title: "Missing Fields", description: "Please fill out all keyword and category fields." });
         return;
     }
     setIsSaving(true);
-
-    const cleanId = editingRule?.id || merchant.toUpperCase()
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "_")
-      .replace(/\s+/g, '_');
-
-    let ruleData: any = {
-      updatedAt: serverTimestamp(),
-      source: isAdminMode ? 'Admin Manual' : 'User Manual'
-    };
-
-    if (isAdminMode) {
-      ruleData = {
-        ...ruleData,
-        originalKeyword: merchant,
-        primary: primaryCategory,
-        secondary: secondaryCategory,
-        sub: subcategory
-      };
-    } else {
-      ruleData = {
-        ...ruleData,
-        userId: user.uid,
-        transactionDescription: merchant,
-        primaryCategory,
-        secondaryCategory,
-        subcategory,
-      };
-    }
-
-    const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
-
+    
     try {
-      await setDoc(doc(firestore, collectionPath, cleanId), ruleData, { merge: true });
-      toast({ title: editingRule ? "Rule Updated" : "Rule Saved", description: `Rule for "${merchant}" has been saved.` });
-      
-      setIsDialogOpen(false);
-      fetchRules();
+        await learnCategoryMapping({
+            transactionDescription: merchant,
+            primaryCategory: l0,
+            secondaryCategory: l1,
+            subcategory: l2,
+            userId: user.uid,
+            propertyId: propertyId,
+        });
 
+        toast({ title: editingRule ? "Rule Updated" : "Rule Saved", description: `Rule for "${merchant}" has been saved.` });
+        setIsDialogOpen(false);
+        fetchRules();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setIsSaving(false);
     }
@@ -165,7 +191,7 @@ export default function SmartRulesPage() {
       toast({ title: "Rule Deleted" });
       fetchRules();
     } catch (error: any) {
-      toast({ variant: 'destructive', title: "Error", description: error.message });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
         setDeletingRuleId(null);
     }
@@ -189,23 +215,21 @@ export default function SmartRulesPage() {
   const filteredAndSortedRules = useMemo(() => {
     let filtered = [...rules];
     
-    // Filter by search term in keyword OR category
     if (searchTerm) {
         const lowercasedFilter = searchTerm.toLowerCase();
         filtered = filtered.filter(rule => {
             const categoryString = `${rule.primaryCategory} ${rule.secondaryCategory} ${rule.subcategory}`.toLowerCase();
             const keywordMatch = rule.originalKeyword.toLowerCase().includes(lowercasedFilter);
             const categoryMatch = categoryString.includes(lowercasedFilter);
-            return keywordMatch || categoryMatch;
+            const propertyMatch = (propertyMap[rule.propertyId] || '').toLowerCase().includes(lowercasedFilter);
+            return keywordMatch || categoryMatch || propertyMatch;
         });
     }
 
-    // Filter by source
     if (sourceFilter !== 'all') {
         filtered = filtered.filter(rule => rule.source === sourceFilter);
     }
     
-    // Sort
     filtered.sort((a, b) => {
         let aValue, bValue;
         
@@ -214,14 +238,13 @@ export default function SmartRulesPage() {
                 aValue = `${a.primaryCategory} > ${a.secondaryCategory} > ${a.subcategory}`;
                 bValue = `${b.primaryCategory} > ${b.secondaryCategory} > ${b.subcategory}`;
                 break;
-            case 'source':
-                aValue = a.source || '';
-                bValue = b.source || '';
+            case 'propertyId':
+                aValue = propertyMap[a.propertyId] || 'zzzz';
+                bValue = propertyMap[b.propertyId] || 'zzzz';
                 break;
-            case 'originalKeyword':
             default:
-                aValue = a.originalKeyword || '';
-                bValue = b.originalKeyword || '';
+                aValue = a[sortConfig.key] || '';
+                bValue = b[sortConfig.key] || '';
         }
         
         if (aValue < bValue) return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -230,7 +253,7 @@ export default function SmartRulesPage() {
     });
 
     return filtered;
-  }, [rules, searchTerm, sourceFilter, sortConfig]);
+  }, [rules, searchTerm, sourceFilter, sortConfig, propertyMap]);
 
   const requestSort = (key: SortKey) => {
     let direction: SortDirection = 'ascending';
@@ -290,7 +313,6 @@ export default function SmartRulesPage() {
         </Alert>
       )}
 
-      {/* Filter and Search Toolbar */}
       <div className="flex flex-col md:flex-row gap-4 p-4 bg-slate-50 border rounded-lg">
         <div className="relative flex-grow">
             <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -325,15 +347,16 @@ export default function SmartRulesPage() {
               <TableRow>
                 <TableHead><Button variant="ghost" onClick={() => requestSort('originalKeyword')}>Keyword {getSortIcon('originalKeyword')}</Button></TableHead>
                 <TableHead><Button variant="ghost" onClick={() => requestSort('category')}>Assigned Category {getSortIcon('category')}</Button></TableHead>
+                <TableHead><Button variant="ghost" onClick={() => requestSort('propertyId')}>Cost Center {getSortIcon('propertyId')}</Button></TableHead>
                 <TableHead><Button variant="ghost" onClick={() => requestSort('source')}>Source {getSortIcon('source')}</Button></TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/></TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/></TableCell></TableRow>
               ) : filteredAndSortedRules.length === 0 ? (
-                <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">No rules match your filters.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No rules match your filters.</TableCell></TableRow>
               ) : (
                 filteredAndSortedRules.map((rule) => (
                   <TableRow key={rule.id}>
@@ -345,6 +368,9 @@ export default function SmartRulesPage() {
                             {rule.secondaryCategory} &gt; {rule.subcategory}
                         </span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                        {rule.propertyId ? <Badge variant="secondary">{propertyMap[rule.propertyId] || rule.propertyId}</Badge> : <span className="text-xs text-muted-foreground italic">Global</span>}
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{rule.source || 'Unknown'}</Badge>
@@ -377,36 +403,29 @@ export default function SmartRulesPage() {
             </DialogHeader>
             <div className="space-y-4 py-4">
                 <div className="grid gap-2">
-                    <Label>If vendor name contains...</Label>
+                    <Label>If transaction description contains...</Label>
                     <Input 
                         value={merchant}
                         onChange={(e) => setMerchant(e.target.value)}
                         placeholder="e.g., STARBUCKS"
                     />
                 </div>
+                
+                <HierarchicalCategorySelector l0={l0} setL0={setL0} l1={l1} setL1={setL1} l2={l2} setL2={setL2} />
+                
                 <div className="grid gap-2">
-                    <Label>Assign Primary Category</Label>
-                    <Input 
-                        value={primaryCategory}
-                        onChange={(e) => setPrimaryCategory(e.target.value)}
-                        placeholder="e.g., Operating Expenses"
-                    />
-                </div>
-                 <div className="grid gap-2">
-                    <Label>Assign Secondary Category</Label>
-                    <Input 
-                        value={secondaryCategory}
-                        onChange={(e) => setSecondaryCategory(e.target.value)}
-                        placeholder="e.g., Meals & Entertainment"
-                    />
-                </div>
-                 <div className="grid gap-2">
-                    <Label>Assign Subcategory</Label>
-                    <Input 
-                        value={subcategory}
-                        onChange={(e) => setSubcategory(e.target.value)}
-                        placeholder="e.g., Business Meals"
-                    />
+                   <Label className="flex items-center gap-2"><Building className="h-4 w-4 text-muted-foreground" /> Assign to Property (Cost Center)</Label>
+                   <Select value={propertyId} onValueChange={setPropertyId}>
+                      <SelectTrigger className="bg-white">
+                        <SelectValue placeholder="Optional: Assign to a property" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">-- Global (No Property) --</SelectItem>
+                        {isLoadingProperties ? <Loader2 className="animate-spin" /> : properties?.map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                   </Select>
                 </div>
             </div>
             <DialogFooter>
