@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -32,7 +33,7 @@ import { Button } from '@/components/ui/button';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
-import { exchangePublicToken, createLinkToken } from '@/lib/plaid';
+import { exchangePublicToken, createLinkToken, createBankAccountFromPlaid } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
 import { PlaidLinkOnSuccessMetadata, usePlaidLink } from 'react-plaid-link';
 import { Label } from '@/components/ui/label';
@@ -72,6 +73,8 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [rebuildHistory, setRebuildHistory] = useState(false);
+
+  // default to previous year start (what most users want)
   const [importFrom, setImportFrom] = useState<'thisYear' | 'lastYear'>('lastYear');
 
   function daysSince(date: Date) {
@@ -106,22 +109,41 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
 
   const handlePlaidSuccess = async (public_token: string, metadata: PlaidLinkOnSuccessMetadata) => {
     const activeUserId = userId || user?.uid;
-    if (!activeUserId || !firestore) return;
+    if (!activeUserId) return;
   
     setIsSubmitting(true);
+  
     try {
-      // The backend now handles all account creation and updates.
-      // We just need to send the public token and user ID.
-      await exchangePublicToken({
-        publicToken: public_token,
+      // ✅ ALWAYS exchange token and update the *existing* bankAccount doc when re-linking
+      if (isEditMode && dataSource?.id) {
+        await exchangePublicToken({
+          publicToken: public_token,
+          userId: activeUserId,
+          accountId: dataSource.id, // update THIS doc, do not create a new one
+        });
+  
+        toast({ title: "Re-linked", description: "Bank connection refreshed." });
+        onOpenChange(false);
+        return;
+      }
+  
+      // ✅ New connection: create/update accounts using /api/plaid/save-account
+      // IMPORTANT: save-account must exchange the public_token internally
+      await createBankAccountFromPlaid({
         userId: activeUserId,
+        accessToken: public_token as any, // TEMP: we will fix plaid.ts + backend next step
+        metadata,
       });
   
-      toast({ title: "Success", description: "Account connected successfully." });
+      toast({ title: "Connected", description: "Account(s) added successfully." });
       onOpenChange(false);
     } catch (error) {
-      console.error("Exchange Error:", error);
-      toast({ variant: 'destructive', title: 'Connection Failed', description: "Could not finalize the bank link." });
+      console.error("Plaid Success Error:", error);
+      toast({
+        variant: "destructive",
+        title: "Connection Failed",
+        description: "Could not finalize the bank link.",
+      });
     } finally {
       setIsSubmitting(false);
       setLinkToken(null);
