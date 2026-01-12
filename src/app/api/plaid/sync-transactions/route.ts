@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { db } from '@/lib/firebase-admin';
@@ -38,6 +37,22 @@ export async function POST(req: NextRequest) {
     if (!accessToken) {
       return NextResponse.json({ message: 'accessToken is required' }, { status: 400 });
     }
+
+    // Build a map: Plaid account_id -> Firestore bankAccount docId
+    const allAccountsSnap = await db
+      .collection('users')
+      .doc(userId)
+      .collection('bankAccounts')
+      .where('plaidItemId', '==', accountData.plaidItemId)
+      .get();
+
+    const plaidAccountIdToDocId: Record<string, string> = {};
+    allAccountsSnap.forEach((docSnap) => {
+      const d = docSnap.data() as any;
+      if (d?.plaidAccountId) {
+        plaidAccountIdToDocId[d.plaidAccountId] = docSnap.id;
+      }
+    });
 
     let cursor: string | undefined = accountData.plaidCursor || undefined;
     let hasMore = true;
