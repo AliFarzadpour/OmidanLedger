@@ -24,7 +24,7 @@ import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800',
@@ -137,7 +137,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleSyncTransactions = async () => {
-    // This component no longer directly handles sync. It's done from the parent list.
+    if (!user) return;
     toast({ title: 'Sync Triggered', description: 'Check the data source card for status.' });
   };
 
@@ -564,3 +564,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
