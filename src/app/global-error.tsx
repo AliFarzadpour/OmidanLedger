@@ -9,8 +9,8 @@ export default function GlobalError({
 }) {
   return (
     <html>
-      <body>
-        <div style={{ fontFamily: 'sans-serif', padding: '2rem', display: 'flex', justifyContent: 'center' }}>
+      <body style={{ margin: 0, padding: 0 }}>
+        <div style={{ fontFamily: 'sans-serif', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', boxSizing: 'border-box' }}>
           <div style={{ maxWidth: '800px', width: '100%' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Something went wrong!</h2>
             <p style={{ marginTop: '0.5rem', color: '#555' }}>
