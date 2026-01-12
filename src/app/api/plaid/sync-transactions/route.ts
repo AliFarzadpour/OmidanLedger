@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
       }
       
       await acctRef.set(
-        { lastSyncAt: new Date(), lastSyncedAt: new Date(), plaidCursor: null },
+        { lastSyncAt: new Date(), lastSyncedAt: new Date(), plaidSyncCursor: null },
         { merge: true }
       );
 
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ✅ INCREMENTAL SYNC MODE
-    let cursor: string | null = acct.plaidCursor ?? null;
+    let cursor: string | null = acct.plaidSyncCursor ?? null;
     let hasMore = true;
 
     while (hasMore) {
@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
     }
 
     await acctRef.set(
-      { plaidCursor: cursor, lastSyncAt: new Date(), lastSyncedAt: new Date() },
+      { plaidSyncCursor: cursor, lastSyncAt: new Date(), lastSyncedAt: new Date() },
       { merge: true }
     );
 
@@ -212,5 +212,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ message: msg }, { status: 500 });
   }
 }
-
-    
