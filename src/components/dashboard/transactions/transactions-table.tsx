@@ -457,6 +457,39 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={isRebuildOpen} onOpenChange={setIsRebuildOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rebuild Transaction History</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will re-fetch transactions from your bank for the selected
+              period. Existing transactions will be overwritten.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="rebuild-start-date">Import transactions from</Label>
+            <Input
+              id="rebuild-start-date"
+              type="date"
+              value={rebuildStartDate}
+              onChange={(e) => setRebuildStartDate(e.target.value)}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleFullRebuild} disabled={isSyncing}>
+              {isSyncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Rebuilding...
+                </>
+              ) : (
+                "Confirm & Rebuild"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

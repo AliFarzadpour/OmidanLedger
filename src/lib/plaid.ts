@@ -99,7 +99,7 @@ export async function syncAndCategorizePlaidTransactions({
   userId: string;
   bankAccountId: string;
   fullSync?: boolean;
-  startDate?: string; // YYYY-MM-DD
+  startDate?: string;
 }) {
   const response = await fetch('/api/plaid/sync-transactions', {
     method: 'POST',
