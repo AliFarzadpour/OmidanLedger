@@ -89,6 +89,10 @@ export default function SmartRulesPage() {
   const [l1, setL1] = useState('');
   const [l2, setL2] = useState('');
   const [propertyId, setPropertyId] = useState('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey, direction: SortDirection }>({ key: 'originalKeyword', direction: 'ascending' });
   
   const propertiesQuery = useMemoFirebase(() => {
     if (!user) return null;
