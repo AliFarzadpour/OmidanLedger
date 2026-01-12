@@ -89,11 +89,11 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   const [filterCategory, setFilterCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [isRebuildOpen, setIsRebuildOpen] = useState(false);
-  const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
-    // default = Jan 1 of current year
-    const now = new Date();
-    return `${now.getFullYear()}-01-01`;
-  });
+const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
+  // default = Jan 1 of current year
+  const now = new Date();
+  return `${now.getFullYear()}-01-01`;
+});
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -157,30 +157,30 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleFullRebuild = async () => {
-    if (!user) return;
-  
-    setIsSyncing(true);
-    try {
-      const result = await syncAndCategorizePlaidTransactions({
-        userId: user.uid,
-        bankAccountId: dataSource.id,
-        fullSync: true,
-        startDate: rebuildStartDate,
-      });
-  
-      toast({
-        title: 'Rebuild Complete',
-        description: `Backfilled ${result.count ?? 0} transactions from ${result.start_date ?? rebuildStartDate}.`,
-      });
-  
-      setIsRebuildOpen(false);
-      refetch();
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Rebuild Failed', description: error.message });
-    } finally {
-      setIsSyncing(false);
-    }
-  };
+  if (!user) return;
+
+  setIsSyncing(true);
+  try {
+    const result = await syncAndCategorizePlaidTransactions({
+      userId: user.uid,
+      bankAccountId: dataSource.id,
+      fullSync: true,
+      startDate: rebuildStartDate,
+    });
+
+    toast({
+      title: 'Rebuild Complete',
+      description: `Backfilled ${result.count ?? 0} transactions from ${result.start_date ?? rebuildStartDate}.`,
+    });
+
+    setIsRebuildOpen(false);
+    refetch();
+  } catch (error: any) {
+    toast({ variant: 'destructive', title: 'Rebuild Failed', description: error.message });
+  } finally {
+    setIsSyncing(false);
+  }
+};
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
     if (!user || !firestore) return;
@@ -458,6 +458,51 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <AlertDialog open={isRebuildOpen} onOpenChange={setIsRebuildOpen}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Rebuild transactions from a start date</AlertDialogTitle>
+      <AlertDialogDescription>
+        This will delete existing transactions for this account and re-download from the selected date.
+        Use this if you want a full year (example: 01/01/2025).
+      </AlertDialogDescription>
+    </AlertDialogHeader>
+
+    <div className="grid gap-3 py-2">
+      <Label htmlFor="rebuildStart">Start date (YYYY-MM-DD)</Label>
+      <Input
+        id="rebuildStart"
+        value={rebuildStartDate}
+        onChange={(e) => setRebuildStartDate(e.target.value)}
+        placeholder="2025-01-01"
+      />
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setRebuildStartDate(`${new Date().getFullYear()}-01-01`)}
+        >
+          This year
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setRebuildStartDate(`${new Date().getFullYear() - 1}-01-01`)}
+        >
+          Last year
+        </Button>
+      </div>
+    </div>
+
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction onClick={handleFullRebuild}>
+        Rebuild Now
+      </AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
     </>
   );
 }
@@ -619,5 +664,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    
