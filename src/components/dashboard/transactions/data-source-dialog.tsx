@@ -33,11 +33,9 @@ import { Button } from '@/components/ui/button';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
-import { createLinkToken, createBankAccountFromPlaid } from '@/lib/plaid';
+import { createLinkToken, exchangePublicToken } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
 import { PlaidLinkOnSuccessMetadata, usePlaidLink } from 'react-plaid-link';
-import { Label } from '@/components/ui/label';
-import { exchangePublicToken } from '@/lib/plaid';
 
 const dataSourceSchema = z.object({
   accountName: z.string().min(1, 'Account name is required.'),
@@ -97,25 +95,13 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     setIsSubmitting(true);
   
     try {
-      if (isEditMode && dataSource?.id) {
-        await exchangePublicToken({
-          publicToken: public_token,
-          userId: activeUserId,
-          accountId: dataSource.id,
-        });
-  
-        toast({ title: "Re-linked", description: "Bank connection refreshed." });
-        onOpenChange(false);
-        return;
-      }
-  
-      await createBankAccountFromPlaid({
-        userId: activeUserId,
+      await exchangePublicToken({
         publicToken: public_token,
-        metadata: metadata,
+        userId: activeUserId,
+        metadata: metadata, // Pass metadata here
       });
   
-      toast({ title: "Connected", description: "Account(s) added successfully." });
+      toast({ title: isEditMode ? "Re-linked Successfully" : "Connected", description: "Account data is being refreshed." });
       onOpenChange(false);
     } catch (error: any) {
       console.error("Plaid Success Error:", error);
@@ -206,47 +192,47 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-3 pt-4">
-            <FormField
-              control={form.control}
-              name="importStart"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Import Transactions From</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
-                      <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
-                      <SelectItem value="allTime">All available time</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          <Button
-            onClick={handleContinueToPlaid}
-            className="w-full bg-blue-600 hover:bg-blue-700"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Launching...' : isEditMode ? 'Re-link with Plaid' : 'Connect with Plaid'}
-          </Button>
-        </div>
+        <Form {...form}>
+          <div className="space-y-3 pt-4">
+              <FormField
+                control={form.control}
+                name="importStart"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Import Transactions From</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
+                        <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
+                        <SelectItem value="allTime">All available time</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            <Button
+              onClick={handleContinueToPlaid}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Launching...' : isEditMode ? 'Re-link with Plaid' : 'Connect with Plaid'}
+            </Button>
+          </div>
 
-        {!isPlaidAccount && !isEditMode && (
-          <>
-            <div className="flex items-center gap-4 my-2">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">OR MANUAL ENTRY</span>
-                <Separator className="flex-1" />
-            </div>
+          {!isPlaidAccount && !isEditMode && (
+            <>
+              <div className="flex items-center gap-4 my-2">
+                  <Separator className="flex-1" />
+                  <span className="text-xs text-muted-foreground">OR MANUAL ENTRY</span>
+                  <Separator className="flex-1" />
+              </div>
 
-            <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField control={form.control} name="accountName" render={({ field }) => (
                   <FormItem><FormLabel>Account Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
@@ -274,9 +260,9 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
                   </Button>
                 </DialogFooter>
               </form>
-            </Form>
-          </>
-        )}
+            </>
+          )}
+        </Form>
       </DialogContent>
     </Dialog>
   );
