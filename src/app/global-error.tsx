@@ -28,7 +28,6 @@ export default function GlobalError({
                 fontFamily: 'monospace',
                 fontSize: '0.875rem',
                 color: '#333',
-                maxHeight: '400px',
                 overflowY: 'auto'
               }}
             >
