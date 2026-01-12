@@ -24,7 +24,7 @@ import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 const primaryCategoryColors: Record<string, string> = {
@@ -454,48 +454,6 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleClearTransactions}>Continue</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={isRebuildOpen} onOpenChange={setIsRebuildOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rebuild transactions from a start date</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will delete existing transactions for this account and re-download from the selected date.
-              Use this if you want a full year (example: 01/01/2025).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="grid gap-3 py-2">
-            <Label htmlFor="rebuildStart">Start date (YYYY-MM-DD)</Label>
-            <Input
-              id="rebuildStart"
-              value={rebuildStartDate}
-              onChange={(e) => setRebuildStartDate(e.target.value)}
-              placeholder="2025-01-01"
-            />
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRebuildStartDate(`${new Date().getFullYear()}-01-01`)}
-              >
-                This year
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setRebuildStartDate(`${new Date().getFullYear() - 1}-01-01`)}
-              >
-                Last year
-              </Button>
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleFullRebuild}>
-              Rebuild Now
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
