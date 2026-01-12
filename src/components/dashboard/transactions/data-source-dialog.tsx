@@ -43,6 +43,9 @@ const dataSourceSchema = z.object({
   bankName: z.string().min(1, 'Bank name is required.'),
   accountType: z.enum(['checking', 'savings', 'credit-card', 'cash', 'credit', 'other']),
   accountNumber: z.string().optional(),
+
+  // NEW:
+  importStart: z.enum(['thisYear', 'lastYear']).default('lastYear'),
 });
 
 type DataSourceFormValues = z.infer<typeof dataSourceSchema>;
@@ -80,6 +83,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
       bankName: '',
       accountType: 'checking',
       accountNumber: '',
+      importStart: 'lastYear',
     },
   });
 
@@ -151,7 +155,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         accountNumber: dataSource.accountNumber || '',
       });
     } else {
-      form.reset({ accountName: '', bankName: '', accountType: 'checking', accountNumber: '' });
+      form.reset({ accountName: '', bankName: '', accountType: 'checking', accountNumber: '', importStart: 'lastYear' });
     }
   }, [dataSource, form, isOpen]);
 
@@ -224,6 +228,27 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
                     </Select>
                   </FormItem>
                 )} />
+                 <FormField
+                  control={form.control}
+                  name="importStart"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Import Transactions From</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
+                          <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
                 <DialogFooter>
                   <Button type="submit" disabled={isSubmitting} variant="outline" className="w-full">
                     {isSubmitting ? 'Saving...' : 'Save Manual Account'}
