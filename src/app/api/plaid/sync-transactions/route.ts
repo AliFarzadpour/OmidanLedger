@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { db } from '@/lib/firebase-admin';
@@ -32,6 +33,17 @@ export async function POST(req: NextRequest) {
     if (!accountData) {
       return NextResponse.json({ message: 'Bank account not found' }, { status: 404 });
     }
+    
+    // --- START: Calculate Start Date ---
+    const importStart = accountData.importStart || 'lastYear';
+    const now = new Date();
+    const startDate =
+      importStart === 'thisYear'
+        ? new Date(now.getFullYear(), 0, 1)
+        : new Date(now.getFullYear() - 1, 0, 1);
+    const startYmd = startDate.toISOString().slice(0, 10); // "YYYY-MM-DD"
+    // --- END: Calculate Start Date ---
+
 
     // This is the CRITICAL field used to keep transactions inside THIS card
     const selectedPlaidAccountId: string | undefined = accountData.plaidAccountId;
@@ -48,7 +60,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'accessToken is required' }, { status: 400 });
     }
 
-    // Use ONE cursor field consistently (this matches your Clear behavior if you reset plaidSyncCursor)
+    // Use ONE cursor field consistently
     let cursor: string | undefined = accountData.plaidSyncCursor || undefined;
 
     // 2) Pull ALL pages (Plaid returns in chunks; has_more indicates more pages)
@@ -67,9 +79,13 @@ export async function POST(req: NextRequest) {
       cursor = next_cursor;
       hasMore = has_more;
 
-      // 3) Filter to ONLY transactions that belong to the selected account_id
-      const mineAdded = (added || []).filter(t => t.account_id === selectedPlaidAccountId);
-      const mineModified = (modified || []).filter(t => t.account_id === selectedPlaidAccountId);
+      // 3) Filter to ONLY transactions that belong to the selected account_id AND are after the start date
+      const mineAdded = (added || []).filter(t =>
+        t.account_id === selectedPlaidAccountId && t.date >= startYmd
+      );
+      const mineModified = (modified || []).filter(t =>
+        t.account_id === selectedPlaidAccountId && t.date >= startYmd
+      );
 
       totalFetched += (added?.length || 0) + (modified?.length || 0) + (removed?.length || 0);
 
