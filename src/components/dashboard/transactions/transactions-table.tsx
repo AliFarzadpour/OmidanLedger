@@ -156,6 +156,32 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
     }
   };
 
+  const handleFullRebuild = async () => {
+    if (!user) return;
+  
+    setIsSyncing(true);
+    try {
+      const result = await syncAndCategorizePlaidTransactions({
+        userId: user.uid,
+        bankAccountId: dataSource.id,
+        fullSync: true,
+        startDate: rebuildStartDate,
+      });
+  
+      toast({
+        title: 'Rebuild Complete',
+        description: `Backfilled ${result.count ?? 0} transactions from ${result.start_date ?? rebuildStartDate}.`,
+      });
+  
+      setIsRebuildOpen(false);
+      refetch();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Rebuild Failed', description: error.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
     if (!user || !firestore) return;
     const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
