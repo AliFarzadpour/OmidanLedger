@@ -24,7 +24,7 @@ import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800',
@@ -121,7 +121,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         querySnapshot.forEach((doc) => batch.delete(doc.ref));
         
         const bankAccountRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}`);
-        batch.update(bankAccountRef, { plaidCursor: null });
+        batch.update(bankAccountRef, { plaidCursor: null, plaidSyncCursor: null });
 
         await batch.commit();
         
@@ -135,27 +135,8 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleSyncTransactions = async () => {
-    if (!user) return;
-    setIsSyncing(true);
-    try {
-      const result = await syncAndCategorizePlaidTransactions({
-        userId: user.uid,
-        bankAccountId: dataSource.id,
-      });
-      toast({
-        title: 'Sync Complete!',
-        description: `Added ${result.count} new transactions.`,
-      });
-      refetch(); // Refetch data to update the UI
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: `Sync Failed for ${dataSource.accountName}`,
-        description: error.message,
-      });
-    } finally {
-      setIsSyncing(false);
-    }
+    // This component no longer directly handles sync. It's done from the parent list.
+    toast({ title: 'Sync Triggered', description: 'Check the data source card for status.' });
   };
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
@@ -269,7 +250,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const getSortIcon = (key: SortKey) => sortConfig.key === key ? <ArrowUpDown className="ml-2 h-4 w-4" /> : <ArrowUpDown className="ml-2 h-4 w-4 opacity-30" />;
   const hasTransactions = transactions && transactions.length > 0;
-  const isPlaidAccount = (dataSource as any).linkStatus === 'connected' || !!(dataSource as any).plaidAccessToken;
+  const isPlaidAccount = !!dataSource.plaidAccessToken;
 
   return (
     <>
@@ -280,11 +261,6 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
-            {isPlaidAccount && (
-              <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
-                {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />} Sync Transactions
-              </Button>
-            )}
             {!isPlaidAccount && (
               <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
             )}
@@ -587,4 +563,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
     );
 }
 
-    
