@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
             txRef,
             {
               id: docId,
-              plaidTransactionId: txId,
+              plaidTransactionId: docId,
               userId,
               bankAccountId,
               accountId: plaidAccountId,
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ✅ INCREMENTAL SYNC MODE
-    let cursor: string | null = acct.plaidCursor ?? null;
+    let cursor: string | null = acct.plaidSyncCursor ?? null;
     let hasMore = true;
 
     while (hasMore) {
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
           const txRef = txCol.doc(docId);
           batch.set(txRef, {
               id: docId,
-              plaidTransactionId: txId,
+              plaidTransactionId: docId,
               userId,
               bankAccountId,
               accountId: plaidAccountId,
