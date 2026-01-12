@@ -51,7 +51,7 @@ interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
-  accountType: 'checking' | 'savings' | 'credit-card' | 'cash' | 'credit' | 'other';
+  accountType: 'checking' | 'savings' | 'credit-card' | 'credit' | 'cash' | 'other';
   accountNumber?: string;
   plaidAccessToken?: string;
 }
@@ -71,7 +71,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
   const [linkToken, setLinkToken] = useState<string | null>(null);
   
   const isEditMode = !!dataSource;
-  const isPlaidAccount = !!dataSource?.plaidAccessToken;
+  const isPlaidAccount = (dataSource as any)?.linkStatus === 'connected' || !!(dataSource as any)?.accessToken;
 
   const form = useForm<DataSourceFormValues>({
     resolver: zodResolver(dataSourceSchema),
