@@ -304,11 +304,23 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
-            {isPlaidAccount && <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
-              {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-              Sync Transactions
-            </Button>}
-            <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
+            {isPlaidAccount && (
+              <div className="flex gap-2">
+                <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
+                  {isSyncing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Sync
+                </Button>
+
+                <Button onClick={() => setIsRebuildOpen(true)} disabled={isSyncing} variant="secondary">
+                  Rebuild
+                </Button>
+              </div>
+            )}
+            {!isPlaidAccount && <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>}
             <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>
           </div>
         </CardHeader>
@@ -607,3 +619,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
