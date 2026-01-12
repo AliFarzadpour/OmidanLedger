@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from 'react';
@@ -11,6 +10,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
+import { Input } from '../ui/input';
+import { Checkbox } from '../ui/checkbox';
+import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
+import { PlusCircle } from 'lucide-react';
 
 function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   l0: string; setL0: (val: string) => void;
@@ -33,21 +36,29 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
       </div>
        <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="l1">L1</Label>
-        <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0}>
-            <SelectTrigger id="l1" className="col-span-3 h-8"><SelectValue placeholder="Select L1..." /></SelectTrigger>
-            <SelectContent>
-                {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
-            </SelectContent>
-        </Select>
+        <div className="col-span-3 flex gap-1">
+            <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0}>
+                <SelectTrigger id="l1" className="h-8"><SelectValue placeholder="Select L1..." /></SelectTrigger>
+                <SelectContent>
+                    {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
+                </SelectContent>
+            </Select>
+            {l1 === '--add-new--' && <Input placeholder="New L1 Category" onChange={e => setL1(e.target.value)} className="h-8"/>}
+        </div>
       </div>
        <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="l2">L2</Label>
-        <Select value={l2} onValueChange={val => { setL2(val); }} disabled={!l1}>
-            <SelectTrigger id="l2" className="col-span-3 h-8"><SelectValue placeholder="Select L2..." /></SelectTrigger>
-            <SelectContent>
-                {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-            </SelectContent>
-        </Select>
+         <div className="col-span-3 flex gap-1">
+            <Select value={l2} onValueChange={val => { setL2(val); }} disabled={!l1 || l1 === '--add-new--'}>
+                <SelectTrigger id="l2" className="h-8"><SelectValue placeholder="Select L2..." /></SelectTrigger>
+                <SelectContent>
+                    {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
+                </SelectContent>
+            </Select>
+            {l2 === '--add-new--' && <Input placeholder="New L2 Category" onChange={e => setL2(e.target.value)} className="h-8"/>}
+        </div>
       </div>
     </div>
   );
@@ -76,6 +87,8 @@ export function BatchEditDialog({
   const [l0, setL0] = React.useState('');
   const [l1, setL1] = React.useState('');
   const [l2, setL2] = React.useState('');
+  const [l3, setL3] = React.useState(''); // NEW: L3 state
+  const [createRule, setCreateRule] = React.useState(false); // NEW: Smart Rule state
 
 
   const propertiesQuery = useMemoFirebase(() => {
@@ -86,7 +99,9 @@ export function BatchEditDialog({
 
   const handleSave = async () => {
     if (!user || !firestore || transactions.length === 0) return;
-    const hasChanges = costCenter || reviewStatus || (l0 && l1 && l2);
+    const hasCategoryChange = l0 && l1 && l2;
+    const hasChanges = costCenter || reviewStatus || hasCategoryChange;
+
     if (!hasChanges) {
         toast({ variant: 'destructive', title: 'No action selected', description: 'Please choose a property, status, or category to apply.' });
         return;
@@ -94,6 +109,7 @@ export function BatchEditDialog({
 
     setIsSaving(true);
     const batch = writeBatch(firestore);
+    const uniqueDescriptions = new Set<string>();
 
     transactions.forEach(tx => {
         if (tx.bankAccountId) {
@@ -101,8 +117,10 @@ export function BatchEditDialog({
             const updates: any = {};
             if (costCenter) updates.costCenter = costCenter === '--clear--' ? null : costCenter;
             if (reviewStatus) updates.reviewStatus = reviewStatus;
-            if (l0 && l1 && l2) {
-                updates.categoryHierarchy = { l0, l1, l2, l3: tx.categoryHierarchy.l3 || '' };
+            
+            if (hasCategoryChange) {
+                updates.categoryHierarchy = { l0, l1, l2, l3: l3 || tx.categoryHierarchy.l3 || '' };
+                uniqueDescriptions.add(tx.description);
             }
             batch.update(txRef, updates);
         }
@@ -110,6 +128,21 @@ export function BatchEditDialog({
 
     try {
         await batch.commit();
+
+        if (createRule && hasCategoryChange && uniqueDescriptions.size > 0) {
+            toast({ title: 'Processing Smart Rules...', description: `Creating rules for ${uniqueDescriptions.size} unique descriptions.` });
+            for (const desc of uniqueDescriptions) {
+                await learnCategoryMapping({
+                    transactionDescription: desc,
+                    primaryCategory: l0,
+                    secondaryCategory: l1,
+                    subcategory: l2,
+                    details: l3,
+                    userId: user.uid,
+                });
+            }
+        }
+
         toast({ title: 'Batch Update Successful', description: `${transactions.length} transactions have been updated.`});
         onSuccess();
         onOpenChange(false);
@@ -148,10 +181,16 @@ export function BatchEditDialog({
            
            <div className="space-y-2">
                 <Label>Assign New Category</Label>
-                <HierarchicalCategorySelector l0={l0} setL0={setL0} l1={l1} setL1={setL1} l2={l2} setL2={setL2} />
+                <div className="p-4 border rounded-md bg-muted/50 space-y-3">
+                    <HierarchicalCategorySelector l0={l0} setL0={setL0} l1={l1} setL1={setL1} l2={l2} setL2={setL2} />
+                    <div className="grid grid-cols-4 items-center gap-4">
+                        <Label htmlFor="l3">L3 (Detail)</Label>
+                        <Input id="l3" value={l3} onChange={e => setL3(e.target.value)} className="col-span-3 h-8 bg-white" placeholder="Vendor or specific detail..."/>
+                    </div>
+                </div>
            </div>
 
-           <div className="space-y-2">
+            <div className="space-y-2">
                 <Label>Set Review Status</Label>
                 <Select value={reviewStatus} onValueChange={setReviewStatus}>
                     <SelectTrigger>
@@ -165,6 +204,12 @@ export function BatchEditDialog({
                     </SelectContent>
                 </Select>
            </div>
+
+            <div className="flex items-center space-x-2 pt-4 border-t">
+                <Checkbox id="create-rule" checked={createRule} onCheckedChange={(checked) => setCreateRule(!!checked)} />
+                <Label htmlFor="create-rule">Create a new Smart Rule from this change</Label>
+            </div>
+
         </div>
 
         <DialogFooter>
