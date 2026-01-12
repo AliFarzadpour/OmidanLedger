@@ -93,11 +93,9 @@ service cloud.firestore {
     }
     
     match /properties/{propertyId} {
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      // UPDATED: Allow tenant to read the property doc, but not list all properties.
-      allow get: if isSignedIn() && (resource.data.userId == request.auth.uid || isTenantOfProperty(propertyId));
-      allow list: if isSignedIn(); // Listing is restricted to landlords via query `where('userId', '==', user.uid)`
-      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
       
       match /monthlyStats/{monthId} {
         allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
@@ -109,8 +107,9 @@ service cloud.firestore {
       }
       
       match /units/{unitId} {
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-        allow read, update, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
       
         match /documents/{documentId} {
             allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
