@@ -7,13 +7,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PlusCircle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Input } from '../ui/input';
-import { Checkbox } from '../ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
-import { PlusCircle } from 'lucide-react';
 
 function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
   l0: string; setL0: (val: string) => void;
@@ -49,7 +48,7 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
       </div>
        <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="l2">L2</Label>
-         <div className="col-span-3 flex gap-1">
+         <div className="col-span-2 flex gap-1">
             <Select value={l2} onValueChange={val => { setL2(val); }} disabled={!l1 || l1 === '--add-new--'}>
                 <SelectTrigger id="l2" className="h-8"><SelectValue placeholder="Select L2..." /></SelectTrigger>
                 <SelectContent>
@@ -87,8 +86,8 @@ export function BatchEditDialog({
   const [l0, setL0] = React.useState('');
   const [l1, setL1] = React.useState('');
   const [l2, setL2] = React.useState('');
-  const [l3, setL3] = React.useState(''); // NEW: L3 state
-  const [createRule, setCreateRule] = React.useState(false); // NEW: Smart Rule state
+  const [l3, setL3] = React.useState('');
+  const [createRule, setCreateRule] = React.useState(false);
 
 
   const propertiesQuery = useMemoFirebase(() => {
@@ -115,14 +114,16 @@ export function BatchEditDialog({
         if (tx.bankAccountId) {
             const txRef = doc(firestore, `users/${user.uid}/bankAccounts/${tx.bankAccountId}/transactions`, tx.id);
             const updates: any = {};
-            if (costCenter) updates.costCenter = costCenter === '--clear--' ? null : costCenter;
-            if (reviewStatus) updates.reviewStatus = reviewStatus;
+            if (costCenter) updates.costCenter = costCenter === '--no-change--' ? undefined : (costCenter === '--clear--' ? null : costCenter);
+            if (reviewStatus && reviewStatus !== '--no-change--') updates.reviewStatus = reviewStatus;
             
             if (hasCategoryChange) {
                 updates.categoryHierarchy = { l0, l1, l2, l3: l3 || tx.categoryHierarchy.l3 || '' };
                 uniqueDescriptions.add(tx.description);
             }
-            batch.update(txRef, updates);
+            if (Object.keys(updates).length > 0) {
+              batch.update(txRef, updates);
+            }
         }
     });
 
