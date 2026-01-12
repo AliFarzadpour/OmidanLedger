@@ -138,6 +138,7 @@ export async function POST(req: NextRequest) {
               reviewStatus: 'needs-review',
               status: 'posted',
               confidence: 0.5,
+              lastUpdatedAt: new Date(),
             },
             { merge: true }
           );
@@ -206,6 +207,7 @@ export async function POST(req: NextRequest) {
             reviewStatus: 'needs-review',
             status: 'posted',
             confidence: 0.5,
+            lastUpdatedAt: new Date(),
           },
           { merge: true }
         );
@@ -228,6 +230,7 @@ export async function POST(req: NextRequest) {
             merchantName: t.merchant_name ?? null,
             pending: t.pending ?? false,
             raw: t,
+            lastUpdatedAt: new Date(),
           },
           { merge: true }
         );
