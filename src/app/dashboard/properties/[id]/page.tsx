@@ -2,7 +2,7 @@
 'use client';
 
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
-import { doc, collection, query, writeBatch, deleteDoc, addDoc } from 'firebase/firestore';
+import { doc, collection, query, writeBatch, deleteDoc, addDoc, where } from 'firebase/firestore';
 import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
 import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText, BookOpen } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
@@ -343,7 +343,10 @@ export default function PropertyDetailPage() {
 
   const unitsQuery = useMemoFirebase(() => {
     if (!firestore || !id || !user) return null;
-    return query(collection(firestore, 'properties', id, 'units'));
+    return query(
+        collection(firestore, 'properties', id, 'units'),
+        where("userId", "==", user.uid)
+    );
   }, [firestore, id, user, refreshKey]);
 
   const { data: units, isLoading: isLoadingUnits, refetch: refetchUnits } = useCollection(unitsQuery);
