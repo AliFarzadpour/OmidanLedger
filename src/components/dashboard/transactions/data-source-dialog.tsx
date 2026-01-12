@@ -132,10 +132,24 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
 
     setIsSubmitting(true);
     try {
+        const importStart = form.getValues('importStart') || 'lastYear';
+        const now = new Date();
+
+        const startDate =
+          importStart === 'thisYear'
+            ? new Date(now.getFullYear(), 0, 1)
+            : new Date(now.getFullYear() - 1, 0, 1);
+
+        // days back (buffer +10 days), cap at 730
+        const daysRequested = Math.min(
+          730,
+          Math.ceil((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 10
+        );
+
         const tokenData = await createLinkToken({ 
             userId: activeUserId,
             accessToken: (dataSource as any)?.accessToken,
-            daysRequested: 730,
+            daysRequested,
         });
         
         const token = typeof tokenData === 'string' ? tokenData : (tokenData as any).link_token;
