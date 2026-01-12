@@ -11,7 +11,7 @@ export default function GlobalError({
     <html>
       <body style={{ margin: 0, padding: 0 }}>
         <div style={{ fontFamily: 'sans-serif', padding: '2rem', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', boxSizing: 'border-box' }}>
-          <div style={{ maxWidth: '800px', width: '100%' }}>
+          <div style={{ maxWidth: '1200px', width: '100%' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: '600' }}>Something went wrong!</h2>
             <p style={{ marginTop: '0.5rem', color: '#555' }}>
               An unhandled error occurred. Below is the full error message, which you can copy and paste.
