@@ -272,7 +272,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
             <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
-             <Button onClick={handleSyncTransactions} disabled={isSyncing}>
+            <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
                 {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
                 Sync Transactions
             </Button>

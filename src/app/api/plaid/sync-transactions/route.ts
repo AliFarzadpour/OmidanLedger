@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { db } from '@/lib/firebase-admin';
@@ -120,6 +121,7 @@ export async function POST(req: NextRequest) {
       // Update cursor & timestamps each page (safe + resumable)
       batch.set(accountRef, {
         plaidCursor: next_cursor,
+        plaidSyncCursor: next_cursor,
         lastSyncAt: new Date(),
         linkStatus: 'connected',
       }, { merge: true });
