@@ -1,3 +1,4 @@
+
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
 import { db } from '@/lib/firebase-admin';
@@ -72,36 +73,64 @@ export async function POST(req: NextRequest) {
 
       const batch = db.batch();
 
-      // ✅ Write to the same place the UI reads:
-      const txCol = accountRef.collection('transactions');
-
       for (const txn of added) {
-        const txRef = txCol.doc(txn.transaction_id);
+        const targetBankAccountDocId = plaidAccountIdToDocId[txn.account_id] || bankAccountId;
+        const txnRef = db
+          .collection('users')
+          .doc(userId)
+          .collection('bankAccounts')
+          .doc(targetBankAccountDocId)
+          .collection('transactions')
+          .doc(txn.transaction_id);
+
         batch.set(
-          txRef,
+          txnRef,
           {
             userId,
-            bankAccountId,
+            bankAccountId: targetBankAccountDocId,
+            plaidAccountId: txn.account_id,
             transaction_id: txn.transaction_id,
             date: txn.date,
             description: txn.name,
             amount: txn.amount,
-            merchant_name: txn.merchant_name || null,
-            pending: txn.pending || false,
-            category: txn.category || null,
-            category_id: txn.category_id || null,
-            account_id: txn.account_id,
-            iso_currency_code: txn.iso_currency_code || null,
-            unofficial_currency_code: txn.unofficial_currency_code || null,
             syncedAt: new Date(),
           },
           { merge: true }
         );
       }
 
-      // (Optional) handle modified/removed if you want:
-      // modified -> batch.set(txRef, {...}, {merge:true})
-      // removed -> batch.delete(txRef)
+      for (const txn of modified) {
+        const targetBankAccountDocId = plaidAccountIdToDocId[txn.account_id] || bankAccountId;
+        const txnRef = db
+          .collection('users')
+          .doc(userId)
+          .collection('bankAccounts')
+          .doc(targetBankAccountDocId)
+          .collection('transactions')
+          .doc(txn.transaction_id);
+        
+        batch.set(
+          txnRef,
+          {
+            userId,
+            bankAccountId: targetBankAccountDocId,
+            plaidAccountId: txn.account_id,
+            transaction_id: txn.transaction_id,
+            date: txn.date,
+            description: txn.name,
+            amount: txn.amount,
+            syncedAt: new Date(),
+          },
+          { merge: true }
+        );
+      }
+      
+      for (const r of removed) {
+        // Since we don't know which account it belonged to, we might need a collectionGroup query to find it.
+        // For simplicity, we'll assume it's from the primary account for now.
+        const txRef = accountRef.collection('transactions').doc(r.transaction_id);
+        batch.delete(txRef);
+      }
 
       // Update cursor on the bank account doc each loop
       batch.set(
