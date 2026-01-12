@@ -33,7 +33,7 @@ import { Button } from '@/components/ui/button';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Separator } from '@/components/ui/separator';
-import { createLinkToken, exchangePublicToken } from '@/lib/plaid';
+import { createLinkToken, exchangePublicToken, createBankAccountFromPlaid } from '@/lib/plaid';
 import { useToast } from '@/hooks/use-toast';
 import { PlaidLinkOnSuccessMetadata, usePlaidLink } from 'react-plaid-link';
 
@@ -95,11 +95,21 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
     setIsSubmitting(true);
   
     try {
-      await exchangePublicToken({
-        publicToken: public_token,
-        userId: activeUserId,
-        metadata: metadata, // Pass metadata here
-      });
+      if (isEditMode) {
+        // RE-LINKING an existing connection
+        await exchangePublicToken({
+          publicToken: public_token,
+          userId: activeUserId,
+          accountId: dataSource.id,
+        });
+      } else {
+        // NEW CONNECTION
+        await createBankAccountFromPlaid({
+          userId: activeUserId,
+          publicToken: public_token,
+          metadata,
+        });
+      }
   
       toast({ title: isEditMode ? "Re-linked Successfully" : "Connected", description: "Account data is being refreshed." });
       onOpenChange(false);
@@ -108,7 +118,7 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
       toast({
         variant: "destructive",
         title: "Connection Failed",
-        description: "Could not finalize the bank link.",
+        description: error.message || "Could not finalize the bank link.",
       });
     } finally {
       setIsSubmitting(false);
@@ -193,75 +203,75 @@ export function DataSourceDialog({ isOpen, onOpenChange, dataSource, userId }: D
         </DialogHeader>
         
         <Form {...form}>
-          <div className="space-y-3 pt-4">
-              <FormField
-                control={form.control}
-                name="importStart"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Import Transactions From</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
-                        <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
-                        <SelectItem value="allTime">All available time</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            <Button
-              onClick={handleContinueToPlaid}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Launching...' : isEditMode ? 'Re-link with Plaid' : 'Connect with Plaid'}
-            </Button>
-          </div>
-
-          {!isPlaidAccount && !isEditMode && (
-            <>
-              <div className="flex items-center gap-4 my-2">
-                  <Separator className="flex-1" />
-                  <span className="text-xs text-muted-foreground">OR MANUAL ENTRY</span>
-                  <Separator className="flex-1" />
-              </div>
-
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField control={form.control} name="accountName" render={({ field }) => (
-                  <FormItem><FormLabel>Account Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="bankName" render={({ field }) => (
-                  <FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
-                )} />
-                <FormField control={form.control} name="accountType" render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+            <div className="space-y-3 pt-4">
+                <FormField
+                    control={form.control}
+                    name="importStart"
+                    render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Import Transactions From</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                            <SelectTrigger>
+                            <SelectValue />
+                            </SelectTrigger>
+                        </FormControl>
                         <SelectContent>
-                            <SelectItem value="checking">Checking</SelectItem>
-                            <SelectItem value="savings">Savings</SelectItem>
-                            <SelectItem value="credit-card">Credit Card</SelectItem>
-                            <SelectItem value="cash">Cash</SelectItem>
+                            <SelectItem value="thisYear">Jan 1 of this year</SelectItem>
+                            <SelectItem value="lastYear">Jan 1 of last year</SelectItem>
+                            <SelectItem value="allTime">All available time</SelectItem>
                         </SelectContent>
-                    </Select>
-                  </FormItem>
-                )} />
-                <DialogFooter>
-                  <Button type="submit" disabled={isSubmitting} variant="outline" className="w-full">
-                    {isSubmitting ? 'Saving...' : 'Save Manual Account'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </>
-          )}
+                        </Select>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
+                <Button
+                    onClick={handleContinueToPlaid}
+                    className="w-full bg-blue-600 hover:bg-blue-700"
+                    disabled={isSubmitting}
+                >
+                    {isSubmitting ? 'Launching...' : isEditMode ? 'Re-link with Plaid' : 'Connect with Plaid'}
+                </Button>
+            </div>
+
+            {!isPlaidAccount && !isEditMode && (
+                <>
+                <div className="flex items-center gap-4 my-2">
+                    <Separator className="flex-1" />
+                    <span className="text-xs text-muted-foreground">OR MANUAL ENTRY</span>
+                    <Separator className="flex-1" />
+                </div>
+
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField control={form.control} name="accountName" render={({ field }) => (
+                    <FormItem><FormLabel>Account Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="bankName" render={({ field }) => (
+                    <FormItem><FormLabel>Bank Name</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="accountType" render={({ field }) => (
+                    <FormItem>
+                        <FormLabel>Type</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                            <SelectContent>
+                                <SelectItem value="checking">Checking</SelectItem>
+                                <SelectItem value="savings">Savings</SelectItem>
+                                <SelectItem value="credit-card">Credit Card</SelectItem>
+                                <SelectItem value="cash">Cash</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </FormItem>
+                    )} />
+                    <DialogFooter>
+                    <Button type="submit" disabled={isSubmitting} variant="outline" className="w-full">
+                        {isSubmitting ? 'Saving...' : 'Save Manual Account'}
+                    </Button>
+                    </DialogFooter>
+                </form>
+                </>
+            )}
         </Form>
       </DialogContent>
     </Dialog>
