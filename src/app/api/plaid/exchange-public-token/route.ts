@@ -1,8 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
-import { db } from '@/lib/firebase-admin'; // Using your Admin SDK to bypass client restrictions
-import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase-admin';
 
 const PLAID_ENV = (process.env.PLAID_ENV || 'sandbox') as 'sandbox' | 'development' | 'production';
 
@@ -23,65 +22,75 @@ export async function POST(req: NextRequest) {
     const { publicToken, userId } = await req.json();
 
     if (!publicToken || !userId) {
-      console.error('EXCHANGE_ERROR: Missing userId or publicToken');
       return NextResponse.json({ message: 'Missing required data' }, { status: 400 });
     }
 
-    // 1. Exchange public token for access token and item ID
-    const exchangeResponse = await plaidClient.itemPublicTokenExchange({
-      public_token: publicToken,
-    });
-    const { access_token, item_id } = exchangeResponse.data;
+    // 1) Exchange public_token -> access_token
+    const exchange = await plaidClient.itemPublicTokenExchange({ public_token: publicToken });
+    const { access_token, item_id } = exchange.data;
 
-    // 2. Use the new access_token to get account details
-    const accountsResponse = await plaidClient.accountsGet({
-        access_token: access_token,
-    });
-    const accounts = accountsResponse.data.accounts;
+    // 2) Save token at ITEM level (single source of truth)
+    const itemRef = db.collection('users').doc(userId).collection('plaidItems').doc(item_id);
+    await itemRef.set(
+      {
+        plaidItemId: item_id,
+        accessToken: access_token,
+        plaidAccessToken: access_token, // keep legacy
+        plaidCursor: null,
+        linkStatus: 'connected',
+        lastUpdatedAt: new Date(),
+      },
+      { merge: true }
+    );
 
-    // --- Firestore Batch Write ---
+    // 3) Fetch ALL accounts for this item and upsert into bankAccounts
+    const accountsResp = await plaidClient.accountsGet({ access_token });
+    const accounts = accountsResp.data.accounts;
+
     const batch = db.batch();
 
-    // 3. Store the Plaid item and access token in a separate collection
-    // This is good practice for managing linked items.
-    const itemRef = db.collection('users').doc(userId).collection('plaidItems').doc(item_id);
-    batch.set(itemRef, {
-      id: item_id,
-      userId: userId,
-      accessToken: access_token,
-      institutionId: accountsResponse.data.item.institution_id,
-      lastUpdatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    for (const acct of accounts) {
+      // Use plaidAccountId as the unique key to prevent duplicates
+      const bankAccountId = acct.account_id;
+      const bankRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId);
 
-    // 4. Create or update each bank account using the Plaid account_id as the document ID
-    accounts.forEach(account => {
-        const accountRef = db.collection('users').doc(userId).collection('bankAccounts').doc(account.account_id);
-        
-        batch.set(accountRef, {
-            id: account.account_id, // Ensure the ID is in the document
-            userId: userId,
-            plaidAccountId: account.account_id,
-            plaidItemId: item_id,
-            accountName: account.name,
-            accountNumber: account.mask,
-            accountType: (account.subtype === 'credit card' || account.type === 'credit')
-              ? 'credit-card'
-              : (account.subtype === 'savings' ? 'savings' : account.type),
-            bankName: accountsResponse.data.item.institution_id, // Store institution ID
-            linkStatus: 'connected',
-            lastUpdatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-    });
+      batch.set(
+        bankRef,
+        {
+          userId,
+          bankName: accountsResp.data.item?.institution_id ? 'Plaid' : 'Plaid',
+          accountName: acct.name || acct.official_name || 'Bank Account',
+          accountNumber: acct.mask || '',
+          accountType: acct.type === 'credit' ? 'credit-card' : (acct.subtype === 'savings' ? 'savings' : 'checking'),
 
-    // 5. Commit all writes at once
+          // keys for routing + joining
+          plaidItemId: item_id,
+          plaidAccountId: acct.account_id,
+
+          // token fields OPTIONAL here (we can store them, or rely on item doc)
+          // Storing them makes your current sync route work immediately
+          accessToken: access_token,
+          plaidAccessToken: access_token,
+
+          linkStatus: 'connected',
+          lastUpdatedAt: new Date(),
+        },
+        { merge: true }
+      );
+    }
+
     await batch.commit();
 
-    return NextResponse.json({ success: true, accounts_created: accounts.length });
+    return NextResponse.json({
+      success: true,
+      itemId: item_id,
+      accountsUpserted: accounts.length,
+    });
   } catch (error: any) {
     const plaidError = error.response?.data || error.message;
     console.error('PLAID_EXCHANGE_API_ERROR:', plaidError);
     return NextResponse.json(
-      { message: plaidError.error_message || 'Bank link failed' }, 
+      { message: plaidError.error_message || 'Bank link failed' },
       { status: 500 }
     );
   }
