@@ -34,7 +34,7 @@ export async function createLinkToken({
 }
 
 /**
- * FIXED: Exchanges a public_token for a permanent access_token.
+ * Exchanges a public_token for a permanent access_token.
  * Now correctly typed to accept userId and accountId for database updates.
  */
 export async function exchangePublicToken({ 
@@ -120,20 +120,24 @@ export async function syncAndCategorizePlaidTransactions({
 /**
  * Placeholder to satisfy AI repair flow imports
  */
-export async function fetchUserContext(userId: string) {
+export async function fetchUserContext(db: any, userId: string) {
   return { userId };
 }
 
 /**
  * Placeholder to satisfy AI repair flow imports
  */
-export async function getCategoryFromDatabase(description: string) {
-  return 'Uncategorized';
+export async function getCategoryFromDatabase(description: string, userContext: any, db: any) {
+  return null;
 }
 
 /**
  * Placeholder to satisfy AI repair flow imports
  */
-export async function categorizeWithHeuristics(description: string) {
-  return ['Uncategorized'];
+export async function categorizeWithHeuristics(description: string, amount: number, plaidCategory: any, userContext: any) {
+  return {
+    primary: 'Uncategorized',
+    secondary: 'Uncategorized',
+    sub: 'General Expense'
+  };
 }

@@ -1,6 +1,6 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
+import { Configuration, PlaidApi, PlaidEnvironments, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     );
     let savedCount = 0;
 
-    // ✅ FULL REBUILD MODE
+    // ✅ FULL REBUILD MODE - This logic is now corrected.
     if (fullSync && startDate) {
       const start = /^\d{4}-\d{2}-\d{2}$/.test(startDate)
         ? startDate
@@ -89,8 +89,9 @@ export async function POST(req: NextRequest) {
       const end = toISODate(new Date());
       let offset = 0;
       const count = 500;
+      let hasMore = true;
 
-      while (true) {
+      while (hasMore) {
         const resp = await plaidClient.transactionsGet({
           access_token: accessToken,
           start_date: start,
@@ -103,7 +104,10 @@ export async function POST(req: NextRequest) {
         });
 
         const txs = resp.data.transactions || [];
-        if (txs.length === 0) break;
+        if (txs.length === 0) {
+            hasMore = false;
+            continue;
+        }
         
         const batch = db.batch();
         for (const t of txs) {
@@ -135,9 +139,12 @@ export async function POST(req: NextRequest) {
         savedCount += txs.length;
 
         offset += txs.length;
-        if (offset >= (resp.data.total_transactions || 0)) break;
+        if (offset >= (resp.data.total_transactions || 0)) {
+            hasMore = false;
+        }
       }
       
+      // After a full rebuild, clear the cursor to force the next sync to be a fresh incremental one.
       await acctRef.set(
         { lastSyncAt: new Date(), lastSyncedAt: new Date(), plaidSyncCursor: null },
         { merge: true }
@@ -148,6 +155,9 @@ export async function POST(req: NextRequest) {
 
     // ✅ INCREMENTAL SYNC MODE
     let cursor: string | null = acct.plaidSyncCursor ?? null;
+    let added: PlaidTransaction[] = [];
+    let modified: PlaidTransaction[] = [];
+    let removed: RemovedTransaction[] = [];
     let hasMore = true;
 
     while (hasMore) {
@@ -155,49 +165,53 @@ export async function POST(req: NextRequest) {
         access_token: accessToken,
         cursor: cursor || undefined,
         count: 500,
+        options: {
+            include_personal_finance_category: true,
+        }
       });
 
       const data = resp.data;
       cursor = data.next_cursor;
       hasMore = !!data.has_more;
-      
-      const added = (resp.data.added || []).filter((t) => t.account_id === plaidAccountId);
-      const modified = (resp.data.modified || []).filter((t) => t.account_id === plaidAccountId);
-      const removed = (resp.data.removed || []).filter((r) => r.account_id === plaidAccountId);
-      const upserts = [...added, ...modified];
-      
-      if (upserts.length > 0) {
-        const batch = db.batch();
-        for (const t of upserts) {
-          const docId = t.transaction_id;
-          const txRef = txCol.doc(docId);
-          batch.set(txRef, {
-              id: docId,
-              plaidTransactionId: docId,
-              userId,
-              bankAccountId,
-              accountId: plaidAccountId,
-              date: t.date,
-              description: t.merchant_name || t.name || t.original_description || "",
-              amount: normalizeAmount(t.amount),
-              categoryHierarchy: { l0: 'Uncategorized', l1: '', l2: '', l3: '' },
-              confidence: 0,
-              status: 'review',
-              reviewStatus: 'needs-review',
-              merchantName: t.merchant_name ?? null,
-              pending: t.pending ?? false,
-              lastUpdatedAt: new Date(),
-          }, { merge: true });
-        }
-        await batch.commit();
-        savedCount += upserts.length;
-      }
 
-       if (removed.length > 0) {
-         const batch = db.batch();
-         removed.forEach(r => batch.delete(txCol.doc(r.transaction_id)));
-         await batch.commit();
+      added = added.concat(data.added.filter(tx => tx.account_id === plaidAccountId));
+      modified = modified.concat(data.modified.filter(tx => tx.account_id === plaidAccountId));
+      removed = removed.concat(data.removed.filter(r => r.account_id === plaidAccountId));
+    }
+    
+    const upserts = [...added, ...modified];
+    
+    if (upserts.length > 0) {
+      const batch = db.batch();
+      for (const t of upserts) {
+        const docId = t.transaction_id;
+        const txRef = txCol.doc(docId);
+        batch.set(txRef, {
+            id: docId,
+            plaidTransactionId: docId,
+            userId,
+            bankAccountId,
+            accountId: plaidAccountId,
+            date: t.date,
+            description: t.merchant_name || t.name || t.original_description || "",
+            amount: normalizeAmount(t.amount),
+            categoryHierarchy: { l0: 'Uncategorized', l1: '', l2: '', l3: '' },
+            confidence: 0,
+            status: 'review',
+            reviewStatus: 'needs-review',
+            merchantName: t.merchant_name ?? null,
+            pending: t.pending ?? false,
+            lastUpdatedAt: new Date(),
+        }, { merge: true });
       }
+      await batch.commit();
+      savedCount += upserts.length;
+    }
+
+      if (removed.length > 0) {
+        const batch = db.batch();
+        removed.forEach(r => batch.delete(txCol.doc(r.transaction_id)));
+        await batch.commit();
     }
 
     await acctRef.set(
