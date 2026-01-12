@@ -138,6 +138,8 @@ export async function categorizeWithHeuristics(description: string, amount: numb
   return {
     primary: 'Uncategorized',
     secondary: 'Uncategorized',
-    sub: 'General Expense'
+    sub: 'General Expense',
+    confidence: 0.5,
+    explanation: 'Default category assigned.',
   };
 }
