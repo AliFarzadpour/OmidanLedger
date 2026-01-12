@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
 import admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { fetchUserContext, categorizeWithHeuristics } from '@/lib/plaid';
 
 // ---------- Firebase Admin init ----------
 function initAdmin() {
@@ -54,6 +55,9 @@ export async function POST(req: NextRequest) {
 
     initAdmin();
     const db = getFirestore();
+    
+    // Fetch the user's categorization context (rules, vendors, etc.)
+    const userContext = await fetchUserContext(db, userId);
 
     const acctRef = db.doc(`users/${userId}/bankAccounts/${bankAccountId}`);
     const acctSnap = await acctRef.get();
@@ -65,7 +69,6 @@ export async function POST(req: NextRequest) {
     }
 
     const acct = acctSnap.data() as any;
-
     const accessToken = acct.plaidAccessToken || acct.accessToken;
     const plaidAccountId = acct.plaidAccountId || bankAccountId;
 
@@ -113,6 +116,10 @@ export async function POST(req: NextRequest) {
         for (const t of txs) {
           const docId = t.transaction_id;
           const txRef = txCol.doc(docId);
+          
+          // **CATEGORIZATION LOGIC RE-INTRODUCED**
+          const categoryResult = await categorizeWithHeuristics(t.name, normalizeAmount(t.amount), t.personal_finance_category, userContext);
+          
           batch.set(
             txRef,
             {
@@ -124,10 +131,15 @@ export async function POST(req: NextRequest) {
               date: t.date,
               description: t.merchant_name || t.name || t.original_description || '',
               amount: normalizeAmount(t.amount),
-              categoryHierarchy: { l0: 'Uncategorized', l1: '', l2: '', l3: '' },
-              confidence: 0,
-              status: 'review',
-              reviewStatus: 'needs-review',
+              categoryHierarchy: {
+                l0: categoryResult.primary,
+                l1: categoryResult.secondary,
+                l2: categoryResult.sub,
+                l3: categoryResult.details || '',
+              },
+              confidence: categoryResult.confidence,
+              reviewStatus: categoryResult.confidence < 0.7 ? 'needs-review' : 'approved',
+              aiExplanation: categoryResult.explanation,
               merchantName: t.merchant_name ?? null,
               pending: t.pending ?? false,
               lastUpdatedAt: new Date(),
@@ -144,7 +156,6 @@ export async function POST(req: NextRequest) {
         }
       }
       
-      // After a full rebuild, clear the cursor to force the next sync to be a fresh incremental one.
       await acctRef.set(
         { lastSyncAt: new Date(), lastSyncedAt: new Date(), plaidSyncCursor: null },
         { merge: true }
@@ -186,6 +197,10 @@ export async function POST(req: NextRequest) {
       for (const t of upserts) {
         const docId = t.transaction_id;
         const txRef = txCol.doc(docId);
+        
+        // **CATEGORIZATION LOGIC RE-INTRODUCED**
+        const categoryResult = await categorizeWithHeuristics(t.name, normalizeAmount(t.amount), t.personal_finance_category, userContext);
+        
         batch.set(txRef, {
             id: docId,
             plaidTransactionId: docId,
@@ -195,10 +210,15 @@ export async function POST(req: NextRequest) {
             date: t.date,
             description: t.merchant_name || t.name || t.original_description || "",
             amount: normalizeAmount(t.amount),
-            categoryHierarchy: { l0: 'Uncategorized', l1: '', l2: '', l3: '' },
-            confidence: 0,
-            status: 'review',
-            reviewStatus: 'needs-review',
+            categoryHierarchy: {
+              l0: categoryResult.primary,
+              l1: categoryResult.secondary,
+              l2: categoryResult.sub,
+              l3: categoryResult.details || '',
+            },
+            confidence: categoryResult.confidence,
+            reviewStatus: categoryResult.confidence < 0.7 ? 'needs-review' : 'approved',
+            aiExplanation: categoryResult.explanation,
             merchantName: t.merchant_name ?? null,
             pending: t.pending ?? false,
             lastUpdatedAt: new Date(),
