@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 
 interface TransactionToolbarProps {
   onSearch: (term: string) => void;
-  onDateRangeChange: (range: { from: string; to: string }) => void; // Updated
+  onDateRangeChange: (range: { from: string; to: string }) => void;
   onCategoryFilter: (category: string) => void;
   onStatusFilterChange: (statuses: string[]) => void;
   onClear: () => void;
@@ -23,13 +23,13 @@ interface TransactionToolbarProps {
 
 export function TransactionToolbar({ 
   onSearch, 
-  onDateRangeChange, // Updated
+  onDateRangeChange,
   onCategoryFilter, 
   onStatusFilterChange,
   onClear,
   onRefresh
 }: TransactionToolbarProps) {
-  const [dates, setDates] = React.useState({ from: '', to: '' }); // Updated state
+  const [dates, setDates] = React.useState({ from: '', to: '' });
   const [searchTerm, setSearchTerm] = React.useState('');
   const [category, setCategory] = React.useState('all');
   const [statusFilters, setStatusFilters] = React.useState<string[]>([]);
@@ -171,18 +171,6 @@ export function TransactionToolbar({
           </Button>
         )}
       </div>
-
-       <div className="flex items-center gap-2">
-           <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => setIsMergeToolOpen(true)}
-        >
-            <Combine className="mr-2 h-4 w-4" />
-            Merge Categories
-        </Button>
-       </div>
     </div>
     {isMergeToolOpen && <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} onSuccess={onRefresh} />}
     </>
