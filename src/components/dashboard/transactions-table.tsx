@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -24,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Loader2, PlusCircle } from 'lucide-react';
 
 const primaryCategoryColors: Record<string, string> = {
   'INCOME': 'bg-green-100 text-green-800',
@@ -37,6 +39,7 @@ interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
+  accountNumber?: string;
   plaidAccessToken?: string;
 }
 
@@ -82,9 +85,15 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'descending' });
   const [filterTerm, setFilterTerm] = useState('');
-  const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState({ from: '', to: '' }); // Updated
   const [filterCategory, setFilterCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [isRebuildOpen, setIsRebuildOpen] = useState(false);
+const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
+  // default = Jan 1 of current year
+  const now = new Date();
+  return `${now.getFullYear()}-01-01`;
+});
 
   const transactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user || !dataSource) return null;
@@ -120,7 +129,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         querySnapshot.forEach((doc) => batch.delete(doc.ref));
         
         const bankAccountRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}`);
-        batch.update(bankAccountRef, { plaidSyncCursor: null });
+        batch.update(bankAccountRef, { plaidSyncCursor: null, lastSyncAt: null, lastSyncedAt: null });
 
         await batch.commit();
         
@@ -134,8 +143,43 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   };
 
   const handleSyncTransactions = async () => {
-    // This component no longer directly handles sync. It's done from the parent list.
-    toast({ title: 'Sync Triggered', description: 'Check the data source card for status.' });
+    if (!user) return;
+    setIsSyncing(true);
+    try {
+      await syncAndCategorizePlaidTransactions({ userId: user.uid, bankAccountId: dataSource.id });
+      toast({ title: 'Sync Complete!' });
+      refetch();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: `Sync Failed`, description: error.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleFullRebuild = async () => {
+    if (!user) return;
+
+    setIsSyncing(true);
+    try {
+      const result = await syncAndCategorizePlaidTransactions({
+        userId: user.uid,
+        bankAccountId: dataSource.id,
+        fullSync: true,
+        startDate: rebuildStartDate,
+      });
+
+      toast({
+        title: 'Rebuild Complete',
+        description: `Backfilled ${result.count ?? 0} transactions from ${result.start_date ?? rebuildStartDate}.`,
+      });
+
+      setIsRebuildOpen(false);
+      refetch();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Rebuild Failed', description: error.message });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
@@ -198,14 +242,21 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       toast({ variant: "destructive", title: "Batch Update Failed", description: error.message });
     }
   };
-
+  
   const sortedTransactions = useMemo(() => {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
-       const l0 = t.categoryHierarchy?.l0 || '';
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory : true;
-       const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
+       const l0 = (t.categoryHierarchy?.l0 || '').toLowerCase();
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory.toLowerCase() : true;
+       
+       const txDate = new Date(t.date);
+       const fromDate = dateRange.from ? new Date(dateRange.from) : null;
+       const toDate = dateRange.to ? new Date(dateRange.to) : null;
+       const matchesDate = 
+          (!fromDate || txDate >= fromDate) &&
+          (!toDate || txDate <= toDate);
+          
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
     });
@@ -237,7 +288,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory, statusFilter]);
+  }, [transactions, sortConfig, filterTerm, dateRange, filterCategory, statusFilter]);
   
   const selectedTransactions = useMemo(() => {
     return sortedTransactions.filter(tx => selectedIds.includes(tx.id));
@@ -257,7 +308,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <CardTitle>Transaction History</CardTitle>
-            <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
+            <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName} ({dataSource.accountNumber})</span></CardDescription>
           </div>
           <div className="flex gap-2">
             {!isPlaidAccount && (
@@ -271,10 +322,10 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
           <div className="flex flex-col gap-4">
             <TransactionToolbar 
                 onSearch={setFilterTerm}
-                onDateChange={setFilterDate}
+                onDateRangeChange={setDateRange}
                 onCategoryFilter={setFilterCategory}
                 onStatusFilterChange={setStatusFilter}
-                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory('all'); setStatusFilter([]); }}
+                onClear={() => { setFilterTerm(''); setDateRange({ from: '', to: '' }); setFilterCategory('all'); setStatusFilter([]); }}
                 onRefresh={refetch}
             />
             {selectedIds.length > 0 && (
