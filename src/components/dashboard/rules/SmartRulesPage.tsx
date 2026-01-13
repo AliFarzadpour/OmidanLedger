@@ -73,6 +73,8 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
 type SortKey = 'originalKeyword' | 'category' | 'source' | 'propertyId';
 type SortDirection = 'ascending' | 'descending';
 
+const ADMIN_USER_ID = 'ZzqaKaPSOGgg6eALbbs5NY9DRVZ2';
+
 export default function SmartRulesPage() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -107,6 +109,8 @@ export default function SmartRulesPage() {
   const { data: properties, isLoading: isLoadingProperties } = useCollection(propertiesQuery);
   const propertyMap = useMemo(() => properties?.reduce((map, p) => ({...map, [p.id]: p.name}), {}) || {}, [properties]);
 
+  const isUserAdmin = user?.uid === ADMIN_USER_ID;
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -116,7 +120,7 @@ export default function SmartRulesPage() {
     setLoading(true);
     setFetchError(null);
     try {
-      const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
+      const collectionPath = isAdminMode && isUserAdmin ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
       const q = query(collection(firestore, collectionPath));
       const snapshot = await getDocs(q);
       
@@ -144,7 +148,7 @@ export default function SmartRulesPage() {
 
   useEffect(() => {
     fetchRules();
-  }, [user, firestore, isAdminMode]);
+  }, [user, firestore, isAdminMode, isUserAdmin]);
 
   const handleOpenDialog = (rule: any = null) => {
     if (rule) {
@@ -195,7 +199,7 @@ export default function SmartRulesPage() {
 
   const handleDelete = async (id: string) => {
     if (!user || !firestore) return;
-    const collectionPath = isAdminMode ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
+    const collectionPath = isAdminMode && isUserAdmin ? 'globalVendorMap' : `users/${user.uid}/categoryMappings`;
     try {
       await deleteDoc(doc(firestore, collectionPath, id));
       toast({ title: "Rule Deleted" });
@@ -278,22 +282,23 @@ export default function SmartRulesPage() {
             Smart Rules Manager
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isAdminMode 
+            {isAdminMode && isUserAdmin
               ? 'You are editing the GLOBAL master rules which apply to all users.' 
               : 'Managing your PERSONAL categorization rules for your account.'}
           </p>
         </div>
         <div className="flex items-center gap-4">
-            <div className="flex items-center space-x-2 bg-muted p-2 rounded-lg">
-                <Label htmlFor="admin-mode" className="font-normal text-sm">Personal</Label>
-                <Switch
-                    id="admin-mode"
-                    checked={isAdminMode}
-                    onCheckedChange={setIsAdminMode}
-                    disabled={user?.uid !== 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2'}
-                />
-                <Label htmlFor="admin-mode" className="font-normal text-sm">Admin</Label>
-            </div>
+            {isUserAdmin && (
+              <div className="flex items-center space-x-2 bg-muted p-2 rounded-lg">
+                  <Label htmlFor="admin-mode" className="font-normal text-sm">Personal</Label>
+                  <Switch
+                      id="admin-mode"
+                      checked={isAdminMode}
+                      onCheckedChange={setIsAdminMode}
+                  />
+                  <Label htmlFor="admin-mode" className="font-normal text-sm">Admin</Label>
+              </div>
+            )}
             <Button onClick={() => handleOpenDialog()} className="bg-blue-600 hover:bg-blue-700">
                 <Plus className="h-4 w-4 mr-2" /> Add Rule
             </Button>

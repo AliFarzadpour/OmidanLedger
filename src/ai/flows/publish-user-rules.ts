@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An admin-only flow to promote a user's personal categorization rules to the global ruleset.
@@ -10,7 +11,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue } from 'firebase-admin/firestore';
 
 // --- SECURITY: Replace with your actual Firebase User ID ---
-const ADMIN_USER_ID = 'gHZ9n7s2b9X8fJ2kP3s5t8YxVOE2'; // 🚨 IMPORTANT!
+const ADMIN_USER_ID = 'ZzqaKaPSOGgg6eALbbs5NY9DRVZ2'; // 🚨 IMPORTANT!
 
 // --- INITIALIZATION ---
 function getAdminDB() {
