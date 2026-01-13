@@ -11,7 +11,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
-import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
+import { UploadTransactionsDialog } from './upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,9 +20,9 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
-import { TransactionToolbar } from './transactions/transaction-toolbar';
+import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BatchEditDialog } from './transactions/batch-edit-dialog';
+import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, PlusCircle } from 'lucide-react';
@@ -618,5 +618,3 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
-
-    
