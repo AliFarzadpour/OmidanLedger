@@ -278,7 +278,9 @@ export default function SmartRulesPage() {
             Smart Rules Manager
           </h1>
           <p className="text-muted-foreground mt-1">
-            {isAdminMode ? 'Editing the Global Master Rules for all users.' : 'Managing your personal categorization rules.'}
+            {isAdminMode 
+              ? 'You are editing the GLOBAL master rules which apply to all users.' 
+              : 'Managing your PERSONAL categorization rules for your account.'}
           </p>
         </div>
         <div className="flex items-center gap-4">
