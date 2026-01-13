@@ -15,7 +15,6 @@ import { Loader2, Trash2, BrainCircuit, Edit2, Plus, ArrowUpDown, Search, Wand2,
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { repairTransactionsAction } from '@/ai/flows/repair-transactions';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
@@ -42,21 +41,29 @@ function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
       </div>
        <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="l1">Group (L1)</Label>
-        <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0} className="col-span-3">
-            <SelectTrigger id="l1" className="h-8 bg-white"><SelectValue placeholder="Select..." /></SelectTrigger>
-            <SelectContent>
-                {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
-            </SelectContent>
-        </Select>
+        <div className="col-span-3 flex gap-1">
+            <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0}>
+                <SelectTrigger id="l1" className="h-8 bg-white"><SelectValue placeholder="Select L1..." /></SelectTrigger>
+                <SelectContent>
+                    {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
+                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
+                </SelectContent>
+            </Select>
+            {l1 === '--add-new--' && <Input placeholder="New L1 Category" onChange={e => setL1(e.target.value)} className="h-8"/>}
+        </div>
       </div>
        <div className="grid grid-cols-4 items-center gap-4">
         <Label htmlFor="l2">Tax Line (L2)</Label>
-        <Select value={l2} onValueChange={setL2} disabled={!l1} className="col-span-3">
-            <SelectTrigger id="l2" className="h-8 bg-white"><SelectValue placeholder="Select..." /></SelectTrigger>
-            <SelectContent>
-                {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-            </SelectContent>
-        </Select>
+        <div className="col-span-2 flex gap-1">
+            <Select value={l2} onValueChange={setL2} disabled={!l1 || l1 === '--add-new--'}>
+                <SelectTrigger id="l2" className="h-8 bg-white"><SelectValue placeholder="Select L2..." /></SelectTrigger>
+                <SelectContent>
+                    {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
+                </SelectContent>
+            </Select>
+            {l2 === '--add-new--' && <Input placeholder="New L2 Category" onChange={e => setL2(e.target.value)} className="h-8"/>}
+        </div>
       </div>
     </div>
   );
@@ -76,7 +83,6 @@ export default function SmartRulesPage() {
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isAdminMode, setIsAdminMode] = useState(false);
-  const [isRepairing, setIsRepairing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -200,21 +206,6 @@ export default function SmartRulesPage() {
         setDeletingRuleId(null);
     }
   };
-  
-  const handleRepair = async () => {
-    if (!user) return;
-    setIsRepairing(true);
-    toast({ title: 'Repairing...', description: 'AI is scanning for incorrectly flagged items.' });
-    try {
-      const result = await repairTransactionsAction(user.uid);
-      toast({ title: 'Repair Complete', description: `${result.repairedCount} out of ${result.scannedCount} flagged items were re-categorized.` });
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
-    } finally {
-      setIsRepairing(false);
-    }
-  };
-
 
   const filteredAndSortedRules = useMemo(() => {
     let filtered = [...rules];
@@ -338,10 +329,6 @@ export default function SmartRulesPage() {
                 ))}
             </SelectContent>
         </Select>
-         <Button onClick={handleRepair} disabled={isRepairing} variant="outline" className="gap-2">
-          {isRepairing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-          Repair Categories
-        </Button>
       </div>
 
       <Card>
