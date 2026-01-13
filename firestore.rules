@@ -107,7 +107,7 @@ service cloud.firestore {
       }
       
       match /units/{unitId} {
-        allow read, list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow read, list, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
         allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
         allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
       
@@ -147,6 +147,11 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read, write: if isSignedIn();
+    }
+
+    // Allow admin to read the global vendor map
+    match /globalVendorMap/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == 'ZzqaKaPSOGgg6eALbbs5NY9DRVZ2';
     }
   }
 }
