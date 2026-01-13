@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -12,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import type { Transaction } from '@/components/dashboard/transactions-table';
+import type { Transaction } from '@/components/dashboard/transactions/transactions-table';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -106,23 +107,23 @@ export default function TransactionsPage() {
       }
 
       // 2. Otherwise, check if the data is older than 4 hours
-// Line 113: Explicitly type 'oldest' as Date
-const oldestUpdate = balanceEntries.reduce((oldest: Date, current: any) => {
-  const currentDate = current.lastUpdatedAt instanceof Date 
-    ? current.lastUpdatedAt 
-    : new Date((current.lastUpdatedAt as any).seconds * 1000);
-    
-  return currentDate < oldest ? currentDate : oldest;
-}, new Date());
+      // Line 113: Explicitly type 'oldest' as Date
+      const oldestUpdate = balanceEntries.reduce((oldest: Date, current: any) => {
+        const currentDate = current.lastUpdatedAt instanceof Date 
+          ? current.lastUpdatedAt 
+          : new Date((current.lastUpdatedAt as any).seconds * 1000);
+          
+        return currentDate < oldest ? currentDate : oldest;
+      }, new Date());
 
-// Line 116: Now 'oldestUpdate' is known to be a Date
-if (differenceInHours(new Date(), oldestUpdate) > 4) {
-  handleRefreshBalances();
-}
+      // Line 116: Now 'oldestUpdate' is known to be a Date
+      if (differenceInHours(new Date(), oldestUpdate) > 4) {
+        handleRefreshBalances();
+      }
     };
 
     checkRefresh();
-  }, [user, isLoadingBalances, handleRefreshBalances]); 
+  }, [user, isLoadingBalances, handleRefreshBalances, balances]); 
 
   useEffect(() => {
     if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
@@ -307,11 +308,11 @@ if (differenceInHours(new Date(), oldestUpdate) > 4) {
       {selectedDataSource && <TransactionsTable dataSource={selectedDataSource} />}
 
       <DataSourceDialog
-  isOpen={isDialogOpen}
-  onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingDataSource(null); }}
-  dataSource={editingDataSource}
-  userId={user?.uid} // <--- Add this line back once the Dialog supports it
-/>
+        isOpen={isDialogOpen}
+        onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingDataSource(null); }}
+        dataSource={editingDataSource}
+        userId={user?.uid}
+      />
 
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setDeleteAlertOpen}>
         <AlertDialogContent>

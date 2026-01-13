@@ -1,20 +1,20 @@
+
 'use client';
 
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { X, Calendar as CalendarIcon, Flag, BookUser, Combine } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { MergeCategoriesDialog } from './MergeCategoriesDialog';
+import { Label } from '@/components/ui/label';
 
 interface TransactionToolbarProps {
   onSearch: (term: string) => void;
-  onDateChange: (date: Date | undefined) => void;
+  onDateRangeChange: (range: { from: string; to: string }) => void; // Updated
   onCategoryFilter: (category: string) => void;
   onStatusFilterChange: (statuses: string[]) => void;
   onClear: () => void;
@@ -23,13 +23,13 @@ interface TransactionToolbarProps {
 
 export function TransactionToolbar({ 
   onSearch, 
-  onDateChange, 
+  onDateRangeChange, // Updated
   onCategoryFilter, 
   onStatusFilterChange,
   onClear,
   onRefresh
 }: TransactionToolbarProps) {
-  const [date, setDate] = React.useState<Date>();
+  const [dates, setDates] = React.useState({ from: '', to: '' }); // Updated state
   const [searchTerm, setSearchTerm] = React.useState('');
   const [category, setCategory] = React.useState('all');
   const [statusFilters, setStatusFilters] = React.useState<string[]>([]);
@@ -41,9 +41,12 @@ export function TransactionToolbar({
     if (onSearch) onSearch(value);
   };
 
-  const handleDateSelect = (d: Date | undefined) => {
-    setDate(d);
-    if (onDateChange) onDateChange(d);
+  const handleDateChange = (field: 'from' | 'to', value: string) => {
+    const newDates = { ...dates, [field]: value };
+    setDates(newDates);
+    if (newDates.from && newDates.to) {
+      onDateRangeChange(newDates);
+    }
   };
 
   const handleCategoryChange = (value: string) => {
@@ -61,108 +64,105 @@ export function TransactionToolbar({
 
   const clearAll = () => {
     setSearchTerm('');
-    setDate(undefined);
+    setDates({ from: '', to: '' });
     setCategory('all');
     setStatusFilters([]);
     if (onClear) onClear();
   };
 
-  const hasFilters = searchTerm || date || category !== 'all' || statusFilters.length > 0;
+  const hasFilters = searchTerm || dates.from || dates.to || category !== 'all' || statusFilters.length > 0;
 
   return (
     <>
-    <div className="flex flex-col md:flex-row items-center justify-between gap-4 py-4">
+    <div className="flex flex-col md:flex-row items-end justify-between gap-4 py-4">
       
       {/* Search & Filters */}
-      <div className="flex flex-1 items-center space-x-2 w-full">
-        <Input
-          placeholder="Search descriptions, merchants..."
-          value={searchTerm}
-          onChange={handleSearch}
-          className="h-9 w-full md:w-[300px]"
-        />
+      <div className="flex flex-1 flex-wrap items-end space-x-2 w-full">
+        <div className="flex-grow min-w-[200px]">
+          <Label>Search</Label>
+          <Input
+            placeholder="Descriptions, merchants..."
+            value={searchTerm}
+            onChange={handleSearch}
+            className="h-9"
+          />
+        </div>
         
-        {/* Date Filter */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn("h-9 justify-start text-left font-normal", !date && "text-muted-foreground")}
-            >
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {date ? format(date, "MMM dd, yyyy") : "Date"}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={handleDateSelect}
-              initialFocus
-            />
-          </PopoverContent>
-        </Popover>
+        {/* Date Range Filter */}
+        <div className="flex-grow">
+          <Label>From</Label>
+          <Input 
+            type="date" 
+            value={dates.from} 
+            onChange={e => handleDateChange('from', e.target.value)} 
+            className="h-9"
+          />
+        </div>
+         <div className="flex-grow">
+          <Label>To</Label>
+          <Input 
+            type="date" 
+            value={dates.to} 
+            onChange={e => handleDateChange('to', e.target.value)} 
+            className="h-9"
+          />
+        </div>
 
         {/* Category Filter */}
-        <Select onValueChange={handleCategoryChange} value={category}>
-             <SelectTrigger className="h-9 w-[150px]">
-                 <SelectValue placeholder="Category" />
-             </SelectTrigger>
-             <SelectContent>
-                 <SelectItem value="all">All Categories</SelectItem>
-                 <SelectItem value="Income">Income</SelectItem>
-                 <SelectItem value="Expense">Expense</SelectItem>
-                 <SelectItem value="Equity">Equity</SelectItem>
-                 <SelectItem value="Liability">Liability</SelectItem>
-                 <SelectItem value="Asset">Asset</SelectItem>
-             </SelectContent>
-        </Select>
+        <div className="flex-grow">
+          <Label>Category</Label>
+          <Select onValueChange={handleCategoryChange} value={category}>
+               <SelectTrigger className="h-9 w-full">
+                   <SelectValue placeholder="Category" />
+               </SelectTrigger>
+               <SelectContent>
+                   <SelectItem value="all">All Categories</SelectItem>
+                   <SelectItem value="Income">Income</SelectItem>
+                   <SelectItem value="Expense">Expense</SelectItem>
+                   <SelectItem value="Equity">Equity</SelectItem>
+                   <SelectItem value="Liability">Liability</SelectItem>
+                   <SelectItem value="Asset">Asset</SelectItem>
+               </SelectContent>
+          </Select>
+        </div>
 
         {/* Status Filter */}
-        <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="h-9">
-                    <Flag className="mr-2 h-4 w-4" />
-                    Status {statusFilters.length > 0 && `(${statusFilters.length})`}
-                </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-                <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuCheckboxItem
-                    checked={statusFilters.includes('approved')}
-                    onCheckedChange={() => handleStatusChange('approved')}
-                >
-                    <Flag className="mr-2 h-4 w-4 text-green-500" />
-                    Approved
-                </DropdownMenuCheckboxItem>
-                 <DropdownMenuCheckboxItem
-                    checked={statusFilters.includes('needs-review')}
-                    onCheckedChange={() => handleStatusChange('needs-review')}
-                >
-                    <Flag className="mr-2 h-4 w-4 text-yellow-500" />
-                    Needs Review
-                </DropdownMenuCheckboxItem>
-                 <DropdownMenuCheckboxItem
-                    checked={statusFilters.includes('incorrect')}
-                    onCheckedChange={() => handleStatusChange('incorrect')}
-                >
-                    <Flag className="mr-2 h-4 w-4 text-red-500" />
-                    Incorrect
-                </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-        </DropdownMenu>
-
-        <Button
-            variant="outline"
-            size="sm"
-            className="h-9"
-            onClick={() => setIsMergeToolOpen(true)}
-        >
-            <Combine className="mr-2 h-4 w-4" />
-            Merge Categories
-        </Button>
+        <div className="flex-grow">
+          <Label>Status</Label>
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="h-9 w-full justify-start">
+                      <Flag className="mr-2 h-4 w-4" />
+                      Status {statusFilters.length > 0 && `(${statusFilters.length})`}
+                  </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                  <DropdownMenuLabel>Filter by Status</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuCheckboxItem
+                      checked={statusFilters.includes('approved')}
+                      onCheckedChange={() => handleStatusChange('approved')}
+                  >
+                      <Flag className="mr-2 h-4 w-4 text-green-500" />
+                      Approved
+                  </DropdownMenuCheckboxItem>
+                   <DropdownMenuCheckboxItem
+                      checked={statusFilters.includes('needs-review')}
+                      onCheckedChange={() => handleStatusChange('needs-review')}
+                  >
+                      <Flag className="mr-2 h-4 w-4 text-yellow-500" />
+                      Needs Review
+                  </DropdownMenuCheckboxItem>
+                   <DropdownMenuCheckboxItem
+                      checked={statusFilters.includes('incorrect')}
+                      onCheckedChange={() => handleStatusChange('incorrect')}
+                  >
+                      <Flag className="mr-2 h-4 w-4 text-red-500" />
+                      Incorrect
+                  </DropdownMenuCheckboxItem>
+              </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
 
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearAll} className="h-9 px-2 lg:px-3">
@@ -171,6 +171,18 @@ export function TransactionToolbar({
           </Button>
         )}
       </div>
+
+       <div className="flex items-center gap-2">
+           <Button
+            variant="outline"
+            size="sm"
+            className="h-9"
+            onClick={() => setIsMergeToolOpen(true)}
+        >
+            <Combine className="mr-2 h-4 w-4" />
+            Merge Categories
+        </Button>
+       </div>
     </div>
     {isMergeToolOpen && <MergeCategoriesDialog isOpen={isMergeToolOpen} onOpenChange={setIsMergeToolOpen} onSuccess={onRefresh} />}
     </>

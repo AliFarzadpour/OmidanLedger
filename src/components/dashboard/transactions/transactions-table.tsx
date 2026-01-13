@@ -84,7 +84,7 @@ export function TransactionsTable({ dataSource }: TransactionsTableProps) {
   
   const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'date', direction: 'descending' });
   const [filterTerm, setFilterTerm] = useState('');
-  const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [dateRange, setDateRange] = useState({ from: '', to: '' }); // Updated
   const [filterCategory, setFilterCategory] = useState('');
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [isRebuildOpen, setIsRebuildOpen] = useState(false);
@@ -246,9 +246,16 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
     if (!transactions) return [];
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
-       const l0 = t.categoryHierarchy?.l0 || '';
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0.toLowerCase() === filterCategory.toLowerCase() : true;
-       const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
+       const l0 = (t.categoryHierarchy?.l0 || '').toLowerCase();
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory.toLowerCase() : true;
+       
+       const txDate = new Date(t.date);
+       const fromDate = dateRange.from ? new Date(dateRange.from) : null;
+       const toDate = dateRange.to ? new Date(dateRange.to) : null;
+       const matchesDate = 
+          (!fromDate || txDate >= fromDate) &&
+          (!toDate || txDate <= toDate);
+          
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
     });
@@ -280,7 +287,7 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
       return sortConfig.direction === 'ascending' ? aValue - bValue : bValue - aValue;
     });
     return filtered;
-  }, [transactions, sortConfig, filterTerm, filterDate, filterCategory, statusFilter]);
+  }, [transactions, sortConfig, filterTerm, dateRange, filterCategory, statusFilter]);
   
   const selectedTransactions = useMemo(() => {
     return sortedTransactions.filter(tx => selectedIds.includes(tx.id));
@@ -303,23 +310,9 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
             <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
           </div>
           <div className="flex gap-2">
-            {isPlaidAccount && (
-              <div className="flex gap-2">
-                <Button onClick={handleSyncTransactions} disabled={isSyncing} variant="outline">
-                  {isSyncing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                  )}
-                  Sync
-                </Button>
-
-                <Button onClick={() => setIsRebuildOpen(true)} disabled={isSyncing} variant="secondary">
-                  Rebuild
-                </Button>
-              </div>
+            {!isPlaidAccount && (
+              <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>
             )}
-            {!isPlaidAccount && <Button onClick={() => setUploadDialogOpen(true)}><Upload className="mr-2 h-4 w-4" /> Upload Statement</Button>}
             <Button variant="destructive" onClick={() => setClearAlertOpen(true)} disabled={!hasTransactions || isClearing}><Trash2 className="mr-2 h-4 w-4" /> Clear</Button>
           </div>
         </CardHeader>
@@ -328,10 +321,10 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
           <div className="flex flex-col gap-4">
             <TransactionToolbar 
                 onSearch={setFilterTerm}
-                onDateChange={setFilterDate}
+                onDateRangeChange={setDateRange}
                 onCategoryFilter={setFilterCategory}
                 onStatusFilterChange={setStatusFilter}
-                onClear={() => { setFilterTerm(''); setFilterDate(undefined); setFilterCategory('all'); setStatusFilter([]); }}
+                onClear={() => { setFilterTerm(''); setDateRange({ from: '', to: '' }); setFilterCategory('all'); setStatusFilter([]); }}
                 onRefresh={refetch}
             />
             {selectedIds.length > 0 && (
