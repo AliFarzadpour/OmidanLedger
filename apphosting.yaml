@@ -14,3 +14,5 @@ env:
     secret: PLAID_SECRET
   - variable: PLAID_ENV
     value: "production"
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    secret: NEXT_PUBLIC_FIREBASE_API_KEY
