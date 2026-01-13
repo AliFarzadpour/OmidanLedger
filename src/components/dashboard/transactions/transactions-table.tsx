@@ -24,7 +24,7 @@ import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './transactions/batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 const primaryCategoryColors: Record<string, string> = {
@@ -618,3 +618,5 @@ function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onS
         </Popover>
     );
 }
+
+    
