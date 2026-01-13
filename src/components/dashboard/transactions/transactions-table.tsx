@@ -11,7 +11,7 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { Upload, ArrowUpDown, Trash2, Pencil, RefreshCw, Edit, Flag, Check, XIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { useUser, useFirestore, useCollection, useMemoFirebase, updateDocumentNonBlocking } from '@/firebase';
 import { collection, doc, writeBatch, getDocs, setDoc, updateDoc, query, where } from 'firebase/firestore';
-import { UploadTransactionsDialog } from './upload-transactions-dialog';
+import { UploadTransactionsDialog } from './transactions/upload-transactions-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -20,11 +20,11 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { learnCategoryMapping } from '@/ai/flows/learn-category-mapping';
 import { syncAndCategorizePlaidTransactions } from '@/lib/plaid';
-import { TransactionToolbar } from './transaction-toolbar';
+import { TransactionToolbar } from './transactions/transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { BatchEditDialog } from './batch-edit-dialog';
+import { BatchEditDialog } from './transactions/batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 const primaryCategoryColors: Record<string, string> = {
@@ -247,7 +247,7 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
     let filtered = transactions.filter(t => {
        const matchesSearch = t.description.toLowerCase().includes(filterTerm.toLowerCase()) || t.amount.toString().includes(filterTerm);
        const l0 = t.categoryHierarchy?.l0 || '';
-       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0 === filterCategory : true;
+       const matchesCategory = filterCategory && filterCategory !== 'all' ? l0.toLowerCase() === filterCategory.toLowerCase() : true;
        const matchesDate = filterDate ? new Date(t.date).toDateString() === filterDate.toDateString() : true;
        const matchesStatus = statusFilter.length > 0 ? statusFilter.includes(t.reviewStatus || 'needs-review') : true;
        return matchesSearch && matchesCategory && matchesDate && matchesStatus;
@@ -454,39 +454,6 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={handleClearTransactions}>Continue</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={isRebuildOpen} onOpenChange={setIsRebuildOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Rebuild Transaction History</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will re-fetch transactions from your bank for the selected
-              period. Existing transactions will be overwritten.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4 space-y-2">
-            <Label htmlFor="rebuild-start-date">Import transactions from</Label>
-            <Input
-              id="rebuild-start-date"
-              type="date"
-              value={rebuildStartDate}
-              onChange={(e) => setRebuildStartDate(e.target.value)}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleFullRebuild} disabled={isSyncing}>
-              {isSyncing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Rebuilding...
-                </>
-              ) : (
-                "Confirm & Rebuild"
-              )}
-            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
