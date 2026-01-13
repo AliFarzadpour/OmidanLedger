@@ -102,14 +102,15 @@ function chunk<T>(arr: T[], size = 10) {
     return out;
 }
   
-async function fetchUnitsForProperties(firestore: any, propertyIds: string[]) {
-    if (propertyIds.length === 0) return [];
+async function fetchUnitsForProperties(firestore: any, propertyIds: string[], userId: string) {
+    if (propertyIds.length === 0 || !userId) return [];
     const chunks = chunk(propertyIds, 10);
     const all: any[] = [];
   
     for (const ids of chunks) {
       const qUnits = query(
         collectionGroup(firestore, "units"),
+        where("userId", "==", userId), // CRITICAL: Security rule compliance
         where("propertyId", "in", ids)
       );
       const snap = await getDocs(qUnits);
@@ -221,10 +222,10 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
   const { data: properties, isLoading: isLoadingProperties } = useCollection<Property>(propertiesQuery);
 
   useEffect(() => {
-    if (!properties || !firestore) return;
+    if (!properties || !firestore || !user?.uid) return;
     setIsLoadingUnits(true);
     const propertyIds = properties.map(p => p.id);
-    fetchUnitsForProperties(firestore, propertyIds)
+    fetchUnitsForProperties(firestore, propertyIds, user.uid)
         .then(units => {
             setAllUnits(units);
         })
@@ -234,7 +235,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
         .finally(() => {
             setIsLoadingUnits(false);
         })
-  }, [properties, firestore]);
+  }, [properties, firestore, user?.uid]);
 
   const incomeByPropertyOrUnit = useMemo(() => {
     const map: Record<string, number> = {};
