@@ -97,8 +97,8 @@ export default function TenantDashboard() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">Welcome Home</h1>
-        <p className="text-slate-500 text-sm">Manage your rent and residency</p>
+        <h1 className="text-2xl font-bold">Welcome Home, {tenantData?.name || tenantData?.email?.split('@')[0]}</h1>
+        <p className="text-slate-500 text-sm">Manage your rent and residency at {propertyData?.name || 'your home'}.</p>
       </header>
 
       {/* Main Stats & Payment */}

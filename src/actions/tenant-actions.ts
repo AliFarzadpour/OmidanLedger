@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAppUrl } from "@/lib/url-utils";
@@ -199,6 +200,26 @@ export async function sendTenantMessage(data: {
         });
 
         await batch.commit();
+
+        // After successfully creating the message, find the landlord's email and send a notification.
+        const landlordDoc = await db.collection('users').doc(landlordId).get();
+        if (landlordDoc.exists) {
+            const landlordEmail = landlordDoc.data()?.email;
+            if (landlordEmail) {
+                await resend.emails.send({
+                    from: process.env.RESEND_FROM || 'onboarding@omidanledger.com',
+                    to: landlordEmail,
+                    subject: `New Message from ${payload.senderName}: ${payload.threadSubject}`,
+                    html: `
+                        <p>You have a new message from ${payload.senderName} (${payload.senderEmail}) regarding "${payload.threadSubject}".</p>
+                        <p>Message:</p>
+                        <p><em>${payload.messageBody}</em></p>
+                        <p><a href="${getAppUrl()}/dashboard/operations">View in Operations Center</a></p>
+                    `
+                });
+            }
+        }
+        
         return { success: true, threadId: threadRef.id };
 
     } catch (e: any) {

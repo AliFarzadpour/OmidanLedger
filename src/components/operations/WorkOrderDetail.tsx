@@ -26,6 +26,8 @@ export function WorkOrderDetail({ workOrder, messages, tasks, onUpdate }: { work
     const [isEditOpen, setIsEditOpen] = useState(false);
 
     if (!user) return null;
+    
+    const unreadMessages = messages.filter(m => !m.isRead && m.author.id !== user.uid).length;
 
     return (
         <>
@@ -48,7 +50,9 @@ export function WorkOrderDetail({ workOrder, messages, tasks, onUpdate }: { work
                 <Tabs defaultValue="overview">
                     <TabsList>
                         <TabsTrigger value="overview">Overview</TabsTrigger>
-                        <TabsTrigger value="messages">Messages ({messages.length})</TabsTrigger>
+                        <TabsTrigger value="messages">
+                            Messages {unreadMessages > 0 && <span className="ml-2 bg-blue-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">{unreadMessages}</span>}
+                        </TabsTrigger>
                         <TabsTrigger value="tasks">Tasks ({tasks.length})</TabsTrigger>
                     </TabsList>
                     <TabsContent value="overview" className="mt-6">

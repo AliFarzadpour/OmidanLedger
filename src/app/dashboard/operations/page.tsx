@@ -87,7 +87,7 @@ export default function OperationsHubPage() {
   const hubItems = [
     {
       title: 'Inbox',
-      description: 'View work orders with recent messages.',
+      description: 'View messages from tenants and work orders.',
       href: '/dashboard/operations/work-orders?view=inbox',
       icon: Inbox,
       kpi: { value: openThreads?.length ?? '—', label: 'active threads' },
