@@ -1,16 +1,16 @@
-
 'use client';
 
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CreditCard, History, Home, AlertCircle, Wallet } from 'lucide-react';
+import { CreditCard, History, Home, AlertCircle, Wallet, MessageSquare } from 'lucide-react';
 import { PayRentButton } from '@/components/tenant/PayRentButton';
 import TenantPaymentHistory from '../history/page';
 import { useEffect, useState } from 'react';
 import { getPaymentSettings } from '@/lib/getPaymentSettings';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
+import { ContactLandlordDialog } from '@/components/tenant/ContactLandlordDialog';
 
 interface NormalizedSettings {
     stripeEnabled: boolean;
@@ -34,6 +34,13 @@ export default function TenantDashboard() {
   
   const { data: tenantData, isLoading: isLoadingTenant } = useDoc(tenantDocRef);
 
+  const propertyDocRef = useMemoFirebase(() => {
+    if (!firestore || !tenantData?.associatedPropertyId) return null;
+    return doc(firestore, 'properties', tenantData.associatedPropertyId);
+  }, [firestore, tenantData]);
+
+  const { data: propertyData, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
+
   useEffect(() => {
     async function fetchSettings() {
       if (!user || !tenantData?.associatedPropertyId) return;
@@ -53,9 +60,20 @@ export default function TenantDashboard() {
     }
   }, [tenantData, user]);
 
-  const isLoading = isLoadingTenant || loadingSettings;
-  const billing = tenantData?.billing || { balance: 0, rentAmount: 0 };
-  const isOverdue = billing.balance > 0;
+  const isLoading = isLoadingTenant || loadingSettings || isLoadingProperty;
+  
+  const leaseInfo = useMemo(() => {
+    if (!propertyData || !tenantData?.email) {
+        return { rentAmount: 0, balance: tenantData?.billing?.balance || 0 };
+    }
+    const tenantInProp = propertyData.tenants?.find((t: any) => t.email === tenantData.email);
+    return {
+        rentAmount: tenantInProp?.rentAmount || 0,
+        balance: tenantData?.billing?.balance || 0,
+    };
+  }, [propertyData, tenantData]);
+  
+  const isOverdue = leaseInfo.balance > 0;
 
   if (isLoading) {
     return (
@@ -90,7 +108,7 @@ export default function TenantDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-4xl font-bold text-slate-900">
-              ${(billing.rentAmount || 0).toLocaleString()}
+              ${(leaseInfo.rentAmount || 0).toLocaleString()}
             </div>
             <p className="text-xs text-slate-500 mt-2">Due on the 1st of every month</p>
           </CardContent>
@@ -102,7 +120,7 @@ export default function TenantDashboard() {
           </CardHeader>
           <CardContent>
             <div className={`text-4xl font-bold ${isOverdue ? 'text-red-600' : 'text-slate-900'}`}>
-              ${(billing.balance || 0).toLocaleString()}
+              ${(leaseInfo.balance || 0).toLocaleString()}
             </div>
             {isOverdue && (
               <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
@@ -130,10 +148,10 @@ export default function TenantDashboard() {
               )}
           </CardContent>
         </Card>
-        {user && billing.balance > 0 && (
+        {user && leaseInfo.balance > 0 && (
           <div className="space-y-4">
             {paymentSettings?.stripeEnabled && (
-              <PayRentButton amount={billing.balance} tenantId={user.uid} />
+              <PayRentButton amount={leaseInfo.balance} tenantId={user.uid} />
             )}
              {paymentSettings?.zelleEnabled && tenantData && (
                 <RecordPaymentModal
@@ -145,6 +163,25 @@ export default function TenantDashboard() {
             )}
           </div>
         )}
+      </div>
+
+      <div className="grid gap-4">
+        <Card>
+            <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5"/>Contact Landlord</CardTitle></CardHeader>
+            <CardContent>
+                <p className="text-sm text-muted-foreground mb-4">Submit a maintenance request or ask a question.</p>
+                {user && tenantData && (
+                    <ContactLandlordDialog 
+                        userId={user.uid} 
+                        landlordId={tenantData.landlordId} 
+                        propertyId={tenantData.associatedPropertyId}
+                        unitId={tenantData.associatedUnitId}
+                        tenantName={tenantData.name || user.email || 'Tenant'}
+                        tenantEmail={user.email!}
+                    />
+                )}
+            </CardContent>
+        </Card>
       </div>
 
       {/* Recent Activity */}

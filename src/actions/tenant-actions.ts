@@ -156,3 +156,53 @@ export async function finalizeInviteAcceptance(userId: string, inviteId: string,
 
     return { success: true };
 }
+
+
+export async function sendTenantMessage(data: {
+    userId: string;
+    landlordId: string;
+    propertyId: string;
+    unitId?: string;
+    threadSubject: string;
+    messageBody: string;
+    senderName: string;
+    senderEmail: string;
+}) {
+    const { userId, landlordId, ...payload } = data;
+    const db = admin.db;
+
+    try {
+        const batch = db.batch();
+        const threadRef = db.collection('users').doc(landlordId).collection('opsThreads').doc();
+        batch.set(threadRef, {
+            uid: threadRef.id,
+            subject: payload.threadSubject,
+            status: 'open',
+            priority: 'normal',
+            propertyId: payload.propertyId,
+            unitId: payload.unitId || null,
+            tenantId: userId,
+            lastMessageAt: Timestamp.now(),
+            createdAt: Timestamp.now(),
+            updatedAt: Timestamp.now()
+        });
+
+        const messageRef = threadRef.collection('messages').doc();
+        batch.set(messageRef, {
+            uid: messageRef.id,
+            threadId: threadRef.id,
+            senderType: 'tenant',
+            senderName: payload.senderName,
+            senderEmail: payload.senderEmail,
+            body: payload.messageBody,
+            createdAt: Timestamp.now()
+        });
+
+        await batch.commit();
+        return { success: true, threadId: threadRef.id };
+
+    } catch (e: any) {
+        console.error("Failed to send tenant message:", e);
+        throw new Error("Could not send message. Please try again later.");
+    }
+}
