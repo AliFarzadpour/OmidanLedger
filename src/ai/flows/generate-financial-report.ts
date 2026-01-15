@@ -1,5 +1,6 @@
-
 'use server';
+
+export const runtime = "nodejs";
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
