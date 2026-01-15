@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
@@ -7,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { CreditCard, History, Home, AlertCircle, Wallet, MessageSquare } from 'lucide-react';
 import { PayRentButton } from '@/components/tenant/PayRentButton';
 import TenantPaymentHistory from '../history/page';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { getPaymentSettings } from '@/lib/getPaymentSettings';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 import { ContactLandlordDialog } from '@/components/tenant/ContactLandlordDialog';
