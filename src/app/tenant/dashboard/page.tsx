@@ -1,8 +1,8 @@
 
 'use client';
 
-import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
+import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
+import { doc, collectionGroup, query, where } from 'firebase/firestore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreditCard, History, Home, AlertCircle, Wallet, MessageSquare } from 'lucide-react';
@@ -46,11 +46,18 @@ export default function TenantDashboard() {
     if (!firestore || !tenantProfile?.propertyId || !tenantProfile?.unitId) return null;
     return doc(firestore, 'properties', tenantProfile.propertyId, 'units', tenantProfile.unitId);
   }, [firestore, tenantProfile]);
+  
+  // NEW: Step 3: Fetch the tenant's transaction history from the ledger
+  const transactionsQuery = useMemoFirebase(() => {
+      if (!user || !firestore) return null;
+      // This queries the entire 'transactions' collection group for entries matching the tenant's ID
+      return query(collectionGroup(firestore, 'transactions'), where('tenantId', '==', user.uid));
+  }, [user, firestore]);
 
   const { data: propertyData, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
   const { data: unitData, isLoading: isLoadingUnit } = useDoc(unitDocRef);
-
-
+  const { data: transactions, isLoading: isLoadingTransactions } = useCollection(transactionsQuery);
+  
   useEffect(() => {
     async function fetchSettings() {
       if (!user || !tenantProfile?.propertyId || !tenantProfile?.landlordId) return;
@@ -70,35 +77,35 @@ export default function TenantDashboard() {
     }
   }, [tenantProfile, user]);
   
-  // The isLoading flag combines all data fetching states
-  const isLoading = isAuthLoading || isLoadingTenant || loadingSettings || isLoadingProperty || isLoadingUnit;
+  const isLoading = isAuthLoading || isLoadingTenant || loadingSettings || isLoadingProperty || isLoadingUnit || isLoadingTransactions;
   
-  // This logic now correctly checks both unit and property level for lease details
   const leaseInfo = useMemo(() => {
     const tenantEmail = tenantProfile?.email;
-    const balance = tenantProfile?.billing?.balance || 0;
+    
+    // NEW: Calculate balance from the fetched transactions
+    const balance = transactions?.reduce((acc, tx) => acc + (tx.amount || 0), 0) ?? 0;
     
     if (!tenantEmail) return { rentAmount: 0, balance };
 
-    // Find tenant-specific lease info, which could be in either the unit or property
     const tenantInUnit = unitData?.tenants?.find((t: any) => t.email === tenantEmail);
     const tenantInProp = propertyData?.tenants?.find((t: any) => t.email === tenantEmail);
     
-    // Determine rent by hierarchy:
-    // 1. Specific rent amount on the tenant record (most specific)
-    // 2. Rent set for the unit (for multi-family)
-    // 3. Rent set for the property (for single-family or as a fallback)
     const rentAmount =
-        tenantInUnit?.rentAmount ||
-        tenantInProp?.rentAmount ||
-        unitData?.financials?.rent ||
-        propertyData?.financials?.rent ||
+        toNum(tenantInUnit?.rentAmount) ||
+        toNum(tenantInProp?.rentAmount) ||
+        toNum(unitData?.financials?.rent) ||
+        toNum(propertyData?.financials?.rent) ||
         0;
 
     return { rentAmount, balance };
-  }, [tenantProfile, propertyData, unitData]);
+  }, [tenantProfile, propertyData, unitData, transactions]);
+
+  const toNum = (val: any) => {
+    const num = parseFloat(val);
+    return isNaN(num) ? 0 : num;
+  };
   
-  const isOverdue = leaseInfo.balance > 0;
+  const isOverdue = leaseInfo.balance < 0; // A negative balance means the tenant owes money
 
   if (isLoading) {
     return (
@@ -121,7 +128,7 @@ export default function TenantDashboard() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">Welcome Home, {tenantProfile?.name || tenantProfile?.email?.split('@')[0]}</h1>
+        <h1 className="text-2xl font-bold">Welcome Home, {tenantProfile?.email?.split('@')[0]}</h1>
         <p className="text-slate-500 text-sm">Manage your rent and residency at {propertyData?.name || 'your home'}.</p>
       </header>
 
@@ -145,13 +152,16 @@ export default function TenantDashboard() {
           </CardHeader>
           <CardContent>
             <div className={`text-4xl font-bold ${isOverdue ? 'text-red-600' : 'text-slate-900'}`}>
-              ${(leaseInfo.balance || 0).toLocaleString()}
+              ${Math.abs(leaseInfo.balance || 0).toLocaleString()}
             </div>
             {isOverdue && (
               <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
                 <AlertCircle className="h-3 w-3" /> Payment is currently due
               </p>
             )}
+             {!isOverdue && leaseInfo.balance > 0 && (
+                 <p className="text-xs text-green-600 mt-2">You have a credit on your account.</p>
+             )}
           </CardContent>
         </Card>
       </div>
@@ -173,14 +183,14 @@ export default function TenantDashboard() {
               )}
           </CardContent>
         </Card>
-        {user && leaseInfo.balance > 0 && (
+        {user && isOverdue && (
           <div className="space-y-4">
             {paymentSettings?.stripeEnabled && (
-              <PayRentButton amount={leaseInfo.balance} tenantId={user.uid} />
+              <PayRentButton amount={Math.abs(leaseInfo.balance)} tenantId={user.uid} />
             )}
              {paymentSettings?.zelleEnabled && tenantProfile && (
                 <RecordPaymentModal
-                    tenant={{ id: user.uid, firstName: tenantProfile.name || user.email }}
+                    tenant={{ id: user.uid, firstName: tenantProfile.email.split('@')[0] }}
                     propertyId={tenantProfile.propertyId}
                     unitId={tenantProfile.unitId}
                     landlordId={tenantProfile.landlordId}
@@ -202,7 +212,7 @@ export default function TenantDashboard() {
                         landlordId={tenantProfile.landlordId} 
                         propertyId={tenantProfile.propertyId}
                         unitId={tenantProfile.unitId}
-                        tenantName={tenantProfile.name || user.email || 'Tenant'}
+                        tenantName={tenantProfile.email.split('@')[0]}
                         tenantEmail={user.email!}
                     />
                 )}
@@ -211,7 +221,7 @@ export default function TenantDashboard() {
       </div>
 
       {/* Recent Activity */}
-      <TenantPaymentHistory />
+      <TenantPaymentHistory transactions={transactions || []} isLoading={isLoadingTransactions} />
     </div>
   );
 }

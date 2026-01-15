@@ -1,0 +1,175 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for reusable logic
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    function isServerProcess() {
+        return request.auth == null;
+    }
+
+    function isLandlordOfTenant(tenantUserId) {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(tenantUserId)).data.landlordId == request.auth.uid;
+    }
+
+    function isTenantOfProperty(propertyId) {
+        // Checks if the requesting user has an associatedPropertyId that matches the property they are trying to read.
+        return get(/databases/$(database)/documents/tenantProfiles/$(request.auth.uid)).data.propertyId == propertyId;
+    }
+
+    // Allow the "transactions" Collection Group queries defined in your index
+    // UPDATED: Allow tenant to read their own transactions
+    match /{path=**}/transactions/{transactionId} {
+        allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || 
+                       (isSignedIn() && resource.data.tenantId == request.auth.uid);
+    }
+
+    // Allow the "monthlyStats" Collection Group queries defined in your index
+    match /{path=**}/monthlyStats/{statsId} {
+        allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId);
+      // Deleting user docs is a sensitive operation, best handled by admin processes.
+      allow delete: if false;
+
+        match /bankAccounts/{bankAccountId} {
+          // Allow read/write/delete if the user owns the parent user document.
+          allow read, write, delete: if isOwner(userId);
+
+            match /transactions/{transactionId} {
+                // Inherit permissions from parent bank account.
+                allow read, delete: if isOwner(userId);
+                allow create, update: if isOwner(userId);
+            }
+        }
+        
+        match /bankBalances/{balanceId} {
+            // Allow user to read and write to their own bank balances
+            allow read, write, delete: if isOwner(userId);
+        }
+
+        match /categoryMappings/{mappingId} {
+            allow read, write, delete: if isOwner(userId);
+        }
+
+        match /admin_invoices/{invoiceId} {
+            allow read, list, write, delete: if isOwner(userId);
+        }
+
+        match /charges/{chargeId} {
+            allow read, list, write, delete: if isOwner(userId);
+        }
+
+        match /settings/{settingId} {
+          allow read, write: if isOwner(userId);
+        }
+
+        // --- NEW: Operations Center Rules ---
+        match /opsThreads/{threadId} {
+          allow read, write: if isOwner(userId);
+          match /messages/{messageId} {
+            allow read, write: if isOwner(userId);
+          }
+        }
+
+        match /opsTasks/{taskId} {
+          allow read, write: if isOwner(userId);
+        }
+
+        match /opsWorkOrders/{workOrderId} {
+          allow read, write: if isOwner(userId);
+        }
+    }
+    
+    match /properties/{propertyId} {
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || isTenantOfProperty(propertyId);
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+      match /monthlyStats/{monthId} {
+        allow read, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+      }
+      
+      match /documents/{documentId} {
+        allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow list: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+      }
+      
+      match /units/{unitId} {
+        allow read: if (isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid) || isTenantOfProperty(propertyId);
+        allow list, write: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      
+        match /documents/{documentId} {
+            allow read, write, delete: if isSignedIn() && get(/databases/$(database)/documents/properties/$(propertyId)).data.userId == request.auth.uid;
+        }
+      }
+    }
+    
+    // Rule for querying 'units' collection group.
+    // This allows a landlord to fetch all units across all their properties in one go.
+    match /{path=**}/units/{unitId} {
+       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    match /accounts/{accountId} {
+        // CORRECTED RULE: Use resource.data for read/delete
+        allow get, list, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+        // Use request.resource.data for create/update
+        allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /vendors/{vendorId} {
+      allow get, list, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+    
+    match /bills/{billId} {
+      allow get, list, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    match /invoices/{invoiceId} {
+      allow get, list, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+    }
+
+    // --- NEW: Tenant Profile Rules ---
+    match /tenantProfiles/{userId} {
+      allow get: if isOwner(userId);
+      allow create, update: if isServerProcess(); // Only server can create/update profiles
+    }
+
+    match /tenantInvites/{inviteId} {
+      // No one can read invites directly from the client.
+      allow read: if false;
+      // Server-side processes (unauthenticated) can create invites.
+      allow create: if isServerProcess();
+      // Server-side can update status, e.g. to 'accepted' or 'expired'.
+      allow update: if isServerProcess();
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // Allow admin to read the global vendor map
+    match /globalVendorMap/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == 'ZzqaKaPSOGgg6eALbbs5NY9DRVZ2';
+    }
+  }
+}

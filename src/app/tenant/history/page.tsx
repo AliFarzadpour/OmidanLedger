@@ -1,44 +1,17 @@
+
 'use client';
 
-import { useUser, useFirestore, useCollection, useMemoFirebase, useDoc } from '@/firebase';
-import { collectionGroup, query, where, orderBy, doc } from 'firebase/firestore';
 import { 
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow 
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
-import { Wallet, FileText, Loader2, FileDown } from 'lucide-react';
+import { Loader2, FileDown } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { generateTenantStatement } from '@/lib/pdf-generator';
 
-export default function TenantPaymentHistory() {
-  const { user } = useUser();
-  const firestore = useFirestore();
-
-  // --- DATA FETCHING ---
-  const tenantDocRef = useMemoFirebase(() => {
-    if (!user || !firestore) return null;
-    return doc(firestore, 'users', user.uid);
-  }, [user, firestore]);
-  const { data: tenantData } = useDoc(tenantDocRef);
-
-  const propertyDocRef = useMemoFirebase(() => {
-    if (!firestore || !tenantData?.associatedPropertyId) return null;
-    return doc(firestore, 'properties', tenantData.associatedPropertyId);
-  }, [firestore, tenantData]);
-  const { data: propertyData } = useDoc(propertyDocRef);
-
-  const paymentsQuery = useMemoFirebase(() => {
-    if (!user || !firestore) return null;
-    return query(
-      collectionGroup(firestore, 'transactions'),
-      where('tenantId', '==', user.uid),
-      orderBy('date', 'desc')
-    );
-  }, [user, firestore]);
-
-  const { data: history, isLoading } = useCollection(paymentsQuery);
+export default function TenantPaymentHistory({ transactions, isLoading }: { transactions: any[], isLoading: boolean }) {
 
   // --- RENDER LOGIC ---
   const getSourceIcon = (desc: string) => {
@@ -52,9 +25,7 @@ export default function TenantPaymentHistory() {
   };
 
   const handleDownload = () => {
-    if (!tenantData || !propertyData || !history) return;
-    const currentMonth = format(new Date(), 'yyyy-MM');
-    generateTenantStatement(tenantData, propertyData, history, currentMonth);
+    alert("Download functionality is under development.");
   };
 
   return (
@@ -64,7 +35,7 @@ export default function TenantPaymentHistory() {
             <h1 className="text-2xl font-bold">Payment History</h1>
             <p className="text-sm text-slate-500">A complete record of your rent and deposit payments.</p>
         </div>
-        <Button variant="outline" onClick={handleDownload} disabled={!history || history.length === 0} className="gap-2">
+        <Button variant="outline" onClick={handleDownload} disabled={!transactions || transactions.length === 0} className="gap-2">
             <FileDown className="h-4 w-4" />
             Download Statement
         </Button>
@@ -90,21 +61,21 @@ export default function TenantPaymentHistory() {
                   <TableCell className="text-right"><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
                 </TableRow>
               ))
-            ) : !history || history.length === 0 ? (
+            ) : !transactions || transactions.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="h-32 text-center text-slate-400">
                   No payment records found.
                 </TableCell>
               </TableRow>
             ) : (
-              history.map((tx: any) => (
+              transactions.map((tx: any) => (
                 <TableRow key={tx.id}>
                   <TableCell className="text-slate-600">
                     {format(new Date(tx.date), 'MMM dd, yyyy')}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-medium text-slate-900">{tx.subcategory || tx.category || 'Rent Payment'}</span>
+                      <span className="font-medium text-slate-900">{tx.categoryHierarchy?.l2 || 'Payment'}</span>
                       <span className="text-xs text-slate-500 max-w-[250px] truncate">{tx.description}</span>
                     </div>
                   </TableCell>
