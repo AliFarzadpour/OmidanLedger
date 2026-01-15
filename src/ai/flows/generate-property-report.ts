@@ -1,9 +1,8 @@
-
 'use server';
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db as adminDb } from '@/lib/admin-db';
+import { db as adminDb } from '@/lib/firebase-admin'; // Use the robust admin instance
 import type { Query, FieldFilter, OrderByDirection } from 'firebase-admin/firestore';
 
 // --- TOOLS ---
