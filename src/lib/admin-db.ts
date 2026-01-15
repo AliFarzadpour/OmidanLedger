@@ -1,5 +1,4 @@
-'use server';
-
+// This file is NOT a "use server" file. It's a server-side utility.
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { getApps, initializeApp, App, cert } from 'firebase-admin/app';
