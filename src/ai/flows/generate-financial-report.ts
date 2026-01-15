@@ -1,7 +1,5 @@
 'use server';
 
-export const runtime = "nodejs";
-
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { db as adminDb } from '@/lib/admin-db'; 
@@ -61,7 +59,7 @@ async function fetchTransactions(userId: string): Promise<Transaction[]> {
 }
 
 // Main Flow
-export const generateFinancialReportFlow = ai.defineFlow(
+const generateFinancialReportFlow = ai.defineFlow(
   {
     name: 'generateFinancialReportFlow',
     inputSchema: GenerateFinancialReportInputSchema,
