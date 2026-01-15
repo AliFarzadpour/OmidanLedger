@@ -3,44 +3,156 @@
 import { getAppUrl } from "@/lib/url-utils";
 import { Resend } from 'resend';
 import * as admin from '@/lib/firebase-admin';
+import { createHash, randomBytes } from 'crypto';
+import { Timestamp } from 'firebase-admin/firestore';
+import { sendTenantInviteEmail } from "@/lib/email";
+import { doc, getDoc, writeBatch } from 'firebase/firestore';
+
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function inviteTenant({ email, propertyId }: { email: string; propertyId: string }) {
-  try {
-    // Attempt to find the database instance from the admin module
-    // It is often exported as 'db' or 'admin.firestore()'
-    const db = admin.db || (admin.admin && admin.admin.firestore());
-    
-    if (!db) {
-      throw new Error("Could not initialize Firebase Admin Database");
+interface InviteTenantParams {
+  email: string;
+  propertyId: string;
+  unitId?: string;
+  landlordId: string;
+  landlordName: string;
+  propertyName: string;
+}
+
+export async function inviteTenantWithToken(params: InviteTenantParams) {
+    const { email, propertyId, unitId, landlordId, landlordName, propertyName } = params;
+
+    if (!email || !propertyId || !landlordId) {
+        throw new Error("Missing required parameters for invitation.");
+    }
+    const db = admin.db;
+
+    try {
+        // 1. Generate a secure, URL-safe token and its hash
+        const token = randomBytes(32).toString('hex');
+        const tokenHash = createHash('sha256').update(token).digest('hex');
+
+        // 2. Set an expiration date (e.g., 72 hours from now)
+        const expiresAt = Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000);
+
+        // 3. Create the invite document in a new top-level collection
+        const inviteRef = db.collection('tenantInvites').doc();
+        await inviteRef.set({
+            tenantEmail: email.toLowerCase(),
+            tokenHash,
+            expiresAt,
+            propertyId,
+            ...(unitId && { unitId }),
+            landlordId,
+            status: 'pending', // 'pending', 'accepted', 'expired'
+            createdAt: Timestamp.now(),
+        });
+        
+        // 4. Construct the invitation link
+        const baseUrl = getAppUrl();
+        const inviteLink = `${baseUrl}/tenant/accept?inviteId=${inviteRef.id}&token=${token}`;
+
+        // 5. Send the email via Resend
+        await sendTenantInviteEmail({
+          to: email,
+          landlordName,
+          propertyName,
+          link: inviteLink
+        });
+
+        return { success: true, message: `An invitation has been sent to ${email}.` };
+
+    } catch (err: any) {
+        console.error('Tenant Invite Error:', err.message);
+        throw new Error('Could not send tenant invitation. Please try again later.');
+    }
+}
+
+
+export async function verifyInviteToken(inviteId: string, token: string) {
+    if (!inviteId || !token) {
+        throw new Error("Invite ID and token are required.");
     }
 
-    // 1. Create the placeholder record
-    await db.collection('users').add({
-      email: email.toLowerCase(),
-      role: 'tenant',
-      tenantPropertyId: propertyId,
-      status: 'invited',
-      createdAt: new Date().toISOString()
-    });
+    const db = admin.db;
+    const inviteRef = db.collection('tenantInvites').doc(inviteId);
+    const inviteDoc = await inviteRef.get();
 
-    // 2. Generate the link
-    const baseUrl = getAppUrl();
-    const inviteLink = `${baseUrl}/tenant/accept?propertyId=${propertyId}&email=${encodeURIComponent(email)}`;
+    if (!inviteDoc.exists) {
+        throw new Error("This invitation is not valid or has been deleted.");
+    }
 
-    // 3. Send email
-    await resend.emails.send({
-      from: 'OmidanLedger <notifications@omidanledger.com>',
-      to: [email],
-      subject: 'Welcome to your Tenant Portal',
-      html: `<p>You have been invited to the OmidanLedger Tenant Portal.</p>
-             <p><a href="${inviteLink}">Click here to set up your account.</a></p>`
+    const invite = inviteDoc.data()!;
+    const now = Timestamp.now();
+
+    if (invite.status !== 'pending') {
+        throw new Error("This invitation has already been used or expired.");
+    }
+
+    if (now > invite.expiresAt) {
+        // Optionally, update status to 'expired'
+        await inviteRef.update({ status: 'expired' });
+        throw new Error("This invitation has expired.");
+    }
+
+    const providedTokenHash = createHash('sha256').update(token).digest('hex');
+    if (providedTokenHash !== invite.tokenHash) {
+        throw new Error("Invalid invitation token.");
+    }
+
+    // Token is valid, return the necessary data for the client
+    return {
+        success: true,
+        email: invite.tenantEmail,
+        propertyId: invite.propertyId,
+        unitId: invite.unitId,
+    };
+}
+
+
+export async function finalizeInviteAcceptance(userId: string, inviteId: string, token: string) {
+    if (!userId || !inviteId || !token) {
+        throw new Error("Missing required data to finalize invitation.");
+    }
+
+    const db = admin.db;
+    const batch = db.batch();
+    
+    // 1. Re-verify the token to prevent race conditions or misuse
+    const inviteRef = db.collection('tenantInvites').doc(inviteId);
+    const inviteDoc = await inviteRef.get();
+
+    if (!inviteDoc.exists || inviteDoc.data()?.status !== 'pending') {
+        throw new Error("Invitation is no longer valid.");
+    }
+
+    const providedTokenHash = createHash('sha256').update(token).digest('hex');
+    if (providedTokenHash !== inviteDoc.data()?.tokenHash) {
+        throw new Error("Invalid token provided for finalization.");
+    }
+
+    // 2. Update the User document
+    const userRef = db.collection('users').doc(userId);
+    const inviteData = inviteDoc.data()!;
+
+    batch.set(userRef, {
+        role: 'tenant',
+        landlordId: inviteData.landlordId,
+        associatedPropertyId: inviteData.propertyId,
+        associatedUnitId: inviteData.unitId || null,
+        status: 'active',
+        // Preserve any existing user data like email, name, etc.
+    }, { merge: true });
+
+    // 3. Mark the invite as accepted
+    batch.update(inviteRef, {
+        status: 'accepted',
+        acceptedAt: Timestamp.now(),
+        acceptedByUid: userId,
     });
+    
+    await batch.commit();
 
     return { success: true };
-  } catch (err: any) {
-    console.error('Invite Error:', err.message);
-    return { success: false, error: err.message };
-  }
 }

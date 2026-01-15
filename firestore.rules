@@ -145,6 +145,16 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
+    // --- NEW: Tenant Invite Rules ---
+    match /tenantInvites/{inviteId} {
+      // No one can read invites directly from the client.
+      allow read: if false;
+      // Server-side processes (unauthenticated) can create invites.
+      allow create: if isServerProcess();
+      // Server-side can update status, e.g. to 'accepted' or 'expired'.
+      allow update: if isServerProcess();
+    }
+
     match /settings/{settingId} {
       allow read, write: if isSignedIn();
     }

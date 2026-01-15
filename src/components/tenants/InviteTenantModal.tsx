@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { inviteTenant } from '@/actions/tenant-actions';
+import { inviteTenantWithToken } from '@/actions/tenant-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Loader2, UserPlus } from 'lucide-react';
@@ -35,17 +35,13 @@ export default function InviteTenantModal({ isOpen, onOpenChange, landlordId, pr
 
   const handleInvite = async () => {
     if (!propertyId || !email) {
-      toast({ variant: "destructive", title: "Error", description: "Email and property are required." });
+      toast({ variant: "destructive", title: "Error", description: "Email is required." });
       return;
     }
     setLoading(true);
 
     try {
-      // Store the email in localStorage BEFORE calling the server action.
-      // This is crucial for the magic link to work smoothly on the same device.
-      window.localStorage.setItem('tenantInviteEmail', email);
-
-      const result = await inviteTenant({
+      const result = await inviteTenantWithToken({
         email,
         propertyId,
         unitId,
@@ -65,8 +61,6 @@ export default function InviteTenantModal({ isOpen, onOpenChange, landlordId, pr
     } catch (e: any) {
       console.error("Invitation process failed:", e);
       toast({ variant: "destructive", title: "Invitation Failed", description: e.message });
-      // Clear storage if the server action fails
-      window.localStorage.removeItem('tenantInviteEmail');
     } finally {
       setLoading(false);
     }
@@ -85,7 +79,7 @@ export default function InviteTenantModal({ isOpen, onOpenChange, landlordId, pr
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><UserPlus /> Create Tenant Portal</DialogTitle>
           <DialogDescription>
-            This will create a user account and send a magic login link to the tenant's email.
+            This will email an invitation link to the tenant, allowing them to create a secure account with their own password.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-4">
@@ -97,7 +91,7 @@ export default function InviteTenantModal({ isOpen, onOpenChange, landlordId, pr
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleInvite} disabled={loading || !email} className="min-w-[120px]">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create & Send Invite"}
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Invitation"}
           </Button>
         </DialogFooter>
       </DialogContent>
