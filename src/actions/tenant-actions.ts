@@ -3,7 +3,7 @@
 
 import { getAppUrl } from "@/lib/url-utils";
 import { Resend } from 'resend';
-import * as admin from '@/lib/firebase-admin';
+import { adminApp } from '@/lib/admin-db';
 import { createHash, randomBytes } from 'crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import { sendTenantInviteEmail } from "@/lib/email";
@@ -27,7 +27,7 @@ export async function inviteTenantWithToken(params: InviteTenantParams) {
     if (!email || !propertyId || !landlordId) {
         throw new Error("Missing required parameters for invitation.");
     }
-    const db = admin.db;
+    const db = adminApp.firestore();
 
     try {
         // 1. Generate a secure, URL-safe token and its hash
@@ -76,7 +76,7 @@ export async function verifyInviteToken(inviteId: string, token: string) {
         throw new Error("Invite ID and token are required.");
     }
 
-    const db = admin.db;
+    const db = adminApp.firestore();
     const inviteRef = db.collection('tenantInvites').doc(inviteId);
     const inviteDoc = await inviteRef.get();
 
@@ -117,7 +117,7 @@ export async function finalizeInviteAcceptance(userId: string, inviteId: string,
         throw new Error("Missing required data to finalize invitation.");
     }
 
-    const db = admin.db;
+    const db = adminApp.firestore();
     const batch = db.batch();
     
     // 1. Re-verify the token to prevent race conditions or misuse
@@ -184,7 +184,7 @@ export async function sendTenantMessage(data: {
     senderEmail: string;
 }) {
     const { userId, landlordId, ...payload } = data;
-    const db = admin.db;
+    const db = adminApp.firestore();
 
     try {
         const batch = db.batch();

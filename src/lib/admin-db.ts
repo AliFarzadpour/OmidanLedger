@@ -1,50 +1,48 @@
+'use server';
 
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { getApps, initializeApp, App, cert } from 'firebase-admin/app';
 
 // This function ensures that the admin app is initialized only once.
 function initializeAdminApp(): App {
   const apps = getApps();
-  if (apps.length) {
-    return apps[0] as App;
+  if (apps.length > 0) {
+    return apps[0];
   }
 
-  // Safely get credentials for the build environment
-  let serviceAccount;
+  const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+
+  if (!serviceAccountKey) {
+    // If running in a production environment (like App Hosting) and credentials aren't fully set,
+    // Google's infrastructure often provides default credentials automatically.
+    // Using initializeApp() without arguments leverages this.
+    console.log("Attempting to initialize Admin App with default credentials...");
+    return initializeApp({
+        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    });
+  }
+
   try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    // Correctly parse the JSON string and replace escaped newlines in the private key.
+    const serviceAccount = JSON.parse(serviceAccountKey);
+    if (serviceAccount.private_key) {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
     }
-  } catch (e) {
-    console.warn("Could not parse FIREBASE_SERVICE_ACCOUNT_KEY, falling back to other credentials.");
-    serviceAccount = null;
-  }
-  
-  if (!serviceAccount) {
-    serviceAccount = {
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      };
-  }
-  
-  // If running in a production environment (like App Hosting) and credentials aren't fully set,
-  // Google's infrastructure often provides default credentials automatically.
-  // Using initializeApp() without arguments leverages this.
-  if (!serviceAccount.privateKey) {
-      console.log("Attempting to initialize Admin App with default credentials...");
-      return initializeApp({
-          storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-      });
-  }
 
-  return initializeApp({
-    credential: cert(serviceAccount),
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-  });
+    return initializeApp({
+      credential: cert(serviceAccount),
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    });
+  } catch (e) {
+    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY. Ensure it is a valid JSON string.", e);
+    // Fallback if parsing fails
+    return initializeApp();
+  }
 }
 
 const adminApp = initializeAdminApp();
 const db = getFirestore(adminApp);
+const storage = getStorage(adminApp);
 
-export { db, adminApp };
+export { db, adminApp, storage };
