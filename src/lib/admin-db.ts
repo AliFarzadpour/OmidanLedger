@@ -10,13 +10,23 @@ function initializeAdminApp(): App {
   }
 
   // Safely get credentials for the build environment
-  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY)
-    : {
+  let serviceAccount;
+  try {
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+      serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    }
+  } catch (e) {
+    console.warn("Could not parse FIREBASE_SERVICE_ACCOUNT_KEY, falling back to other credentials.");
+    serviceAccount = null;
+  }
+  
+  if (!serviceAccount) {
+    serviceAccount = {
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       };
+  }
   
   // If running in a production environment (like App Hosting) and credentials aren't fully set,
   // Google's infrastructure often provides default credentials automatically.
