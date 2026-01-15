@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getAppUrl } from "@/lib/url-utils";
@@ -127,23 +126,29 @@ export async function finalizeInviteAcceptance(userId: string, inviteId: string,
     if (!inviteDoc.exists || inviteDoc.data()?.status !== 'pending') {
         throw new Error("Invitation is no longer valid.");
     }
-
+    
+    const inviteData = inviteDoc.data()!;
     const providedTokenHash = createHash('sha256').update(token).digest('hex');
-    if (providedTokenHash !== inviteDoc.data()?.tokenHash) {
+    if (providedTokenHash !== inviteData.tokenHash) {
         throw new Error("Invalid token provided for finalization.");
     }
 
-    // 2. Update the User document
+    // 2. Update the User document with their tenant profile data
     const userRef = db.collection('users').doc(userId);
-    const inviteData = inviteDoc.data()!;
-
+    
     batch.set(userRef, {
+        uid: userId,
+        email: inviteData.tenantEmail,
         role: 'tenant',
         landlordId: inviteData.landlordId,
         associatedPropertyId: inviteData.propertyId,
         associatedUnitId: inviteData.unitId || null,
         status: 'active',
-        // Preserve any existing user data like email, name, etc.
+        // Initialize billing object for the tenant
+        billing: {
+            balance: 0,
+            lastPaymentDate: null,
+        },
     }, { merge: true });
 
     // 3. Mark the invite as accepted

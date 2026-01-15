@@ -22,31 +22,31 @@ interface NormalizedSettings {
 }
 
 export default function TenantDashboard() {
-  const { user } = useUser();
+  const { user, isUserLoading: isAuthLoading } = useUser();
   const firestore = useFirestore();
   const [paymentSettings, setPaymentSettings] = useState<NormalizedSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
-  const tenantDocRef = useMemoFirebase(() => {
+  // Step 1: Fetch the tenant's own user document. This is our source of truth.
+  const tenantUserDocRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
     return doc(firestore, 'users', user.uid);
   }, [user, firestore]);
   
-  const { data: tenantData, isLoading: isLoadingTenant } = useDoc(tenantDocRef);
-
+  const { data: tenantData, isLoading: isLoadingTenant } = useDoc(tenantUserDocRef);
+  
+  // Step 2: Use the IDs from the tenant's document to fetch the property and unit.
   const propertyDocRef = useMemoFirebase(() => {
     if (!firestore || !tenantData?.associatedPropertyId) return null;
     return doc(firestore, 'properties', tenantData.associatedPropertyId);
   }, [firestore, tenantData]);
 
-  const { data: propertyData, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
-
-  // --- NEW: Fetch the specific unit document ---
   const unitDocRef = useMemoFirebase(() => {
     if (!firestore || !tenantData?.associatedPropertyId || !tenantData?.associatedUnitId) return null;
     return doc(firestore, 'properties', tenantData.associatedPropertyId, 'units', tenantData.associatedUnitId);
   }, [firestore, tenantData]);
 
+  const { data: propertyData, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
   const { data: unitData, isLoading: isLoadingUnit } = useDoc(unitDocRef);
 
 
@@ -68,30 +68,31 @@ export default function TenantDashboard() {
       fetchSettings();
     }
   }, [tenantData, user]);
-
-  const isLoading = isLoadingTenant || loadingSettings || isLoadingProperty || isLoadingUnit;
   
+  // The isLoading flag combines all data fetching states
+  const isLoading = isAuthLoading || isLoadingTenant || loadingSettings || isLoadingProperty || isLoadingUnit;
+  
+  // This logic now correctly checks both unit and property level for lease details
   const leaseInfo = useMemo(() => {
-    if (!propertyData || !tenantData?.email) {
-        return { rentAmount: 0, balance: tenantData?.billing?.balance || 0 };
-    }
+    const tenantEmail = tenantData?.email;
+    const balance = tenantData?.billing?.balance || 0;
     
+    if (!tenantEmail) return { rentAmount: 0, balance };
+
     // Prioritize finding the tenant in the specific unit data if it exists
-    const tenantInUnit = unitData?.tenants?.find((t: any) => t.email === tenantData.email);
+    const tenantInUnit = unitData?.tenants?.find((t: any) => t.email === tenantEmail);
     if (tenantInUnit) {
-      return {
-        rentAmount: tenantInUnit.rentAmount || 0,
-        balance: tenantData?.billing?.balance || 0,
-      }
+      return { rentAmount: tenantInUnit.rentAmount || 0, balance };
     }
 
     // Fallback to the property's top-level tenants array (for single-family homes)
-    const tenantInProp = propertyData.tenants?.find((t: any) => t.email === tenantData.email);
-    return {
-        rentAmount: tenantInProp?.rentAmount || 0,
-        balance: tenantData?.billing?.balance || 0,
-    };
-  }, [propertyData, tenantData, unitData]);
+    const tenantInProp = propertyData?.tenants?.find((t: any) => t.email === tenantEmail);
+    if (tenantInProp) {
+        return { rentAmount: tenantInProp.rentAmount || 0, balance };
+    }
+    
+    return { rentAmount: 0, balance };
+  }, [tenantData, propertyData, unitData]);
   
   const isOverdue = leaseInfo.balance > 0;
 
