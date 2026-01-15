@@ -1,6 +1,11 @@
 import { headers } from 'next/headers';
 
 export function getAppUrl() {
+  // Prioritize the environment variable for consistency across environments.
+  if (process.env.APP_URL) {
+    return process.env.APP_URL;
+  }
+
   try {
     const headersList = headers();
     // Use a more compatible way to get the host
@@ -14,6 +19,6 @@ export function getAppUrl() {
     console.warn("Could not determine URL from headers, using fallback.");
   }
 
-  // Fallback to the environment variable we set earlier
-  return process.env.APP_URL || 'https://omidanledger.com';
+  // Fallback for local development if APP_URL is not set.
+  return 'http://localhost:3000';
 }
