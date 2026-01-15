@@ -1,11 +1,10 @@
+
 'use server';
 
-import { adminApp } from '@/lib/admin-db';
+import { db } from '@/lib/admin-db';
 
 export async function refreshGlobalSystemStats() {
   // Use the verified admin pattern
-  const db = adminApp.firestore();
-  
   if (!db) {
     throw new Error("Could not initialize Firebase Admin Database");
   }

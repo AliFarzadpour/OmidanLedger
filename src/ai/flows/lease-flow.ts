@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An agentic workflow for generating state-compliant lease agreements.
@@ -12,11 +13,10 @@ import {
   type LeaseAgentInput,
   type LeaseAgentOutput
 } from './schemas/lease-flow.schema';
-import { db } from '@/lib/admin-db';
+import { db, storage } from '@/lib/admin-db';
 import legalDictionary from '../../../docs/legal/lease-dictionary.json';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getStorage } from 'firebase-admin/storage';
 import { v4 as uuidv4 } from 'uuid';
 
 
@@ -190,7 +190,6 @@ const leaseAgentFlow = ai.defineFlow(
     const pdfBuffer = Buffer.from(pdfOutput);
 
     // 4. Upload to Firebase Storage
-    const storage = getStorage();
     const bucket = storage.bucket(); 
     const documentId = uuidv4();
     const fileName = `lease-agreement-${input.tenantId.replace(/[^a-zA-Z0-9]/g, '_')}-${documentId}.pdf`;
