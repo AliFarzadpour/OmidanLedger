@@ -37,10 +37,10 @@ function AcceptInvite() {
   const [errorMessage, setErrorMessage] = useState('');
   const [inviteData, setInviteData] = useState<{ email: string } | null>(null);
 
-  const inviteId = searchParams.get('inviteId');
-  const token = searchParams.get('token');
-
   useEffect(() => {
+    const inviteId = searchParams.get('inviteId');
+    const token = searchParams.get('token');
+
     if (!inviteId || !token) {
       setErrorMessage("Missing invitation details in the URL.");
       setStatus('error');
@@ -62,7 +62,7 @@ function AcceptInvite() {
       }
     };
     verify();
-  }, [inviteId, token]);
+  }, [searchParams]);
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupSchema),
@@ -70,6 +70,8 @@ function AcceptInvite() {
   });
 
   const onSubmit = async (data: SignupFormValues) => {
+    const inviteId = searchParams.get('inviteId');
+    const token = searchParams.get('token');
     if (!inviteData || !inviteId || !token) return;
 
     try {
