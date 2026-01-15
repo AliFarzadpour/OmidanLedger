@@ -3,8 +3,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db as adminDb } from '@/lib/admin-db'; // Correctly import the robust admin DB instance
-import type { Query, Timestamp } from 'firebase-admin/firestore';
+import { db as adminDb } from '@/lib/admin-db'; 
+import { Timestamp, type Query } from 'firebase-admin/firestore';
 
 // Input Schema
 const GenerateFinancialReportInputSchema = z.object({
