@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useUser, useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
@@ -7,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { CreditCard, History, Home, AlertCircle, Wallet, MessageSquare } from 'lucide-react';
 import { PayRentButton } from '@/components/tenant/PayRentButton';
-import TenantPaymentHistory from '../history/page';
+import TenantPaymentHistory from '@/components/tenant/TenantPaymentHistory';
 import { useEffect, useState, useMemo } from 'react';
 import { getPaymentSettings } from '@/lib/getPaymentSettings';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
