@@ -3,17 +3,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { getFirestore } from 'firebase-admin/firestore';
-import { getApps, initializeApp } from 'firebase-admin/app';
-import { Query, Timestamp } from 'firebase-admin/firestore';
-
-// Helper to ensure Admin SDK is initialized once
-function getAdminDB() {
-  if (!getApps().length) {
-    initializeApp();
-  }
-  return getFirestore();
-}
+import { db as adminDb } from '@/lib/admin-db'; // Correctly import the robust admin DB instance
+import type { Query, Timestamp } from 'firebase-admin/firestore';
 
 // Input Schema
 const GenerateFinancialReportInputSchema = z.object({
@@ -37,7 +28,7 @@ type Transaction = {
   
 async function fetchTransactions(userId: string): Promise<Transaction[]> {
     console.log(`[AI-FLOW] Fetching transactions for user: ${userId}`);
-    const db = getAdminDB(); // Initialize DB inside the function
+    const db = adminDb; // Use the imported admin DB instance
     const snapshot = await db
         .collectionGroup('transactions')
         .where('userId', '==', userId)
