@@ -18,9 +18,8 @@ env:
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
 
-  # --- NEW: Required for Firebase Login & Admin ---
-  # These make the keys visible to the browser so users can log in,
-  # and also ensures the Admin SDK has necessary context.
+  # --- NEW: Required for Firebase Login ---
+  # These make the keys visible to the browser so users can log in.
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
   - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
@@ -29,7 +28,3 @@ env:
     value: "studio-7576922301-bac28"
   - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
     value: "studio-7576922301-bac28.appspot.com"
-  - variable: FIREBASE_CLIENT_EMAIL
-    secret: FIREBASE_CLIENT_EMAIL
-  - variable: FIREBASE_PRIVATE_KEY
-    secret: FIREBASE_PRIVATE_KEY
