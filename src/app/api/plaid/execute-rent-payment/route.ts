@@ -1,9 +1,10 @@
+
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import { plaidClient } from '@/lib/plaid-client'; 
 import { stripe } from '@/lib/stripe';
-import { db } from '@/lib/firebase-admin'; 
+import { db } from '@/lib/admin-db'; 
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function POST(req: Request) {
