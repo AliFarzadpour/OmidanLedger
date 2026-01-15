@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
@@ -42,6 +41,15 @@ export default function TenantDashboard() {
 
   const { data: propertyData, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
 
+  // --- NEW: Fetch the specific unit document ---
+  const unitDocRef = useMemoFirebase(() => {
+    if (!firestore || !tenantData?.associatedPropertyId || !tenantData?.associatedUnitId) return null;
+    return doc(firestore, 'properties', tenantData.associatedPropertyId, 'units', tenantData.associatedUnitId);
+  }, [firestore, tenantData]);
+
+  const { data: unitData, isLoading: isLoadingUnit } = useDoc(unitDocRef);
+
+
   useEffect(() => {
     async function fetchSettings() {
       if (!user || !tenantData?.associatedPropertyId) return;
@@ -61,18 +69,29 @@ export default function TenantDashboard() {
     }
   }, [tenantData, user]);
 
-  const isLoading = isLoadingTenant || loadingSettings || isLoadingProperty;
+  const isLoading = isLoadingTenant || loadingSettings || isLoadingProperty || isLoadingUnit;
   
   const leaseInfo = useMemo(() => {
     if (!propertyData || !tenantData?.email) {
         return { rentAmount: 0, balance: tenantData?.billing?.balance || 0 };
     }
+    
+    // Prioritize finding the tenant in the specific unit data if it exists
+    const tenantInUnit = unitData?.tenants?.find((t: any) => t.email === tenantData.email);
+    if (tenantInUnit) {
+      return {
+        rentAmount: tenantInUnit.rentAmount || 0,
+        balance: tenantData?.billing?.balance || 0,
+      }
+    }
+
+    // Fallback to the property's top-level tenants array (for single-family homes)
     const tenantInProp = propertyData.tenants?.find((t: any) => t.email === tenantData.email);
     return {
         rentAmount: tenantInProp?.rentAmount || 0,
         balance: tenantData?.billing?.balance || 0,
     };
-  }, [propertyData, tenantData]);
+  }, [propertyData, tenantData, unitData]);
   
   const isOverdue = leaseInfo.balance > 0;
 
@@ -158,6 +177,7 @@ export default function TenantDashboard() {
                 <RecordPaymentModal
                     tenant={{ id: user.uid, firstName: tenantData.name || user.email }}
                     propertyId={tenantData.associatedPropertyId}
+                    unitId={tenantData.associatedUnitId}
                     landlordId={tenantData.landlordId}
                     buttonText="I've Paid via Zelle/Check"
                 />
