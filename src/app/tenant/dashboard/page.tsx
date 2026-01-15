@@ -53,7 +53,7 @@ export default function TenantDashboard() {
 
   useEffect(() => {
     async function fetchSettings() {
-      if (!user || !tenantProfile?.propertyId) return;
+      if (!user || !tenantProfile?.propertyId || !tenantProfile?.landlordId) return;
       setLoadingSettings(true);
       try {
         const settings = await getPaymentSettings(tenantProfile.landlordId, tenantProfile.propertyId);
@@ -80,19 +80,22 @@ export default function TenantDashboard() {
     
     if (!tenantEmail) return { rentAmount: 0, balance };
 
-    // Prioritize finding the tenant in the specific unit data if it exists
+    // Find tenant-specific lease info, which could be in either the unit or property
     const tenantInUnit = unitData?.tenants?.find((t: any) => t.email === tenantEmail);
-    if (tenantInUnit) {
-      return { rentAmount: tenantInUnit.rentAmount || 0, balance };
-    }
-
-    // Fallback to the property's top-level tenants array (for single-family homes)
     const tenantInProp = propertyData?.tenants?.find((t: any) => t.email === tenantEmail);
-    if (tenantInProp) {
-        return { rentAmount: tenantInProp.rentAmount || 0, balance };
-    }
     
-    return { rentAmount: 0, balance };
+    // Determine rent by hierarchy:
+    // 1. Specific rent amount on the tenant record (most specific)
+    // 2. Rent set for the unit (for multi-family)
+    // 3. Rent set for the property (for single-family or as a fallback)
+    const rentAmount =
+        tenantInUnit?.rentAmount ||
+        tenantInProp?.rentAmount ||
+        unitData?.financials?.rent ||
+        propertyData?.financials?.rent ||
+        0;
+
+    return { rentAmount, balance };
   }, [tenantProfile, propertyData, unitData]);
   
   const isOverdue = leaseInfo.balance > 0;
