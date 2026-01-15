@@ -136,6 +136,8 @@ export async function finalizeInviteAcceptance(userId: string, inviteId: string,
     // 2. Update the User document with their tenant profile data
     const userRef = db.collection('users').doc(userId);
     
+    // This is the new, correct payload as per your instructions.
+    // It establishes the user document as the source of truth for the tenant's associations.
     batch.set(userRef, {
         uid: userId,
         email: inviteData.tenantEmail,
