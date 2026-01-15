@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useUser, useFirestore, useDoc, useMemoFirebase } from '@/firebase';
@@ -27,24 +28,24 @@ export default function TenantDashboard() {
   const [paymentSettings, setPaymentSettings] = useState<NormalizedSettings | null>(null);
   const [loadingSettings, setLoadingSettings] = useState(true);
 
-  // Step 1: Fetch the tenant's own user document. This is our source of truth.
-  const tenantUserDocRef = useMemoFirebase(() => {
+  // Step 1: Fetch the tenant's profile. This is our source of truth.
+  const tenantProfileRef = useMemoFirebase(() => {
     if (!user || !firestore) return null;
-    return doc(firestore, 'users', user.uid);
+    return doc(firestore, 'tenantProfiles', user.uid);
   }, [user, firestore]);
   
-  const { data: tenantData, isLoading: isLoadingTenant } = useDoc(tenantUserDocRef);
+  const { data: tenantProfile, isLoading: isLoadingTenant } = useDoc(tenantProfileRef);
   
-  // Step 2: Use the IDs from the tenant's document to fetch the property and unit.
+  // Step 2: Use the IDs from the tenant's profile to fetch the property and unit.
   const propertyDocRef = useMemoFirebase(() => {
-    if (!firestore || !tenantData?.associatedPropertyId) return null;
-    return doc(firestore, 'properties', tenantData.associatedPropertyId);
-  }, [firestore, tenantData]);
+    if (!firestore || !tenantProfile?.propertyId) return null;
+    return doc(firestore, 'properties', tenantProfile.propertyId);
+  }, [firestore, tenantProfile]);
 
   const unitDocRef = useMemoFirebase(() => {
-    if (!firestore || !tenantData?.associatedPropertyId || !tenantData?.associatedUnitId) return null;
-    return doc(firestore, 'properties', tenantData.associatedPropertyId, 'units', tenantData.associatedUnitId);
-  }, [firestore, tenantData]);
+    if (!firestore || !tenantProfile?.propertyId || !tenantProfile?.unitId) return null;
+    return doc(firestore, 'properties', tenantProfile.propertyId, 'units', tenantProfile.unitId);
+  }, [firestore, tenantProfile]);
 
   const { data: propertyData, isLoading: isLoadingProperty } = useDoc(propertyDocRef);
   const { data: unitData, isLoading: isLoadingUnit } = useDoc(unitDocRef);
@@ -52,10 +53,10 @@ export default function TenantDashboard() {
 
   useEffect(() => {
     async function fetchSettings() {
-      if (!user || !tenantData?.associatedPropertyId) return;
+      if (!user || !tenantProfile?.propertyId) return;
       setLoadingSettings(true);
       try {
-        const settings = await getPaymentSettings(tenantData.landlordId, tenantData.associatedPropertyId);
+        const settings = await getPaymentSettings(tenantProfile.landlordId, tenantProfile.propertyId);
         setPaymentSettings(settings);
       } catch (error) {
         console.error("Failed to fetch payment settings:", error);
@@ -64,18 +65,18 @@ export default function TenantDashboard() {
       }
     }
 
-    if (tenantData) {
+    if (tenantProfile) {
       fetchSettings();
     }
-  }, [tenantData, user]);
+  }, [tenantProfile, user]);
   
   // The isLoading flag combines all data fetching states
   const isLoading = isAuthLoading || isLoadingTenant || loadingSettings || isLoadingProperty || isLoadingUnit;
   
   // This logic now correctly checks both unit and property level for lease details
   const leaseInfo = useMemo(() => {
-    const tenantEmail = tenantData?.email;
-    const balance = tenantData?.billing?.balance || 0;
+    const tenantEmail = tenantProfile?.email;
+    const balance = tenantProfile?.billing?.balance || 0;
     
     if (!tenantEmail) return { rentAmount: 0, balance };
 
@@ -92,7 +93,7 @@ export default function TenantDashboard() {
     }
     
     return { rentAmount: 0, balance };
-  }, [tenantData, propertyData, unitData]);
+  }, [tenantProfile, propertyData, unitData]);
   
   const isOverdue = leaseInfo.balance > 0;
 
@@ -117,7 +118,7 @@ export default function TenantDashboard() {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-bold">Welcome Home, {tenantData?.name || tenantData?.email?.split('@')[0]}</h1>
+        <h1 className="text-2xl font-bold">Welcome Home, {tenantProfile?.name || tenantProfile?.email?.split('@')[0]}</h1>
         <p className="text-slate-500 text-sm">Manage your rent and residency at {propertyData?.name || 'your home'}.</p>
       </header>
 
@@ -174,12 +175,12 @@ export default function TenantDashboard() {
             {paymentSettings?.stripeEnabled && (
               <PayRentButton amount={leaseInfo.balance} tenantId={user.uid} />
             )}
-             {paymentSettings?.zelleEnabled && tenantData && (
+             {paymentSettings?.zelleEnabled && tenantProfile && (
                 <RecordPaymentModal
-                    tenant={{ id: user.uid, firstName: tenantData.name || user.email }}
-                    propertyId={tenantData.associatedPropertyId}
-                    unitId={tenantData.associatedUnitId}
-                    landlordId={tenantData.landlordId}
+                    tenant={{ id: user.uid, firstName: tenantProfile.name || user.email }}
+                    propertyId={tenantProfile.propertyId}
+                    unitId={tenantProfile.unitId}
+                    landlordId={tenantProfile.landlordId}
                     buttonText="I've Paid via Zelle/Check"
                 />
             )}
@@ -192,13 +193,13 @@ export default function TenantDashboard() {
             <CardHeader><CardTitle className="flex items-center gap-2"><MessageSquare className="h-5 w-5"/>Contact Landlord</CardTitle></CardHeader>
             <CardContent>
                 <p className="text-sm text-muted-foreground mb-4">Submit a maintenance request or ask a question.</p>
-                {user && tenantData && (
+                {user && tenantProfile && (
                     <ContactLandlordDialog 
                         userId={user.uid} 
-                        landlordId={tenantData.landlordId} 
-                        propertyId={tenantData.associatedPropertyId}
-                        unitId={tenantData.associatedUnitId}
-                        tenantName={tenantData.name || user.email || 'Tenant'}
+                        landlordId={tenantProfile.landlordId} 
+                        propertyId={tenantProfile.propertyId}
+                        unitId={tenantProfile.unitId}
+                        tenantName={tenantProfile.name || user.email || 'Tenant'}
                         tenantEmail={user.email!}
                     />
                 )}

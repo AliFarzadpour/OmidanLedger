@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAppUrl } from "@/lib/url-utils";
@@ -133,19 +134,16 @@ export async function finalizeInviteAcceptance(userId: string, inviteId: string,
         throw new Error("Invalid token provided for finalization.");
     }
 
-    // 2. Update the User document with their tenant profile data
-    const userRef = db.collection('users').doc(userId);
-    
-    // This is the new, correct payload as per your instructions.
-    // It establishes the user document as the source of truth for the tenant's associations.
-    batch.set(userRef, {
-        uid: userId,
+    // 2. Create the Tenant Profile document
+    const tenantProfileRef = db.collection('tenantProfiles').doc(userId);
+    batch.set(tenantProfileRef, {
+        tenantUid: userId,
         email: inviteData.tenantEmail,
-        role: 'tenant',
         landlordId: inviteData.landlordId,
-        associatedPropertyId: inviteData.propertyId,
-        associatedUnitId: inviteData.unitId || null,
-        status: 'active',
+        propertyId: inviteData.propertyId,
+        unitId: inviteData.unitId || null,
+        acceptedInviteId: inviteId,
+        createdAt: Timestamp.now(),
         // Initialize billing object for the tenant
         billing: {
             balance: 0,
@@ -153,7 +151,16 @@ export async function finalizeInviteAcceptance(userId: string, inviteId: string,
         },
     }, { merge: true });
 
-    // 3. Mark the invite as accepted
+    // 3. Create/update the main user document for auth purposes
+    const userRef = db.collection('users').doc(userId);
+    batch.set(userRef, {
+        uid: userId,
+        email: inviteData.tenantEmail,
+        role: 'tenant',
+    }, { merge: true });
+
+
+    // 4. Mark the invite as accepted
     batch.update(inviteRef, {
         status: 'accepted',
         acceptedAt: Timestamp.now(),

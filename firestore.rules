@@ -23,7 +23,7 @@ service cloud.firestore {
 
     function isTenantOfProperty(propertyId) {
         // Checks if the requesting user has an associatedPropertyId that matches the property they are trying to read.
-        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.associatedPropertyId == propertyId;
+        return get(/databases/$(database)/documents/tenantProfiles/$(request.auth.uid)).data.propertyId == propertyId;
     }
 
     // Allow the "transactions" Collection Group queries defined in your index
@@ -145,7 +145,12 @@ service cloud.firestore {
       allow write: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
-    // --- NEW: Tenant Invite Rules ---
+    // --- NEW: Tenant Profile Rules ---
+    match /tenantProfiles/{userId} {
+      allow get: if isOwner(userId);
+      allow create, update: if isServerProcess(); // Only server can create/update profiles
+    }
+
     match /tenantInvites/{inviteId} {
       // No one can read invites directly from the client.
       allow read: if false;
