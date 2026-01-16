@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/format';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNowStrict } from 'date-fns';
 
 interface DataSource {
   id: string;
@@ -25,6 +25,7 @@ interface DataSource {
   plaidAccessToken?: string;
   plaidAccountId?: string;
   historicalDataPending?: boolean;
+  lastSyncedAt?: { seconds: number; nanoseconds: number } | Date;
 }
 
 interface BalanceData {
@@ -147,6 +148,7 @@ export function DataSourceList({
         const Icon = config.icon;
         const last4 = (source.accountNumber || '').slice(-4);
         const bankLine = `${source.bankName || 'Bank'}${last4 ? ` • ${last4}` : ''}`;
+        const lastSyncedDate = source.lastSyncedAt ? (source.lastSyncedAt instanceof Date ? source.lastSyncedAt : new Date((source.lastSyncedAt as any).seconds * 1000)) : null;
 
         return (
             <div key={source.id} className="relative group">
@@ -192,11 +194,18 @@ export function DataSourceList({
                                     </span>
                                 </p>
                             )}
-                            {balanceDisplay.lastUpdatedAt && (
-                                <p className="text-[10px] text-muted-foreground/70 mt-1">
-                                    Updated {formatDistanceToNow(balanceDisplay.lastUpdatedAt, { addSuffix: true })}
-                                </p>
-                            )}
+                            <div className="text-[10px] text-muted-foreground/70 mt-1 space-y-0.5">
+                                {balanceDisplay.lastUpdatedAt && (
+                                    <p>
+                                        Balance: {formatDistanceToNowStrict(balanceDisplay.lastUpdatedAt, { addSuffix: true })}
+                                    </p>
+                                )}
+                                {lastSyncedDate && (
+                                    <p>
+                                        Sync: {formatDistanceToNowStrict(lastSyncedDate, { addSuffix: true })}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     ) : (
                         <div className="mt-2 pt-2 border-t">
