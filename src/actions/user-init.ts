@@ -3,13 +3,13 @@
 import { db } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
-export async function initializeUserSchema(userId: string, email: string, provider: string) {
+export async function initializeUserSchema(userId: string, email: string, provider: string, trade?: string) {
   const userRef = db.collection('users').doc(userId);
 
   const doc = await userRef.get();
 
   // Define default billing/role settings
-  const defaultSchema = {
+  const defaultSchema: {[key:string]: any} = {
     email: email,
     role: 'landlord', // Default new signups to landlord
     authProvider: provider,
@@ -27,16 +27,24 @@ export async function initializeUserSchema(userId: string, email: string, provid
     }
   };
 
+  if (trade) {
+    defaultSchema.trade = trade;
+  }
+
   if (!doc.exists) {
     // New User: Set full schema
     await userRef.set(defaultSchema);
   } else {
     // Existing User: Only add missing fields (Migration)
-    await userRef.update({
+    const updateData: {[key: string]: any} = {
       'metadata.lastLogin': FieldValue.serverTimestamp(),
       authProvider: provider, // Track how they logged in
       // Ensure role exists if it was missing
       role: doc.data()?.role || 'landlord'
-    });
+    };
+    if (trade) {
+      updateData.trade = trade;
+    }
+    await userRef.update(updateData);
   }
 }

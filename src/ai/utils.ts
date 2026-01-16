@@ -1,6 +1,6 @@
 
 // This file is now updated to use the Admin SDK for server-side operations.
-import { db as adminDb } from '@/lib/admin-db';
+import { db as adminDb } from '@/lib/firebaseAdmin';
 import { Firestore } from 'firebase-admin/firestore';
 
 
