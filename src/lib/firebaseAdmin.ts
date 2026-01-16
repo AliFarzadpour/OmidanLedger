@@ -2,39 +2,49 @@
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
+import * as fs from 'fs';
+import * as path from 'path';
 
 function initAdmin() {
-  if (getApps().length) return;
-
-  let raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-
-  if (!raw) {
-    console.warn("Missing FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
+  if (getApps().length) {
     return;
   }
 
-  // Sanitize the input: handle escaped newlines often found in .env values
-  raw = raw.replace(/\\n/g, '\n');
+  // Path to the service account key file in the project root
+  const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
 
   try {
-    const serviceAccount = JSON.parse(raw);
-    const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-    
-    initializeApp({
-      credential: cert(serviceAccount),
-      projectId: serviceAccount.project_id,
-      storageBucket: bucketName
-    });
-  } catch (error: any) {
-    console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", error);
+    // Check if the file exists before trying to read it
+    if (fs.existsSync(serviceAccountPath)) {
+      const serviceAccountString = fs.readFileSync(serviceAccountPath, 'utf8');
+      const serviceAccount = JSON.parse(serviceAccountString);
 
-    // Provide a helpful hint based on the specific error
-    let hint = "Check your .env file.";
-    if (error instanceof SyntaxError && error.message.includes("position 1")) {
-      hint = "The JSON likely starts with a single quote (') instead of a double quote (\") or has single-quoted keys.";
+      // Get storage bucket name from environment variables
+      const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+      
+      initializeApp({
+        credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id,
+        storageBucket: bucketName
+      });
+    } else {
+        // If the file is not found, we fall back to the environment variable.
+        const rawEnvVar = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+        if (rawEnvVar) {
+            const serviceAccount = JSON.parse(rawEnvVar.replace(/\\n/g, '\n'));
+            const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+            initializeApp({
+                credential: cert(serviceAccount),
+                projectId: serviceAccount.project_id,
+                storageBucket: bucketName
+            });
+        } else {
+            console.warn("Firebase Admin SDK not initialized: service-account.json not found and FIREBASE_SERVICE_ACCOUNT_KEY is not set.");
+        }
     }
-
-    throw new Error(`FIREBASE_SERVICE_ACCOUNT_KEY is malformed. ${hint} Error: ${error.message}`);
+  } catch (error: any) {
+    console.error("Failed to parse service-account.json or initialize Firebase Admin SDK:", error);
+    throw new Error(`Could not initialize Firebase Admin. Please ensure service-account.json is valid. Error: ${error.message}`);
   }
 }
 
