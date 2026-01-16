@@ -1,30 +1,37 @@
-kind: "bundle"
-apiVersion: "v1"
+runConfig:
+  env:
+    # --- Secrets from Secret Manager ---
+    - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+      secret: FIREBASE_SERVICE_ACCOUNT_KEY
 
-env:
-  # --- Your Existing Secrets ---
-  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
-    secret: FIREBASE_SERVICE_ACCOUNT_KEY
-  - variable: RESEND_API_KEY
-    secret: RESEND_API_KEY
-  - variable: APP_URL
-    secret: APP_URL
-  - variable: PLAID_CLIENT_ID
-    secret: PLAID_CLIENT_ID
-  - variable: PLAID_SECRET
-    secret: PLAID_SECRET
-  - variable: PLAID_ENV
-    value: "production"
-  - variable: GEMINI_API_KEY
-    secret: GEMINI_API_KEY
+    - variable: RESEND_API_KEY
+      secret: RESEND_API_KEY
 
-  # --- NEW: Required for Firebase Login ---
-  # These make the keys visible to the browser so users can log in.
-  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-    value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
-  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-    value: "omidanledger.firebaseapp.com"
-  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-    value: "studio-7576922301-bac28"
-  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-    value: "studio-7576922301-bac28.appspot.com"
+    - variable: APP_URL
+      secret: APP_URL
+
+    - variable: PLAID_CLIENT_ID
+      secret: PLAID_CLIENT_ID
+
+    - variable: PLAID_SECRET
+      secret: PLAID_SECRET
+
+    - variable: GEMINI_API_KEY
+      secret: GEMINI_API_KEY
+
+    # --- Non-secret plain env values ---
+    - variable: PLAID_ENV
+      value: "production"
+
+    # --- Public Firebase config (safe to be public) ---
+    - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+      value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
+
+    - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+      value: "omidanledger.firebaseapp.com"
+
+    - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      value: "studio-7576922301-bac28"
+
+    - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+      value: "studio-7576922301-bac28.appspot.com"
