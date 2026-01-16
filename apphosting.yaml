@@ -32,12 +32,6 @@ env:
       - BUILD
       - RUNTIME
 
-  # Keep this as fallback for now (optional). Remove later once everything is stable.
-  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
-    secret: FIREBASE_SERVICE_ACCOUNT_KEY
-    availability:
-      - BUILD
-      - RUNTIME
 
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
