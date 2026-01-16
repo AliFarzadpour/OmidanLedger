@@ -2,8 +2,10 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db as adminDb } from '@/lib/firebaseAdmin'; 
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { Timestamp, type Query } from 'firebase-admin/firestore';
+
+const adminDb = getAdminDb();
 
 // Input Schema
 const GenerateFinancialReportInputSchema = z.object({
@@ -27,8 +29,7 @@ type Transaction = {
   
 async function fetchTransactions(userId: string): Promise<Transaction[]> {
     console.log(`[AI-FLOW] Fetching transactions for user: ${userId}`);
-    const db = adminDb; // Use the imported admin DB instance
-    const snapshot = await db
+    const snapshot = await adminDb
         .collectionGroup('transactions')
         .where('userId', '==', userId)
         .orderBy('date', 'desc')
