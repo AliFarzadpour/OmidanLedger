@@ -1,6 +1,8 @@
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
+
+const db = getAdminDb();
 
 export async function isSuperAdmin(userId: string) {
   if (!userId) return false;

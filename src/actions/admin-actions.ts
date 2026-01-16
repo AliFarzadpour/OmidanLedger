@@ -1,7 +1,9 @@
 
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
+
+const db = getAdminDb();
 
 export async function refreshGlobalSystemStats() {
   // Use the verified admin pattern

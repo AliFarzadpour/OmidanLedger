@@ -1,9 +1,11 @@
 
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { incrementPropertyStats } from './update-property-stats';
+
+const db = getAdminDb();
 
 export async function recordManualPayment({
   tenantId,

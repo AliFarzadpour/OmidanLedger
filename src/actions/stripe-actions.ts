@@ -2,9 +2,10 @@
 'use server';
 
 import Stripe from 'stripe';
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
+const db = getAdminDb();
 // Initialize Stripe with the secret key from environment variables
 // Ensure STRIPE_SECRET_KEY is set in your .env file
 const stripeKey = process.env.STRIPE_SECRET_KEY || 'dummy_key_for_build';

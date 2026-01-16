@@ -1,7 +1,9 @@
 'use server';
 
-import { db as adminDb } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
+
+const adminDb = getAdminDb();
 
 /**
  * Updates financial stats for a specific property.

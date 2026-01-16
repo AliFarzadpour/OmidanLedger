@@ -1,8 +1,10 @@
 
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
+
+const db = getAdminDb();
 
 // --- SYSTEM DEFAULTS & PRICING RULES ---
 const DEFAULT_PCT = 0.0075;

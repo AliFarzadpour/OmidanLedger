@@ -13,11 +13,14 @@ import {
   type LeaseAgentInput,
   type LeaseAgentOutput
 } from './schemas/lease-flow.schema';
-import { db, storage } from '@/lib/firebaseAdmin';
+import { getAdminDb, getAdminStorage } from '@/lib/firebaseAdmin';
 import legalDictionary from '../../../docs/legal/lease-dictionary.json';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { v4 as uuidv4 } from 'uuid';
+
+const db = getAdminDb();
+const storage = getAdminStorage();
 
 
 // --- TOOLS ---

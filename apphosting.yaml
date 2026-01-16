@@ -1,5 +1,5 @@
 env:
-  # --- Public (client) Firebase config: must be present at BUILD ---
+  # --- Public (client) Firebase config (safe to expose; must be present at BUILD + RUNTIME) ---
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY
     value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
     availability:
@@ -25,14 +25,30 @@ env:
       - RUNTIME
 
   # --- Secrets from Secret Manager (server only) ---
+  # IMPORTANT: These must be available at BUILD because Next.js runs server code during "Collecting page data"
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY_B64
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY_B64
+    availability:
+      - BUILD
+      - RUNTIME
+
+  # Keep this as fallback for now (optional). Remove later once everything is stable.
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY
     secret: FIREBASE_SERVICE_ACCOUNT_KEY
     availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability:
+      - BUILD
       - RUNTIME
 
   - variable: RESEND_API_KEY
     secret: RESEND_API_KEY
     availability:
+      - BUILD
       - RUNTIME
 
   - variable: APP_URL
@@ -50,11 +66,7 @@ env:
   - variable: PLAID_SECRET
     secret: PLAID_SECRET
     availability:
-      - RUNTIME
-
-  - variable: GEMINI_API_KEY
-    secret: GEMINI_API_KEY
-    availability:
+      - BUILD
       - RUNTIME
 
   # --- Non-secret plain env values ---
@@ -64,7 +76,3 @@ env:
       - BUILD
       - RUNTIME
 
-  - variable: FIREBASE_SERVICE_ACCOUNT_KEY_B64
-    secret: FIREBASE_SERVICE_ACCOUNT_KEY_B64
-    availability:
-      - RUNTIME

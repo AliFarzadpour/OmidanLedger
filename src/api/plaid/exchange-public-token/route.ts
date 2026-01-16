@@ -1,7 +1,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments } from 'plaid';
-import { db } from '@/lib/firebaseAdmin'; // Use the central admin instance
+import { getAdminDb } from '@/lib/firebaseAdmin'; // Use the central admin instance
+
+const db = getAdminDb();
 
 const plaidClient = new PlaidApi(
   new Configuration({

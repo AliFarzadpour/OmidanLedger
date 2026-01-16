@@ -1,7 +1,9 @@
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
+
+const db = getAdminDb();
 
 export async function updateUnitsInBulk(
   propertyId: string,

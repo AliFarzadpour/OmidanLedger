@@ -1,10 +1,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { fetchUserContext, categorizeWithHeuristics } from '@/lib/plaid';
 import { normalizeCategoryHierarchy, removeUndefinedDeep } from "@/lib/firestore-sanitize";
 
+const db = getAdminDb();
 
 // ---------- Plaid init ----------
 const plaidClient = new PlaidApi(

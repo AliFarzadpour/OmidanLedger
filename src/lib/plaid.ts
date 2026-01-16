@@ -1,9 +1,10 @@
 
 import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { deepCategorizeTransaction } from '@/ai/flows/deep-categorize-transaction';
 import type { TransactionCategorySchema } from '@/lib/prompts/categorization';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
+import { Firestore } from 'firebase-admin/firestore';
 
 /**
  * Creates a Plaid Link Token.
@@ -128,7 +129,7 @@ type UserContext = {
   globalRules: any[];
 };
 
-export async function fetchUserContext(db: any, userId: string): Promise<UserContext> {
+export async function fetchUserContext(db: Firestore, userId: string): Promise<UserContext> {
   const [userRulesSnap, globalRulesSnap] = await Promise.all([
     db.collection(`users/${userId}/categoryMappings`).get(),
     db.collection('globalVendorMap').get()

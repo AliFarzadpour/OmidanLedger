@@ -1,7 +1,9 @@
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
+
+const db = getAdminDb();
 
 const workOrderCategoryToAccountingMap: Record<string, { l1: string, l2: string }> = {
     'Plumbing': { l1: 'Repairs', l2: 'Line 14: Repairs' },

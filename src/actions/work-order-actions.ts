@@ -1,11 +1,13 @@
 
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { v4 as uuidv4 } from 'uuid';
+
+const db = getAdminDb();
 
 const WorkOrderAttachmentSchema = z.object({
   name: z.string(),

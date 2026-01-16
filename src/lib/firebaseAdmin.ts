@@ -1,10 +1,9 @@
 // src/lib/firebaseAdmin.ts
-import { getApps, initializeApp, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getStorage } from "firebase-admin/storage";
+import { getApps, initializeApp, cert, App } from "firebase-admin/app";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
+import { getStorage, Storage } from 'firebase-admin/storage';
 
 function loadServiceAccount() {
-  // Preferred: Base64-encoded JSON (safe across environments)
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64;
   if (b64 && b64.trim().length > 0) {
     try {
@@ -17,7 +16,6 @@ function loadServiceAccount() {
     }
   }
 
-  // Fallback: raw JSON string (your older secret)
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (raw && raw.trim().length > 0) {
     try {
@@ -29,33 +27,44 @@ function loadServiceAccount() {
     }
   }
 
-  // This check will only fail at runtime if no key is present, allowing the build to pass.
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      "CRITICAL: Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64 or FIREBASE_SERVICE_ACCOUNT_KEY in production environment."
-    );
+  throw new Error(
+    "Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64 or FIREBASE_SERVICE_ACCOUNT_KEY in environment."
+  );
+}
+
+let adminApp: App;
+let _db: Firestore | null = null;
+let _storage: Storage | null = null;
+
+function initializeAdmin() {
+  if (getApps().length === 0) {
+    const serviceAccount = loadServiceAccount();
+    adminApp = initializeApp({
+      credential: cert(serviceAccount),
+      projectId: serviceAccount.project_id,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    });
   } else {
-    // In development or build, we might not have the key. Return a dummy object to allow build to pass.
-    // The functions will fail at runtime if they are called without a real key.
-    console.warn("Firebase Admin SDK running in mock mode. Real credentials are required for backend operations.");
-    return { projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'dummy-project' };
+    adminApp = getApps()[0];
   }
 }
 
-// Initialize once per runtime
-if (!getApps().length) {
-    try {
-        const serviceAccount = loadServiceAccount();
-        initializeApp({
-            credential: cert(serviceAccount),
-            projectId: serviceAccount.projectId, 
-            storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        });
-    } catch (e) {
-        console.warn(`Firebase Admin initialization failed: ${(e as Error).message}. Backend features will be unavailable.`);
+export function getAdminDb(): Firestore {
+  if (!_db) {
+    if (getApps().length === 0) {
+      initializeAdmin();
     }
+    _db = getFirestore();
+  }
+  return _db;
 }
 
-// These will now safely export, and will only fail at runtime if initialization failed.
-export const db = getFirestore();
-export const storage = getStorage();
+export function getAdminStorage(): Storage {
+  if (!_storage) {
+    if (getApps().length === 0) {
+      initializeAdmin();
+    }
+    _storage = getStorage();
+  }
+  return _storage;
+}

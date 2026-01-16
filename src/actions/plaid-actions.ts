@@ -2,8 +2,10 @@
 'use server';
 
 import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
+
+const db = getAdminDb();
 
 function getPlaidClient(): PlaidApi {
   const { PLAID_CLIENT_ID, PLAID_SECRET, PLAID_ENV } = process.env;

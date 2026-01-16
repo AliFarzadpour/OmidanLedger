@@ -1,8 +1,10 @@
 
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
+
+const db = getAdminDb();
 
 async function deleteCollection(collectionPath: string, batch: FirebaseFirestore.WriteBatch) {
     const collectionRef = db.collection(collectionPath);

@@ -1,8 +1,10 @@
 
 'use server';
 
-import { db } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import { createHash } from 'crypto';
+
+const db = getAdminDb();
 
 /**
  * Creates or updates a specific categorization rule in Firestore.
