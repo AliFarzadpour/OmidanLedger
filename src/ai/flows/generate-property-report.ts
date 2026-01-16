@@ -3,8 +3,10 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db as adminDb } from '@/lib/firebaseAdmin'; // Use the robust admin instance
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import type { Query, FieldFilter, OrderByDirection } from 'firebase-admin/firestore';
+
+const adminDb = getAdminDb();
 
 // --- TOOLS ---
 
