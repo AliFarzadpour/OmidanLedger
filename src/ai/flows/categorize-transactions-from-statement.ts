@@ -1,3 +1,4 @@
+
 'use server';
 
 import { ai } from '@/ai/genkit';
@@ -8,7 +9,22 @@ import {
   StatementOutputSchema,
 } from './schemas';
 import { CATEGORY_MAP } from '@/lib/categories';
-import { initializeServerFirebase, getUserCategoryMappings } from '@/ai/utils';
+import { getAdminFirestore } from '@/ai/utils';
+import type { Firestore } from 'firebase-admin/firestore';
+
+async function getUserCategoryMappings(firestore: Firestore, userId: string): Promise<string> {
+    const mappingsSnapshot = await firestore.collection(`users/${userId}/categoryMappings`).get();
+    if (mappingsSnapshot.empty) {
+        return "No custom mappings provided.";
+    }
+    const mappings = mappingsSnapshot.docs.map(doc => {
+        const data = doc.data();
+        // Fallback for older rule structure
+        const cats = data.categoryHierarchy || {l0: data.primaryCategory, l1: data.secondaryCategory, l2: data.subcategory};
+        return `- If the transaction description contains "${data.transactionDescription}", you MUST categorize it as: ${cats.l0} > ${cats.l1} > ${cats.l2}`;
+    });
+    return mappings.join('\n');
+}
 
 // NOTE: We use Admin SDK syntax (db.collection) here
 
@@ -54,7 +70,7 @@ const categorizeTransactionsFromStatementFlow = ai.defineFlow(
     outputSchema: StatementOutputSchema,
   },
   async (input) => {
-    const { firestore } = initializeServerFirebase();
+    const firestore = getAdminFirestore();
 
     // 1. Fetch User Data
     const userProfileSnap = await firestore.collection('users').doc(input.userId).get();

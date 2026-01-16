@@ -9,7 +9,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { initializeServerFirebase } from '@/ai/utils';
+import { getAdminFirestore } from '@/ai/utils';
 import { createHash } from 'crypto';
 
 
@@ -41,7 +41,7 @@ const learnCategoryMappingFlow = ai.defineFlow(
   async (input) => {
     try {
       // 1. Initialize Server-Side Admin Firestore
-      const { firestore } = initializeServerFirebase();
+      const firestore = getAdminFirestore();
       const { transactionDescription, primaryCategory, secondaryCategory, subcategory, details, userId, propertyId } = input;
       
       const keywordForMatching = transactionDescription;

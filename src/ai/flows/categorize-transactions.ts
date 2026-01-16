@@ -12,7 +12,7 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import { CATEGORY_MAP } from '@/lib/categories';
-import { initializeServerFirebase } from '@/ai/utils';
+import { getAdminFirestore } from '@/ai/utils';
 import { doc, getDoc } from 'firebase/firestore';
 
 const CategorizeTransactionsInputSchema = z.object({
@@ -73,7 +73,7 @@ const categorizeTransactionsFlow = ai.defineFlow(
     outputSchema: CategorizeTransactionsOutputSchema,
   },
   async input => {
-    const { firestore } = initializeServerFirebase();
+    const firestore = getAdminFirestore();
 
     const userProfileSnap = await getDoc(doc(firestore, 'users', input.userId));
 
