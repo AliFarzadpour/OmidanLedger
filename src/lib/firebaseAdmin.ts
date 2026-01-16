@@ -2,30 +2,45 @@
 import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getFirestore, Firestore } from "firebase-admin/firestore";
 import { getStorage, Storage } from "firebase-admin/storage";
+import fs from "fs";
 
-function loadServiceAccountFromB64() {
+function loadServiceAccount() {
+  // ✅ Prod/App Hosting path (Secret Manager)
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64;
-
-  if (!b64 || !b64.trim()) {
-    throw new Error(
-      "CRITICAL: Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64. Add it as an App Hosting secret (BUILD + RUNTIME)."
-    );
+  if (b64 && b64.trim()) {
+    try {
+      const json = Buffer.from(b64, "base64").toString("utf8");
+      return JSON.parse(json);
+    } catch (err: any) {
+      throw new Error(
+        `CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY_B64 is not valid base64-encoded JSON. ${err?.message || err}`
+      );
+    }
   }
 
-  try {
-    const json = Buffer.from(b64, "base64").toString("utf8");
-    return JSON.parse(json);
-  } catch (err: any) {
-    throw new Error(
-      `CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY_B64 is not valid base64-encoded JSON. ${err?.message || err}`
-    );
+  // ✅ Dev fallback (local file)
+  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+  if (filePath && filePath.trim()) {
+    try {
+      const json = fs.readFileSync(filePath, "utf8");
+      return JSON.parse(json);
+    } catch (err: any) {
+      throw new Error(
+        `CRITICAL: Failed to read FIREBASE_SERVICE_ACCOUNT_PATH "${filePath}". ${err?.message || err}`
+      );
+    }
   }
+
+  // ✅ Helpful message that explains the difference
+  throw new Error(
+    "CRITICAL: Missing Firebase Admin credentials. In production set FIREBASE_SERVICE_ACCOUNT_KEY_B64 (App Hosting secret). In development set FIREBASE_SERVICE_ACCOUNT_PATH to a local service account JSON file."
+  );
 }
 
 function ensureAdminInitialized() {
   if (getApps().length) return;
 
-  const serviceAccount = loadServiceAccountFromB64();
+  const serviceAccount = loadServiceAccount();
 
   initializeApp({
     credential: cert(serviceAccount),
@@ -49,4 +64,3 @@ export function getAdminStorage(): Storage {
   _storage = getStorage();
   return _storage;
 }
-
