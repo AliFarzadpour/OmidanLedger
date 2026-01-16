@@ -9,7 +9,7 @@ function initAdmin() {
 
   if (!raw) {
     console.warn("Missing FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
-    return; 
+    return;
   }
 
   // Sanitize the input: handle escaped newlines often found in .env values
@@ -25,13 +25,13 @@ function initAdmin() {
     });
   } catch (error: any) {
     console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", error);
-    
+
     // Provide a helpful hint based on the specific error
     let hint = "Check your .env file.";
     if (error instanceof SyntaxError && error.message.includes("position 1")) {
       hint = "The JSON likely starts with a single quote (') instead of a double quote (\") or has single-quoted keys.";
     }
-    
+
     throw new Error(`FIREBASE_SERVICE_ACCOUNT_KEY is malformed. ${hint} Error: ${error.message}`);
   }
 }
