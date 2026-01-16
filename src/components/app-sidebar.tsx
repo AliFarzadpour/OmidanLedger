@@ -18,6 +18,7 @@ import {
   BookOpenCheck, // Icon for Onboarding
   DollarSign, // Icon for Billing
   Wrench, // Icon for Operations
+  LifeBuoy,
 } from "lucide-react";
 
 import {
