@@ -168,6 +168,40 @@ export default function TransactionsPage() {
     }
   }, [user, toast, refetchDataSources]);
 
+  // Auto-sync transactions if enabled and last sync was > 24 hours ago
+  useEffect(() => {
+    if (isLoadingDataSources || !user || !autoSyncEnabled || !dataSources) {
+      return;
+    }
+
+    let mostRecentSync: Date | null = null;
+    let hasEverSynced = false;
+    dataSources.forEach(source => {
+      if (source.lastSyncedAt) {
+        hasEverSynced = true;
+        const d = source.lastSyncedAt instanceof Date ? source.lastSyncedAt : new Date((source.lastSyncedAt as any).seconds * 1000);
+        if (!mostRecentSync || d > mostRecentSync) {
+          mostRecentSync = d;
+        }
+      }
+    });
+
+    const plaidAccounts = dataSources.filter(ds => ds.plaidAccessToken);
+    if (plaidAccounts.length === 0) return;
+
+    const shouldSync = autoSyncEnabled && (!hasEverSynced || (mostRecentSync && differenceInHours(new Date(), mostRecentSync) > 24));
+    
+    if (shouldSync) {
+      toast({
+        title: 'Auto-Syncing Transactions',
+        description: `Fetching latest data for ${plaidAccounts.length} Plaid account(s).`,
+      });
+      plaidAccounts.forEach(account => {
+        handleSync(account.id);
+      });
+    }
+  }, [dataSources, isLoadingDataSources, user, autoSyncEnabled, toast, handleSync]);
+
   const allTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !user) return null;
     return query(collectionGroup(firestore, 'transactions'), where('userId', '==', user.uid));
