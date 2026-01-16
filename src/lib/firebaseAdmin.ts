@@ -5,13 +5,15 @@ import { getStorage } from "firebase-admin/storage";
 function initAdmin() {
   if (getApps().length) return;
 
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+  let raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
 
   if (!raw) {
-    // In dev, we might not have the key set yet, or it might be in .env.local
     console.warn("Missing FIREBASE_SERVICE_ACCOUNT_KEY environment variable.");
     return; 
   }
+
+  // Sanitize the input: handle escaped newlines often found in .env values
+  raw = raw.replace(/\\n/g, '\n');
 
   try {
     const serviceAccount = JSON.parse(raw);
@@ -23,8 +25,14 @@ function initAdmin() {
     });
   } catch (error: any) {
     console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:", error);
-    // Throwing a clearer error helps you confirm if the issue is the variable itself
-    throw new Error(`FIREBASE_SERVICE_ACCOUNT_KEY is malformed or invalid JSON. Check your .env file. Error: ${error.message}`);
+    
+    // Provide a helpful hint based on the specific error
+    let hint = "Check your .env file.";
+    if (error instanceof SyntaxError && error.message.includes("position 1")) {
+      hint = "The JSON likely starts with a single quote (') instead of a double quote (\") or has single-quoted keys.";
+    }
+    
+    throw new Error(`FIREBASE_SERVICE_ACCOUNT_KEY is malformed. ${hint} Error: ${error.message}`);
   }
 }
 
