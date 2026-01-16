@@ -1,9 +1,15 @@
-export const firebaseConfig = {
-  "projectId": "studio-7576922301-bac28",
-  "appId": "1:785987975672:web:3d2a2404cd4168c3ffbe0d",
-  "storageBucket": "studio-7576922301-bac28.firebasestorage.app",
-  "apiKey": process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "your_firebase_api_key",
-  "authDomain": "studio-7576922301-bac28.firebaseapp.com",
-  "measurementId": "",
-  "messagingSenderId": "785987975672"
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
 };
+
+// Build-time sanity check to ensure essential variables are present.
+// This prevents deploying a broken application.
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  throw new Error("CRITICAL: Missing NEXT_PUBLIC_FIREBASE_API_KEY or NEXT_PUBLIC_FIREBASE_PROJECT_ID. Check apphosting.yaml configuration.");
+}
+
+export { firebaseConfig };
