@@ -2,9 +2,8 @@
 
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
-const db = getAdminDb();
-
 export async function isSuperAdmin(userId: string) {
+  const db = getAdminDb();
   if (!userId) return false;
   
   try {
