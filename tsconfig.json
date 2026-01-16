@@ -26,10 +26,7 @@
       "@/*": [
         "./src/*"
       ]
-    },
-    "types": [
-      "@types/marked"
-    ]
+    }
   },
   "include": [
     "next-env.d.ts",
