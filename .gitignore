@@ -37,3 +37,8 @@ next-env.d.ts
 
 # Firebase
 service-account.json
+
+# env files
+.env
+.env.*
+!.env.example
