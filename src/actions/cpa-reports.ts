@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { calculateAmortization } from './amortization-actions';
 import { eachMonthOfInterval, parseISO } from 'date-fns';
 

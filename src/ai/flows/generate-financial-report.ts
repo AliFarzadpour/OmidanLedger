@@ -2,7 +2,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db as adminDb } from '@/lib/admin-db'; 
+import { db as adminDb } from '@/lib/firebaseAdmin'; 
 import { Timestamp, type Query } from 'firebase-admin/firestore';
 
 // Input Schema

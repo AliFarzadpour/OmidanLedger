@@ -3,7 +3,7 @@
 
 import { getAppUrl } from "@/lib/url-utils";
 import { Resend } from 'resend';
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { createHash, randomBytes } from 'crypto';
 import { Timestamp } from 'firebase-admin/firestore';
 import { sendTenantInviteEmail } from "@/lib/email";

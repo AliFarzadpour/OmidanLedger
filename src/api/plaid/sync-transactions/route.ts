@@ -1,24 +1,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
-import admin from 'firebase-admin';
+import { db } from '@/lib/firebaseAdmin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { fetchUserContext, categorizeWithHeuristics } from '@/lib/plaid';
 import { normalizeCategoryHierarchy, removeUndefinedDeep } from "@/lib/firestore-sanitize";
 
-// ---------- Firebase Admin init ----------
-function initAdmin() {
-  if (admin.apps.length) return admin.app();
-
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY env var');
-
-  const serviceAccount = JSON.parse(raw);
-
-  return admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-}
 
 // ---------- Plaid init ----------
 const plaidClient = new PlaidApi(
@@ -53,9 +40,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    initAdmin();
-    const db = getFirestore();
     
     // Fetch the user's categorization context (rules, vendors, etc.)
     const userContext = await fetchUserContext(db, userId);
@@ -220,7 +204,7 @@ export async function POST(req: NextRequest) {
             categoryHierarchy,
             costCenter: categoryResult.costCenter, // Apply cost center from rule
             confidence: categoryResult.confidence,
-            reviewStatus: (categoryResult.confidence || 0) < 0.95 ? 'needs-review' : 'approved',
+            reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
             aiExplanation: categoryResult.explanation,
             merchantName: t.merchant_name ?? null,
             pending: t.pending ?? false,

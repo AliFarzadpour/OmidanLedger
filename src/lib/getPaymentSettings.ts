@@ -1,6 +1,6 @@
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 
 interface PaymentSettings {
     stripe: { enabled: boolean };

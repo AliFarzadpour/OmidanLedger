@@ -2,7 +2,7 @@
 'use server';
 
 import Stripe from 'stripe';
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Stripe with the secret key from environment variables

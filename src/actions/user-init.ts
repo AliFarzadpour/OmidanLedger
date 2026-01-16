@@ -1,6 +1,6 @@
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 export async function initializeUserSchema(userId: string, email: string, provider: string) {

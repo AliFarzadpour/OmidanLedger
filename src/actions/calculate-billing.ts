@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { startOfMonth, endOfMonth, format } from 'date-fns';
 
 // --- SYSTEM DEFAULTS & PRICING RULES ---

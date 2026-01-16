@@ -1,6 +1,6 @@
 'use server';
 
-import { db as adminDb } from '@/lib/admin-db';
+import { db as adminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 /**

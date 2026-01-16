@@ -3,7 +3,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'zod';
-import { db as adminDb } from '@/lib/admin-db'; // Use the robust admin instance
+import { db as adminDb } from '@/lib/firebaseAdmin'; // Use the robust admin instance
 import type { Query, FieldFilter, OrderByDirection } from 'firebase-admin/firestore';
 
 // --- TOOLS ---

@@ -13,7 +13,7 @@ import {
   type LeaseAgentInput,
   type LeaseAgentOutput
 } from './schemas/lease-flow.schema';
-import { db, storage } from '@/lib/admin-db';
+import { db, storage } from '@/lib/firebaseAdmin';
 import legalDictionary from '../../../docs/legal/lease-dictionary.json';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';

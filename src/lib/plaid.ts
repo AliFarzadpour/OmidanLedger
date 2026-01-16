@@ -1,6 +1,6 @@
 
 import { PlaidLinkOnSuccessMetadata } from 'react-plaid-link';
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { deepCategorizeTransaction } from '@/ai/flows/deep-categorize-transaction';
 import type { TransactionCategorySchema } from '@/lib/prompts/categorization';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';

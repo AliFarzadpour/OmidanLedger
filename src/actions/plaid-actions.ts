@@ -2,7 +2,7 @@
 'use server';
 
 import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 function getPlaidClient(): PlaidApi {

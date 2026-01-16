@@ -1,6 +1,6 @@
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
 
 const workOrderCategoryToAccountingMap: Record<string, { l1: string, l2: string }> = {

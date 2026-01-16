@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import { revalidatePath } from 'next/cache';
 import Stripe from 'stripe';
 import { FieldValue } from 'firebase-admin/firestore';

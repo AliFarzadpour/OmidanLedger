@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/admin-db';
+import { db } from '@/lib/firebaseAdmin';
 import Stripe from 'stripe';
 
 const stripeKey = process.env.STRIPE_SECRET_KEY || 'dummy_key_for_build';
