@@ -2,7 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Configuration, PlaidApi, PlaidEnvironments, RemovedTransaction, Transaction as PlaidTransaction } from 'plaid';
 import { db } from '@/lib/firebaseAdmin';
-import { getFirestore } from 'firebase-admin/firestore';
 import { fetchUserContext, categorizeWithHeuristics } from '@/lib/plaid';
 import { normalizeCategoryHierarchy, removeUndefinedDeep } from "@/lib/firestore-sanitize";
 
