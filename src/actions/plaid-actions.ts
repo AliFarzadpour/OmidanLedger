@@ -43,7 +43,6 @@ export async function getAndUpdatePlaidBalances(userId: string) {
   const plaidClient = getPlaidClient();
   const batch = db.batch();
 
-  // 1. Get all Plaid-linked bank accounts for the user
   const accountsQuery = await db
     .collection(`users/${userId}/bankAccounts`)
     .where('plaidAccessToken', '!=', null)
@@ -53,19 +52,17 @@ export async function getAndUpdatePlaidBalances(userId: string) {
     return { success: true, count: 0, message: 'No Plaid-linked accounts found.' };
   }
   
-  // Group access tokens to make one API call per financial institution
   const accessTokens = [...new Set(accountsQuery.docs.map(doc => doc.data().plaidAccessToken))];
   
   let updatedCount = 0;
+  const errors: string[] = [];
 
   for (const token of accessTokens) {
     try {
-      // 2. Fetch balances from Plaid
       const balanceResponse = await plaidClient.accountsBalanceGet({
         access_token: token,
       });
 
-      // 3. Update Firestore with the new balances
       for (const account of balanceResponse.data.accounts) {
         const balanceData = {
           currentBalance: account.balances.current,
@@ -81,12 +78,18 @@ export async function getAndUpdatePlaidBalances(userId: string) {
         updatedCount++;
       }
     } catch (error: any) {
-        // If one token fails, log it and continue with others.
-        console.error(`Failed to fetch balance for an access token: ${error.message}`);
+        const errorMessage = error.response?.data?.error_message || error.message || 'An unknown error occurred with Plaid.';
+        console.error(`Failed to fetch balance for an access token: ${errorMessage}`);
+        errors.push(errorMessage);
     }
   }
 
-  await batch.commit();
+  if (updatedCount > 0) {
+      await batch.commit();
+  } else if (errors.length > 0) {
+      throw new Error(`Plaid connection failed for all accounts: ${errors.join('; ')}`);
+  }
 
-  return { success: true, count: updatedCount };
+  return { success: true, count: updatedCount, errors };
 }
+
