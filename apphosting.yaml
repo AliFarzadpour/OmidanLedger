@@ -1,3 +1,13 @@
+buildConfig:
+  env:
+    - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+      value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
+    - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+      value: "omidanledger.firebaseapp.com"
+    - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+      value: "studio-7576922301-bac28"
+    - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+      value: "studio-7576922301-bac28.appspot.com"
 runConfig:
   env:
     # --- Secrets from Secret Manager ---
