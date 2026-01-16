@@ -1,34 +1,65 @@
-buildConfig:
-  env:
-    - variable: NEXT_PUBLIC_FIREBASE_API_KEY
-      value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
-    - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
-      value: "omidanledger.firebaseapp.com"
-    - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
-      value: "studio-7576922301-bac28"
-    - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
-      value: "studio-7576922301-bac28.appspot.com"
-runConfig:
-  env:
-    # --- Secrets from Secret Manager ---
-    - variable: FIREBASE_SERVICE_ACCOUNT_KEY
-      secret: FIREBASE_SERVICE_ACCOUNT_KEY
+env:
+  # --- Public (client) Firebase config: must be present at BUILD ---
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyCbDubxoArupHAz2jquVoNeB6j8vbZcY-8"
+    availability:
+      - BUILD
+      - RUNTIME
 
-    - variable: RESEND_API_KEY
-      secret: RESEND_API_KEY
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "omidanledger.firebaseapp.com"
+    availability:
+      - BUILD
+      - RUNTIME
 
-    - variable: APP_URL
-      secret: APP_URL
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "studio-7576922301-bac28"
+    availability:
+      - BUILD
+      - RUNTIME
 
-    - variable: PLAID_CLIENT_ID
-      secret: PLAID_CLIENT_ID
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "studio-7576922301-bac28.appspot.com"
+    availability:
+      - BUILD
+      - RUNTIME
 
-    - variable: PLAID_SECRET
-      secret: PLAID_SECRET
+  # --- Secrets from Secret Manager (server only) ---
+  - variable: FIREBASE_SERVICE_ACCOUNT_KEY
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY
+    availability:
+      - RUNTIME
 
-    - variable: GEMINI_API_KEY
-      secret: GEMINI_API_KEY
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY
+    availability:
+      - RUNTIME
 
-    # --- Non-secret plain env values ---
-    - variable: PLAID_ENV
-      value: "production"
+  - variable: APP_URL
+    secret: APP_URL
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: PLAID_CLIENT_ID
+    secret: PLAID_CLIENT_ID
+    availability:
+      - BUILD
+      - RUNTIME
+
+  - variable: PLAID_SECRET
+    secret: PLAID_SECRET
+    availability:
+      - RUNTIME
+
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY
+    availability:
+      - RUNTIME
+
+  # --- Non-secret plain env values ---
+  - variable: PLAID_ENV
+    value: "production"
+    availability:
+      - BUILD
+      - RUNTIME
