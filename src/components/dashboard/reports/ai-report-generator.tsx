@@ -280,14 +280,38 @@ export function AIReportGenerator() {
     link.click();
     document.body.removeChild(link);
   };
-
-  const handleCopy = () => {
+  
+  const handleCopy = async () => {
     if (!report) return;
-    navigator.clipboard.writeText(report);
-    toast({
-      title: 'Copied!',
-      description: 'The report text is now on your clipboard.',
-    });
+    try {
+      await navigator.clipboard.writeText(report);
+      toast({
+        title: "Copied!",
+        description: "The report text has been copied to your clipboard.",
+      });
+    } catch (err) {
+      // Fallback for insecure contexts
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = report;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        toast({
+          title: "Copied!",
+          description: "The report text has been copied to your clipboard.",
+        });
+      } catch (fallbackErr) {
+        toast({
+          variant: "destructive",
+          title: "Copy Failed",
+          description: "Could not copy the report text.",
+        });
+        console.error('Fallback copy failed:', fallbackErr);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
