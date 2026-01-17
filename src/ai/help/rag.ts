@@ -1,162 +1,144 @@
+'use server';
 
 import 'server-only';
-
-import { ai } from '@/ai/genkit';
 import { getAdminDb } from '@/lib/firebaseAdmin';
+import { isHelpEnabled } from '@/lib/help/help-config';
+import { isSuperAdmin } from '@/lib/auth-utils';
+import { ai } from '@/ai/genkit';
+import { retrieveTopK, type HelpArticle } from '@/lib/help/help-retrieval';
+import { z } from 'zod';
 
-type HelpArticle = {
-  id: string;
-  title: string;
-  category?: string;
-  body: string;
-  tags?: string[];
-  embedding?: number[];
-  updatedAt?: any;
-};
+const GENKIT_EMBEDDING_MODEL = 'googleai/text-embedding-004';
+const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 
-function cosineSimilarity(a: number[], b: number[]) {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  const len = Math.min(a.length, b.length);
-  for (let i = 0; i < len; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
-
-// Uses a small, safe embedding model. If your Genkit plugin supports a different one,
-// we can swap it later without changing app behavior.
 async function embedText(text: string): Promise<number[]> {
-  // Genkit embeddings API varies slightly by version.
-  // This pattern works in many setups; adjust if your local typings differ.
-  const res: any = await ai.embed({
-    model: 'googleai/text-embedding-004',
-    content: text,
-  });
-  // Normalize common return shapes
-  const v =
-    res?.embedding?.values ??
-    res?.embedding ??
-    res?.[0]?.embedding?.values ??
-    res?.[0]?.embedding ??
-    null;
-
-  if (!Array.isArray(v)) {
-    throw new Error('Embedding model did not return a numeric vector.');
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not set. Please add it to your environment secrets.");
   }
-  return v as number[];
+  try {
+    const res: any = await ai.embed({ model: GENKIT_EMBEDDING_MODEL, content: text });
+    // Normalize different possible return shapes from Genkit/Google AI
+    const v =
+        res?.embedding?.values ??
+        res?.embedding ??
+        res?.[0]?.embedding?.values ??
+        res?.[0]?.embedding ??
+        null;
+    
+    if (!Array.isArray(v)) {
+        throw new Error('Embedding model did not return a valid vector.');
+    }
+    return v;
+
+  } catch (err: any) {
+    console.error("Embedding service failed:", err);
+    throw new Error(`Embedding service failed: ${err.message}`);
+  }
 }
 
-export async function indexMissingHelpEmbeddings(options?: { limit?: number }) {
+/**
+ * Admin-only action to generate help articles from the codebase.
+ */
+export async function generateHelpArticlesFromCodebase(userId: string) {
+  if (!isHelpEnabled() || !process.env.GEMINI_API_KEY) throw new Error(FRIENDLY_ERROR_MSG);
+  if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
+
   const db = getAdminDb();
-  const limit = options?.limit ?? 200;
+  const fileContentPrompt = `
+    Analyze the following key file paths and their descriptions from a Next.js/React application named 'FiscalFlow'.
+    Based on this, generate 15-20 comprehensive help articles for end-users.
 
-  const snap = await db.collection('help_articles').limit(limit).get();
-  let updated = 0;
+    - /dashboard/page.tsx: The main dashboard with KPI cards and charts.
+    - /dashboard/transactions/page.tsx: The page for managing bank connections and viewing all transactions.
+    - /dashboard/properties/page.tsx: The hub for adding and managing properties (both single-family and multi-family).
+    - /dashboard/reports/page.tsx: The main reports hub.
+    - /dashboard/reports/ai-report/page.tsx: The AI-powered financial report generator.
+    - /dashboard/rules/page.tsx: The "Smart Rules" page for custom categorization.
+    - /lib/plaid.ts & /firebase/errors.ts: Files containing Plaid connection logic and permission error handling.
 
-  for (const doc of snap.docs) {
-    const data = doc.data() as Omit<HelpArticle, 'id'>;
-    const needsEmbedding =
-      !data.embedding || !Array.isArray(data.embedding) || data.embedding.length < 10;
+    For each article, provide a 'title', 'category' (e.g., "Getting Started", "Banking", "Properties", "Reports", "Troubleshooting"), 'body' (in Markdown), and relevant 'tags' (lowercase array).
+  `;
+  
+  const articleSchema = z.object({
+    title: z.string(),
+    category: z.string(),
+    body: z.string(),
+    tags: z.array(z.string()),
+  });
 
-    if (!needsEmbedding) continue;
+  const { output } = await ai.generate({
+    prompt: fileContentPrompt,
+    model: 'googleai/gemini-2.5-flash',
+    output: { schema: z.object({ articles: z.array(articleSchema) }) },
+  });
 
-    const text = `${data.title}\n\n${data.body}\n\nTags: ${(data.tags || []).join(', ')}`;
-    const embedding = await embedText(text);
+  if (!output || !output.articles) throw new Error("Failed to generate articles from AI.");
 
-    await doc.ref.set(
-      {
-        embedding,
-        updatedAt: new Date(),
-      },
-      { merge: true }
-    );
+  const batch = db.batch();
+  output.articles.forEach(article => {
+    const docRef = db.collection('help_articles').doc();
+    batch.set(docRef, { ...article, updatedAt: new Date(), enabled: true, embedding: [] });
+  });
 
-    updated++;
-  }
-
-  return { updated };
+  await batch.commit();
+  return { created: output.articles.length };
 }
 
-export async function answerHelpQuestion(question: string) {
+/**
+ * Admin-only action to create and store embeddings for help articles.
+ */
+export async function indexHelpArticles(userId: string) {
+  if (!isHelpEnabled() || !process.env.GEMINI_API_KEY) throw new Error(FRIENDLY_ERROR_MSG);
+  if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
+
   const db = getAdminDb();
+  const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
+  
+  let updatedCount = 0;
+  const batch = db.batch();
 
-  // 1) Embed question
-  const qVec = await embedText(question);
+  for (const doc of snapshot.docs) {
+    const article = doc.data();
+    if (article.embedding && article.embedding.length > 0) continue;
 
-  // 2) Pull articles (for a few hundred/thousand docs this is OK)
-  // If corpus grows large, we’ll upgrade to a real vector index later.
-  const snap = await db.collection('help_articles').get();
+    const contentToEmbed = `${article.title}\n\n${article.body}`;
+    try {
+        const embedding = await embedText(contentToEmbed);
+        batch.update(doc.ref, { embedding, updatedAt: new Date() });
+        updatedCount++;
+    } catch (e: any) {
+        // Log the error for the admin but don't stop the whole batch
+        console.error(`Failed to embed article ${doc.id}: ${e.message}`);
+    }
+  }
 
-  const articles: HelpArticle[] = snap.docs.map((d) => {
-    const data = d.data() as any;
-    return {
-      id: d.id,
-      title: data.title,
-      category: data.category,
-      body: data.body,
-      tags: data.tags,
-      embedding: data.embedding,
-      updatedAt: data.updatedAt,
-    };
-  });
+  if (updatedCount > 0) await batch.commit();
+  return { updated: updatedCount };
+}
 
-  // 3) Score + pick top K with embeddings
-  const scored = articles
-    .filter((a) => Array.isArray(a.embedding) && (a.embedding as number[]).length > 10)
-    .map((a) => ({
-      ...a,
-      score: cosineSimilarity(qVec, a.embedding as number[]),
-    }))
-    .sort((x, y) => y.score - x.score)
-    .slice(0, 5);
+/**
+ * Answers a user's question using the RAG pipeline.
+ */
+export async function askHelpRag(question: string) {
+  if (!isHelpEnabled()) {
+    return { answer: FRIENDLY_ERROR_MSG, sources: [] };
+  }
+  if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
 
-  // 4) Build grounded context
-  const context = scored
-    .map(
-      (a, idx) =>
-        `SOURCE ${idx + 1}: ${a.title}\nCategory: ${a.category || 'General'}\n${a.body}`
-    )
-    .join('\n\n---\n\n');
+  const db = getAdminDb();
+  // embedText will now throw on failure, which will be caught by the UI's try/catch
+  const questionEmbedding = await embedText(question);
+  
+  const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
+  const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
 
-  // 5) Generate answer grounded in sources
-  const prompt = `
-You are the OmidanLedger in-app Help Assistant.
-Answer the user's question using ONLY the provided sources.
-If the sources do not contain the answer, say you don’t have enough info and suggest what page/feature to check.
+  const sources = retrieveTopK(questionEmbedding, allArticles, 5);
 
-User question:
-${question}
+  const context = sources.map((s, i) => `Source ${i+1}: ${s.title}\n${s.body}`).join('\n\n---\n\n');
+  const prompt = `You are a helpful AI assistant for the FiscalFlow app. Answer the user's question based ONLY on the provided sources.\n\nQuestion: ${question}\n\nSources:\n${context}`;
 
-Sources:
-${context}
-
-Return:
-1) A clear answer (short, step-by-step).
-2) Mention the relevant page(s) in the app when possible (Dashboard, Transactions, Reports, etc).
-`;
-
-  const completion: any = await ai.generate({
-    prompt,
-    // model already configured in ai instance, but can be overridden
-  });
-
-  const text =
-    completion?.text ??
-    completion?.outputText ??
-    completion?.output ??
-    'Sorry — I could not generate a response.';
-
-  const sources = scored.map((s) => ({
-    id: s.id,
-    title: s.title,
-    category: s.category || 'General',
-    score: s.score,
-  }));
-
-  return { answer: text, sources };
+  const { output } = await ai.generate({ prompt, model: 'googleai/gemini-2.5-flash' });
+  const answer = output?.text || "Sorry, I couldn't find an answer in the help articles.";
+  
+  return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
 }

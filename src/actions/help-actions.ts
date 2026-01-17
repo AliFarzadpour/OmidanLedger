@@ -11,16 +11,27 @@ import { z } from 'zod';
 const GENKIT_EMBEDDING_MODEL = 'googleai/text-embedding-004';
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 
-async function embedText(text: string): Promise<number[] | null> {
+async function embedText(text: string): Promise<number[]> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error("GEMINI_API_KEY is not set. Please add it to your environment secrets.");
   }
   try {
-    const res = await ai.embed({ model: GENKIT_EMBEDDING_MODEL, content: text });
-    return res.embedding;
+    const res: any = await ai.embed({ model: GENKIT_EMBEDDING_MODEL, content: text });
+    // Normalize different possible return shapes from Genkit/Google AI
+    const v =
+        res?.embedding?.values ??
+        res?.embedding ??
+        res?.[0]?.embedding?.values ??
+        res?.[0]?.embedding ??
+        null;
+    
+    if (!Array.isArray(v)) {
+        throw new Error('Embedding model did not return a valid vector.');
+    }
+    return v;
+
   } catch (err: any) {
-    console.error("Embedding failed:", err);
-    // Re-throw a more specific error to be caught by the UI
+    console.error("Embedding service failed:", err);
     throw new Error(`Embedding service failed: ${err.message}`);
   }
 }
@@ -91,11 +102,13 @@ export async function indexHelpArticles(userId: string) {
     if (article.embedding && article.embedding.length > 0) continue;
 
     const contentToEmbed = `${article.title}\n\n${article.body}`;
-    const embedding = await embedText(contentToEmbed);
-
-    if (embedding) {
-      batch.update(doc.ref, { embedding, updatedAt: new Date() });
-      updatedCount++;
+    try {
+        const embedding = await embedText(contentToEmbed);
+        batch.update(doc.ref, { embedding, updatedAt: new Date() });
+        updatedCount++;
+    } catch (e: any) {
+        // Log the error for the admin but don't stop the whole batch
+        console.error(`Failed to embed article ${doc.id}: ${e.message}`);
     }
   }
 
@@ -113,16 +126,9 @@ export async function askHelpRag(question: string) {
   if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
 
   const db = getAdminDb();
-  // embedText will now throw a specific error if the key is missing,
-  // which will be caught by the UI component's try/catch block.
+  // embedText will now throw on failure, which will be caught by the UI's try/catch
   const questionEmbedding = await embedText(question);
   
-  if (!questionEmbedding) {
-      // This should now be less likely to be hit, but remains as a safeguard.
-      throw new Error("Failed to create question embedding.");
-  }
-
-
   const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
   const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
 
