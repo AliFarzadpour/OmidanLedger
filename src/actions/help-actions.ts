@@ -53,7 +53,8 @@ async function embedText(text: string): Promise<EmbeddingResult> {
  * Admin-only action to generate help articles from the codebase.
  */
 export async function generateHelpArticlesFromCodebase(userId: string) {
-  if (!isHelpEnabled() || !process.env.NEXT_PUBLIC_GEMINI_API_KEY) throw new Error(FRIENDLY_ERROR_MSG);
+  if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) throw new Error(FRIENDLY_ERROR_MSG);
+  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
   if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
 
   const db = getAdminDb();
@@ -110,32 +111,24 @@ export async function indexHelpArticles(userId: string): Promise<{
 }> {
   const result = { ok: true, indexed: 0, skipped: 0, failed: 0, errors: [] as string[] };
 
-  if (!isHelpEnabled()) {
-    result.ok = false;
-    result.errors.push("Help feature is not enabled.");
-    return result;
-  }
-  if (!process.env.GEMINI_API_KEY) {
-    result.ok = false;
-    result.errors.push("GEMINI_API_KEY is not configured on the server.");
-    return result;
-  }
-  if (!await isSuperAdmin(userId)) {
-    result.ok = false;
-    result.errors.push("Permission denied.");
-    return result;
-  }
-
-  const db = getAdminDb();
-  const batch = db.batch();
-
   try {
+    if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) {
+      throw new Error("Help feature is not enabled.");
+    }
+    if (!process.env.GEMINI_API_KEY) {
+        throw new Error("GEMINI_API_KEY is not configured on the server.");
+    }
+    if (!await isSuperAdmin(userId)) {
+        throw new Error("Permission denied.");
+    }
+
+    const db = getAdminDb();
+    const batch = db.batch();
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
 
     if (snapshot.empty) {
-        console.error('[HELP][INDEX] Docs query returned 0 results.');
         result.ok = false;
-        result.errors.push("No enabled help articles found in the database.");
+        result.errors.push("No help articles found. Click 'Generate Help Content' first.");
         return result;
     }
 
@@ -202,30 +195,45 @@ export async function indexHelpArticles(userId: string): Promise<{
  * Answers a user's question using the RAG pipeline.
  */
 export async function askHelpRag(question: string) {
-  if (!isHelpEnabled()) {
-    return { answer: FRIENDLY_ERROR_MSG, sources: [] };
-  }
-  if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
+    if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) {
+        return { answer: FRIENDLY_ERROR_MSG, sources: [] };
+    }
+    if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
 
-  const db = getAdminDb();
-  
-  const questionEmbeddingResult = await embedText(question);
-  if (!questionEmbeddingResult.ok) {
-    // Forward the specific error from the embedding function
-    throw new Error(questionEmbeddingResult.error);
-  }
-  const questionEmbedding = questionEmbeddingResult.embedding;
-  
-  const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
-  const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
+    try {
+        const db = getAdminDb();
+        const questionEmbeddingResult = await embedText(question);
+        if (!questionEmbeddingResult.ok) {
+            throw new Error(questionEmbeddingResult.error);
+        }
+        const questionEmbedding = questionEmbeddingResult.embedding;
+        
+        const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
 
-  const sources = retrieveTopK(questionEmbedding, allArticles, 5);
+        if (snapshot.empty) {
+            return { answer: "The knowledge base is empty. Please ask an admin to generate content.", sources: [] };
+        }
 
-  const context = sources.map((s, i) => `Source ${i+1}: ${s.title}\n${s.body}`).join('\n\n---\n\n');
-  const prompt = `You are a helpful AI assistant for the FiscalFlow app. Answer the user's question based ONLY on the provided sources.\n\nQuestion: ${question}\n\nSources:\n${context}`;
+        const allArticles = snapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() }))
+            .filter(doc => doc.title && doc.body) as HelpArticle[];
 
-  const { output } = await ai.generate({ prompt, model: 'googleai/gemini-2.5-flash' });
-  const answer = output?.text || "Sorry, I couldn't find an answer in the help articles.";
-  
-  return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
+        const sources = retrieveTopK(questionEmbedding, allArticles, 5);
+
+        if (sources.length === 0) {
+            return { answer: "Sorry, I couldn't find any relevant help articles for your question.", sources: [] };
+        }
+
+        const context = sources.map((s, i) => `Source ${i+1}: ${s.title}\n${s.body}`).join('\n\n---\n\n');
+        const prompt = `You are a helpful AI assistant for the FiscalFlow app. Answer the user's question based ONLY on the provided sources.\n\nQuestion: ${question}\n\nSources:\n${context}`;
+
+        const { output } = await ai.generate({ prompt, model: 'googleai/gemini-2.5-flash' });
+        const answer = output?.text || "Sorry, I couldn't find an answer in the help articles.";
+        
+        return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
+
+    } catch (error: any) {
+        console.error("[HELP][ASK] RAG pipeline failed:", error);
+        throw new Error(error.message || 'There was a problem answering your question.');
+    }
 }
