@@ -29,7 +29,6 @@ env:
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY_B64
     secret: FIREBASE_SERVICE_ACCOUNT_KEY_B64
     availability:
-      - BUILD
       - RUNTIME
 
 
@@ -69,4 +68,3 @@ env:
     availability:
       - BUILD
       - RUNTIME
-
