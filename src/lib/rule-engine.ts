@@ -1,10 +1,7 @@
-
 'use server';
 
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { createHash } from 'crypto';
-
-const db = getAdminDb();
 
 /**
  * Creates or updates a specific categorization rule in Firestore.
@@ -17,6 +14,8 @@ async function setRule(
   propertyId: string
 ) {
   if (!keyword) return;
+
+  const db = getAdminDb(); // Moved initialization here
 
   // Use a consistent ID generation scheme. Using propertyId ensures property-specific rules
   // for the same keyword (e.g., "Water Bill") don't overwrite each other.
