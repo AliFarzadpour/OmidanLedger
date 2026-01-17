@@ -42,6 +42,7 @@ import { isSuperAdmin } from "@/lib/auth-utils";
 import { Logo } from "@/components/logo";
 import { collection, query, where } from "firebase/firestore";
 import { cn } from "@/lib/utils";
+import { isHelpEnabled } from "@/lib/help/help-config";
 
 const data = {
   // Zone 1: The "Physical" World (Real Estate)
@@ -169,6 +170,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user } = useUser();
   const firestore = useFirestore();
   const [isAdmin, setIsAdmin] = React.useState(false);
+  const helpEnabled = isHelpEnabled();
 
   // Check if user has properties to determine if they are still in setup mode
   const propertiesQuery = useMemoFirebase(() => {
@@ -185,6 +187,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }, [user]);
 
   const renderMenuItem = (item: any) => {
+    if (item.title === 'Help' && !helpEnabled) {
+      return null;
+    }
+    
     const isActive = item.url === '/dashboard' 
       ? pathname === item.url 
       : pathname.startsWith(item.url);

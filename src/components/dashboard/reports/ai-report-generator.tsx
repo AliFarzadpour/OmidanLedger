@@ -13,9 +13,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { marked } from 'marked';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { isHelpEnabled } from '@/lib/help/help-config';
+import { askHelpRag } from '@/actions/help-actions';
 
-// Render markdown inside UI (No changes)
+// Render markdown inside UI
 function MarkdownReport({ content }: { content: string }) {
+  if (!content) return null;
   const htmlContent = marked.parse(content);
   return (
     <div
@@ -32,6 +35,7 @@ export function AIReportGenerator() {
   const [query, setQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [report, setReport] = useState<string | null>(null);
+  const [helpSources, setHelpSources] = useState<any[]>([]); // For RAG results
   const reportContentRef = useRef<HTMLDivElement>(null);
 
   const userDocRef = useMemoFirebase(() => {
@@ -43,9 +47,7 @@ export function AIReportGenerator() {
     businessProfile?: { businessName?: string; logoUrl?: string };
   }>(userDocRef);
 
-  // ===========================================================
-  // 🚀 PROFESSIONAL PDF GENERATOR (Fixed Wrapping & Cut-offs)
-  // ===========================================================
+  // ... (PDF and CSV generation functions remain the same)
   const handleDownloadPdf = () => {
     if (!report) return;
     toast({ title: 'Generating PDF...', description: 'Creating professional report.' });
@@ -301,14 +303,23 @@ export function AIReportGenerator() {
 
     setIsLoading(true);
     setReport(null);
+    setHelpSources([]);
 
     try {
-      const result = await generateFinancialReport({
-        userQuery: query,
-        userId: user.uid,
-      });
+      const helpEnabled = isHelpEnabled();
+      const isHelpQuestion = ['how do i', 'how to', 'where can i', 'what is'].some(prefix => query.toLowerCase().startsWith(prefix));
 
-      setReport(result);
+      if (helpEnabled && isHelpQuestion) {
+        const result = await askHelpRag(query);
+        setReport(result.answer);
+        setHelpSources(result.sources);
+      } else {
+        const result = await generateFinancialReport({
+          userQuery: query,
+          userId: user.uid,
+        });
+        setReport(result);
+      }
     } catch (error: any) {
       console.error('AI error:', error);
       toast({
@@ -411,6 +422,16 @@ export function AIReportGenerator() {
             <div ref={reportContentRef}>
               <MarkdownReport content={report} />
             </div>
+            {helpSources.length > 0 && (
+              <div className="pt-4 mt-4 border-t">
+                <h4 className="font-semibold text-sm mb-2">Sources</h4>
+                <div className="flex flex-wrap gap-2">
+                  {helpSources.map(source => (
+                    <div key={source.id} className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full">{source.title}</div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

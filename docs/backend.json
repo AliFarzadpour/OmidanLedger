@@ -16,7 +16,9 @@
           "type": "array",
           "items": { "type": "number" },
           "description": "Vector embedding for semantic search."
-        }
+        },
+        "enabled": { "type": "boolean" },
+        "sourcePaths": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["title", "body"]
     },
