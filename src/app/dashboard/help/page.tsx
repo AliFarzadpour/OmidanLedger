@@ -73,9 +73,26 @@ export default function HelpPage() {
     setIsAdminActionLoading(true);
     try {
       const result = await indexHelpArticles(user.uid);
-      toast({ title: "Indexing Complete", description: `${result.updated} articles were indexed.` });
+      
+      if (result.ok) {
+        toast({ 
+          title: "Indexing Complete", 
+          description: `Indexed: ${result.indexed}, Skipped: ${result.skipped}, Failed: ${result.failed}` 
+        });
+      } else {
+        toast({ 
+          variant: 'destructive', 
+          title: 'Indexing Failed', 
+          description: result.errors[0] || 'An unknown error occurred during indexing.' 
+        });
+      }
+
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Error', description: e.message });
+      toast({ 
+        variant: 'destructive', 
+        title: 'Error', 
+        description: e.message 
+      });
     } finally {
       setIsAdminActionLoading(false);
     }

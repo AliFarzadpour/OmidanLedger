@@ -10,14 +10,25 @@ import { z } from 'zod';
 
 const GENKIT_EMBEDDING_MODEL = 'googleai/text-embedding-004';
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
+const MIN_CONTENT_LENGTH = 20;
 
-async function embedText(text: string): Promise<number[]> {
+// Hardened embedText function
+type EmbeddingResult = 
+  | { ok: true; embedding: number[] }
+  | { ok: false; error: string };
+
+async function embedText(text: string): Promise<EmbeddingResult> {
   if (!process.env.GEMINI_API_KEY) {
-    throw new Error("GEMINI_API_KEY is not set. Please add it to your environment secrets.");
+    return { ok: false, error: "GEMINI_API_KEY is not set on the server." };
   }
+  
+  if (!text || text.trim().length < MIN_CONTENT_LENGTH) {
+    return { ok: false, error: `Content is too short to embed (must be at least ${MIN_CONTENT_LENGTH} characters).` };
+  }
+
   try {
     const res: any = await ai.embed({ model: GENKIT_EMBEDDING_MODEL, content: text });
-    // Normalize different possible return shapes from Genkit/Google AI
+    
     const v =
         res?.embedding?.values ??
         res?.embedding ??
@@ -25,14 +36,16 @@ async function embedText(text: string): Promise<number[]> {
         res?.[0]?.embedding ??
         null;
     
-    if (!Array.isArray(v)) {
-        throw new Error('Embedding model did not return a valid vector.');
+    if (!Array.isArray(v) || v.length < 5) { // Check for a reasonable vector length
+      console.error('[HELP][EMBED] Invalid embedding response:', JSON.stringify(res));
+      return { ok: false, error: 'Embedding model returned an invalid or empty vector.' };
     }
-    return v;
+    
+    return { ok: true, embedding: v };
 
   } catch (err: any) {
-    console.error("Embedding service failed:", err);
-    throw new Error(`Embedding service failed: ${err.message}`);
+    console.error("[HELP][EMBED] Genkit embedding service failed:", err);
+    return { ok: false, error: `Embedding service failed: ${err.message}` };
   }
 }
 
@@ -40,7 +53,7 @@ async function embedText(text: string): Promise<number[]> {
  * Admin-only action to generate help articles from the codebase.
  */
 export async function generateHelpArticlesFromCodebase(userId: string) {
-  if (!isHelpEnabled() || !process.env.GEMINI_API_KEY) throw new Error(FRIENDLY_ERROR_MSG);
+  if (!isHelpEnabled() || !process.env.NEXT_PUBLIC_GEMINI_API_KEY) throw new Error(FRIENDLY_ERROR_MSG);
   if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
 
   const db = getAdminDb();
@@ -86,35 +99,104 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
 
 /**
  * Admin-only action to create and store embeddings for help articles.
+ * Returns a detailed status object.
  */
-export async function indexHelpArticles(userId: string) {
-  if (!isHelpEnabled() || !process.env.GEMINI_API_KEY) throw new Error(FRIENDLY_ERROR_MSG);
-  if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
+export async function indexHelpArticles(userId: string): Promise<{
+    ok: boolean;
+    indexed: number;
+    skipped: number;
+    failed: number;
+    errors: string[];
+}> {
+  const result = { ok: true, indexed: 0, skipped: 0, failed: 0, errors: [] as string[] };
 
-  const db = getAdminDb();
-  const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
-  
-  let updatedCount = 0;
-  const batch = db.batch();
-
-  for (const doc of snapshot.docs) {
-    const article = doc.data();
-    if (article.embedding && article.embedding.length > 0) continue;
-
-    const contentToEmbed = `${article.title}\n\n${article.body}`;
-    try {
-        const embedding = await embedText(contentToEmbed);
-        batch.update(doc.ref, { embedding, updatedAt: new Date() });
-        updatedCount++;
-    } catch (e: any) {
-        // Log the error for the admin but don't stop the whole batch
-        console.error(`Failed to embed article ${doc.id}: ${e.message}`);
-    }
+  if (!isHelpEnabled()) {
+    result.ok = false;
+    result.errors.push("Help feature is not enabled.");
+    return result;
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    result.ok = false;
+    result.errors.push("GEMINI_API_KEY is not configured on the server.");
+    return result;
+  }
+  if (!await isSuperAdmin(userId)) {
+    result.ok = false;
+    result.errors.push("Permission denied.");
+    return result;
   }
 
-  if (updatedCount > 0) await batch.commit();
-  return { updated: updatedCount };
+  const db = getAdminDb();
+  const batch = db.batch();
+
+  try {
+    const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
+
+    if (snapshot.empty) {
+        console.error('[HELP][INDEX] Docs query returned 0 results.');
+        result.ok = false;
+        result.errors.push("No enabled help articles found in the database.");
+        return result;
+    }
+
+    for (const doc of snapshot.docs) {
+      if (!doc.exists) {
+        result.skipped++;
+        continue;
+      }
+      
+      const article = doc.data();
+      if (!article) {
+        console.error(`[HELP][INDEX] Document ${doc.id} has no data.`);
+        result.skipped++;
+        continue;
+      }
+
+      // Skip if embedding exists and is not older than content
+      const updatedAt = article.updatedAt?.toDate() || new Date(0);
+      const embeddingUpdatedAt = article.embeddingUpdatedAt?.toDate() || new Date(0);
+      if (Array.isArray(article.embedding) && article.embedding.length > 0 && embeddingUpdatedAt >= updatedAt) {
+          result.skipped++;
+          continue;
+      }
+
+      const title = article.title ?? '';
+      const content = article.body ?? article.content ?? '';
+      const combinedText = [title, content].filter(Boolean).join('\n\n');
+
+      if (combinedText.trim().length < MIN_CONTENT_LENGTH) {
+        console.error(`[HELP][INDEX] Document ${doc.id} has insufficient content to embed.`);
+        result.skipped++;
+        continue;
+      }
+
+      const embeddingResult = await embedText(combinedText);
+      if (embeddingResult.ok) {
+        batch.update(doc.ref, { embedding: embeddingResult.embedding, embeddingUpdatedAt: new Date() });
+        result.indexed++;
+      } else {
+        console.error(`[HELP][INDEX] Failed to embed doc ${doc.id}: ${embeddingResult.error}`);
+        result.failed++;
+        result.errors.push(`Doc ID ${doc.id}: ${embeddingResult.error}`);
+      }
+    }
+
+    if (result.indexed > 0) {
+      await batch.commit();
+    }
+  } catch (err: any) {
+    console.error('[HELP][INDEX] A critical error occurred during indexing:', err);
+    result.ok = false;
+    result.errors.push(err.message || "An unknown error occurred while fetching articles.");
+  }
+  
+  if (result.failed > 0) {
+      result.ok = false;
+  }
+
+  return result;
 }
+
 
 /**
  * Answers a user's question using the RAG pipeline.
@@ -126,8 +208,13 @@ export async function askHelpRag(question: string) {
   if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
 
   const db = getAdminDb();
-  // embedText will now throw on failure, which will be caught by the UI's try/catch
-  const questionEmbedding = await embedText(question);
+  
+  const questionEmbeddingResult = await embedText(question);
+  if (!questionEmbeddingResult.ok) {
+    // Forward the specific error from the embedding function
+    throw new Error(questionEmbeddingResult.error);
+  }
+  const questionEmbedding = questionEmbeddingResult.embedding;
   
   const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
   const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
