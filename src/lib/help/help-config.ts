@@ -3,5 +3,5 @@
  * @returns {boolean} True if the feature is enabled, false otherwise.
  */
 export function isHelpEnabled(): boolean {
-  return process.env.ENABLE_HELP_RAG === 'true';
+  return process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true';
 }
