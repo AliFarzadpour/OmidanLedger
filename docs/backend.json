@@ -1,6 +1,25 @@
 
 {
   "entities": {
+    "HelpArticle": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Help Article",
+      "type": "object",
+      "description": "A single article for the RAG-based help center.",
+      "properties": {
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "body": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "embedding": {
+          "type": "array",
+          "items": { "type": "number" },
+          "description": "Vector embedding for semantic search."
+        }
+      },
+      "required": ["title", "body"]
+    },
     "Unit": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "Unit",
@@ -653,6 +672,22 @@
   },
   "firestore": {
     "structure": [
+      {
+        "path": "/help_articles/{articleId}",
+        "definition": {
+          "entityName": "HelpArticle",
+          "schema": {
+            "$ref": "#/backend/entities/HelpArticle"
+          },
+          "description": "Stores content for the AI help assistant.",
+          "params": [
+            {
+              "name": "articleId",
+              "description": "The unique ID of the help article."
+            }
+          ]
+        }
+      },
       {
         "path": "/users/{userId}",
         "definition": {
