@@ -94,8 +94,6 @@ async function embedText(text: string): Promise<EmbeddingResult> {
   }
 }
 
-
-// --- 2. Article Generation Action ---
 export async function generateHelpArticlesFromCodebase(userId: string) {
   // 1. Safety Checks
   if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) throw new Error(FRIENDLY_ERROR_MSG);
@@ -104,51 +102,52 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
 
   const db = getAdminDb();
 
-  // 2. READ THE ACTUAL CODE
-  // We scan the 'src' folder (or 'app'/'pages' if you don't use src)
-  // We limit the total characters to avoid hitting hard limits, though Gemini handles huge context well.
+  // 2. Clear existing articles (Optional but recommended)
+  // You can do this manually in Firebase Console to be safe, or uncomment this to auto-delete:
+  /*
+  const existingDocs = await db.collection('help_articles').listDocuments();
+  const deleteBatch = db.batch();
+  existingDocs.forEach(doc => deleteBatch.delete(doc));
+  await deleteBatch.commit();
+  console.log("Cleared old help articles.");
+  */
+
+  // 3. Scan Codebase
   const srcDir = path.join(process.cwd(), 'src'); 
   let allCode = "";
-  
   try {
     const files = readCodebase(srcDir);
-    // Join them into one giant text block, limited to ~2MB of text to be safe/fast
-    allCode = files.join('\n').substring(0, 2000000); 
-    console.log(`[HELP][GEN] Scanned ${files.length} files. Payload size: ${allCode.length} chars.`);
+    allCode = files.join('\n').substring(0, 2000000); // 2MB Limit
   } catch (err) {
     console.error("Error reading codebase:", err);
     throw new Error("Failed to read codebase files.");
   }
 
-  // 3. The "Deep Analysis" Prompt
+  // 4. The "Step-by-Step" Prompt
   const deepPrompt = `
-    You are a technical documentation expert. I have attached the actual source code of a Next.js application named 'FiscalFlow'.
+    You are a technical documentation expert for 'FiscalFlow'. I have attached the source code.
     
     YOUR TASK:
-    Analyze this code deeply to understand every feature, user flow, and capability.
-    Generate a comprehensive knowledge base of at least 30-40 distinct help articles.
+    Generate 30-40 comprehensive help articles that explain EXACTLY how to use the app.
     
-    GUIDELINES:
-    1. **Be Exhaustive**: Don't just stick to "Getting Started". Look for specific features like "How AI Reporting works", "Handling Plaid Errors", "Customizing Smart Rules", "Exporting Data", etc.
-    2. **User-Focused**: Write for the end-user, not the developer. Don't mention "functions" or "variables". Mention "buttons", "pages", and "actions".
-    3. **Structure**: 
-       - Title: Clear and action-oriented (e.g., "How to categorize a transaction").
-       - Category: Group them logically (Getting Started, Transactions, Properties, Reports, Settings, Troubleshooting).
-       - Body: Detailed Markdown with steps.
+    CRITICAL WRITING STYLE:
+    - **Step-by-Step**: Every article MUST use numbered lists (1., 2., 3.) for instructions.
+    - **Directional**: Tell the user exactly where to click. (e.g., "Click the 'Add Property' button in the top right corner").
+    - **No Fluff**: Avoid marketing language. Be direct.
+    
+    REQUIRED ARTICLE TYPES:
+    - **Workflows**: "How to add a property", "How to reconcile a transaction", "How to generate a P&L report".
+    - **Troubleshooting**: "What to do if Plaid sync fails", "Why is my balance not updating?".
+    - **Features**: "How Smart Rules categorize your data automatically".
+
+    OUTPUT FORMAT (JSON):
+    Return a raw JSON object with an "articles" array. Each article has title, category, body (Markdown), and tags.
     
     SOURCE CODE CONTEXT:
     ${allCode}
   `;
   
-  const articleSchema = z.object({
-    title: z.string(),
-    category: z.string(),
-    body: z.string(),
-    tags: z.array(z.string()),
-  });
-
-  // 4. Generate with Gemini (Using 1.5 Pro or Flash for large context)
-  // We use the direct fetch method (like we did for embed/ask) to avoid library timeout/parsing issues
+  // 5. Generate with Gemini 1.5 Flash (Direct API)
   const apiKey = process.env.GEMINI_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -184,27 +183,16 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
       })
     });
 
-    if (!response.ok) {
-        throw new Error(`AI Generation failed: ${response.status} ${await response.text()}`);
-    }
+    if (!response.ok) throw new Error(`AI Generation failed: ${response.status} ${await response.text()}`);
 
     const data = await response.json();
-    // Parse the JSON string inside the response
     const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!jsonText) throw new Error("Empty response from AI");
     
     const output = JSON.parse(jsonText);
 
-    if (!output.articles || output.articles.length === 0) {
-        throw new Error("AI returned 0 articles.");
-    }
-
-    // 5. Save to Database (Batching 500 max)
+    // 6. Save to Database
     const batch = db.batch();
-    
-    // Optional: Delete old articles first? 
-    // For now, we just add new ones. You might want to manually clear the collection if you want a fresh start.
-    
     output.articles.forEach((article: any) => {
       const docRef = db.collection('help_articles').doc();
       batch.set(docRef, { ...article, updatedAt: new Date(), enabled: true, embedding: [] });
