@@ -1,5 +1,3 @@
-'use server';
-
 import type { DocumentData } from 'firebase-admin/firestore';
 
 export type HelpArticle = DocumentData & {
