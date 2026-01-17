@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as React from "react";
@@ -153,6 +152,12 @@ const data = {
       title: "My Billing",
       url: "/dashboard/billing",
       icon: CreditCard,
+      advanced: false,
+    },
+     {
+      title: "Help",
+      url: "/dashboard/help",
+      icon: LifeBuoy,
       advanced: false,
     },
   ]

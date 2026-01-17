@@ -1,70 +1,43 @@
 'use server';
 
-import { getAdminDb } from '@/lib/firebaseAdmin';
-import { generateEmbedding, findRelevantArticles, generateAnswer } from '@/ai/help/rag';
-import { isSuperAdmin } from '@/lib/auth-utils';
-import { WriteBatch } from 'firebase-admin/firestore';
+import 'server-only';
 
-/**
- * Main server action for the RAG help assistant.
- */
-export async function askHelp(question: string): Promise<{ answer: string; sources: any[] }> {
-  if (!question) {
-    throw new Error('Question cannot be empty.');
+import { answerHelpQuestion, indexMissingHelpEmbeddings } from '@/ai/help/rag';
+import { isSuperAdmin } from '@/lib/auth-utils';
+
+function isEnabled() {
+  return process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true';
+}
+
+export async function askHelp(question: string) {
+  if (!isEnabled()) {
+    return {
+      answer: 'Help Assistant is currently disabled.',
+      sources: [],
+    };
+  }
+
+  if (!question || question.trim().length < 3) {
+    return { answer: 'Please enter a longer question.', sources: [] };
   }
 
   try {
-    const questionEmbedding = await generateEmbedding(question);
-    const relevantArticles = await findRelevantArticles(questionEmbedding);
-    const answer = await generateAnswer(question, relevantArticles);
-
-    const sources = relevantArticles.map(article => ({
-      id: article.id,
-      title: article.title,
-      category: article.category,
-    }));
-
-    return { answer, sources };
-  } catch(error: any) {
-    console.error("Error in askHelp action: ", error);
-    throw new Error("Failed to get an answer from the AI assistant.");
+    return await answerHelpQuestion(question.trim());
+  } catch (err: any) {
+    // Do not crash the page; return a friendly message
+    return {
+      answer:
+        `Sorry — I couldn’t answer right now. ` +
+        `If this persists, check server logs for GEMINI_API_KEY and embeddings config. ` +
+        `(${err?.message || 'unknown error'})`,
+      sources: [],
+    };
   }
 }
 
-/**
- * Admin-only action to index help articles and create embeddings.
- */
-export async function indexHelpArticles(userId: string): Promise<{ count: number }> {
-    const isAdmin = await isSuperAdmin(userId);
-    if (!isAdmin) {
-        throw new Error("Permission Denied: This action is restricted to administrators.");
-    }
+// Admin-only indexing; The calling page is responsible for an Admin check.
+export async function indexHelpArticles() {
+  if (!isEnabled()) return { updated: 0 };
 
-    const db = getAdminDb();
-    const articlesRef = db.collection('help_articles');
-    const snapshot = await articlesRef.where('embedding', '==', []).get();
-
-    if (snapshot.empty) {
-        return { count: 0 };
-    }
-
-    let indexedCount = 0;
-    const batch = db.batch();
-
-    for (const doc of snapshot.docs) {
-        const article = doc.data();
-        const contentToIndex = `${article.title}\n${article.body}`;
-        
-        try {
-            const embedding = await generateEmbedding(contentToIndex);
-            batch.update(doc.ref, { embedding: embedding, updatedAt: new Date() });
-            indexedCount++;
-        } catch (error) {
-            console.error(`Failed to generate embedding for article ${doc.id}:`, error);
-        }
-    }
-    
-    await batch.commit();
-
-    return { count: indexedCount };
+  return await indexMissingHelpEmbeddings({ limit: 300 });
 }

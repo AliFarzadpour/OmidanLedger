@@ -1,98 +1,161 @@
-'use server';
+import 'server-only';
 
 import { ai } from '@/ai/genkit';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 
-// 1. Function to generate embedding for a piece of text
-export async function generateEmbedding(text: string): Promise<number[]> {
-  const { embedding } = await ai.embed({
-    model: 'googleai/embedding-004', // A standard embeddings model
+type HelpArticle = {
+  id: string;
+  title: string;
+  category?: string;
+  body: string;
+  tags?: string[];
+  embedding?: number[];
+  updatedAt?: any;
+};
+
+function cosineSimilarity(a: number[], b: number[]) {
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  const len = Math.min(a.length, b.length);
+  for (let i = 0; i < len; i++) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (normA === 0 || normB === 0) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
+// Uses a small, safe embedding model. If your Genkit plugin supports a different one,
+// we can swap it later without changing app behavior.
+async function embedText(text: string): Promise<number[]> {
+  // Genkit embeddings API varies slightly by version.
+  // This pattern works in many setups; adjust if your local typings differ.
+  const res: any = await ai.embed({
+    model: 'googleai/text-embedding-004',
     content: text,
   });
-  return embedding;
+  // Normalize common return shapes
+  const v =
+    res?.embedding?.values ??
+    res?.embedding ??
+    res?.[0]?.embedding?.values ??
+    res?.[0]?.embedding ??
+    null;
+
+  if (!Array.isArray(v)) {
+    throw new Error('Embedding model did not return a numeric vector.');
+  }
+  return v as number[];
 }
 
-// 2. Function to calculate cosine similarity between two vectors
-export function cosineSimilarity(vecA: number[], vecB: number[]): number {
-  if (vecA.length !== vecB.length) {
-    return 0;
-  }
-  let dotProduct = 0;
-  let magnitudeA = 0;
-  let magnitudeB = 0;
-  for (let i = 0; i < vecA.length; i++) {
-    dotProduct += vecA[i] * vecB[i];
-    magnitudeA += vecA[i] * vecA[i];
-    magnitudeB += vecB[i] * vecB[i];
-  }
-  magnitudeA = Math.sqrt(magnitudeA);
-  magnitudeB = Math.sqrt(magnitudeB);
-  if (magnitudeA === 0 || magnitudeB === 0) {
-    return 0;
-  }
-  return dotProduct / (magnitudeA * magnitudeB);
-}
-
-// 3. Function to find relevant articles
-export async function findRelevantArticles(questionEmbedding: number[], limit = 5) {
+export async function indexMissingHelpEmbeddings(options?: { limit?: number }) {
   const db = getAdminDb();
-  const articlesRef = db.collection('help_articles');
-  const snapshot = await articlesRef.get();
+  const limit = options?.limit ?? 200;
 
-  if (snapshot.empty) {
-    return [];
+  const snap = await db.collection('help_articles').limit(limit).get();
+  let updated = 0;
+
+  for (const doc of snap.docs) {
+    const data = doc.data() as Omit<HelpArticle, 'id'>;
+    const needsEmbedding =
+      !data.embedding || !Array.isArray(data.embedding) || data.embedding.length < 10;
+
+    if (!needsEmbedding) continue;
+
+    const text = `${data.title}\n\n${data.body}\n\nTags: ${(data.tags || []).join(', ')}`;
+    const embedding = await embedText(text);
+
+    await doc.ref.set(
+      {
+        embedding,
+        updatedAt: new Date(),
+      },
+      { merge: true }
+    );
+
+    updated++;
   }
 
-  const articlesWithSimilarity = snapshot.docs
-    .map(doc => {
-      const data = doc.data();
-      // Ensure embedding exists and is a valid array of numbers
-      if (Array.isArray(data.embedding) && data.embedding.length > 0) {
-        const similarity = cosineSimilarity(questionEmbedding, data.embedding);
-        return { ...data, id: doc.id, similarity };
-      }
-      return null;
-    })
-    .filter((item): item is Exclude<typeof item, null> => item !== null && item.similarity > 0.5); // Filter out nulls and low similarity scores
-
-  // Sort by similarity score in descending order
-  articlesWithSimilarity.sort((a, b) => b.similarity - a.similarity);
-
-  return articlesWithSimilarity.slice(0, limit);
+  return { updated };
 }
 
+export async function answerHelpQuestion(question: string) {
+  const db = getAdminDb();
 
-// 4. Function to generate a final answer using LLM
-export async function generateAnswer(question: string, articles: any[]): Promise<string> {
-  if (articles.length === 0) {
-    return "I'm sorry, but I couldn't find any information in our help center that matches your question. Please try rephrasing your question or contact support for further assistance.";
-  }
+  // 1) Embed question
+  const qVec = await embedText(question);
 
-  const context = articles
-    .map(article => `## ${article.title}\n${article.body}`)
+  // 2) Pull articles (for a few hundred/thousand docs this is OK)
+  // If corpus grows large, we’ll upgrade to a real vector index later.
+  const snap = await db.collection('help_articles').get();
+
+  const articles: HelpArticle[] = snap.docs.map((d) => {
+    const data = d.data() as any;
+    return {
+      id: d.id,
+      title: data.title,
+      category: data.category,
+      body: data.body,
+      tags: data.tags,
+      embedding: data.embedding,
+      updatedAt: data.updatedAt,
+    };
+  });
+
+  // 3) Score + pick top K with embeddings
+  const scored = articles
+    .filter((a) => Array.isArray(a.embedding) && (a.embedding as number[]).length > 10)
+    .map((a) => ({
+      ...a,
+      score: cosineSimilarity(qVec, a.embedding as number[]),
+    }))
+    .sort((x, y) => y.score - x.score)
+    .slice(0, 5);
+
+  // 4) Build grounded context
+  const context = scored
+    .map(
+      (a, idx) =>
+        `SOURCE ${idx + 1}: ${a.title}\nCategory: ${a.category || 'General'}\n${a.body}`
+    )
     .join('\n\n---\n\n');
 
+  // 5) Generate answer grounded in sources
   const prompt = `
-    You are a friendly and helpful support assistant for an application named OmidanLedger.
-    Your task is to answer the user's question based *only* on the provided "Help Articles" context.
+You are the OmidanLedger in-app Help Assistant.
+Answer the user's question using ONLY the provided sources.
+If the sources do not contain the answer, say you don’t have enough info and suggest what page/feature to check.
 
-    **Instructions:**
-    1.  Read the user's question and the context carefully.
-    2.  Formulate a clear and concise answer using only the information from the articles.
-    3.  If the context does not contain the answer, state that you couldn't find the information and suggest they rephrase their question.
-    4.  Do not make up information or use any knowledge outside of the provided context.
-    5.  At the end of your answer, you MUST cite the articles you used by listing their titles under a "Sources:" heading.
+User question:
+${question}
 
-    ---
-    **CONTEXT: HELP ARTICLES**
-    ${context}
-    ---
+Sources:
+${context}
 
-    **USER'S QUESTION:**
-    ${question}
-  `;
+Return:
+1) A clear answer (short, step-by-step).
+2) Mention the relevant page(s) in the app when possible (Dashboard, Transactions, Reports, etc).
+`;
 
-  const { text } = await ai.generate({ prompt });
-  
-  return text || "I am unable to provide an answer at this time.";
+  const completion: any = await ai.generate({
+    prompt,
+    // model already configured in ai instance, but can be overridden
+  });
+
+  const text =
+    completion?.text ??
+    completion?.outputText ??
+    completion?.output ??
+    'Sorry — I could not generate a response.';
+
+  const sources = scored.map((s) => ({
+    id: s.id,
+    title: s.title,
+    category: s.category || 'General',
+    score: s.score,
+  }));
+
+  return { answer: text, sources };
 }
