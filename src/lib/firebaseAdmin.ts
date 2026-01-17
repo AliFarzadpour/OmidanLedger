@@ -1,103 +1,130 @@
 // src/lib/firebaseAdmin.ts
 import 'server-only';
 
-import { getApps, initializeApp, cert, type App } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
-import { getStorage, type Storage } from 'firebase-admin/storage';
-import fs from 'fs';
-import path from 'path';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
+import fs from 'node:fs';
+import path from 'node:path';
 
 type ServiceAccount = {
-  project_id: string;
-  client_email: string;
-  private_key: string;
-  [key: string]: any;
+  type?: string;
+  project_id?: string;
+  private_key_id?: string;
+  private_key?: string;
+  client_email?: string;
+  client_id?: string;
+  auth_uri?: string;
+  token_uri?: string;
+  auth_provider_x509_cert_url?: string;
+  client_x509_cert_url?: string;
+  universe_domain?: string;
 };
 
-// ---- Global singletons (prevents re-init across hot reload / multiple imports) ----
-declare global {
-  // eslint-disable-next-line no-var
-  var __ADMIN_APP__: App | undefined;
-  // eslint-disable-next-line no-var
-  var __ADMIN_DB__: Firestore | undefined;
-  // eslint-disable-next-line no-var
-  var __ADMIN_STORAGE__: Storage | undefined;
+function normalizePrivateKey(key: string) {
+  // Handles both:
+  // 1) keys stored with literal "\n" sequences (\\n)
+  // 2) keys stored with real newlines
+  // 3) Windows CRLF issues
+  return key
+    .replace(/\\n/g, '\n')
+    .replace(/\r/g, '')
+    .trim();
 }
 
-function normalizePrivateKey(sa: ServiceAccount): ServiceAccount {
-  if (sa.private_key) {
-    sa.private_key = sa.private_key.replace(/\\n/g, '\n');
-  }
-  return sa;
-}
-
-function loadServiceAccount(): ServiceAccount {
-  // ✅ Prod/App Hosting path (Secret Manager)
+function loadServiceAccountFromB64(): ServiceAccount | null {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64;
-  if (b64 && b64.trim()) {
-    try {
-      const json = Buffer.from(b64, 'base64').toString('utf8');
-      const serviceAccount = JSON.parse(json);
-      return normalizePrivateKey(serviceAccount);
-    } catch (err: any) {
-      throw new Error(
-        `CRITICAL: FIREBASE_SERVICE_ACCOUNT_KEY_B64 is not valid base64-encoded JSON. ${err?.message || err}`
-      );
-    }
+  if (!b64 || !b64.trim()) return null;
+
+  let raw: string;
+  try {
+    raw = Buffer.from(b64, 'base64').toString('utf8');
+  } catch (err: any) {
+    throw new Error(`Failed to base64-decode FIREBASE_SERVICE_ACCOUNT_KEY_B64: ${err?.message || err}`);
   }
 
-  // ✅ Dev fallback (local file)
-  const filePath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
-  if (filePath && filePath.trim()) {
-    const absolutePath = path.resolve(filePath);
-    try {
-      if (!fs.existsSync(absolutePath)) {
-         throw new Error(`File not found at specified path: ${absolutePath}`);
-      }
-      const json = fs.readFileSync(absolutePath, 'utf8');
-      const serviceAccount = JSON.parse(json);
-      return normalizePrivateKey(serviceAccount);
-    } catch (err: any) {
-      throw new Error(
-        `CRITICAL: Failed to read FIREBASE_SERVICE_ACCOUNT_PATH "${absolutePath}". ${err?.message || err}`
-      );
-    }
+  try {
+    const sa = JSON.parse(raw) as ServiceAccount;
+    if (sa.private_key) sa.private_key = normalizePrivateKey(sa.private_key);
+    return sa;
+  } catch (err: any) {
+    throw new Error(
+      `Failed to parse decoded FIREBASE_SERVICE_ACCOUNT_KEY_B64 JSON: ${err?.message || err}`
+    );
   }
+}
 
-  // ✅ Helpful message that explains the difference
+function loadServiceAccountFromLocalFile(): ServiceAccount | null {
+  // Dev-only fallback for Firebase Studio preview or local runs
+  const p = path.join(process.cwd(), '.secrets', 'firebase-service-account.json');
+  if (!fs.existsSync(p)) return null;
+
+  try {
+    const raw = fs.readFileSync(p, 'utf8');
+    const sa = JSON.parse(raw) as ServiceAccount;
+    if (sa.private_key) sa.private_key = normalizePrivateKey(sa.private_key);
+    return sa;
+  } catch (err: any) {
+    throw new Error(
+      `Failed to read/parse ${p}. Is it valid JSON? ${err?.message || err}`
+    );
+  }
+}
+
+function getServiceAccount(): ServiceAccount {
+  // Prefer production secret; fallback to dev file.
+  const fromB64 = loadServiceAccountFromB64();
+  if (fromB64) return fromB64;
+
+  const fromFile = loadServiceAccountFromLocalFile();
+  if (fromFile) return fromFile;
+
+  // Clear error message for dev
   throw new Error(
-    "CRITICAL: Missing Firebase Admin credentials. In production set FIREBASE_SERVICE_ACCOUNT_KEY_B64 (App Hosting secret). In development create service-account.json and set FIREBASE_SERVICE_ACCOUNT_PATH in .env.local."
+    'CRITICAL: Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64. ' +
+      'For production: add it as an App Hosting secret. ' +
+      'For dev: create .secrets/firebase-service-account.json with a real Firebase Admin SDK key.'
   );
 }
 
+function ensureAdminInitialized() {
+  if (getApps().length) return;
 
-function ensureAdminInitialized(): App {
-  if (getApps().length) return getApps()[0];
-  if (global.__ADMIN_APP__) return global.__ADMIN_APP__;
+  const serviceAccount = getServiceAccount();
 
-  const serviceAccount = loadServiceAccount();
+  // Validate minimum fields early with helpful messaging
+  if (!serviceAccount.project_id) {
+    throw new Error('Firebase Admin service account missing project_id.');
+  }
+  if (!serviceAccount.client_email) {
+    throw new Error('Firebase Admin service account missing client_email.');
+  }
+  if (!serviceAccount.private_key) {
+    throw new Error('Firebase Admin service account missing private_key.');
+  }
 
-  const app = initializeApp({
-    credential: cert(serviceAccount),
-    projectId: serviceAccount.project_id,
-  });
+  // Extra sanity: must look like a PEM
+  if (!serviceAccount.private_key.includes('BEGIN PRIVATE KEY')) {
+    throw new Error('Firebase Admin private_key does not look like a PEM key (missing BEGIN PRIVATE KEY).');
+  }
 
-  global.__ADMIN_APP__ = app;
-  return app;
+  try {
+    initializeApp({
+      credential: cert(serviceAccount as any),
+      projectId: serviceAccount.project_id,
+    });
+  } catch (err: any) {
+    // This is the exact error you’re seeing; keep it explicit
+    throw new Error(`Failed to parse private key: ${err?.message || err}`);
+  }
 }
 
-export function getAdminDb(): Firestore {
-  if (global.__ADMIN_DB__) return global.__ADMIN_DB__;
-  const app = ensureAdminInitialized();
-  const db = getFirestore(app);
-  global.__ADMIN_DB__ = db;
-  return db;
+export function getAdminDb() {
+  ensureAdminInitialized();
+  return getFirestore();
 }
 
-export function getAdminStorage(): Storage {
-  if (global.__ADMIN_STORAGE__) return global.__ADMIN_STORAGE__;
-  const app = ensureAdminInitialized();
-  const storage = getStorage(app);
-  global.__ADMIN_STORAGE__ = storage;
-  return storage;
+export function getAdminStorage() {
+  ensureAdminInitialized();
+  return getStorage();
 }

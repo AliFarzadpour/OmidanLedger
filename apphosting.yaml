@@ -20,7 +20,7 @@ env:
   # Admin SDK may be used during Next build (collecting page data) -> needs BUILD + RUNTIME
   - variable: FIREBASE_SERVICE_ACCOUNT_KEY_B64
     secret: FIREBASE_SERVICE_ACCOUNT_KEY_B64
-    availability: [BUILD, RUNTIME]
+    availability: [RUNTIME]
 
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
@@ -45,4 +45,8 @@ env:
   # --- Non-secret plain env values ---
   - variable: PLAID_ENV
     value: "production"
+    availability: [BUILD, RUNTIME]
+  
+  - variable: NEXT_PUBLIC_ENABLE_HELP_RAG
+    value: "true"
     availability: [BUILD, RUNTIME]
