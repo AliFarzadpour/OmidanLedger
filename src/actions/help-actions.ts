@@ -8,62 +8,61 @@ import { ai } from '@/ai/genkit';
 import { retrieveTopK, type HelpArticle } from '@/lib/help/help-retrieval';
 import { z } from 'zod';
 
-const GENKIT_EMBEDDING_MODEL = 'googleai/text-embedding-004';
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 const MIN_CONTENT_LENGTH = 20;
 
-// --- 1. Hardened Embedding Function ---
+// --- REPLACED: Direct API Call Function ---
 type EmbeddingResult =
   | { ok: true; embedding: number[] }
   | { ok: false; error: string };
 
 async function embedText(text: string): Promise<EmbeddingResult> {
-  // STRICT CHECK: Fail fast if API key is missing to prevent SDK crash
-  if (!process.env.GEMINI_API_KEY && !process.env.GOOGLE_GENAI_API_KEY) {
-    console.error("[HELP][EMBED] Missing GEMINI_API_KEY");
+  // 1. Check for the Key
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    console.error("[HELP][EMBED] Missing GEMINI_API_KEY in process.env");
     return { ok: false, error: 'Server configuration error: Missing API Key.' };
   }
 
   if (!text || text.trim().length < MIN_CONTENT_LENGTH) {
-    return {
-      ok: false,
-      error: `Content is too short to embed (must be at least ${MIN_CONTENT_LENGTH} characters).`,
-    };
+    return { ok: false, error: `Content too short (min ${MIN_CONTENT_LENGTH} chars).` };
   }
 
   try {
-    const res: any = await ai.embed({
-      model: GENKIT_EMBEDDING_MODEL,
-      content: text,
+    // 2. Direct Call to Google Gemini API (Bypassing Genkit)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: "models/text-embedding-004",
+        content: { parts: [{ text: text }] }
+      })
     });
 
-    // Robustly find the embedding vector from various possible response shapes
-    const v =
-      res?.embedding?.values ??
-      res?.embedding ??
-      res?.embeddings?.[0]?.values ??
-      res?.embeddings?.[0] ??
-      res?.[0]?.embedding?.values ??
-      res?.[0]?.embedding ??
-      res?.output?.[0]?.embedding?.values ??
-      null;
+    // 3. Handle specific API errors nicely
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[HELP][EMBED] API Error ${response.status}:`, errorText);
+      return { ok: false, error: `Google API Error: ${response.statusText}` };
+    }
 
-    if (!Array.isArray(v) || v.length < 5) {
-      console.error(
-        '[HELP][EMBED] Invalid embedding response shape:',
-        JSON.stringify(res, null, 2)
-      );
-      return {
-        ok: false,
-        error: 'Embedding model returned an invalid or empty vector.',
-      };
+    const data = await response.json();
+
+    // 4. Extract the vector safely
+    const v = data?.embedding?.values;
+
+    if (!Array.isArray(v)) {
+       console.error('[HELP][EMBED] Unexpected response format:', JSON.stringify(data));
+       return { ok: false, error: 'Invalid response format from Google API.' };
     }
 
     return { ok: true, embedding: v };
+
   } catch (err: any) {
-    console.error('[HELP][EMBED] Genkit embedding service failed:', err);
-    // Return a safe error object instead of crashing
-    return { ok: false, error: `Embedding service failed: ${err.message}` };
+    console.error('[HELP][EMBED] Network or parsing failed:', err);
+    return { ok: false, error: `Embedding failed: ${err.message}` };
   }
 }
 
