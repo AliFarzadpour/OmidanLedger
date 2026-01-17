@@ -66,6 +66,7 @@ async function embedText(text: string): Promise<EmbeddingResult> {
   }
 }
 
+
 // --- 2. Article Generation Action ---
 export async function generateHelpArticlesFromCodebase(userId: string) {
   if (!isHelpEnabled()) throw new Error(FRIENDLY_ERROR_MSG);
@@ -143,12 +144,11 @@ export async function indexHelpArticles(userId: string): Promise<{
     }
 
     for (const doc of snapshot.docs) {
-      if (!doc.exists) {
+      const article = doc.data();
+      if (!doc.exists || !article) {
         result.skipped++;
         continue;
       }
-
-      const article = doc.data();
       
       // Skip if embedding exists and is fresh
       const updatedAt = article.updatedAt?.toDate() || new Date(0);
@@ -162,6 +162,12 @@ export async function indexHelpArticles(userId: string): Promise<{
       const title = article.title ?? '';
       const content = article.body ?? article.content ?? '';
       const combinedText = [title, content].filter(Boolean).join('\n\n');
+      
+      if (combinedText.trim().length < MIN_CONTENT_LENGTH) {
+        result.skipped++;
+        continue;
+      }
+
 
       // Attempt to Embed
       const embeddingResult = await embedText(combinedText);
@@ -195,46 +201,82 @@ export async function indexHelpArticles(userId: string): Promise<{
   return result;
 }
 
-// --- 4. RAG / Q&A Action ---
+/**
+ * Answers a user's question using the RAG pipeline with Direct API calls.
+ */
 export async function askHelpRag(question: string) {
-  if (!isHelpEnabled()) return { answer: FRIENDLY_ERROR_MSG, sources: [] };
+  if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) {
+    return { answer: FRIENDLY_ERROR_MSG, sources: [] };
+  }
   if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
 
   try {
     const db = getAdminDb();
     
-    // Embed the User's Question
+    // 1. Embed the User's Question (This uses your fixed direct-fetch function)
     const questionEmbeddingResult = await embedText(question);
     
     if (!questionEmbeddingResult.ok) {
         console.error("Embedding failed during ASK:", questionEmbeddingResult.error);
-        return { answer: "I'm having trouble connecting to the AI service right now. Please try again.", sources: [] };
+        return { answer: "I'm having trouble analyzing your question. Please try again.", sources: [] };
     }
     
     const questionEmbedding = questionEmbeddingResult.embedding;
+    
+    // 2. Retrieve Articles from Firestore
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
 
     if (snapshot.empty) {
-      return { answer: "The knowledge base is empty.", sources: [] };
+      return { answer: "The knowledge base is empty. Please ask an admin to generate content.", sources: [] };
     }
 
     const allArticles = snapshot.docs
       .map(doc => ({ id: doc.id, ...doc.data() }))
       .filter(doc => doc.title && doc.body) as HelpArticle[];
 
+    // 3. Find the most relevant articles (Vector Search)
     const sources = retrieveTopK(questionEmbedding, allArticles, 5);
 
     if (sources.length === 0) {
-      return { answer: "Sorry, I couldn't find any relevant help articles.", sources: [] };
+      return { answer: "Sorry, I couldn't find any relevant help articles for your question.", sources: [] };
     }
 
+    // 4. Construct the Prompt
     const context = sources.map((s, i) => `Source ${i+1}: ${s.title}\n${s.body}`).join('\n\n---\n\n');
-    const prompt = `You are a helpful AI assistant for the FiscalFlow app. Answer the user's question based ONLY on the provided sources.\n\nQuestion: ${question}\n\nSources:\n${context}`;
+    const systemPrompt = `You are a helpful AI assistant for FiscalFlow. Answer the user's question based ONLY on the provided sources below. If the answer isn't in the sources, say you don't know. Keep the answer concise and helpful.`;
+    
+    // 5. Generate Answer via Direct API Call (Bypassing Genkit)
+    const apiKey = process.env.GEMINI_API_KEY;
+    // Using gemini-1.5-flash for speed and reliability
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    const { output } = await ai.generate({ prompt, model: 'googleai/gemini-2.5-flash' });
-    const answer = output?.text || "Sorry, I couldn't find an answer in the help articles.";
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [{ text: `${systemPrompt}\n\nQuestion: ${question}\n\nSources:\n${context}` }]
+        }]
+      })
+    });
 
-    return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
+    if (!response.ok) {
+      console.error(`[HELP][ASK] Generation API Error ${response.status}:`, await response.text());
+      // Fallback if AI generation fails, but return sources so the user sees something
+      return { 
+        answer: "I found some relevant articles (listed below), but I couldn't summarize them right now.", 
+        sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) 
+      };
+    }
+
+    const data = await response.json();
+    const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a summary.";
+
+    return { 
+      answer, 
+      sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) 
+    };
 
   } catch (error: any) {
     console.error("[HELP][ASK] RAG pipeline failed:", error);
