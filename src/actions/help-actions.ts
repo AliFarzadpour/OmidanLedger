@@ -29,15 +29,19 @@ async function embedText(text: string): Promise<EmbeddingResult> {
   try {
     const res: any = await ai.embed({ model: GENKIT_EMBEDDING_MODEL, content: text });
     
+    // Robustly find the embedding vector from various possible response shapes
     const v =
         res?.embedding?.values ??
         res?.embedding ??
+        res?.embeddings?.[0]?.values ??
+        res?.embeddings?.[0] ??
         res?.[0]?.embedding?.values ??
         res?.[0]?.embedding ??
+        res?.output?.[0]?.embedding?.values ??
         null;
     
     if (!Array.isArray(v) || v.length < 5) { // Check for a reasonable vector length
-      console.error('[HELP][EMBED] Invalid embedding response:', JSON.stringify(res));
+      console.error('[HELP][EMBED] Invalid embedding response shape:', JSON.stringify(res, null, 2));
       return { ok: false, error: 'Embedding model returned an invalid or empty vector.' };
     }
     
