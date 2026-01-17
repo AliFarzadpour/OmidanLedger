@@ -41,6 +41,11 @@ function ensureAdminInitialized() {
   if (getApps().length) return;
 
   const serviceAccount = loadServiceAccount();
+  
+  // FIX: Explicitly replace escaped newlines in the private key string
+  if (serviceAccount.private_key) {
+    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+  }
 
   initializeApp({
     credential: cert(serviceAccount),
