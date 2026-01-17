@@ -7,6 +7,35 @@ import { isSuperAdmin } from '@/lib/auth-utils';
 import { ai } from '@/ai/genkit';
 import { retrieveTopK, type HelpArticle } from '@/lib/help/help-retrieval';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
+
+// Helper: Recursively read all code files in a directory
+function readCodebase(dir: string, fileList: string[] = []): string[] {
+  const files = fs.readdirSync(dir);
+
+  files.forEach((file) => {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+
+    if (stat.isDirectory()) {
+      if (file !== 'node_modules' && file !== '.next' && file !== '.git' && file !== 'fonts') {
+        readCodebase(filePath, fileList);
+      }
+    } else {
+      // Only read relevant code files
+      if (/\.(tsx|ts|js|jsx)$/.test(file)) {
+        // Read the file content
+        const content = fs.readFileSync(filePath, 'utf8');
+        // Add a header so the AI knows which file this is
+        fileList.push(`\n--- FILE: ${filePath} ---\n${content}`);
+      }
+    }
+  });
+
+  return fileList;
+}
+
 
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 const MIN_CONTENT_LENGTH = 20;
