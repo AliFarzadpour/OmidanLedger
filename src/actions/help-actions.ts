@@ -12,13 +12,16 @@ const GENKIT_EMBEDDING_MODEL = 'googleai/text-embedding-004';
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 
 async function embedText(text: string): Promise<number[] | null> {
-  if (!process.env.GEMINI_API_KEY) return null;
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY is not set. Please add it to your environment secrets.");
+  }
   try {
     const res = await ai.embed({ model: GENKIT_EMBEDDING_MODEL, content: text });
     return res.embedding;
-  } catch (err) {
+  } catch (err: any) {
     console.error("Embedding failed:", err);
-    return null;
+    // Re-throw a more specific error to be caught by the UI
+    throw new Error(`Embedding service failed: ${err.message}`);
   }
 }
 
@@ -104,14 +107,21 @@ export async function indexHelpArticles(userId: string) {
  * Answers a user's question using the RAG pipeline.
  */
 export async function askHelpRag(question: string) {
-  if (!isHelpEnabled() || !process.env.GEMINI_API_KEY) {
+  if (!isHelpEnabled()) {
     return { answer: FRIENDLY_ERROR_MSG, sources: [] };
   }
   if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
 
   const db = getAdminDb();
+  // embedText will now throw a specific error if the key is missing,
+  // which will be caught by the UI component's try/catch block.
   const questionEmbedding = await embedText(question);
-  if (!questionEmbedding) throw new Error("Failed to embed question.");
+  
+  if (!questionEmbedding) {
+      // This should now be less likely to be hit, but remains as a safeguard.
+      throw new Error("Failed to create question embedding.");
+  }
+
 
   const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
   const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
