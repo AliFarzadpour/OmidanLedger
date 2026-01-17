@@ -4,7 +4,6 @@ import 'server-only';
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { isHelpEnabled } from '@/lib/help/help-config';
 import { isSuperAdmin } from '@/lib/auth-utils';
-import { ai } from '@/ai/genkit';
 import { retrieveTopK, type HelpArticle } from '@/lib/help/help-retrieval';
 import { z } from 'zod';
 import fs from 'fs';
@@ -98,26 +97,49 @@ async function embedText(text: string): Promise<EmbeddingResult> {
 
 // --- 2. Article Generation Action ---
 export async function generateHelpArticlesFromCodebase(userId: string) {
-  if (!isHelpEnabled()) throw new Error(FRIENDLY_ERROR_MSG);
+  // 1. Safety Checks
+  if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) throw new Error(FRIENDLY_ERROR_MSG);
+  if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
   if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
 
   const db = getAdminDb();
+
+  // 2. READ THE ACTUAL CODE
+  // We scan the 'src' folder (or 'app'/'pages' if you don't use src)
+  // We limit the total characters to avoid hitting hard limits, though Gemini handles huge context well.
+  const srcDir = path.join(process.cwd(), 'src'); 
+  let allCode = "";
   
-  const fileContentPrompt = `
-    Analyze the following key file paths and their descriptions from a Next.js/React application named 'FiscalFlow'.
-    Based on this, generate 15-20 comprehensive help articles for end-users.
+  try {
+    const files = readCodebase(srcDir);
+    // Join them into one giant text block, limited to ~2MB of text to be safe/fast
+    allCode = files.join('\n').substring(0, 2000000); 
+    console.log(`[HELP][GEN] Scanned ${files.length} files. Payload size: ${allCode.length} chars.`);
+  } catch (err) {
+    console.error("Error reading codebase:", err);
+    throw new Error("Failed to read codebase files.");
+  }
 
-    - /dashboard/page.tsx: The main dashboard with KPI cards and charts.
-    - /dashboard/transactions/page.tsx: The page for managing bank connections and viewing all transactions.
-    - /dashboard/properties/page.tsx: The hub for adding and managing properties.
-    - /dashboard/reports/page.tsx: The main reports hub.
-    - /dashboard/reports/ai-report/page.tsx: The AI-powered financial report generator.
-    - /dashboard/rules/page.tsx: The "Smart Rules" page for custom categorization.
-    - /lib/plaid.ts & /firebase/errors.ts: Plaid connection logic and error handling.
-
-    For each article, provide a 'title', 'category' (e.g., "Getting Started", "Banking", "Properties", "Reports", "Troubleshooting"), 'body' (in Markdown), and relevant 'tags' (lowercase array).
+  // 3. The "Deep Analysis" Prompt
+  const deepPrompt = `
+    You are a technical documentation expert. I have attached the actual source code of a Next.js application named 'FiscalFlow'.
+    
+    YOUR TASK:
+    Analyze this code deeply to understand every feature, user flow, and capability.
+    Generate a comprehensive knowledge base of at least 30-40 distinct help articles.
+    
+    GUIDELINES:
+    1. **Be Exhaustive**: Don't just stick to "Getting Started". Look for specific features like "How AI Reporting works", "Handling Plaid Errors", "Customizing Smart Rules", "Exporting Data", etc.
+    2. **User-Focused**: Write for the end-user, not the developer. Don't mention "functions" or "variables". Mention "buttons", "pages", and "actions".
+    3. **Structure**: 
+       - Title: Clear and action-oriented (e.g., "How to categorize a transaction").
+       - Category: Group them logically (Getting Started, Transactions, Properties, Reports, Settings, Troubleshooting).
+       - Body: Detailed Markdown with steps.
+    
+    SOURCE CODE CONTEXT:
+    ${allCode}
   `;
-
+  
   const articleSchema = z.object({
     title: z.string(),
     category: z.string(),
@@ -125,23 +147,72 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
     tags: z.array(z.string()),
   });
 
+  // 4. Generate with Gemini (Using 1.5 Pro or Flash for large context)
+  // We use the direct fetch method (like we did for embed/ask) to avoid library timeout/parsing issues
+  const apiKey = process.env.GEMINI_API_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
   try {
-    const { output } = await ai.generate({
-      prompt: fileContentPrompt,
-      model: 'googleai/gemini-2.5-flash',
-      output: { schema: z.object({ articles: z.array(articleSchema) }) },
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [{ text: deepPrompt }]
+        }],
+        generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: "OBJECT",
+                properties: {
+                    articles: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                title: { type: "STRING" },
+                                category: { type: "STRING" },
+                                body: { type: "STRING" },
+                                tags: { type: "ARRAY", items: { type: "STRING" } }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+      })
     });
 
-    if (!output || !output.articles) throw new Error("Failed to generate articles from AI.");
+    if (!response.ok) {
+        throw new Error(`AI Generation failed: ${response.status} ${await response.text()}`);
+    }
 
+    const data = await response.json();
+    // Parse the JSON string inside the response
+    const jsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!jsonText) throw new Error("Empty response from AI");
+    
+    const output = JSON.parse(jsonText);
+
+    if (!output.articles || output.articles.length === 0) {
+        throw new Error("AI returned 0 articles.");
+    }
+
+    // 5. Save to Database (Batching 500 max)
     const batch = db.batch();
-    output.articles.forEach(article => {
+    
+    // Optional: Delete old articles first? 
+    // For now, we just add new ones. You might want to manually clear the collection if you want a fresh start.
+    
+    output.articles.forEach((article: any) => {
       const docRef = db.collection('help_articles').doc();
       batch.set(docRef, { ...article, updatedAt: new Date(), enabled: true, embedding: [] });
     });
 
     await batch.commit();
     return { created: output.articles.length };
+
   } catch (error: any) {
     console.error("Generate Error:", error);
     throw new Error(error.message || "Failed to generate content.");
