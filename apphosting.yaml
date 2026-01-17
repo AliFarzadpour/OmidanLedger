@@ -47,6 +47,6 @@ env:
     value: "production"
     availability: [BUILD, RUNTIME]
   
-  - variable: NEXT_PUBLIC_ENABLE_HELP_RAG
+  - variable: ENABLE_HELP_RAG
     value: "true"
     availability: [BUILD, RUNTIME]

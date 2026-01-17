@@ -6,7 +6,7 @@ import { answerHelpQuestion, indexMissingHelpEmbeddings } from '@/ai/help/rag';
 import { isSuperAdmin } from '@/lib/auth-utils';
 
 function isEnabled() {
-  return process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true';
+  return process.env.ENABLE_HELP_RAG === 'true';
 }
 
 export async function askHelp(question: string) {
