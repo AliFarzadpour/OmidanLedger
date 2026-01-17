@@ -8,7 +8,7 @@ import { askHelpRag, generateHelpArticlesFromCodebase, indexHelpArticles } from 
 
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, Sparkles, BrainCircuit, AlertCircle, FilePlus, ListTree } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
