@@ -1,4 +1,3 @@
-
 'use server';
 
 import 'server-only';
@@ -10,35 +9,41 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 
-// Helper: Recursively read all code files in a directory
-function readCodebase(dir: string, fileList: string[] = []): string[] {
-  const files = fs.readdirSync(dir);
-
-  files.forEach((file) => {
-    const filePath = path.join(dir, file);
-    const stat = fs.statSync(filePath);
-
-    if (stat.isDirectory()) {
-      if (file !== 'node_modules' && file !== '.next' && file !== '.git' && file !== 'fonts') {
-        readCodebase(filePath, fileList);
-      }
-    } else {
-      // Only read relevant code files
-      if (/\.(tsx|ts|js|jsx)$/.test(file)) {
-        // Read the file content
-        const content = fs.readFileSync(filePath, 'utf8');
-        // Add a header so the AI knows which file this is
-        fileList.push(`\n--- FILE: ${filePath} ---\n${content}`);
-      }
-    }
-  });
-
-  return fileList;
-}
-
-
+// --- CONFIGURATION ---
+// Updated for 2026 standards
+const GENERATION_MODEL = 'gemini-2.5-flash'; 
+const EMBEDDING_MODEL = 'text-embedding-004';
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 const MIN_CONTENT_LENGTH = 20;
+
+// Helper: Recursively read all code files in a directory
+function readCodebase(dir: string, fileList: string[] = []): string[] {
+    // Safety check: if directory doesn't exist (Production), stop immediately
+    if (!fs.existsSync(dir)) return [];
+  
+    const files = fs.readdirSync(dir);
+  
+    files.forEach((file) => {
+      const filePath = path.join(dir, file);
+      try {
+        const stat = fs.statSync(filePath);
+    
+        if (stat.isDirectory()) {
+          if (file !== 'node_modules' && file !== '.next' && file !== '.git' && file !== 'fonts') {
+            readCodebase(filePath, fileList);
+          }
+        } else {
+          if (/\.(tsx|ts|js|jsx)$/.test(file)) {
+            const content = fs.readFileSync(filePath, 'utf8');
+            fileList.push(`\n--- FILE: ${filePath} ---\n${content}`);
+          }
+        }
+      } catch (err) {
+        // Ignore individual file read errors
+      }
+    });
+    return fileList;
+  }
 
 // --- REPLACED: Direct API Call Function ---
 type EmbeddingResult =
@@ -49,7 +54,7 @@ async function embedText(text: string): Promise<EmbeddingResult> {
   // 1. Check for the Key
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error("[HELP][EMBED] Missing GEMINI_API_KEY in process.env");
+    console.error("[HELP][EMBED] Missing GEMINI_API_KEY");
     return { ok: false, error: 'Server configuration error: Missing API Key.' };
   }
 
@@ -59,13 +64,13 @@ async function embedText(text: string): Promise<EmbeddingResult> {
 
   try {
     // 2. Direct Call to Google Gemini API (Bypassing Genkit)
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
     
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: "models/text-embedding-004",
+        model: `models/${EMBEDDING_MODEL}`,
         content: { parts: [{ text: text }] }
       })
     });
@@ -103,17 +108,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
 
   const db = getAdminDb();
 
-  // 2. Clear existing articles (Optional but recommended)
-  // You can do this manually in Firebase Console to be safe, or uncomment this to auto-delete:
-  /*
-  const existingDocs = await db.collection('help_articles').listDocuments();
-  const deleteBatch = db.batch();
-  existingDocs.forEach(doc => deleteBatch.delete(doc));
-  await deleteBatch.commit();
-  console.log("Cleared old help articles.");
-  */
-
-  // 3. Scan Codebase
+  // 2. Scan Codebase
   const srcDir = path.join(process.cwd(), 'src'); 
   let allCode = "";
   try {
@@ -124,7 +119,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
     throw new Error("Failed to read codebase files.");
   }
 
-  // 4. The "Step-by-Step" Prompt
+  // 3. The "Step-by-Step" Prompt
   const deepPrompt = `
     You are a technical documentation expert for 'FiscalFlow'. I have attached the source code.
     
@@ -148,7 +143,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
     ${allCode}
   `;
   
-  // 5. Generate with Gemini 1.5 Flash (Direct API)
+  // 4. Generate with Gemini 1.5 Flash (Direct API)
   const apiKey = process.env.GEMINI_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -174,7 +169,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
                                 title: { type: "STRING" },
                                 category: { type: "STRING" },
                                 body: { type: "STRING" },
-                                tags: { type: "ARRAY", items: { type: "STRING" } }
+                                tags: { type: "ARRAY", items: { "type": "STRING" } }
                             }
                         }
                     }
@@ -192,7 +187,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
     
     const output = JSON.parse(jsonText);
 
-    // 6. Save to Database
+    // 5. Save to Database
     const batch = db.batch();
     output.articles.forEach((article: any) => {
       const docRef = db.collection('help_articles').doc();
@@ -208,7 +203,8 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
   }
 }
 
-// --- 3. Indexing Action ---
+
+// --- 2. Index Help Articles ---
 export async function indexHelpArticles(userId: string): Promise<{
   ok: boolean;
   indexed: number;
@@ -220,29 +216,31 @@ export async function indexHelpArticles(userId: string): Promise<{
 
   try {
     if (!isHelpEnabled()) throw new Error("Help feature is not enabled.");
+    if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
     if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
 
     const db = getAdminDb();
-    const batch = db.batch();
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
 
     if (snapshot.empty) {
       result.ok = false;
       result.errors.push("No help articles found. Click 'Generate Help Content' first.");
+      console.error('[HELP][INDEX] No enabled help articles found to index.');
       return result;
     }
 
+    console.log(`[HELP][INDEX] Found ${snapshot.size} articles to process.`);
+    const batch = db.batch();
+    
     for (const doc of snapshot.docs) {
       const article = doc.data();
-      if (!doc.exists || !article) {
+      if (!article) {
         result.skipped++;
         continue;
       }
       
-      // Skip if embedding exists and is fresh
       const updatedAt = article.updatedAt?.toDate() || new Date(0);
       const embeddingUpdatedAt = article.embeddingUpdatedAt?.toDate() || new Date(0);
-      
       if (Array.isArray(article.embedding) && article.embedding.length > 0 && embeddingUpdatedAt >= updatedAt) {
         result.skipped++;
         continue;
@@ -251,42 +249,35 @@ export async function indexHelpArticles(userId: string): Promise<{
       const title = article.title ?? '';
       const content = article.body ?? article.content ?? '';
       const combinedText = [title, content].filter(Boolean).join('\n\n');
-      
+
       if (combinedText.trim().length < MIN_CONTENT_LENGTH) {
         result.skipped++;
         continue;
       }
 
-
-      // Attempt to Embed
       const embeddingResult = await embedText(combinedText);
-
       if (embeddingResult.ok) {
-        batch.update(doc.ref, { 
-          embedding: embeddingResult.embedding, 
-          embeddingUpdatedAt: new Date() 
-        });
+        batch.update(doc.ref, { embedding: embeddingResult.embedding, embeddingUpdatedAt: new Date() });
         result.indexed++;
       } else {
-        console.error(`[HELP][INDEX] Failed to embed doc ${doc.id}: ${embeddingResult.error}`);
         result.failed++;
-        result.errors.push(`Doc "${title}": ${embeddingResult.error}`);
+        result.errors.push(`Doc "${title || doc.id}": ${embeddingResult.error}`);
+        console.error(`[HELP][INDEX] Failed to embed doc ${doc.id}:`, embeddingResult.error);
       }
     }
 
     if (result.indexed > 0) {
       await batch.commit();
     }
+    
+    if (result.failed > 0) result.ok = false;
+
   } catch (err: any) {
     console.error('[HELP][INDEX] Critical error:', err);
     result.ok = false;
-    result.errors.push(err.message || "An unknown error occurred.");
+    result.errors.push(err.message || "An unknown error occurred during indexing.");
   }
-
-  if (result.failed > 0 && result.indexed === 0) {
-     result.ok = false;
-  }
-
+  
   return result;
 }
 
@@ -336,6 +327,7 @@ export async function askHelpRag(question: string) {
     
     // 5. Generate Answer via Direct API Call (Bypassing Genkit)
     const apiKey = process.env.GEMINI_API_KEY;
+    
     // UPDATED: Changed from 'gemini-1.5-flash' to 'gemini-2.5-flash'
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
