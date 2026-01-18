@@ -2,7 +2,6 @@
 
 import 'server-only';
 import { getAdminDb } from '@/lib/firebaseAdmin';
-import { isHelpEnabled } from '@/lib/help/help-config';
 import { isSuperAdmin } from '@/lib/auth-utils';
 import { retrieveTopK, type HelpArticle } from '@/lib/help/help-retrieval';
 import { z } from 'zod';
@@ -10,51 +9,45 @@ import fs from 'fs';
 import path from 'path';
 
 // --- CONFIGURATION ---
-// Updated for 2026 standards
-const GENERATION_MODEL = 'gemini-2.5-flash'; 
-const EMBEDDING_MODEL = 'text-embedding-004';
+const GENERATION_MODEL = 'gemini-2.5-flash';
+const EMBEDDING_MODEL = 'text-embedding-004'; 
 const FRIENDLY_ERROR_MSG = 'The AI Help Assistant is currently unavailable. Please try again later.';
 const MIN_CONTENT_LENGTH = 20;
 
 // Helper: Recursively read all code files in a directory
 function readCodebase(dir: string, fileList: string[] = []): string[] {
-    // Safety check: if directory doesn't exist (Production), stop immediately
-    if (!fs.existsSync(dir)) return [];
-  
-    const files = fs.readdirSync(dir);
-  
-    files.forEach((file) => {
-      const filePath = path.join(dir, file);
-      try {
-        const stat = fs.statSync(filePath);
-    
-        if (stat.isDirectory()) {
-          if (file !== 'node_modules' && file !== '.next' && file !== '.git' && file !== 'fonts') {
-            readCodebase(filePath, fileList);
-          }
-        } else {
-          if (/\.(tsx|ts|js|jsx)$/.test(file)) {
-            const content = fs.readFileSync(filePath, 'utf8');
-            fileList.push(`\n--- FILE: ${filePath} ---\n${content}`);
-          }
-        }
-      } catch (err) {
-        // Ignore individual file read errors
-      }
-    });
-    return fileList;
-  }
+  const files = fs.readdirSync(dir);
 
-// --- REPLACED: Direct API Call Function ---
+  files.forEach((file) => {
+    const filePath = path.join(dir, file);
+    const stat = fs.statSync(filePath);
+
+    if (stat.isDirectory()) {
+      if (file !== 'node_modules' && file !== '.next' && file !== '.git' && file !== 'fonts') {
+        readCodebase(filePath, fileList);
+      }
+    } else {
+      // Only read relevant code files
+      if (/\.(tsx|ts|js|jsx)$/.test(file)) {
+        // Read the file content
+        const content = fs.readFileSync(filePath, 'utf8');
+        // Add a header so the AI knows which file this is
+        fileList.push(`\n--- FILE: ${filePath} ---\n${content}`);
+      }
+    }
+  });
+  return fileList;
+}
+
+// --- 1. Hardened Embedding Function ---
 type EmbeddingResult =
   | { ok: true; embedding: number[] }
   | { ok: false; error: string };
 
 async function embedText(text: string): Promise<EmbeddingResult> {
-  // 1. Check for the Key
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    console.error("[HELP][EMBED] Missing GEMINI_API_KEY");
+    console.error("[HELP][EMBED] Missing GEMINI_API_KEY in process.env");
     return { ok: false, error: 'Server configuration error: Missing API Key.' };
   }
 
@@ -63,7 +56,6 @@ async function embedText(text: string): Promise<EmbeddingResult> {
   }
 
   try {
-    // 2. Direct Call to Google Gemini API (Bypassing Genkit)
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
     
     const response = await fetch(url, {
@@ -75,7 +67,6 @@ async function embedText(text: string): Promise<EmbeddingResult> {
       })
     });
 
-    // 3. Handle specific API errors nicely
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[HELP][EMBED] API Error ${response.status}:`, errorText);
@@ -84,7 +75,6 @@ async function embedText(text: string): Promise<EmbeddingResult> {
 
     const data = await response.json();
 
-    // 4. Extract the vector safely
     const v = data?.embedding?.values;
 
     if (!Array.isArray(v)) {
@@ -100,62 +90,86 @@ async function embedText(text: string): Promise<EmbeddingResult> {
   }
 }
 
-export async function generateHelpArticlesFromCodebase(userId: string) {
-  // 1. Safety Checks
+// --- 2. Generate Help Articles (Chunked by Category) ---
+export async function generateHelpArticlesFromCodebase(userId: string, targetCategory?: string) {
   if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) throw new Error(FRIENDLY_ERROR_MSG);
   if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
   if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
 
   const db = getAdminDb();
 
-  // 2. Scan Codebase
-  const srcDir = path.join(process.cwd(), 'src'); 
-  let allCode = "";
-  try {
-    const files = readCodebase(srcDir);
-    allCode = files.join('\n').substring(0, 2000000); // 2MB Limit
-  } catch (err) {
-    console.error("Error reading codebase:", err);
-    throw new Error("Failed to read codebase files.");
+  // 1. DEFINE CATEGORIES
+  // If no category is passed, default to the first one (or handle UI logic to loop)
+  // We will run this function multiple times, once for each block.
+  const categories = {
+    'RealEstate': `
+      Focus ONLY on Real Estate Management:
+      - Properties: Adding Single/Multi-family, editing settings, tax info.
+      - Revenue Center: Rent Roll, Economic Occupancy, Collection Rate.
+      - Debt Center: Mortgages, Loan Balance, Interest Paid, DSCR.
+      - Operations: Work Orders, Vendors, Tenant Portals.
+    `,
+    'Accounting': `
+      Focus ONLY on Accounting & Banking:
+      - Dashboard: Net Income, Cash Flow, Expense Breakdown.
+      - Transactions: Plaid Bank Sync, Splitting Transactions, Manual Adds.
+      - Smart Rules: Auto-categorization, Schedule E mapping.
+      - Invoices: Creating and sending tenant invoices.
+      - Reports: P&L, Balance Sheet, Tax Packets.
+    `,
+    'Admin': `
+      Focus ONLY on Setup & Admin:
+      - Onboarding: Opening Balances (Assets/Liabilities).
+      - Settings: User Roles & Permissions.
+      - Billing: Managing the FiscalFlow subscription.
+    `
+  };
+
+  // Select the specific prompt part based on input, or default to RealEstate for a test run
+  const activeCategory = targetCategory && categories[targetCategory as keyof typeof categories] 
+    ? targetCategory 
+    : 'RealEstate';
+
+  const categoryPrompt = categories[activeCategory as keyof typeof categories];
+
+  // 2. READ CODE (Standard Hybrid Read)
+  const srcDir = path.join(process.cwd(), 'src');
+  let promptSourceContext = "CONTEXT: Production Mode.";
+  if (fs.existsSync(srcDir)) {
+    try {
+      const files = readCodebase(srcDir);
+      const allCode = files.join('\n').substring(0, 1500000); // 1.5MB limit
+      promptSourceContext = `SOURCE CODE CONTEXT:\n${allCode}`;
+    } catch (err) { }
   }
 
-  // 3. The "Step-by-Step" Prompt
+  // 3. THE PROMPT (Scoped to 10-15 articles)
   const deepPrompt = `
-    You are a technical documentation expert for 'FiscalFlow'. I have attached the source code.
+    You are the Lead Technical Writer for 'FiscalFlow'.
+    YOUR TASK: Generate 10-15 comprehensive help articles covering ONLY the following topic area:
     
-    YOUR TASK:
-    Generate 30-40 comprehensive help articles that explain EXACTLY how to use the app.
+    ${categoryPrompt}
     
-    CRITICAL WRITING STYLE:
-    - **Step-by-Step**: Every article MUST use numbered lists (1., 2., 3.) for instructions.
-    - **Directional**: Tell the user exactly where to click. (e.g., "Click the 'Add Property' button in the top right corner").
-    - **No Fluff**: Avoid marketing language. Be direct.
+    WRITING STYLE:
+    - **Step-by-Step**: "1. Click X", "2. Select Y".
+    - **Directional**: "Navigate to..."
+    - **Specifics**: Use actual field names from the code context.
     
-    REQUIRED ARTICLE TYPES:
-    - **Workflows**: "How to add a property", "How to reconcile a transaction", "How to generate a P&L report".
-    - **Troubleshooting**: "What to do if Plaid sync fails", "Why is my balance not updating?".
-    - **Features**: "How Smart Rules categorize your data automatically".
-
+    ${promptSourceContext}
+    
     OUTPUT FORMAT (JSON):
-    Return a raw JSON object with an "articles" array. Each article has title, category, body (Markdown), and tags.
-    
-    SOURCE CODE CONTEXT:
-    ${allCode}
+    Return a raw JSON object with an "articles" array.
   `;
-  
-  // 4. Generate with Gemini 1.5 Flash (Direct API)
+
   const apiKey = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent?key=${apiKey}`;
 
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        contents: [{
-          role: "user",
-          parts: [{ text: deepPrompt }]
-        }],
+        contents: [{ role: "user", parts: [{ text: deepPrompt }] }],
         generationConfig: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -169,7 +183,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
                                 title: { type: "STRING" },
                                 category: { type: "STRING" },
                                 body: { type: "STRING" },
-                                tags: { type: "ARRAY", items: { "type": "STRING" } }
+                                tags: { type: "ARRAY", items: { type: "STRING" } }
                             }
                         }
                     }
@@ -187,7 +201,6 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
     
     const output = JSON.parse(jsonText);
 
-    // 5. Save to Database
     const batch = db.batch();
     output.articles.forEach((article: any) => {
       const docRef = db.collection('help_articles').doc();
@@ -195,7 +208,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
     });
 
     await batch.commit();
-    return { created: output.articles.length };
+    return { created: output.articles.length, category: activeCategory };
 
   } catch (error: any) {
     console.error("Generate Error:", error);
@@ -203,8 +216,7 @@ export async function generateHelpArticlesFromCodebase(userId: string) {
   }
 }
 
-
-// --- 2. Index Help Articles ---
+// --- 3. Index Help Articles ---
 export async function indexHelpArticles(userId: string): Promise<{
   ok: boolean;
   indexed: number;
@@ -215,30 +227,26 @@ export async function indexHelpArticles(userId: string): Promise<{
   const result = { ok: true, indexed: 0, skipped: 0, failed: 0, errors: [] as string[] };
 
   try {
-    if (!isHelpEnabled()) throw new Error("Help feature is not enabled.");
+    if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) throw new Error("Help feature is not enabled.");
     if (!process.env.GEMINI_API_KEY) throw new Error("GEMINI_API_KEY is not configured.");
     if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
 
     const db = getAdminDb();
+    const batch = db.batch();
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
 
     if (snapshot.empty) {
       result.ok = false;
-      result.errors.push("No help articles found. Click 'Generate Help Content' first.");
-      console.error('[HELP][INDEX] No enabled help articles found to index.');
+      result.errors.push("No help articles found.");
       return result;
     }
 
-    console.log(`[HELP][INDEX] Found ${snapshot.size} articles to process.`);
-    const batch = db.batch();
-    
     for (const doc of snapshot.docs) {
+      if (!doc.exists) continue;
       const article = doc.data();
-      if (!article) {
-        result.skipped++;
-        continue;
-      }
       
+      if (!article) continue;
+
       const updatedAt = article.updatedAt?.toDate() || new Date(0);
       const embeddingUpdatedAt = article.embeddingUpdatedAt?.toDate() || new Date(0);
       if (Array.isArray(article.embedding) && article.embedding.length > 0 && embeddingUpdatedAt >= updatedAt) {
@@ -249,10 +257,10 @@ export async function indexHelpArticles(userId: string): Promise<{
       const title = article.title ?? '';
       const content = article.body ?? article.content ?? '';
       const combinedText = [title, content].filter(Boolean).join('\n\n');
-
-      if (combinedText.trim().length < MIN_CONTENT_LENGTH) {
-        result.skipped++;
-        continue;
+      
+      if(combinedText.trim().length < MIN_CONTENT_LENGTH) {
+          result.skipped++;
+          continue;
       }
 
       const embeddingResult = await embedText(combinedText);
@@ -261,29 +269,20 @@ export async function indexHelpArticles(userId: string): Promise<{
         result.indexed++;
       } else {
         result.failed++;
-        result.errors.push(`Doc "${title || doc.id}": ${embeddingResult.error}`);
-        console.error(`[HELP][INDEX] Failed to embed doc ${doc.id}:`, embeddingResult.error);
+        result.errors.push(`Doc "${title}": ${embeddingResult.error}`);
       }
     }
 
-    if (result.indexed > 0) {
-      await batch.commit();
-    }
-    
-    if (result.failed > 0) result.ok = false;
-
+    if (result.indexed > 0) await batch.commit();
   } catch (err: any) {
     console.error('[HELP][INDEX] Critical error:', err);
     result.ok = false;
-    result.errors.push(err.message || "An unknown error occurred during indexing.");
+    result.errors.push(err.message || "An unknown error occurred.");
   }
-  
   return result;
 }
 
-/**
- * Answers a user's question using the RAG pipeline with Direct API calls.
- */
+// --- 4. Ask RAG ---
 export async function askHelpRag(question: string) {
   if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) {
     return { answer: FRIENDLY_ERROR_MSG, sources: [] };
