@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,9 +19,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, Sparkles, BrainCircuit, FilePlus, ListTree, PlusCircle, Trash2, Search, RefreshCw, HelpCircle, Wrench } from 'lucide-react';
+import { Loader2, Sparkles, BrainCircuit, FilePlus, ListTree, PlusCircle, Trash2, Search, RefreshCw, HelpCircle, Wrench, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { marked } from 'marked';
 
@@ -141,6 +143,13 @@ export function HelpAssistant() {
             Omidan Assistant
           </SheetTitle>
         </SheetHeader>
+
+        <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-800 mb-4">
+          <AlertTriangle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-xs">
+            Articles are prepared by an AI assistant and may contain inaccuracies. Please verify critical information.
+          </AlertDescription>
+        </Alert>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
