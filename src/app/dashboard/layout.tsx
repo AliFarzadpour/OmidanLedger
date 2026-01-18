@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/sidebar"
 import { Separator } from "@/components/ui/separator"
 import { UserNav } from "@/components/dashboard/user-nav"
+import { HelpAssistant } from "@/components/help/help-assistant"
 
 export default function DashboardLayout({
   children,
@@ -29,6 +30,7 @@ export default function DashboardLayout({
           {children}
         </div>
       </SidebarInset>
+      <HelpAssistant />
     </SidebarProvider>
   )
 }
