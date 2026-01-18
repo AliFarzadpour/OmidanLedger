@@ -1,3 +1,4 @@
+
 'use server';
 
 import 'server-only';
@@ -335,8 +336,8 @@ export async function askHelpRag(question: string) {
     
     // 5. Generate Answer via Direct API Call (Bypassing Genkit)
     const apiKey = process.env.GEMINI_API_KEY;
-    // Using gemini-1.5-flash for speed and reliability
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    // UPDATED: Changed from 'gemini-1.5-flash' to 'gemini-2.5-flash'
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(url, {
       method: 'POST',
