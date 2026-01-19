@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -19,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Sparkles, BrainCircuit, FilePlus, ListTree, PlusCircle, Trash2, Search, RefreshCw, HelpCircle, Wrench, AlertTriangle } from 'lucide-react';
@@ -53,11 +52,19 @@ export function HelpAssistant() {
   const [articles, setArticles] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Hydration fix
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   useEffect(() => {
     if (user?.uid) isSuperAdmin(user.uid).then(setIsAdmin);
   }, [user]);
 
-  if (!isHelpEnabled()) return null;
+  if (!isHelpEnabled() || !isClient) {
+    return null;
+  }
 
   // --- HANDLERS ---
   const handleAsk = async () => {
