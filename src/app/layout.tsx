@@ -1,9 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Toaster } from '@/components/ui/toaster';
 import { cn } from '@/lib/utils';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
-import { HelmetProvider } from 'react-helmet-async';
+import { AppProviders } from '@/components/AppProviders';
 
 
 export const metadata: Metadata = {
@@ -31,12 +29,9 @@ export default function RootLayout({
         />
       </head>
       <body className={cn('font-body antialiased')}>
-        <HelmetProvider>
-          <FirebaseClientProvider>
-            {children}
-          </FirebaseClientProvider>
-          <Toaster />
-        </HelmetProvider>
+        <AppProviders>
+          {children}
+        </AppProviders>
       </body>
     </html>
   );
