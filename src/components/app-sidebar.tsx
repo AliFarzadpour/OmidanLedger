@@ -253,7 +253,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {data.accounting.map(renderMenuItem)}
+              {data.accounting
+                .filter(item => isAdmin || item.title !== 'Invoices & Billing')
+                .map(renderMenuItem)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -276,7 +278,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup className="mt-auto pb-4">
           <SidebarGroupContent>
             <SidebarMenu>
-              {data.system.map(renderMenuItem)}
+              {data.system
+                .filter(item => isAdmin || item.title !== 'My Billing')
+                .map(renderMenuItem)}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
