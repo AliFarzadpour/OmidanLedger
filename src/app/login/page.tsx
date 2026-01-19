@@ -23,6 +23,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Lock, Banknote, Loader2, FileText } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { signInWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
+import { Helmet } from 'react-helmet-async';
 
 /** Initiate email/password sign-in (non-blocking). */
 export function initiateEmailSignIn(authInstance: Auth, email: string, password: string, onError?: (error: AuthError) => void): void {
@@ -71,6 +72,21 @@ export default function LoginPage() {
       setAuthError(errorMessage);
     });
   };
+
+  const softwareSchema = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "OmidanLedger",
+    "description": "Simplify your property management. Track rent, manage expenses, and generate real-time financial reports in one secure dashboard.",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "keywords": "real estate accounting, landlord software, rent tracking, expense management, property finance"
+  };
   
   if (isUserLoading || user) {
     return (
@@ -82,6 +98,13 @@ export default function LoginPage() {
 
   return (
     <div className="w-full min-h-screen grid lg:grid-cols-2">
+      <Helmet>
+        <title>Login | OmidanLedger - Real Estate Financial Management</title>
+        <meta name="description" content="Sign in to OmidanLedger to manage your real estate finances. Track rent, automate expenses, and get insights into your property portfolio." />
+        <script type="application/ld+json">
+          {JSON.stringify(softwareSchema)}
+        </script>
+      </Helmet>
       <div className="hidden lg:flex flex-col items-start justify-center bg-slate-50 p-12 text-slate-800">
         <div className="mb-8">
             <Logo />
