@@ -73,19 +73,20 @@ export default function LoginPage() {
     });
   };
 
-  const softwareSchema = {
+  const structuredData = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "OmidanLedger",
-    "description": "Simplify your property management. Track rent, manage expenses, and generate real-time financial reports in one secure dashboard.",
     "applicationCategory": "FinanceApplication",
     "operatingSystem": "Web",
     "offers": {
       "@type": "Offer",
       "price": "0",
-      "priceCurrency": "USD"
+      "priceCurrency": "USD",
+      "description": "Free beta testing phase"
     },
-    "keywords": "real estate accounting, landlord software, rent tracking, expense management, property finance"
+    "description": "A modern financial management platform for real estate investors and landlords.",
+    "featureList": "Automated Bookkeeping, AI-Powered Categorization, Real-time Reporting"
   };
   
   if (isUserLoading || user) {
@@ -99,10 +100,22 @@ export default function LoginPage() {
   return (
     <div className="w-full min-h-screen grid lg:grid-cols-2">
       <Helmet>
-        <title>Login | OmidanLedger - Real Estate Financial Management</title>
-        <meta name="description" content="Sign in to OmidanLedger to manage your real estate finances. Track rent, automate expenses, and get insights into your property portfolio." />
+        {/* 1. Basic Meta Tags */}
+        <title>OmidanLedger | Free Landlord Rent Tracking & Financial Software</title>
+        <meta 
+          name="description" 
+          content="Simplify your property management. Track rent, manage expenses, and generate real-time financial reports in one secure dashboard. Free for landlords." 
+        />
+        
+        {/* 2. Open Graph (for nicer links on LinkedIn/Facebook) */}
+        <meta property="og:title" content="OmidanLedger - All-in-One Financial Command Center" />
+        <meta property="og:description" content="Automated bookkeeping and expense tracking for real estate investors." />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://omidanledger.net/" />
+        
+        {/* 3. The 'Invisible' Schema Code for AI Bots */}
         <script type="application/ld+json">
-          {JSON.stringify(softwareSchema)}
+          {JSON.stringify(structuredData)}
         </script>
       </Helmet>
       <div className="hidden lg:flex flex-col items-start justify-center bg-slate-50 p-12 text-slate-800">
