@@ -452,7 +452,8 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
               <TableHead>Property</TableHead>
               <TableHead>Tenant</TableHead>
               <TableHead>Rent Due</TableHead>
-              <TableHead>Amount Paid</TableHead>
+              <TableHead className="text-right">Amount Paid</TableHead>
+              <TableHead className="w-12"></TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
@@ -460,13 +461,13 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
           <TableBody>
             {isLoading ? (
                 <TableRow>
-                    <TableCell colSpan={7} className="text-center p-8">
+                    <TableCell colSpan={8} className="text-center p-8">
                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/>
                     </TableCell>
                 </TableRow>
             ) : rentRoll.length === 0 ? (
                  <TableRow>
-                    <TableCell colSpan={7} className="text-center p-8">
+                    <TableCell colSpan={8} className="text-center p-8">
                         <p className="font-semibold">No Active Leases with Rent Due Found</p>
                         <p className="text-sm text-muted-foreground">Add tenants with rent amounts to your properties to see them here.</p>
                     </TableCell>
@@ -491,8 +492,10 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                             <TableCell className="font-medium">{item.propertyName}</TableCell>
                             <TableCell>{item.tenantName}</TableCell>
                             <TableCell>{formatCurrency(item.rentDue)}</TableCell>
-                            <TableCell className="font-medium text-green-700 flex items-baseline justify-end gap-1">
+                            <TableCell className="font-medium text-green-700 text-right">
                                 {formatCurrency(item.amountPaid)}
+                            </TableCell>
+                            <TableCell>
                                 <AssignPaymentDialog 
                                     tenant={item} 
                                     viewingDate={viewingDate} 
