@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useUser, useFirestore } from '@/firebase';
-import { collectionGroup, query, where, getDocs, startOfMonth, endOfMonth, format } from 'firebase/firestore';
+import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
+import { startOfMonth, endOfMonth, format } from 'date-fns';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Loader2, Pencil } from 'lucide-react';
