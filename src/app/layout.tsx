@@ -6,8 +6,8 @@ import { FirebaseClientProvider } from '@/firebase/client-provider';
 
 
 export const metadata: Metadata = {
-  title: 'OmidanLedger',
-  description: 'Your modern solution for financial management.',
+  title: 'OmidanLedger | All-in-One Rent & Expense Tracking for Landlords',
+  description: 'Simplify your property management. Track rent, manage expenses, and generate real-time financial reports in one secure dashboard. Sign in or start today.',
   keywords: 'finance, bookkeeping, accounting, real estate, landlord, rent tracking, expense management, AI finance',
 };
 
