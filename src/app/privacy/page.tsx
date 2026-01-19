@@ -98,7 +98,7 @@ export default function PrivacyPolicyPage() {
           <div className="space-y-2">
             <h2 className="text-xl font-semibold">9. CONTACT US</h2>
             <p>
-              If you have questions, comments, or requests regarding this Privacy Policy or your data, please contact us at: [Your Contact Email Here].
+              If you have questions, comments, or requests regarding this Privacy Policy or your data, please contact us at: Dev@OmidanAI.com.
             </p>
           </div>
         </CardContent>
