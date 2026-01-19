@@ -491,7 +491,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                             <TableCell className="font-medium">{item.propertyName}</TableCell>
                             <TableCell>{item.tenantName}</TableCell>
                             <TableCell>{formatCurrency(item.rentDue)}</TableCell>
-                            <TableCell className="font-medium text-green-700 flex items-center justify-end gap-1">
+                            <TableCell className="font-medium text-green-700 flex items-baseline justify-end gap-1">
                                 {formatCurrency(item.amountPaid)}
                                 <AssignPaymentDialog 
                                     tenant={item} 
