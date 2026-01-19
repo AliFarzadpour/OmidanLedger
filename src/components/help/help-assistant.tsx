@@ -147,7 +147,7 @@ export function HelpAssistant() {
         <Alert variant="destructive" className="bg-amber-50 border-amber-200 text-amber-800 mb-4">
           <AlertTriangle className="h-4 w-4 text-amber-600" />
           <AlertDescription className="text-xs">
-            Articles are prepared by an AI assistant and may contain inaccuracies. Please verify critical information.
+            Articles are prepared by an AI assistant and may contain inaccuracies. Please verify critical information. For questions, contact <a href="mailto:Dev@OmidanAI.com" className="font-semibold">Dev@OmidanAI.com</a>.
           </AlertDescription>
         </Alert>
 
