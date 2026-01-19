@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertCircle, Send, Check } from 'lucide-react';
+import { Loader2, AlertCircle, Send, Check, Pencil } from 'lucide-react';
 import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO, differenceInDays, isPast } from 'date-fns';
@@ -34,6 +34,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { AssignPaymentDialog } from './AssignPaymentDialog';
 
 
 interface Tenant {
@@ -147,9 +148,6 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
       endOfMonth: endOfMonth(viewingDate),
     }
   }, [viewingDate]);
-
-  const monthStartStr = useMemo(() => format(startOfMonthDate, 'yyyy-MM-dd'), [startOfMonthDate]);
-  const monthEndStr = useMemo(() => format(endOfMonthDate, 'yyyy-MM-dd'), [endOfMonthDate]);
   
     // Fetch charges
   const chargesQuery = useMemoFirebase(() => {
@@ -179,40 +177,44 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
     return { sent: !!charge, date: charge ? (charge.sentAt instanceof Date ? charge.sentAt : new Date((charge.sentAt as any).seconds * 1000)) : null };
   }, [charges]);
 
-  useEffect(() => {
-    (async () => {
-      if (!firestore || !user?.uid) return;
-  
-      setIsLoadingTx(true);
-      setTxError(null);
-  
-      try {
-        const txsSnap = await getDocs(
-          query(
+  const fetchTransactions = useCallback(async () => {
+    if (!firestore || !user?.uid) return;
+    
+    setIsLoadingTx(true);
+    setTxError(null);
+    
+    try {
+        const monthStartStr = format(startOfMonth(viewingDate), 'yyyy-MM-dd');
+        const monthEndStr = format(endOfMonth(viewingDate), 'yyyy-MM-dd');
+
+        const txsSnap = await getDocs(query(
             collectionGroup(firestore, 'transactions'),
             where('userId', '==', user.uid),
             where('categoryHierarchy.l0', '==', 'INCOME'),
             where('date', '>=', monthStartStr),
             where('date', '<=', monthEndStr)
-          )
-        );
-        
-        const allTx: Tx[] = [];
-        txsSnap.docs.forEach(doc => {
-            allTx.push({ id: doc.id, ...doc.data() });
-        });
+        ));
+      
+      const allTx: Tx[] = [];
+      txsSnap.docs.forEach(doc => {
+          allTx.push({ id: doc.id, ...doc.data() });
+      });
   
-        setMonthlyIncomeTx(allTx);
+      setMonthlyIncomeTx(allTx);
 
-      } catch (e) {
-        console.error('Monthly tx fetch failed:', e);
-        setTxError(e);
-        setMonthlyIncomeTx([]);
-      } finally {
-        setIsLoadingTx(false);
-      }
-    })();
-  }, [firestore, user?.uid, monthStartStr, monthEndStr]);
+    } catch (e) {
+      console.error('Monthly tx fetch failed:', e);
+      setTxError(e);
+      setMonthlyIncomeTx([]);
+    } finally {
+      setIsLoadingTx(false);
+    }
+  }, [firestore, user?.uid, viewingDate]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
 
   const propertiesQuery = useMemoFirebase(() => {
     if (!user?.uid || !firestore) return null;
@@ -489,7 +491,14 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                             <TableCell className="font-medium">{item.propertyName}</TableCell>
                             <TableCell>{item.tenantName}</TableCell>
                             <TableCell>{formatCurrency(item.rentDue)}</TableCell>
-                            <TableCell className="font-medium text-green-700">{formatCurrency(item.amountPaid)}</TableCell>
+                            <TableCell className="font-medium text-green-700 flex items-center justify-end gap-1">
+                                {formatCurrency(item.amountPaid)}
+                                <AssignPaymentDialog 
+                                    tenant={item} 
+                                    viewingDate={viewingDate} 
+                                    onSuccess={fetchTransactions} 
+                                />
+                            </TableCell>
                             <TableCell>
                             <Badge
                                 variant={

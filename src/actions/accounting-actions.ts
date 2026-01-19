@@ -66,3 +66,25 @@ export async function createExpenseFromWorkOrder(data: {
         throw new Error(error.message || "An unknown error occurred.");
     }
 }
+
+export async function updateTransactionAssignment(data: {
+    userId: string;
+    transactionId: string;
+    bankAccountId: string;
+    costCenter: string;
+    tenantId: string;
+}) {
+    const { userId, transactionId, bankAccountId, costCenter, tenantId } = data;
+    if (!userId || !transactionId || !bankAccountId || !costCenter) {
+        throw new Error("Missing required fields to assign transaction.");
+    }
+    
+    const txRef = db.collection('users').doc(userId).collection('bankAccounts').doc(bankAccountId).collection('transactions').doc(transactionId);
+    
+    await txRef.update({
+        costCenter: costCenter,
+        tenantId: tenantId,
+    });
+
+    return { success: true };
+}
