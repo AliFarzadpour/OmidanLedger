@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getAdminDb } from '@/lib/firebaseAdmin';
@@ -27,6 +26,20 @@ export async function recordManualPayment({
   const batch = db.batch();
 
   try {
+    let tenantUid = tenantId;
+
+    // --- FIX STARTS HERE ---
+    // If the provided ID looks like an email, find the actual user UID.
+    if (tenantId.includes('@')) {
+        const tenantQuery = await db.collection('users').where('email', '==', tenantId).limit(1).get();
+        if (tenantQuery.empty) {
+            throw new Error(`No tenant user found with email: ${tenantId}`);
+        }
+        const tenantDoc = tenantQuery.docs[0];
+        tenantUid = tenantDoc.id; // This is the correct UID.
+    }
+    // --- FIX ENDS HERE ---
+
     // Find a destination bank account for the landlord
     const landlordAccountsSnap = await db.collection('users').doc(landlordId)
         .collection('bankAccounts').where('accountType', '==', 'checking').limit(1).get();
@@ -52,7 +65,7 @@ export async function recordManualPayment({
         },
         status: 'posted',
         propertyId: propertyId,
-        tenantId: tenantId, 
+        tenantId: tenantUid, // Store the correct UID
         userId: landlordId,
         bankAccountId: destinationAccountId,
         createdAt: FieldValue.serverTimestamp(),
@@ -67,7 +80,7 @@ export async function recordManualPayment({
 
 
     // 2. Deduct from Tenant Balance
-    const tenantRef = db.collection('users').doc(tenantId);
+    const tenantRef = db.collection('users').doc(tenantUid); // Use the correct UID
     batch.update(tenantRef, {
       'billing.balance': FieldValue.increment(-amount),
       'billing.lastPaymentDate': date
