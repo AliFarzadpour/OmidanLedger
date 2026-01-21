@@ -64,6 +64,7 @@ interface Unit {
 interface Property {
     id: string;
     name: string;
+    type: 'single-family' | 'multi-family' | 'condo' | 'commercial' | 'office';
     address: {
         street: string;
     };
@@ -260,7 +261,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
     const propertyMap = new Map((properties || []).map(p => [p.id, p]));
   
     const singleFamilyRows = (properties || [])
-      .filter(p => !p.isMultiUnit)
+      .filter(p => p.type === 'single-family' || p.type === 'condo')
       .flatMap((p, propIndex) => {
         const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
         return activeTenants.map((t, tenantIndex) => ({
