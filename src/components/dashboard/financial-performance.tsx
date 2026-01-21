@@ -34,6 +34,43 @@ function normalizeL0(tx: any): string {
     return 'OPERATING EXPENSE';
 }
 
+// Helper function to fetch units in chunks
+function chunk<T>(arr: T[], size = 10) {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+}
+  
+async function fetchUnitsForProperties(firestore: any, propertyIds: string[], userId: string) {
+    if (propertyIds.length === 0 || !userId) return [];
+    const chunks = chunk(propertyIds, 10);
+    const all: any[] = [];
+  
+    for (const ids of chunks) {
+      const qUnits = query(
+        collectionGroup(firestore, "units"),
+        where("userId", "==", userId), // CRITICAL: Security rule compliance
+        where("propertyId", "in", ids)
+      );
+      const snap = await getDocs(qUnits);
+      snap.forEach((d) => all.push({ id: d.id, path: d.ref.path, ...d.data() }));
+    }
+  
+    return all;
+}
+
+const toNum = (v: any): number => {
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === "string") {
+    const cleaned = v.replace(/[^0-9.-]/g, "", ""); // strips $ and commas safely
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+
 export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
   const { user } = useUser();
   const db = useFirestore();
@@ -41,6 +78,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [properties, setProperties] = useState<any[]>([]);
+  const [allUnits, setAllUnits] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
@@ -71,6 +109,12 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
 
         const allProps = propsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setProperties(allProps);
+        
+        const propertyIds = allProps.map(p => p.id);
+        if (propertyIds.length > 0) {
+            const units = await fetchUnitsForProperties(db, propertyIds, user.uid);
+            setAllUnits(units);
+        }
 
     } catch (e: any) {
         setError(e);
@@ -90,13 +134,27 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     let potentialRent = 0;
     
     properties.forEach(prop => {
-        if(prop.tenants) {
-            prop.tenants.forEach((tenant: any) => {
-                if(tenant.status === 'active') {
-                    potentialRent += Number(tenant.rentAmount || 0);
+        if (prop.type === 'single-family' || prop.type === 'condo') {
+            (prop.tenants || []).forEach((tenant: any) => {
+                if (tenant.status === 'active') {
+                    potentialRent += toNum(tenant.rentAmount);
                 }
-            })
+            });
         }
+    });
+
+    allUnits.forEach(unit => {
+        (unit.tenants || []).forEach((tenant: any) => {
+            if (tenant.status === 'active') {
+                 const rentDue =
+                    toNum(tenant.rentAmount) ||
+                    toNum(unit.financials?.rent) ||
+                    toNum(unit.financials?.targetRent) ||
+                    toNum(unit.targetRent) ||
+                    0;
+                potentialRent += rentDue;
+            }
+        });
     });
     
     const tenantPayments = new Map<string, number>();
@@ -123,7 +181,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         collectedRent,
         potentialRent,
     };
-  }, [transactions, properties]);
+  }, [transactions, properties, allUnits]);
 
 
   const handleRecalculate = async () => {
