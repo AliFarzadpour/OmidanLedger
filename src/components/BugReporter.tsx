@@ -6,6 +6,7 @@ import { useUser } from "@/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { reportBug } from "@/actions/report-bug-action";
 import { Bug } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function BugReporter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -65,14 +66,16 @@ export default function BugReporter() {
 
   if (!isOpen) {
     return (
-      <button
+      <Button
         id="bug-trigger-btn"
+        variant="ghost"
+        size="icon"
         onClick={handleCapture}
-        className="bg-red-600 hover:bg-red-700 text-white h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all font-semibold"
+        className="h-12 w-12 rounded-full"
       >
-        <Bug className="h-6 w-6" />
+        <Bug className="h-6 w-6 text-red-600" />
         <span className="sr-only">Report Bug</span>
-      </button>
+      </Button>
     );
   }
 
