@@ -21,6 +21,23 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
     throw new Error('Resend API key is not configured.');
   }
 
+  // --- FETCH USER DETAILS ---
+  let userDetailsHtml = `<p><strong>User:</strong> ${userEmail} (${userId})</p>`;
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (userDoc.exists) {
+        const userData = userDoc.data();
+        userDetailsHtml += `
+            <p><strong>Role:</strong> ${userData?.role || 'N/A'}</p>
+            <p><strong>Business Name:</strong> ${userData?.businessProfile?.businessName || 'N/A'}</p>
+            <p><strong>Subscription:</strong> ${userData?.billing?.subscriptionTier || 'N/A'}</p>
+        `;
+    }
+  } catch (e) {
+      console.error("Could not fetch additional user details for bug report", e);
+  }
+  // --- END FETCH ---
+
   // 1. Save report to Firestore (without a public URL)
   const reportRef = db.collection('bug_reports').doc();
   await reportRef.set({
@@ -39,8 +56,9 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
   const subject = `New Bug Report from ${userEmail}`;
   const htmlBody = `
     <h1>New Bug Report</h1>
-    <p><strong>User:</strong> ${userEmail}</p>
+    ${userDetailsHtml}
     <p><strong>Page:</strong> <a href="${pageUrl}">${pageUrl}</a></p>
+    <p><strong>Browser:</strong> ${browser}</p>
     <p><strong>Notes:</strong></p>
     <blockquote style="background: #f4f4f4; padding: 15px; border-left: 4px solid #d32f2f;">${notes || "No description provided."}</blockquote>
     <p>Screenshot is attached to this email.</p>
