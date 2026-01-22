@@ -56,7 +56,7 @@ export async function sendWelcomeEmail({ email, name }: { email: string, name?: 
                   <p>Since we are in Beta, I want to make sure you get set up perfectly. If you are stuck or just want a tour, book a free onboarding session with me:</p>
                   
                   <p style="text-align: center;">
-                    <a href="https://calendly.com/alifarzadpour" class="button">Book 30-Min Onboarding</a>
+                    <a href="https://calendar.app.google/7otbXee4xsXWU91e8" class="button">Book 30-Min Onboarding</a>
                   </p>
 
                   <div class="warning-box">
