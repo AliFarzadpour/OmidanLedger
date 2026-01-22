@@ -32,8 +32,8 @@ export default function DashboardLayout({
         </div>
       </SidebarInset>
       <div className="fixed bottom-4 right-4 z-50 flex flex-row items-center gap-2">
-        <HelpAssistant />
         <BugReporter />
+        <HelpAssistant />
       </div>
     </SidebarProvider>
   )
