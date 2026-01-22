@@ -108,10 +108,18 @@ function ensureAdminInitialized() {
     throw new Error('Firebase Admin private_key does not look like a PEM key (missing BEGIN PRIVATE KEY).');
   }
 
+  // Get and clean the storage bucket name
+  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.replace('gs://', '');
+  if (!bucketName) {
+    throw new Error('CRITICAL: Missing NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. Check apphosting.yaml configuration.');
+  }
+
+
   try {
     initializeApp({
       credential: cert(serviceAccount as any),
       projectId: serviceAccount.project_id,
+      storageBucket: bucketName,
     });
   } catch (err: any) {
     // This is the exact error you’re seeing; keep it explicit
