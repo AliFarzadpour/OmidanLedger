@@ -84,9 +84,11 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
     resend.emails.send({
         from: 'support@omidanledger.com',
         to: userEmail,
+        reply_to: 'Dev@OmidanAI.com',
         subject: 'Thank You for Your Bug Report!',
         html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <img src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FOmidanLedger%20logo%20Rightside%20trimed.png?alt=media&token=80772977-26b5-4080-b0f4-30eccf9cc323" alt="OmidanLedger Logo" style="width: 150px; margin-bottom: 20px;" />
                 <h2 style="color: #1e293b;">We've Received Your Report</h2>
                 <p>Hi there,</p>
                 <p>Thank you for taking the time to submit a bug report. We appreciate you helping us make OmidanLedger better.</p>
