@@ -44,7 +44,6 @@ import { Logo } from "@/components/logo";
 import { collection, query, where } from "firebase/firestore";
 import { cn } from "@/lib/utils";
 import { isHelpEnabled } from "@/lib/help/help-config";
-import { ReportBugButton } from "@/components/bug-report/report-bug-button";
 
 const data = {
   // Zone 1: The "Physical" World (Real Estate)
@@ -285,9 +284,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 .filter(item => item.title !== 'Help' || helpEnabled)
                 .map(renderMenuItem)}
             </SidebarMenu>
-             <div className="px-2 pt-2 mt-2 border-t">
-                <ReportBugButton />
-            </div>
           </SidebarGroupContent>
         </SidebarGroup>
 
