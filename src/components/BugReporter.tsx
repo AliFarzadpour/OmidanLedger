@@ -1,9 +1,11 @@
+
 "use client";
 import { useState } from "react";
 import html2canvas from "html2canvas";
 import { useUser } from "@/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { reportBug } from "@/actions/report-bug-action";
+import { Bug } from "lucide-react";
 
 export default function BugReporter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -67,9 +69,10 @@ export default function BugReporter() {
         id="bug-trigger-btn"
         onClick={handleCapture}
         style={{ zIndex: 9999 }}
-        className="fixed bottom-4 right-4 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-full shadow-2xl flex items-center gap-2 transition-all font-semibold"
+        className="fixed bottom-4 right-4 bg-red-600 hover:bg-red-700 text-white h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all font-semibold"
       >
-        <span>🐞 Report Bug</span>
+        <Bug className="h-6 w-6" />
+        <span className="sr-only">Report Bug</span>
       </button>
     );
   }
