@@ -52,9 +52,19 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
     const handleUpload = async () => {
       if (!file || !propertyId || !landlordId) {
         toast({
-          variant: "destructive",
-          title: "Missing Information",
-          description: "Please select a file and ensure IDs are set.",
+          variant: 'destructive',
+          title: 'Missing Information',
+          description: 'Please select a file and ensure IDs are set.',
+        });
+        return;
+      }
+    
+      if (!storage) {
+        toast({
+          variant: 'destructive',
+          title: 'Storage not initialized',
+          description:
+            'useStorage() returned null/undefined. Check client Firebase init + storageBucket.',
         });
         return;
       }
@@ -62,69 +72,102 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
       setIsUploading(true);
       setUploadProgress(0);
     
-      const documentId = uuidv4();
-    
-      const storagePath = unitId
-        ? `property_documents/${propertyId}/units/${unitId}/${documentId}-${file.name}`
-        : `property_documents/${propertyId}/${documentId}-${file.name}`;
-    
       try {
-        if (!storage) throw new Error("Firebase Storage is not initialized.");
+        const documentId = uuidv4();
+    
+        const storagePath = unitId
+          ? `property_documents/${propertyId}/units/${unitId}/${documentId}-${file.name}`
+          : `property_documents/${propertyId}/${documentId}-${file.name}`;
+    
+        console.log('[UPLOAD] starting', {
+          propertyId,
+          unitId,
+          landlordId,
+          storagePath,
+          fileName: file.name,
+          size: file.size,
+          type: file.type,
+        });
     
         const storageRef = ref(storage, storagePath);
     
-        // Upload file (with progress)
         const uploadTask = uploadBytesResumable(storageRef, file, {
           customMetadata: { ownerId: landlordId },
         });
     
-        await new Promise<void>((resolve, reject) => {
-          uploadTask.on(
-            "state_changed",
-            (snapshot) => {
-              const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-              setUploadProgress(progress);
-            },
-            (error) => reject(error),
-            () => resolve()
-          );
-        });
+        uploadTask.on(
+          'state_changed',
+          (snapshot) => {
+            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+            setUploadProgress(progress);
+            console.log('[UPLOAD] progress', Math.round(progress) + '%');
+          },
+          (error) => {
+            console.error('[UPLOAD] storage error:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Upload Failed (Storage)',
+              description: error?.message || String(error),
+            });
+            setIsUploading(false);
+          },
+          async () => {
+            console.log('[UPLOAD] upload complete, fetching download URL...');
+            try {
+              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              console.log('[UPLOAD] download URL ok', downloadURL);
     
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+              const docPath = unitId
+                ? `properties/${propertyId}/units/${unitId}/documents`
+                : `properties/${propertyId}/documents`;
     
-        // Firestore write (THIS is what likely fails today)
-        const docRef = unitId
-          ? doc(firestore, `properties/${propertyId}/units/${unitId}/documents`, documentId)
-          : doc(firestore, `properties/${propertyId}/documents`, documentId);
+              const docRef = doc(firestore, docPath, documentId);
     
-        await setDoc(docRef, {
-          id: documentId,
-          propertyId,
-          userId: landlordId,
-          ...(unitId ? { unitId } : {}),
-          fileName: file.name,
-          fileType,
-          description,
-          downloadUrl: downloadURL,
-          storagePath,
-          uploadedAt: serverTimestamp(),
-        });
+              console.log('[UPLOAD] writing Firestore doc', { docPath, documentId });
     
-        toast({ title: "Upload Complete", description: `${file.name} has been saved.` });
+              await setDoc(docRef, {
+                id: documentId,
+                propertyId,
+                userId: landlordId,
+                ...(unitId && { unitId }),
+                fileName: file.name,
+                fileType,
+                description,
+                downloadUrl: downloadURL,
+                storagePath,
+                uploadedAt: serverTimestamp(),
+              });
     
-        setFile(null);
-        setDescription('');
-        onOpenChange(false);
-        onSuccess?.();
+              console.log('[UPLOAD] Firestore doc written OK');
+    
+              toast({ title: 'Upload Complete', description: `${file.name} has been saved.` });
+    
+              setFile(null);
+              setDescription('');
+              onOpenChange(false);
+              onSuccess?.();
+            } catch (err: any) {
+              console.error('[UPLOAD] completion error (likely Firestore rules/path):', err);
+              toast({
+                variant: 'destructive',
+                title: 'Upload Failed (Finalize)',
+                description: err?.message || String(err),
+              });
+            } finally {
+              setIsUploading(false);
+              setUploadProgress(0);
+            }
+          }
+        );
       } catch (err: any) {
-        console.error("Upload & save failed:", err);
+        console.error('[UPLOAD] unexpected setup error:', err);
         toast({
-          variant: "destructive",
-          title: "Upload Failed",
-          description: err?.message || "Unknown error",
+          variant: 'destructive',
+          title: 'Upload Failed (Setup)',
+          description: err?.message || String(err),
         });
-      } finally {
         setIsUploading(false);
+        setUploadProgress(0);
       }
     };
 
