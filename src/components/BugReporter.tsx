@@ -72,7 +72,7 @@ export default function BugReporter() {
         onClick={handleCapture}
         className="h-12 w-12 rounded-full"
       >
-        <span className="text-3xl">🐞</span>
+        <span className="text-2xl">🐞</span>
         <span className="sr-only">Report Bug</span>
       </Button>
     );
