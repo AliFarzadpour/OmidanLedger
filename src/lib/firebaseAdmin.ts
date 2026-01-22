@@ -22,10 +22,6 @@ type ServiceAccount = {
 };
 
 function normalizePrivateKey(key: string) {
-  // Handles both:
-  // 1) keys stored with literal "\n" sequences (\\n)
-  // 2) keys stored with real newlines
-  // 3) Windows CRLF issues
   return key
     .replace(/\\n/g, '\n')
     .replace(/\r/g, '')
@@ -55,7 +51,6 @@ function loadServiceAccountFromB64(): ServiceAccount | null {
 }
 
 function loadServiceAccountFromLocalFile(): ServiceAccount | null {
-  // Dev-only fallback for Firebase Studio preview or local runs
   const p = path.join(process.cwd(), '.secrets', 'firebase-service-account.json');
   if (!fs.existsSync(p)) return null;
 
@@ -72,14 +67,12 @@ function loadServiceAccountFromLocalFile(): ServiceAccount | null {
 }
 
 function getServiceAccount(): ServiceAccount {
-  // Prefer production secret; fallback to dev file.
   const fromB64 = loadServiceAccountFromB64();
   if (fromB64) return fromB64;
 
   const fromFile = loadServiceAccountFromLocalFile();
   if (fromFile) return fromFile;
 
-  // Clear error message for dev
   throw new Error(
     'CRITICAL: Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64. ' +
       'For production: add it as an App Hosting secret. ' +
@@ -92,7 +85,6 @@ function ensureAdminInitialized() {
 
   const serviceAccount = getServiceAccount();
 
-  // Validate minimum fields early with helpful messaging
   if (!serviceAccount.project_id) {
     throw new Error('Firebase Admin service account missing project_id.');
   }
@@ -103,12 +95,10 @@ function ensureAdminInitialized() {
     throw new Error('Firebase Admin service account missing private_key.');
   }
 
-  // Extra sanity: must look like a PEM
   if (!serviceAccount.private_key.includes('BEGIN PRIVATE KEY')) {
     throw new Error('Firebase Admin private_key does not look like a PEM key (missing BEGIN PRIVATE KEY).');
   }
 
-  // Get and clean the storage bucket name
   const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET?.replace('gs://', '');
   if (!bucketName) {
     throw new Error('CRITICAL: Missing NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET. Check apphosting.yaml configuration.');
@@ -122,7 +112,6 @@ function ensureAdminInitialized() {
       storageBucket: bucketName,
     });
   } catch (err: any) {
-    // This is the exact error you’re seeing; keep it explicit
     throw new Error(`Failed to parse private key: ${err?.message || err}`);
   }
 }
