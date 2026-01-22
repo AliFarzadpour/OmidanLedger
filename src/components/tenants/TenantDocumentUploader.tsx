@@ -21,6 +21,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { v4 as uuidv4 } from 'uuid';
 import { Loader2, FileUp, CheckCircle } from 'lucide-react';
 import { Textarea } from '../ui/textarea';
+import { getAuth } from "firebase/auth";
 
 interface UploaderProps {
     isOpen: boolean;
@@ -91,6 +92,13 @@ export function TenantDocumentUploader({ isOpen, onOpenChange, propertyId, landl
     
         const storageRef = ref(storage, storagePath);
     
+        const auth = getAuth();
+        const u = auth.currentUser;
+        console.log("[UPLOAD] auth user", u?.uid, u?.email);
+
+        const token = await u?.getIdToken();
+        console.log("[UPLOAD] has token?", !!token);
+
         const uploadTask = uploadBytesResumable(storageRef, file, {
           customMetadata: { ownerId: landlordId },
         });
