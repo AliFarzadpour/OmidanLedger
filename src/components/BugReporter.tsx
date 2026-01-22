@@ -5,7 +5,6 @@ import html2canvas from "html2canvas";
 import { useUser } from "@/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { reportBug } from "@/actions/report-bug-action";
-import { Bug } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function BugReporter() {
@@ -73,7 +72,7 @@ export default function BugReporter() {
         onClick={handleCapture}
         className="h-12 w-12 rounded-full"
       >
-        <Bug className="h-8 w-8 text-red-600" />
+        <span className="text-3xl">🐞</span>
         <span className="sr-only">Report Bug</span>
       </Button>
     );
