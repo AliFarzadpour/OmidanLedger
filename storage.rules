@@ -1,0 +1,28 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // --- Logos ---
+    // Anyone can read logos.
+    // Only authenticated users can write to their own logo folder.
+    match /logos/{userId}/{fileName} {
+      allow read;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- User-specific private files (e.g., work order attachments) ---
+    // Only the authenticated user can read or write to their own folder.
+    match /users/{userId}/{path=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- Property Documents (Leases, etc.) ---
+    // Anyone can read these as they are served via public URLs.
+    // Only the user identified in the file's metadata as 'ownerId' can write.
+    match /property_documents/{path=**} {
+      allow read;
+      allow write: if request.auth != null && request.resource.metadata.ownerId == request.auth.uid;
+    }
+  }
+}
