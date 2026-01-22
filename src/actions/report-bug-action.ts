@@ -51,10 +51,10 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
       userId: userId,
   });
 
-  // 2. Prepare email content and attachment
+  // 2. Prepare admin email content
   const base64Data = screenshotDataUrl.split(',')[1];
-  const subject = `New Bug Report from ${userEmail}`;
-  const htmlBody = `
+  const adminSubject = `New Bug Report from ${userEmail}`;
+  const adminHtmlBody = `
     <h1>New Bug Report</h1>
     ${userDetailsHtml}
     <p><strong>Page:</strong> <a href="${pageUrl}">${pageUrl}</a></p>
@@ -64,19 +64,41 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
     <p>Screenshot is attached to this email.</p>
   `;
 
-  // 3. Send email via Resend with attachment
-  await resend.emails.send({
-    from: 'bug-reporter@omidanledger.com',
-    to: 'Dev@OmidanAI.com',
-    subject,
-    html: htmlBody,
-    attachments: [
-      {
-        filename: `bug-report-${reportRef.id}.png`,
-        content: base64Data,
-      },
-    ],
-  });
+  // 3. Send both emails concurrently
+  await Promise.all([
+    // Email to Admin
+    resend.emails.send({
+        from: 'bug-reporter@omidanledger.com',
+        to: 'Dev@OmidanAI.com',
+        subject: adminSubject,
+        html: adminHtmlBody,
+        attachments: [
+            {
+            filename: `bug-report-${reportRef.id}.png`,
+            content: base64Data,
+            },
+        ],
+    }),
+    // Thank you email to the user
+    resend.emails.send({
+        from: 'support@omidanledger.com',
+        to: userEmail,
+        subject: 'Thank You for Your Bug Report!',
+        html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                <h2 style="color: #1e293b;">We've Received Your Report</h2>
+                <p>Hi there,</p>
+                <p>Thank you for taking the time to submit a bug report. We appreciate you helping us make OmidanLedger better.</p>
+                <p>We have added your feedback to our development queue and our team will investigate the issue. We will notify you as soon as a fix has been deployed.</p>
+                <p>If you have any more details to add, please don't hesitate to reply to this email.</p>
+                <br>
+                <p>Best,</p>
+                <p>The OmidanLedger Team</p>
+            </div>
+        `,
+    })
+  ]);
+
 
   return { success: true };
 }
