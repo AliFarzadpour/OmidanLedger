@@ -31,8 +31,10 @@ export default function DashboardLayout({
           {children}
         </div>
       </SidebarInset>
-      <HelpAssistant />
-      <BugReporter />
+      <div className="fixed bottom-4 right-4 z-50 flex flex-col-reverse gap-3">
+        <HelpAssistant />
+        <BugReporter />
+      </div>
     </SidebarProvider>
   )
 }

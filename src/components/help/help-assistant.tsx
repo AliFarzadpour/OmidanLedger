@@ -135,7 +135,7 @@ export function HelpAssistant() {
         <Button 
           variant="outline" 
           size="icon" 
-          className="fixed bottom-6 right-6 h-12 w-12 rounded-full shadow-lg bg-primary text-primary-foreground hover:bg-primary/90 z-50"
+          className="h-12 w-12 rounded-full shadow-lg bg-primary text-primary-foreground hover:bg-primary/90"
           title="Open Help Assistant"
         >
           <Sparkles className="h-6 w-6" />

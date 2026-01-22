@@ -68,8 +68,7 @@ export default function BugReporter() {
       <button
         id="bug-trigger-btn"
         onClick={handleCapture}
-        style={{ zIndex: 9999 }}
-        className="fixed bottom-4 right-4 bg-red-600 hover:bg-red-700 text-white h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all font-semibold"
+        className="bg-red-600 hover:bg-red-700 text-white h-14 w-14 rounded-full shadow-2xl flex items-center justify-center transition-all font-semibold"
       >
         <Bug className="h-6 w-6" />
         <span className="sr-only">Report Bug</span>
