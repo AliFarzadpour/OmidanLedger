@@ -82,7 +82,7 @@ export default function BugReporter() {
     <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 relative animate-in fade-in zoom-in duration-200">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Report an Issue</h2>
+          <h2 className="text-xl font-bold text-gray-800">Report an Issue / Suggest a feature</h2>
           <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-gray-600">
             ✕
           </button>
