@@ -24,7 +24,7 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
 
   // 1. Upload screenshot to Firebase Storage
   const storage = getAdminStorage();
-  const bucket = storage.bucket(); 
+  const bucket = storage.bucket('studio-7576922301-bac28.appspot.com'); 
 
   const base64Data = screenshotDataUrl.split(',')[1];
   const buffer = Buffer.from(base64Data, 'base64');
