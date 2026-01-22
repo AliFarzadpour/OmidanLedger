@@ -2,6 +2,7 @@
 
 import { getAdminDb } from '@/lib/firebaseAdmin';
 import { FieldValue } from 'firebase-admin/firestore';
+import { sendWelcomeEmail } from './email-actions';
 
 const db = getAdminDb();
 
@@ -36,6 +37,8 @@ export async function initializeUserSchema(userId: string, email: string, provid
   if (!doc.exists) {
     // New User: Set full schema
     await userRef.set(defaultSchema);
+    // Send welcome email to new user
+    await sendWelcomeEmail({ email, name: email.split('@')[0] });
   } else {
     // Existing User: Only add missing fields (Migration)
     const updateData: {[key: string]: any} = {
