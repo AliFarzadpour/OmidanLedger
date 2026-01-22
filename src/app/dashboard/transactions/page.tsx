@@ -13,7 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
-import type { Transaction } from '@/components/dashboard/transactions/transactions-table';
+import type { Transaction } from '@/components/dashboard/transactions-table';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -69,7 +69,7 @@ export default function TransactionsPage() {
     if (!user || !firestore) return null;
     return collection(firestore, `users/${user.uid}/bankBalances`);
   }, [user, firestore]);
-  const { data: balanceDocs, isLoading: isLoadingBalances } = useCollection(balancesQuery);
+  const { data: balanceDocs, isLoading: isLoadingBalances, refetch: refetchBalances } = useCollection(balancesQuery);
 
   const balances = useMemo(() => {
       if (!balanceDocs) return {};
@@ -85,45 +85,12 @@ export default function TransactionsPage() {
     toast({ title: 'Refreshing Balances...', description: 'Fetching latest data from your banks.' });
     try {
         await getAndUpdatePlaidBalances(user.uid);
+        refetchBalances();
         toast({ title: 'Balances Updated!', description: 'Your bank-reported balances are now up to date.' });
     } catch (e: any) {
         toast({ variant: 'destructive', title: 'Refresh Failed', description: e.message });
     }
-  }, [user, toast]);
-
-  /** * FIXED: This hook now only runs once when the user arrives. 
-   * It no longer triggers an infinite loop because 'balances' is removed from the dependencies.
-   */
-  useEffect(() => {
-    if (!user || isLoadingBalances) return;
-
-    const checkRefresh = async () => {
-      const balanceEntries = Object.values(balances);
-      
-      // 1. If we have NO balances in the DB, fetch them once
-      if (balanceEntries.length === 0) {
-        handleRefreshBalances();
-        return;
-      }
-
-      // 2. Otherwise, check if the data is older than 4 hours
-      // Line 113: Explicitly type 'oldest' as Date
-      const oldestUpdate = balanceEntries.reduce((oldest: Date, current: any) => {
-        const currentDate = current.lastUpdatedAt instanceof Date 
-          ? current.lastUpdatedAt 
-          : new Date((current.lastUpdatedAt as any).seconds * 1000);
-          
-        return currentDate < oldest ? currentDate : oldest;
-      }, new Date());
-
-      // Line 116: Now 'oldestUpdate' is known to be a Date
-      if (differenceInHours(new Date(), oldestUpdate) > 4) {
-        handleRefreshBalances();
-      }
-    };
-
-    checkRefresh();
-  }, [user, isLoadingBalances, handleRefreshBalances, balances]); 
+  }, [user, toast, refetchBalances]);
 
   useEffect(() => {
     if (userData && typeof userData.plaidAutoSyncEnabled === 'boolean') {
@@ -221,10 +188,6 @@ export default function TransactionsPage() {
     }, {} as Record<string, { needsReview: number; incorrect: number }>);
   }, [allTransactions]);
   
-  /**
-   * FIXED: Corrected mapping for balances. Uses Plaid ID or Firestore ID to ensure 
-   * we don't display $0.00 when data exists.
-   */
   const totalCash = useMemo(() => {
     if (!dataSources || !balances) return 0;
     return dataSources.reduce((sum, source) => {

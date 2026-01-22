@@ -1,13 +1,81 @@
-export const dynamic = 'force-dynamic';
 
-import { NextResponse } from 'next/server';
+'use server';
+import { NextRequest, NextResponse } from 'next/server';
+import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
+import { getAdminDb } from '@/lib/firebaseAdmin';
+import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 
-export async function POST(req: Request) {
+const db = getAdminDb();
+
+const plaidClient = new PlaidApi(
+  new Configuration({
+    basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
+    baseOptions: {
+      headers: {
+        'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
+        'PLAID-SECRET': process.env.PLAID_SECRET!,
+      },
+    },
+  })
+);
+
+export async function POST(req: NextRequest) {
   try {
-    console.log('Plaid webhook received');
-    return NextResponse.json({ received: true });
-  } catch (error) {
-    console.error('Error processing Plaid webhook:', error);
-    return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 });
+    const body = await req.json();
+    const { webhook_type, webhook_code, item_id, new_transactions } = body;
+
+    console.log(`[Plaid Webhook] Received: ${webhook_type} - ${webhook_code}`);
+
+    // --- We only care about transaction updates for now ---
+    if (webhook_type !== 'TRANSACTIONS') {
+      return NextResponse.json({ status: 'ignored', reason: 'Not a transactions webhook' });
+    }
+    
+    if (webhook_code !== 'DEFAULT_UPDATE' && webhook_code !== 'SYNC_UPDATES_AVAILABLE') {
+       return NextResponse.json({ status: 'ignored', reason: 'Not a relevant transaction update code' });
+    }
+
+    // 1. Find the user and account associated with this item_id
+    const accountsQuery = await db.collectionGroup('bankAccounts').where('plaidItemId', '==', item_id).limit(1).get();
+    
+    if (accountsQuery.empty) {
+      console.warn(`[Plaid Webhook] No account found for item_id: ${item_id}`);
+      return NextResponse.json({ status: 'error', message: 'Account not found' }, { status: 404 });
+    }
+
+    const accountDoc = accountsQuery.docs[0];
+    const { userId, plaidAccessToken } = accountDoc.data();
+
+    if (!userId || !plaidAccessToken) {
+      throw new Error(`Missing userId or accessToken for item_id: ${item_id}`);
+    }
+
+    // 2. Fetch the latest balances from Plaid
+    const balanceResponse = await plaidClient.accountsBalanceGet({ access_token: plaidAccessToken });
+    
+    const batch = db.batch();
+
+    // 3. Update the balances in Firestore for each account in the item
+    for (const account of balanceResponse.data.accounts) {
+        const balanceData = {
+          currentBalance: account.balances.current,
+          availableBalance: account.balances.available,
+          currency: account.balances.iso_currency_code,
+          lastUpdatedAt: Timestamp.now(), // Use server timestamp
+          source: 'plaid-webhook',
+          plaidAccountId: account.account_id
+        };
+
+        const balanceDocRef = db.collection('users').doc(userId).collection('bankBalances').doc(account.account_id);
+        batch.set(balanceDocRef, balanceData, { merge: true });
+    }
+
+    await batch.commit();
+    console.log(`[Plaid Webhook] Successfully updated ${balanceResponse.data.accounts.length} account balances for item_id: ${item_id}`);
+
+    return NextResponse.json({ status: 'success' });
+  } catch (error: any) {
+    console.error('[Plaid Webhook] Error:', error.response?.data || error.message);
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
   }
 }

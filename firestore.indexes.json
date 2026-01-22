@@ -1,5 +1,16 @@
+
 {
   "indexes": [
+    {
+      "collectionGroup": "bankAccounts",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "plaidItemId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
     {
       "collectionGroup": "invoices",
       "queryScope": "COLLECTION",
