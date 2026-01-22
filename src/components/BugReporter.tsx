@@ -1,10 +1,9 @@
 "use client";
 import { useState } from "react";
 import html2canvas from "html2canvas";
-import { useStorage, useFirestore, useUser } from "@/firebase";
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
-import { collection, addDoc } from "firebase/firestore";
+import { useUser } from "@/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { reportBug } from "@/actions/report-bug-action";
 
 export default function BugReporter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,8 +12,6 @@ export default function BugReporter() {
   const [loading, setLoading] = useState(false);
   
   const { user } = useUser(); 
-  const storage = useStorage();
-  const db = useFirestore();
   const { toast } = useToast();
 
   const handleCapture = async () => {
@@ -39,41 +36,26 @@ export default function BugReporter() {
   };
 
   const handleSubmit = async () => {
-    if (!screenshot || !user || !db || !storage) return;
+    if (!screenshot || !user) return;
     setLoading(true);
 
     try {
-      const timestamp = Date.now();
-      const filename = `bugs/${timestamp}_${user.uid}.png`;
-      const storageRef = ref(storage, filename);
-      await uploadString(storageRef, screenshot, 'data_url');
-      const imageUrl = await getDownloadURL(storageRef);
-
-      const bugData = {
-        description,
-        screenshotUrl: imageUrl,
-        userEmail: user.email || "Anonymous",
+      await reportBug({
+        screenshotDataUrl: screenshot,
+        userEmail: user.email || 'Anonymous',
+        notes: description,
         pageUrl: window.location.href,
         browser: navigator.userAgent,
-        createdAt: new Date(),
-        status: "open"
-      };
-
-      await addDoc(collection(db, "bug_reports"), bugData);
-
-      await fetch('/api/notify-bug', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(bugData),
+        userId: user.uid,
       });
       
       toast({ title: "Report sent!", description: "Thanks for helping us improve." });
       setIsOpen(false);
       setDescription("");
       setScreenshot(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error submitting report", error);
-      toast({ variant: 'destructive', title: "Failed to send report", description: "Please try again." });
+      toast({ variant: 'destructive', title: "Failed to send report", description: error.message });
     } finally {
       setLoading(false);
     }
