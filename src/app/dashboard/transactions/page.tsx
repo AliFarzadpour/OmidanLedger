@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -282,7 +281,7 @@ export default function TransactionsPage() {
                     <p className="text-2xl font-bold text-slate-800">{formatCurrency(totalCash)}</p>
                 </div>
             </div>
-             <Button variant="ghost" size="sm" onClick={handleRefreshBalances} className="text-xs text-muted-foreground gap-2">
+             <Button variant="ghost" size="sm" onClick={handleRefreshBalances} className="text-xs text-muted-foreground gap-2 hidden">
                 <RefreshCw className="h-3 w-3" /> Refresh Bank Balances (Plaid)
             </Button>
         </CardContent>
