@@ -87,17 +87,38 @@ export async function reportBug({ screenshotDataUrl, userEmail, notes, pageUrl, 
         reply_to: 'Dev@OmidanAI.com',
         subject: 'Thank You for Your Bug Report!',
         html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
-                <img src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FOmidanLedger%20logo%20Rightside%20trimed.png?alt=media&token=80772977-26b5-4080-b0f4-30eccf9cc323" alt="OmidanLedger Logo" style="width: 150px; margin-bottom: 20px;" />
-                <h2 style="color: #1e293b;">We've Received Your Report</h2>
-                <p>Hi there,</p>
-                <p>Thank you for taking the time to submit a bug report. We appreciate you helping us make OmidanLedger better.</p>
-                <p>We have added your feedback to our development queue and our team will investigate the issue. We will notify you as soon as a fix has been deployed.</p>
-                <p>If you have any more details to add, please don't hesitate to reply to this email.</p>
-                <br>
-                <p>Best,</p>
-                <p>The OmidanLedger Team</p>
-            </div>
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <script type="application/ld+json">
+                {
+                  "@context": "http://schema.org",
+                  "@type": "EmailMessage",
+                  "publisher": {
+                    "@type": "Organization",
+                    "name": "OmidanLedger",
+                    "logo": {
+                      "@type": "ImageObject",
+                      "url": "https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FFavicon.png?alt=media&token=e5f84106-38f2-4d8c-a550-6e795136aef6"
+                    }
+                  }
+                }
+                </script>
+            </head>
+            <body>
+                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <img src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FOmidanLedger%20logo%20Rightside%20trimed.png?alt=media&token=80772977-26b5-4080-b0f4-30eccf9cc323" alt="OmidanLedger Logo" style="width: 150px; margin-bottom: 20px;" />
+                    <h2 style="color: #1e293b;">We've Received Your Report</h2>
+                    <p>Hi there,</p>
+                    <p>Thank you for taking the time to submit a bug report. We appreciate you helping us make OmidanLedger better.</p>
+                    <p>We have added your feedback to our development queue and our team will investigate the issue. We will notify you as soon as a fix has been deployed.</p>
+                    <p>If you have any more details to add, please don't hesitate to reply to this email.</p>
+                    <br>
+                    <p>Best,</p>
+                    <p>The OmidanLedger Team</p>
+                </div>
+            </body>
+            </html>
         `,
     })
   ]);

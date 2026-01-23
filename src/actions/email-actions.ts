@@ -21,6 +21,20 @@ export async function sendWelcomeEmail({ email, name }: { email: string, name?: 
               <!DOCTYPE html>
               <html>
               <head>
+                <script type="application/ld+json">
+                {
+                  "@context": "http://schema.org",
+                  "@type": "EmailMessage",
+                  "publisher": {
+                    "@type": "Organization",
+                    "name": "OmidanLedger",
+                    "logo": {
+                      "@type": "ImageObject",
+                      "url": "https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FFavicon.png?alt=media&token=e5f84106-38f2-4d8c-a550-6e795136aef6"
+                    }
+                  }
+                }
+                </script>
                 <style>
                   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #333; }
                   .container { max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px; }
