@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -62,8 +63,8 @@ export function GoogleLoginButton() {
         <Image
             src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FGoogle%20Logo.png?alt=media&token=8431062c-df3b-47c1-990c-444f603c4062"
             alt="Google icon"
-            width={16}
-            height={16}
+            width={20}
+            height={20}
             className="mr-2"
         />
       )}
