@@ -1,4 +1,3 @@
-
 'use server';
 import { NextRequest, NextResponse } from 'next/server';
 import { PlaidApi, Configuration, PlaidEnvironments } from 'plaid';
@@ -9,7 +8,7 @@ const db = getAdminDb();
 
 const plaidClient = new PlaidApi(
   new Configuration({
-    basePath: PlaidEnvironments[process.env.PLAID_ENV || 'sandbox'],
+    basePath: PlaidEnvironments[process.env.PLAID_ENV || 'production'], // Ensure this defaults to production if env is missing
     baseOptions: {
       headers: {
         'PLAID-CLIENT-ID': process.env.PLAID_CLIENT_ID!,
@@ -22,22 +21,23 @@ const plaidClient = new PlaidApi(
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { webhook_type, webhook_code, item_id, new_transactions } = body;
+    const { webhook_type, webhook_code, item_id } = body;
 
-    console.log(`[Plaid Webhook] Received: ${webhook_type} - ${webhook_code}`);
+    console.log(`[Plaid Webhook] Received: ${webhook_type} - ${webhook_code} | Item: ${item_id}`);
 
-    // --- We only care about transaction updates for now ---
+    // --- FILTER: We only want standard updates ---
     if (webhook_type !== 'TRANSACTIONS') {
       return NextResponse.json({ status: 'ignored', reason: 'Not a transactions webhook' });
     }
-    
+
     if (webhook_code !== 'DEFAULT_UPDATE' && webhook_code !== 'SYNC_UPDATES_AVAILABLE') {
-       return NextResponse.json({ status: 'ignored', reason: 'Not a relevant transaction update code' });
+       return NextResponse.json({ status: 'ignored', reason: 'Not a relevant update code' });
     }
 
-    // 1. Find the user and account associated with this item_id
+    // 1. Find the user/token associated with this item_id
+    // Note: Ensure your 'bankAccounts' documents actually contain the 'plaidAccessToken' field.
     const accountsQuery = await db.collectionGroup('bankAccounts').where('plaidItemId', '==', item_id).limit(1).get();
-    
+
     if (accountsQuery.empty) {
       console.warn(`[Plaid Webhook] No account found for item_id: ${item_id}`);
       return NextResponse.json({ status: 'error', message: 'Account not found' }, { status: 404 });
@@ -47,33 +47,40 @@ export async function POST(req: NextRequest) {
     const { userId, plaidAccessToken } = accountDoc.data();
 
     if (!userId || !plaidAccessToken) {
-      throw new Error(`Missing userId or accessToken for item_id: ${item_id}`);
+      console.error(`[Plaid Webhook] Missing userId or accessToken for item_id: ${item_id}`);
+      return NextResponse.json({ status: 'error', message: 'Missing credentials in DB' }, { status: 500 });
     }
 
-    // 2. Fetch the latest balances from Plaid
-    const balanceResponse = await plaidClient.accountsBalanceGet({ access_token: plaidAccessToken });
-    
+    // 2. Fetch the latest balances (FREE METHOD)
+    // We use accountsGet because the webhook tells us Plaid just updated its cache.
+    // We do NOT need to pay for accountsBalanceGet here.
+    const response = await plaidClient.accountsGet({ access_token: plaidAccessToken });
+
     const batch = db.batch();
 
-    // 3. Update the balances in Firestore for each account in the item
-    for (const account of balanceResponse.data.accounts) {
+    // 3. Update Firestore
+    // We loop through the accounts returned by Plaid to ensure we update all accounts under this Item
+    for (const account of response.data.accounts) {
         const balanceData = {
           currentBalance: account.balances.current,
           availableBalance: account.balances.available,
           currency: account.balances.iso_currency_code,
-          lastUpdatedAt: Timestamp.now(), // Use server timestamp
-          source: 'plaid-webhook',
+          lastUpdatedAt: Timestamp.now(),
+          source: 'plaid-webhook-free', // Tagged so you know it worked
           plaidAccountId: account.account_id
         };
 
+        // Caution: Ensure this path matches your DB structure exactly
         const balanceDocRef = db.collection('users').doc(userId).collection('bankBalances').doc(account.account_id);
+        
         batch.set(balanceDocRef, balanceData, { merge: true });
     }
 
     await batch.commit();
-    console.log(`[Plaid Webhook] Successfully updated ${balanceResponse.data.accounts.length} account balances for item_id: ${item_id}`);
+    console.log(`[Plaid Webhook] Successfully updated ${response.data.accounts.length} balances via Free API for item: ${item_id}`);
 
     return NextResponse.json({ status: 'success' });
+
   } catch (error: any) {
     console.error('[Plaid Webhook] Error:', error.response?.data || error.message);
     return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });

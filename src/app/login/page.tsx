@@ -24,6 +24,7 @@ import { AlertCircle, Lock, Banknote, Loader2, FileText } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { signInWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
 import { Helmet } from 'react-helmet-async';
+import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 
 /** Initiate email/password sign-in (non-blocking). */
 export function initiateEmailSignIn(authInstance: Auth, email: string, password: string, onError?: (error: AuthError) => void): void {
@@ -216,6 +217,17 @@ export default function LoginPage() {
                   </Button>
                 </form>
               </Form>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with
+                    </span>
+                </div>
+              </div>
+              <GoogleLoginButton />
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
               <div className="text-center text-sm">
