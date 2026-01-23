@@ -157,7 +157,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <div className="flex items-center justify-center bg-background p-4">
+      <div className="flex flex-col items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md shadow-2xl">
             <CardHeader className="space-y-1 text-center pt-8">
               <div className="flex justify-center mb-4 lg:hidden">
@@ -236,18 +236,11 @@ export default function LoginPage() {
                   Create a free account
                 </Link>
               </div>
-              <div className="text-center text-xs">
-                <Link
-                  href="https://omidanledger.com/privacy"
-                  className="underline text-muted-foreground hover:text-primary"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Privacy Policy
-                </Link>
-              </div>
             </CardFooter>
           </Card>
+          <footer className="w-full py-4 text-center text-sm text-muted-foreground mt-8">
+            <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
+        </footer>
       </div>
     </div>
   );
