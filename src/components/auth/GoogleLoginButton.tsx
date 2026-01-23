@@ -60,7 +60,7 @@ export function GoogleLoginButton() {
         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
       ) : (
         <Image
-            src="https://firebasestorage.googleapis.com/v0/b/fir-images-1a80c.appspot.com/o/google.svg?alt=media&token=09c48873-1f19-450f-b413-524a87261073"
+            src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FGoogle%20Logo.png?alt=media&token=8431062c-df3b-47c1-990c-444f603c4062"
             alt="Google icon"
             width={16}
             height={16}
