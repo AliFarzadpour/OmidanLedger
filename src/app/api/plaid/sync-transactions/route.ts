@@ -10,8 +10,8 @@ import { normalizeCategoryHierarchy, removeUndefinedDeep } from "@/lib/firestore
 function initAdmin() {
   if (admin.apps.length) return admin.app();
 
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
-  if (!raw) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY env var');
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64;
+  if (!raw) throw new Error('Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64 env var');
 
   const serviceAccount = JSON.parse(raw);
 
@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
               categoryHierarchy,
               costCenter: categoryResult.costCenter, // Apply cost center from rule
               confidence: categoryResult.confidence,
-              reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
+              reviewStatus: 'needs-review',
               aiExplanation: categoryResult.explanation,
               merchantName: t.merchant_name ?? null,
               pending: t.pending ?? false,
@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
             categoryHierarchy,
             costCenter: categoryResult.costCenter, // Apply cost center from rule
             confidence: categoryResult.confidence,
-            reviewStatus: (categoryResult.confidence || 0) < 0.7 ? 'needs-review' : 'approved',
+            reviewStatus: 'needs-review',
             aiExplanation: categoryResult.explanation,
             merchantName: t.merchant_name ?? null,
             pending: t.pending ?? false,
