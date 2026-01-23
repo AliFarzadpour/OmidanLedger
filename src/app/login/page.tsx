@@ -236,6 +236,16 @@ export default function LoginPage() {
                   Create a free account
                 </Link>
               </div>
+              <div className="text-center text-xs">
+                <Link
+                  href="https://omidanledger.com/privacy"
+                  className="underline text-muted-foreground hover:text-primary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Privacy Policy
+                </Link>
+              </div>
             </CardFooter>
           </Card>
       </div>
