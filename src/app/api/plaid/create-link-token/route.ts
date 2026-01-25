@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
       client_name: 'OmidanLedger',
       country_codes: [CountryCode.Us],
       language: 'en',
+      webhook: 'https://omidanledger.com/api/webhooks/plaid',
     };
 
     // Re-linking (Update Mode) logic
