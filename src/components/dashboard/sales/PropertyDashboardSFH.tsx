@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -329,6 +330,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     calculateInterest();
   }, [user, property]);
   
+  // SEPARATE ACTIVE AND PAST TENANTS
   const { activeTenants, pastTenants } = useMemo(() => {
     if (!property?.tenants) {
       return { activeTenants: [], pastTenants: [] };
@@ -509,7 +511,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                             <div className="text-2xl font-bold">{!isFinite(dscr) || dscr === 0 ? 'No Debt' : `${dscr.toFixed(2)}x`}</div>
                             {getDscrBadge(dscr)}
                         </CardContent></Card>
-                    </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for >1.25x.</p></TooltipContent></Tooltip>
+                    </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
                     
                     <Tooltip><TooltipTrigger asChild><div>
                         <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} cardClassName="bg-indigo-50/70 border-indigo-200" />
