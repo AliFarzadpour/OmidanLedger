@@ -22,7 +22,7 @@ type Transaction = {
     id: string;
     date: string;
     description: string;
-    categoryHierarchy: { l0: string; l2: string };
+    categoryHierarchy: { l0: string; l1: string; l2: string };
     costCenter?: string;
     amount: number;
 };
@@ -73,11 +73,22 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
         // Client-side filtering based on view using normalized category
         fetchedTxs = fetchedTxs.filter(tx => {
             const l0 = normalizeL0(tx);
-            const categoryL1 = (tx as any).categoryHierarchy?.l1 || '';
 
             if (view === 'income' && l0 === 'INCOME') return true;
             if (view === 'expenses' && (l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE')) return true;
-            if (view === 'deposits' && l0 === 'LIABILITY' && categoryL1.toLowerCase() === 'tenant deposits') return true;
+            
+            if (view === 'deposits') {
+              const l0Norm = (tx.categoryHierarchy?.l0 || '').toLowerCase();
+              const l1Norm = (tx.categoryHierarchy?.l1 || '').toLowerCase();
+              const l2Norm = (tx.categoryHierarchy?.l2 || '').toLowerCase();
+              
+              const isLiability = l0Norm === 'liability';
+              const isTenantFunds = l1Norm === 'tenant / client funds';
+              const isSecurityDeposit = l2Norm.includes('security deposits held');
+
+              return isLiability && isTenantFunds && isSecurityDeposit;
+            }
+
             return false;
         });
         
