@@ -77,7 +77,7 @@ export function PropertyFinancials({ propertyId, propertyName, view }: PropertyF
 
             if (view === 'income' && l0 === 'INCOME') return true;
             if (view === 'expenses' && (l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE')) return true;
-            if (view === 'deposits' && l0 === 'LIABILITY' && categoryL1 === 'Tenant Deposits') return true;
+            if (view === 'deposits' && l0 === 'LIABILITY' && categoryL1.toLowerCase() === 'tenant deposits') return true;
             return false;
         });
         
