@@ -2,11 +2,37 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, Timestamp, collectionGroup, where } from 'firebase/firestore';
+import {
+  doc,
+  collection,
+  query,
+  deleteDoc,
+  getDocs,
+  Timestamp,
+  collectionGroup,
+  where,
+} from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Edit, UserPlus, Wallet, FileText, Download, Trash2, UploadCloud, Eye, Bot, Loader2, BookOpen, HandCoins, Building, Landmark, TrendingUp, AlertTriangle, Users, BadgeHelp } from 'lucide-react';
+import {
+  ArrowLeft,
+  Edit,
+  UserPlus,
+  Wallet,
+  FileText,
+  Download,
+  Trash2,
+  UploadCloud,
+  Eye,
+  Bot,
+  Loader2,
+  HandCoins,
+  Landmark,
+  TrendingUp,
+  AlertTriangle,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { PropertyForm } from '@/components/dashboard/sales/property-form';
 import { PropertyFinancials } from '@/components/dashboard/sales/property-financials';
@@ -20,13 +46,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription
-} from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import InviteTenantModal from '@/components/tenants/InviteTenantModal';
 import { RecordPaymentModal } from '@/components/dashboard/sales/RecordPaymentModal';
 import { TenantDocumentUploader } from '@/components/tenants/TenantDocumentUploader';
@@ -35,7 +55,7 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO, format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { parseISO, format, startOfMonth, endOfMonth } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -43,13 +63,13 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 
-// ---------- Robust helpers (copy/paste) ----------
+/* ------------------------- Robust helpers ------------------------- */
 const toNum = (v: any): number => {
   if (v === null || v === undefined) return 0;
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
 
-  if (typeof v === "string") {
-    const cleaned = v.replace(/[^0-9.-]/g, ""); // <- FIXED (2 args only)
+  if (typeof v === 'string') {
+    const cleaned = v.replace(/[^0-9.-]/g, '');
     const n = parseFloat(cleaned);
     return Number.isFinite(n) ? n : 0;
   }
@@ -61,7 +81,7 @@ const toDateSafe = (v: any): Date | null => {
 
   // Firestore Timestamp
   if (v instanceof Timestamp) return v.toDate();
-  if (typeof v === "object" && typeof v.seconds === "number") {
+  if (typeof v === 'object' && typeof v.seconds === 'number') {
     return new Date(v.seconds * 1000);
   }
 
@@ -70,10 +90,26 @@ const toDateSafe = (v: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
+// Normalize category to handle both old and new schemas (IMPORTANT for KPIs)
+function normalizeL0(tx: any): string {
+  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase();
+  if (raw === 'INCOME') return 'INCOME';
+  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'EXPENSE') return 'EXPENSE';
+  if (raw === 'ASSET') return 'ASSET';
+  if (raw === 'LIABILITY') return 'LIABILITY';
+  if (raw === 'EQUITY') return 'EQUITY';
+  if (raw.includes('INCOME')) return 'INCOME';
+  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
+  return 'OPERATING EXPENSE';
+}
+
+const getRentForDate = (
+  rentHistory: { amount: any; effectiveDate: any }[],
+  date: Date
+): number => {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  // Accept multiple possible keys from DB/UI
   const normalized = rentHistory
     .map((r) => ({
       amount: toNum(r?.amount ?? r?.rent ?? r?.value),
@@ -83,23 +119,23 @@ const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date
 
   if (normalized.length === 0) return 0;
 
-  // Sort newest effective date first
-  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
-
-  // Find most recent rent <= target date
+  normalized.sort((a, b) => b.effective!.getTime() - a.effective!.getTime());
   const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
   return match ? match.amount : 0;
 };
 
 function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
   if (!tenants || tenants.length === 0) return 0;
-
-  // flatten all rentHistory across all tenants (property-level fallback)
-  const allHistory = tenants.flatMap(t => Array.isArray(t?.rentHistory) ? t.rentHistory : []);
+  const allHistory = tenants.flatMap((t) => (Array.isArray(t?.rentHistory) ? t.rentHistory : []));
   return getRentForDate(allHistory, date);
 }
 
-function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?: any; date: Date }): number {
+function resolveRentDueForMonth(opts: {
+  monthTenant?: any;
+  property?: any;
+  unit?: any;
+  date: Date;
+}): number {
   const { monthTenant, property, unit, date } = opts;
 
   // 1) rentHistory on the actual month tenant
@@ -125,11 +161,9 @@ function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?
   return 0;
 }
 
-
-// --- NEW HELPER FUNCTIONS ---
-
 function parseMonthKeyToDate(monthKey: string): Date {
-  return parseISO(`${monthKey}-02`); // Use day 2 to avoid timezone issues
+  // day 02 prevents timezone month-shift issues
+  return parseISO(`${monthKey}-02`);
 }
 
 function monthWindow(date: Date): { start: Date; end: Date } {
@@ -141,85 +175,111 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
 
   const { start: monthStart, end: monthEnd } = monthWindow(date);
 
-  const overlappingTenants = tenants.filter(t => {
+  const overlappingTenants = tenants.filter((t) => {
     const leaseStart = toDateSafe(t.leaseStart);
     const leaseEnd = toDateSafe(t.leaseEnd);
-
-    // If no dates, can't determine overlap
     if (!leaseStart || !leaseEnd) return false;
-
-    // Check for overlap: (StartA <= EndB) and (EndA >= StartB)
     return leaseStart <= monthEnd && leaseEnd >= monthStart;
   });
 
-  // If multiple tenants overlap (e.g., move-in/move-out), pick the one with the latest start date
   if (overlappingTenants.length > 1) {
     return overlappingTenants.sort((a, b) => {
       const startA = toDateSafe(a.leaseStart)?.getTime() || 0;
       const startB = toDateSafe(b.leaseStart)?.getTime() || 0;
-      return startB - startA; // Sort descending by start date
+      return startB - startA;
     })[0];
   }
 
   return overlappingTenants[0] || null;
 }
 
-const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth, viewingDate, property }: any) => {
-    const rentDue = resolveRentDueForMonth({ monthTenant: tenant, property, date: viewingDate });
-    return (
-        <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
-            <div>
-                <div className="flex items-center gap-2">
-                    <p className="font-medium">{tenant.firstName} {tenant.lastName}</p>
-                    {isOccupantForMonth && <Badge className="bg-blue-100 text-blue-800">This Month</Badge>}
-                    {tenant.status && (
-                        <Badge variant="outline" className={cn('capitalize text-xs h-5', tenant.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-600')}>
-                            {tenant.status}
-                        </Badge>
-                    )}
-                </div>
-                <p className="text-sm text-muted-foreground">{tenant.email}</p>
-            </div>
-            <div className="text-right hidden sm:block">
-                <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
-                <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
-            </div>
-            <div className="flex items-center gap-2">
-                <RecordPaymentModal
-                    tenant={{ ...tenant, id: tenant.email || `tenant_${index}` }}
-                    propertyId={propertyId}
-                    landlordId={landlordId}
-                    onSuccess={onUpdate}
-                />
-                <Button variant="ghost" size="icon" onClick={() => onOpenLease(tenant)} title="Auto-Draft Lease">
-                    <Bot className="h-4 w-4 text-slate-500" />
-                </Button>
-            </div>
+/* ------------------------- UI pieces ------------------------- */
+
+const TenantRow = ({
+  tenant,
+  index,
+  propertyId,
+  landlordId,
+  onUpdate,
+  onOpenLease,
+  isOccupantForMonth,
+  viewingDate,
+  property,
+}: any) => {
+  const rentDue = resolveRentDueForMonth({ monthTenant: tenant, property, date: viewingDate });
+  return (
+    <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
+      <div>
+        <div className="flex items-center gap-2">
+          <p className="font-medium">
+            {tenant.firstName} {tenant.lastName}
+          </p>
+          {isOccupantForMonth && <Badge className="bg-blue-100 text-blue-800">This Month</Badge>}
+          {tenant.status && (
+            <Badge
+              variant="outline"
+              className={cn(
+                'capitalize text-xs h-5',
+                tenant.status?.toLowerCase() === 'active'
+                  ? 'bg-green-100 text-green-800 border-green-200'
+                  : 'bg-slate-100 text-slate-600'
+              )}
+            >
+              {tenant.status}
+            </Badge>
+          )}
         </div>
-    );
+        <p className="text-sm text-muted-foreground">{tenant.email}</p>
+      </div>
+
+      <div className="text-right hidden sm:block">
+        <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
+        <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <RecordPaymentModal
+          tenant={{ ...tenant, id: tenant.email || `tenant_${index}` }}
+          propertyId={propertyId}
+          landlordId={landlordId}
+          onSuccess={onUpdate}
+        />
+        <Button variant="ghost" size="icon" onClick={() => onOpenLease(tenant)} title="Auto-Draft Lease">
+          <Bot className="h-4 w-4 text-slate-500" />
+        </Button>
+      </div>
+    </div>
+  );
 };
 
-
-function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+function LeaseAgentModal({
+  tenant,
+  propertyId,
+  onOpenChange,
+  isOpen,
+}: {
+  tenant: any;
+  propertyId: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
   const { toast } = useToast();
 
   const handleConfirm = async () => {
     setLoading(true);
     try {
-      const flowResult = await generateLease({
-        propertyId: propertyId,
-        tenantId: tenant.email, 
+      await generateLease({
+        propertyId,
+        tenantId: tenant.email,
         state: 'TX',
       });
-      setResult(flowResult);
-      toast({ title: 'Lease Saved!', description: 'The lease has been generated and saved to your documents tab.' });
+      toast({ title: 'Lease Saved!', description: "The lease has been generated and saved to this property's documents tab." });
     } catch (error: any) {
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
       setLoading(false);
-      onOpenChange(false); // Close the modal after action
+      onOpenChange(false);
     }
   };
 
@@ -227,39 +287,42 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Bot className="text-primary"/> AI Agent Confirmation</DialogTitle>
-          <DialogDescription>
-            Please review the AI's plan before proceeding.
-          </DialogDescription>
+          <DialogTitle className="flex items-center gap-2">
+            <Bot className="text-primary" /> AI Agent Confirmation
+          </DialogTitle>
+          <DialogDescription>Please review the AI&apos;s plan before proceeding.</DialogDescription>
         </DialogHeader>
+
         <div className="space-y-4 py-4">
-            <div className="bg-slate-50 p-4 rounded-lg border">
-                <h4 className="font-semibold text-slate-800">Smart Summary</h4>
-                <p className="text-sm text-slate-600 mt-1">
-                    I will generate a Texas-compliant lease for ${tenant.firstName} ${tenant.lastName} and save it to this property's documents tab.
-                </p>
-            </div>
-            <div>
-                <h4 className="font-semibold text-slate-800">Legal Disclaimer</h4>
-                <p className="text-xs text-muted-foreground mt-1">
-                    This document was generated by an AI assistant. It is not a substitute for legal advice from a qualified attorney. Please review the document carefully before signing.
-                </p>
-            </div>
+          <div className="bg-slate-50 p-4 rounded-lg border">
+            <h4 className="font-semibold text-slate-800">Smart Summary</h4>
+            <p className="text-sm text-slate-600 mt-1">
+              I will generate a Texas-compliant lease for {tenant.firstName} {tenant.lastName} and save it to this property&apos;s documents tab.
+            </p>
+          </div>
+          <div>
+            <h4 className="font-semibold text-slate-800">Legal Disclaimer</h4>
+            <p className="text-xs text-muted-foreground mt-1">
+              This document was generated by an AI assistant. It is not a substitute for legal advice from a qualified attorney. Please review the document carefully before signing.
+            </p>
+          </div>
         </div>
+
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={handleConfirm} disabled={loading} className="bg-primary hover:bg-primary/90">
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : null}
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Confirm & Generate
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
-
-function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
+function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; landlordId: string }) {
   const firestore = useFirestore();
   const storage = useStorage();
   const { toast } = useToast();
@@ -275,59 +338,51 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
 
   const handleDelete = async (docData: any) => {
     if (!firestore || !storage) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
-        return;
+      toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+      return;
     }
 
     let fileRef;
-    if (docData?.storagePath) {
-        fileRef = ref(storage, docData.storagePath);
-    } else if (docData?.downloadUrl) {
-        fileRef = ref(storage, docData.downloadUrl);
-    } else {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'No file path found in document.' });
-        return;
+    if (docData?.storagePath) fileRef = ref(storage, docData.storagePath);
+    else if (docData?.downloadUrl) fileRef = ref(storage, docData.downloadUrl);
+    else {
+      toast({ variant: 'destructive', title: 'Cannot Delete', description: 'No file path found in document.' });
+      return;
     }
 
     try {
-        await deleteObject(fileRef);
-        
+      await deleteObject(fileRef);
+      const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
+      await deleteDoc(docRef);
+      toast({ title: 'Document Deleted', description: `${docData.fileName} removed successfully.` });
+      refetchDocs();
+    } catch (error: any) {
+      console.error('Deletion Error:', error);
+      if (error.code === 'storage/object-not-found') {
         const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
         await deleteDoc(docRef);
-
-        toast({ title: 'Document Deleted', description: `${docData.fileName} removed successfully.` });
+        toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
         refetchDocs();
-    } catch (error: any) {
-        console.error("Deletion Error:", error);
-        if (error.code === 'storage/object-not-found') {
-             const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
-             await deleteDoc(docRef);
-             toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
-             refetchDocs();
-        } else if (error.code === 'storage/unauthorized') {
-            toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to delete this file.' });
-        } else {
-            toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
-        }
+      } else if (error.code === 'storage/unauthorized') {
+        toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to delete this file.' });
+      } else {
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+      }
     }
   };
 
   const getSafeDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
     if (typeof timestamp === 'string') {
-        const date = new Date(timestamp);
-        if (!isNaN(date.getTime())) {
-            return date.toLocaleDateString();
-        }
+      const date = new Date(timestamp);
+      if (!isNaN(date.getTime())) return date.toLocaleDateString();
     }
-    if (timestamp.seconds) {
-      return new Date(timestamp.seconds * 1000).toLocaleDateString();
-    }
+    if (timestamp.seconds) return new Date(timestamp.seconds * 1000).toLocaleDateString();
     try {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleDateString();
-    } catch (e) {
+    } catch {
       return 'Invalid Date';
     }
   };
@@ -335,7 +390,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   const onUploadSuccess = () => {
     refetchDocs();
     setUploaderOpen(false);
-  }
+  };
 
   return (
     <>
@@ -349,44 +404,63 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
             <UploadCloud className="h-4 w-4" /> Upload File
           </Button>
         </CardHeader>
+
         <CardContent>
           {isLoading && <p>Loading documents...</p>}
           {!isLoading && (!documents || documents.length === 0) && (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
-                <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
+              <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+              <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
             </div>
           )}
+
           {!isLoading && documents && documents.length > 0 && (
             <div className="space-y-3">
-              {documents.map((doc: any) => (
-                <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
+              {documents.map((docu: any) => (
+                <div key={docu.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
                   <div>
-                    <p className="font-medium">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
-                    {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
+                    <p className="font-medium">{docu.fileName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Type: {docu.fileType} | Uploaded: {getSafeDate(docu.uploadedAt)}
+                    </p>
+                    {docu.description && (
+                      <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{docu.description}</p>
+                    )}
                   </div>
+
                   <div className="flex items-center gap-1">
-                    <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" size="sm" className="gap-1"><Eye className="h-3 w-3"/> View</Button>
+                    <a href={docu.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <Eye className="h-3 w-3" /> View
+                      </Button>
                     </a>
-                    <a href={doc.downloadUrl} download>
-                      <Button variant="outline" size="sm" className="gap-1"><Download className="h-3 w-3"/> Download</Button>
+                    <a href={docu.downloadUrl} download>
+                      <Button variant="outline" size="sm" className="gap-1">
+                        <Download className="h-3 w-3" /> Download
+                      </Button>
                     </a>
-                    
-                    {isDeleting === doc.id ? (
-                        <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            onClick={() => {
-                                handleDelete(doc);
-                                setIsDeleting(null);
-                            }}
-                        >
-                            Confirm Delete?
-                        </Button>
+
+                    {isDeleting === docu.id ? (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          handleDelete(docu);
+                          setIsDeleting(null);
+                        }}
+                      >
+                        Confirm Delete?
+                      </Button>
                     ) : (
-                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-500" onClick={() => setIsDeleting(doc.id)}><Trash2 className="h-4 w-4"/></Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:text-red-500"
+                        onClick={() => setIsDeleting(docu.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -395,6 +469,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
           )}
         </CardContent>
       </Card>
+
       {isUploaderOpen && (
         <TenantDocumentUploader
           isOpen={isUploaderOpen}
@@ -405,10 +480,13 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
         />
       )}
     </>
-  )
+  );
 }
 
-export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
+/* ------------------------- MAIN COMPONENT ------------------------- */
+
+export function PropertyDashboardSFH({ property, onUpdate }: { property: any; onUpdate: () => void }) {
+  console.log("✅ USING PropertyDashboardSFH FILE A (signature): 2026-01-28-A");
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isLeaseAgentOpen, setLeaseAgentOpen] = useState(false);
@@ -422,9 +500,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const selectedMonthKey = useMemo(() => {
     const monthParam = searchParams.get('month');
-    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
-      return monthParam;
-    }
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) return monthParam;
     return format(new Date(), 'yyyy-MM');
   }, [searchParams]);
 
@@ -443,26 +519,25 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
-  
+    
     console.log("DEBUG monthlyTransactionsQuery inputs:", {
       userUid: user?.uid,
       propertyIdUsedInQuery: property?.id,
+      selectedMonthKey,
     });
-  
+    
     return query(
-      collectionGroup(firestore, 'transactions'),
-      where('userId', '==', user.uid),
-      where('costCenter', '==', property.id)
+        collectionGroup(firestore, 'transactions'),
+        where('userId', '==', user.uid),
+        where('costCenter', '==', property.id)
     );
-  }, [firestore, property?.id, user?.uid]);
+  }, [firestore, property?.id, user?.uid, selectedMonthKey]);
   
   useEffect(() => {
-    console.log("🧪 monthlyTransactionsQuery is", monthlyTransactionsQuery);
-  
     if (!monthlyTransactionsQuery) {
-      console.log("🧪 monthlyTransactionsQuery is NULL (not running getDocs)");
-      return;
-    }
+        console.log("🧪 monthlyTransactionsQuery is NULL (not running getDocs)");
+        return;
+    };
   
     (async () => {
       try {
@@ -475,12 +550,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       }
     })();
   }, [monthlyTransactionsQuery]);
+  
 
   const { data: monthlyTransactions, isLoading: loadingTxs, error: txError } = useCollection(monthlyTransactionsQuery);
-  
+
   useEffect(() => {
     if (txError) {
-      console.error("🔥 monthlyTransactionsQuery ERROR:", txError);
+        console.error('🔥 monthlyTransactionsQuery ERROR:', txError);
     }
   }, [txError]);
   
@@ -490,6 +566,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     console.log("monthlyTransactions length", monthlyTransactions?.length);
     console.log("monthlyTransactions first", monthlyTransactions?.[0]);
   }, [selectedMonthKey, property?.id, monthlyTransactions]);
+  
 
   useEffect(() => {
     if (!user || !property?.id) return;
@@ -504,9 +581,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               loanTermInYears: property.mortgage.loanTerm,
               targetDate: selectedMonthDate.toISOString(),
           });
-          if (result.success) {
-              setInterestForMonth(result.interestPaidForMonth || 0);
-          }
+          if (result.success) setInterestForMonth(result.interestPaidForMonth || 0);
       }
     };
     calculateInterest();
@@ -514,9 +589,19 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
   
+  /* ------------------------- KPI CALC (FIXED) ------------------------- */
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
-      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
+      return {
+        noi: 0,
+        cashFlow: 0,
+        dscr: 0,
+        economicOccupancy: 0,
+        breakEvenRent: 0,
+        rentalIncome: 0,
+        potentialRent: 0,
+        verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
+      };
     }
   
     const monthKey = selectedMonthKey;
@@ -527,134 +612,151 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         return format(d, 'yyyy-MM') === monthKey;
     });
 
-    const rentalIncome = (monthlyTxs || [])
-        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
-        .reduce((sum, tx) => sum + toNum(tx.amount), 0);
+    const rentalIncomeVal = monthlyTxs
+      .filter((tx: any) => normalizeL0(tx) === 'INCOME')
+      .reduce((sum: number, tx: any) => sum + toNum(tx.amount), 0);
 
-    const operatingExpenses = Math.abs((monthlyTxs || [])
-        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
-        .reduce((sum, tx) => sum + toNum(tx.amount), 0));
-        
-    const potentialRentValue = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
+    const operatingExpensesVal = Math.abs(
+      monthlyTxs
+        .filter((tx: any) => {
+          const l0 = normalizeL0(tx);
+          return l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
+        })
+        .reduce((sum: number, tx: any) => sum + toNum(tx.amount), 0)
+    );
+
+    const potentialRentVal = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
     
-    const noiValue = rentalIncome - operatingExpenses;
+    const noiVal = rentalIncomeVal - operatingExpensesVal;
   
-    const debtPayment = property.mortgage?.principalAndInterest || 0;
-    const totalDebtPayment = debtPayment + (property.mortgage?.escrowAmount || 0);
+    const debtPayment = toNum(property.mortgage?.principalAndInterest);
+    const escrow = toNum(property.mortgage?.escrowAmount);
+    const totalDebtPayment = debtPayment + escrow;
   
-    const cashFlowValue = noiValue - debtPayment;
-    const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
+    const cashFlowVal = noiVal - totalDebtPayment;
+    const dscrVal = totalDebtPayment > 0 ? noiVal / totalDebtPayment : Infinity;
   
-    const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
-    
-    const breakEvenRentValue = operatingExpenses + totalDebtPayment;
-    const surplus = potentialRentValue - breakEvenRentValue;
+    const economicOccupancyVal = potentialRentVal > 0 ? (rentalIncomeVal / potentialRentVal) * 100 : 0;
+    const breakEvenRentVal = operatingExpensesVal + totalDebtPayment;
     
     let verdictLabel = "Stable";
     let verdictColor = "bg-blue-100 text-blue-800";
   
-    if (cashFlowValue > 100 && dscrValue > 1.25) {
+    if (cashFlowVal > 100 && dscrVal > 1.25) {
         verdictLabel = "Healthy Cash Flow";
         verdictColor = "bg-green-100 text-green-800";
-    } else if (cashFlowValue < 0) {
+    } else if (cashFlowVal < 0) {
         verdictLabel = "Underperforming";
         verdictColor = "bg-red-100 text-red-800";
-    } else if (dscrValue < 1.25 && debtPayment > 0) {
+    } else if (dscrVal < 1.25 && debtPayment > 0) {
         verdictLabel = "High Debt Ratio";
         verdictColor = "bg-amber-100 text-amber-800";
     }
   
-    return { 
-      noi: noiValue, 
-      cashFlow: cashFlowValue, 
-      dscr: dscrValue, 
-      economicOccupancy: economicOccupancyValue, 
-      breakEvenRent: breakEvenRentValue,
-      surplus,
-      rentalIncome: rentalIncome, 
-      potentialRent: potentialRentValue,
+    // optional quick debug (safe to keep for now)
+    console.log('KPI DEBUG', {
+      selectedMonthKey: monthKey,
+      allTxCount: monthlyTransactions?.length || 0,
+      monthTxCount: monthlyTxs.length,
+      incomeSum: rentalIncomeVal,
+      expenseSum: operatingExpensesVal,
+      noi: noiVal,
+    });
+
+    return {
+      noi: noiVal,
+      cashFlow: cashFlowVal,
+      dscr: dscrVal,
+      economicOccupancy: economicOccupancyVal,
+      breakEvenRent: breakEvenRentVal,
+      rentalIncome: rentalIncomeVal,
+      potentialRent: potentialRentVal,
       verdict: { label: verdictLabel, color: verdictColor },
     };
   }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate, selectedMonthKey]);
-  
+
   const getAiInsight = useMemo(() => {
-    if (loadingTxs) return "Analyzing property performance...";
-    
+    if (loadingTxs) return 'Analyzing property performance...';
+
     if (cashFlow > 0 && economicOccupancy < 80 && economicOccupancy > 0) {
-        return `This property is cash-flowing. Improving the collection rate from ${economicOccupancy.toFixed(0)}% to 95% could increase monthly cash flow by approximately ${formatCurrency(potentialRent * 0.95 - rentalIncome)}.`;
+      return `This property is cash-flowing. Improving the collection rate from ${economicOccupancy.toFixed(
+        0
+      )}% to 95% could increase monthly cash flow by approximately ${formatCurrency(potentialRent * 0.95 - rentalIncome)}.`;
     }
     if (dscr > 1.5 && property?.tenants?.length === 1) {
-        return "Risk is tenant concentration (100% from one tenant). Consider adding a lease renewal reminder.";
+      return 'Risk is tenant concentration (100% from one tenant). Consider adding a lease renewal reminder.';
     }
     if (cashFlow < 0 && noi > 0) {
-        return "The property is profitable on an operating basis, but negative cash flow suggests the debt service is high. Consider refinancing options.";
+      return 'The property is profitable on an operating basis, but negative cash flow suggests the debt service is high. Consider refinancing options.';
     }
     if (dscr < 1.2 && dscr > 0 && isFinite(dscr)) {
-        return "The debt service coverage ratio is below the typical lender threshold of 1.25x. Focus on increasing NOI by reducing expenses or raising rent.";
+      return 'The debt service coverage ratio is below the typical lender threshold of 1.25x. Focus on increasing NOI by reducing expenses or raising rent.';
     }
-    return "Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.";
+    return 'Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.';
   }, [loadingTxs, cashFlow, economicOccupancy, dscr, property, potentialRent, rentalIncome, noi]);
-
 
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
     setIsEditOpen(true);
-  }
-  
-  const handleOpenLeaseAgent = (tenant: any) => {
-    setSelectedTenantForLease({...tenant });
-    setLeaseAgentOpen(true);
-  };
-  
-  if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
-  if (!property) return <div className="p-8">Property not found.</div>;
-  
-  const getPropertyStatus = () => {
-    // Month-based status: if a tenant overlaps the selected month, it's occupied for that month.
-    return monthTenant ? 'Occupied' : 'Vacant';
   };
 
-  const status = getPropertyStatus();
+  const handleOpenLeaseAgent = (tenant: any) => {
+    setSelectedTenantForLease({ ...tenant });
+    setLeaseAgentOpen(true);
+  };
+
+  if (!user) return <div className="p-8 text-muted-foreground">Loading...</div>;
+  if (!property) return <div className="p-8">Property not found.</div>;
+
+  const status = monthTenant ? 'Occupied' : 'Vacant';
   const currentRent = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
-  const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
-  
+  const totalDebtPayment = toNum(property.mortgage?.principalAndInterest) + toNum(property.mortgage?.escrowAmount);
+
   const getDscrBadge = (ratio: number) => {
     if (!isFinite(ratio) || ratio === 0) return <Badge className="bg-blue-100 text-blue-800">No Debt</Badge>;
     if (ratio >= 1.25) return <Badge className="bg-green-100 text-green-800">Healthy</Badge>;
     if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Watch</Badge>;
     return <Badge variant="destructive">Risk</Badge>;
-  }
+  };
 
   const header = (
     <div className="flex items-start justify-between">
       <div className="flex items-center gap-4">
         <Link href="/dashboard/properties">
-          <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
         </Link>
         <div>
           <h1 className="text-2xl font-bold">{property.name}</h1>
-          <p className="text-muted-foreground">{property.address.street}, {property.address.city}</p>
+          <p className="text-muted-foreground">
+            {property.address?.street}, {property.address?.city}
+          </p>
         </div>
-        <Badge className={cn("mt-1", verdict.color)}>{verdict.label}</Badge>
+        <Badge className={cn('mt-1', verdict.color)}>{verdict.label}</Badge>
       </div>
+
       <div className="flex items-center gap-2">
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-            <DialogTrigger asChild>
-            <Button variant="outline" onClick={() => handleOpenDialog('general')}><Edit className="mr-2 h-4 w-4" /> Edit Settings</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogTrigger asChild>
+            <Button variant="outline" onClick={() => handleOpenDialog('general')}>
+              <Edit className="mr-2 h-4 w-4" /> Edit Settings
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-                <DialogTitle>Edit Property Settings</DialogTitle>
-                <DialogDescription>
-                Update tenants, mortgage details, and configuration for {property.name}.
-                </DialogDescription>
+              <DialogTitle>Edit Property Settings</DialogTitle>
+              <DialogDescription>Update tenants, mortgage details, and configuration for {property.name}.</DialogDescription>
             </DialogHeader>
-            <PropertyForm 
-                initialData={{ id: property.id, ...property }} 
-                onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
-                defaultTab={formTab} 
+            <PropertyForm
+              initialData={{ id: property.id, ...property }}
+              onSuccess={() => {
+                onUpdate();
+                setIsEditOpen(false);
+              }}
+              defaultTab={formTab}
             />
-            </DialogContent>
+          </DialogContent>
         </Dialog>
       </div>
     </div>
@@ -664,75 +766,134 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     <>
       <div className="space-y-6 p-6">
         {header}
-        
+
         <div className="space-y-6 pt-4">
+          {/* Investor KPIs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <StatCard
+                      title="NOI (Monthly)"
+                      value={noi}
+                      icon={<Wallet className="h-5 w-5 text-slate-500" />}
+                      isLoading={loadingTxs}
+                      cardClassName={cn(noi >= 0 ? 'bg-green-50/70 border-green-200' : 'bg-red-50/70 border-red-200')}
+                      colorClass={noi >= 0 ? 'text-green-700' : 'text-red-700'}
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Net Operating Income: collected rent minus operating expenses (excludes debt).</p>
+                </TooltipContent>
+              </Tooltip>
 
-            {/* --- Investor KPIs --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <TooltipProvider>
-                    <Tooltip><TooltipTrigger asChild><div>
-                        <StatCard 
-                          title="NOI (Monthly)" 
-                          value={noi} 
-                          icon={<Wallet className="h-5 w-5 text-slate-500"/>} 
-                          isLoading={loadingTxs} 
-                          cardClassName={cn(noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} 
-                          colorClass={noi >= 0 ? "text-green-700" : "text-red-700"}
-                        />
-                    </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <StatCard
+                      title="Cash Flow After Debt"
+                      value={cashFlow}
+                      icon={<TrendingUp className="h-5 w-5 text-slate-500" />}
+                      isLoading={loadingTxs}
+                      colorClass={cashFlow >= 0 ? 'text-green-600' : 'text-red-600'}
+                      cardClassName={cn(
+                        cashFlow >= 0 ? 'bg-green-50/70 border-green-200' : 'bg-red-50/70 border-red-200'
+                      )}
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>NOI minus all debt payments (P&amp;I + escrow). Cash left in your pocket.</p>
+                </TooltipContent>
+              </Tooltip>
 
-                    <Tooltip><TooltipTrigger asChild><div>
-                         <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cn(cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} />
-                    </div></TooltipTrigger><TooltipContent><p>NOI minus principal & interest payments. The cash left in your pocket.</p></TooltipContent></Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-medium">DSCR</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-2xl font-bold">{!isFinite(dscr) || dscr === 0 ? 'No Debt' : `${dscr.toFixed(2)}x`}</div>
+                        {getDscrBadge(dscr)}
+                      </CardContent>
+                    </Card>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p>
+                </TooltipContent>
+              </Tooltip>
 
-                    <Tooltip><TooltipTrigger asChild><div>
-                        <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle></CardHeader><CardContent>
-                            <div className="text-2xl font-bold">{!isFinite(dscr) || dscr === 0 ? 'No Debt' : `${dscr.toFixed(2)}x`}</div>
-                            {getDscrBadge(dscr)}
-                        </CardContent></Card>
-                    </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
-                    
-                    <Tooltip><TooltipTrigger asChild><div>
-                        <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} cardClassName="bg-indigo-50/70 border-indigo-200" />
-                    </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
-                </TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div>
+                    <StatCard
+                      title="Economic Occupancy"
+                      value={economicOccupancy}
+                      format="percent"
+                      icon={<Users className="h-5 w-5 text-slate-500" />}
+                      isLoading={loadingTxs}
+                      description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`}
+                      cardClassName="bg-indigo-50/70 border-indigo-200"
+                    />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Actual rent collected ÷ potential rent. Shows vacancy &amp; bad debt impact.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
+          {/* Operational KPIs */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+            <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium">Status</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-xl font-bold capitalize">{status}</div>
+              </CardContent>
+            </Card>
+            <StatCard
+              title="Break-Even Rent"
+              value={breakEvenRent}
+              icon={<AlertTriangle className="h-5 w-5 text-slate-500" />}
+              isLoading={loadingTxs}
+              description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(potentialRent - breakEvenRent)}` : 'No fixed costs'}
+            />
+          </div>
+
+          <div className="space-y-2 pt-4">
+            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
+              <div className="bg-slate-200 p-2 rounded-full">
+                <Bot className="h-5 w-5 text-slate-500 shrink-0" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-slate-800">Insight</h4>
+                <p className="text-sm text-slate-600">{getAiInsight}</p>
+              </div>
             </div>
-            
-            {/* --- Operational KPIs --- */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-                <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-                <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
-                <StatCard 
-                    title="Break-Even Rent" 
-                    value={breakEvenRent} 
-                    icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
-                    isLoading={loadingTxs} 
-                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(potentialRent - breakEvenRent)}` : 'No fixed costs'}
-                />
-            </div>
-            
-             <div className="space-y-2 pt-4">
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
-                    <div className="bg-slate-200 p-2 rounded-full"><Bot className="h-5 w-5 text-slate-500 shrink-0" /></div>
-                    <div>
-                        <h4 className="font-semibold text-slate-800">Insight</h4>
-                        <p className="text-sm text-slate-600">{getAiInsight}</p>
-                    </div>
-                </div>
-            </div>
+          </div>
 
-            <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
+          <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog} />
 
-            <Tabs defaultValue="tenants" className="w-full">
+          <Tabs defaultValue="tenants" className="w-full">
             <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
-                <TabsTrigger value="tenants">Tenants</TabsTrigger>
-                <TabsTrigger value="income">Income</TabsTrigger>
-                <TabsTrigger value="expenses">Expenses</TabsTrigger>
-                <TabsTrigger value="deposits">Deposits</TabsTrigger>
-                <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="tenants">Tenants</TabsTrigger>
+              <TabsTrigger value="income">Income</TabsTrigger>
+              <TabsTrigger value="expenses">Expenses</TabsTrigger>
+              <TabsTrigger value="deposits">Deposits</TabsTrigger>
+              <TabsTrigger value="documents">Documents</TabsTrigger>
+              <TabsTrigger value="documents" className="hidden" />
             </TabsList>
-            
+
             <TabsContent value="tenants" className="mt-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -751,7 +912,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     </Button>
                   </div>
                 </CardHeader>
-            
+
                 <CardContent>
                   {monthTenant ? (
                     <div className="space-y-3">
@@ -771,31 +932,29 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     <div className="text-center py-10 border-2 border-dashed rounded-lg">
                       <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
                       <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        No lease overlaps this month.
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">No lease overlaps this month.</p>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
-            
+
             <TabsContent value="income" className="mt-6">
-                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
+              <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
             </TabsContent>
-            
+
             <TabsContent value="expenses" className="mt-6">
-                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
+              <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
             </TabsContent>
 
             <TabsContent value="deposits" className="mt-6">
-                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
+              <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
             </TabsContent>
 
             <TabsContent value="documents" className="mt-6">
-                <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
+              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
             </TabsContent>
-            </Tabs>
+          </Tabs>
         </div>
       </div>
 
@@ -807,12 +966,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           landlordId={user.uid}
         />
       )}
+
       {isLeaseAgentOpen && selectedTenantForLease && (
         <LeaseAgentModal
-            isOpen={isLeaseAgentOpen}
-            onOpenChange={setLeaseAgentOpen}
-            tenant={selectedTenantForLease}
-            propertyId={property.id}
+          isOpen={isLeaseAgentOpen}
+          onOpenChange={setLeaseAgentOpen}
+          tenant={selectedTenantForLease}
+          propertyId={property.id}
         />
       )}
     </>
