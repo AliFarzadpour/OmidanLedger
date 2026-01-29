@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, collectionGroup, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, Timestamp, getDoc } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -35,13 +35,14 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO, format } from 'date-fns';
+import { isPast, parseISO, format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { History } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+
 
 const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease }: any) => {
     return (
@@ -671,4 +672,3 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
-
