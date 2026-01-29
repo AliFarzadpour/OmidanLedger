@@ -410,21 +410,6 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   )
 }
 
-// --- KPI CALC (FIXED) ---
-// Put this helper near your other helpers (top of file), OR keep it right above the KPI useMemo.
-function normalizeL0Any(tx: any): string {
-  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().trim();
-  if (raw === 'INCOME') return 'INCOME';
-  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
-  if (raw === 'EXPENSE') return 'OPERATING EXPENSE';
-  if (raw === 'ASSET') return 'ASSET';
-  if (raw === 'LIABILITY') return 'LIABILITY';
-  if (raw === 'EQUITY') return 'EQUITY';
-  if (raw.includes('INCOME')) return 'INCOME';
-  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
-  return raw || 'UNKNOWN';
-}
-
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
   console.log("✅ USING src/components/dashboard/PropertyDashboardSFH.tsx");
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -494,7 +479,22 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
   
-  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
+// --- KPI CALC (FIXED) ---
+// Put this helper near your other helpers (top of file), OR keep it right above the KPI useMemo.
+function normalizeL0Any(tx: any): string {
+  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().trim();
+  if (raw === 'INCOME') return 'INCOME';
+  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'ASSET') return 'ASSET';
+  if (raw === 'LIABILITY') return 'LIABILITY';
+  if (raw === 'EQUITY') return 'EQUITY';
+  if (raw.includes('INCOME')) return 'INCOME';
+  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
+  return raw || 'UNKNOWN';
+}
+
+const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
   if (!property) {
     return {
       noi: 0,
@@ -510,28 +510,31 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const monthKey = selectedMonthKey;
 
-  // 1) Filter txs to THIS month (robust date parsing)
-  const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
+  // ✅ IMPORTANT: normalize monthlyTransactions into a real array of tx objects
+  const txList: any[] = Array.isArray(monthlyTransactions)
+    ? monthlyTransactions
+    : Array.isArray((monthlyTransactions as any)?.docs)
+      ? (monthlyTransactions as any).docs.map((d: any) => ({ id: d.id, ...d.data() }))
+      : [];
+
+  // 1) Filter txs to THIS month
+  const monthlyTxs = txList.filter((tx: any) => {
     const d = toDateSafe(tx?.date);
     if (!d) return false;
     return format(d, 'yyyy-MM') === monthKey;
   });
 
-  // 2) Sum INCOME (actual collected)
+  // 2) Income
   const rentalIncomeValue = monthlyTxs
-    .filter((tx: any) => normalizeL0Any(tx) === 'INCOME')
-    .reduce((sum: number, tx: any) => {
-      const amt = toNum(tx?.amount);
-      // rent collected should contribute positively
-      return sum + (amt >= 0 ? amt : Math.abs(amt));
-    }, 0);
-
-  // 3) Sum Operating Expenses
-  const operatingExpensesValue = monthlyTxs
-    .filter((tx: any) => normalizeL0Any(tx) === 'OPERATING EXPENSE')
+    .filter((tx: any) => String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().includes('INCOME'))
     .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
 
-  // 4) Potential rent (from tenant/property rent logic)
+  // 3) Operating expenses
+  const operatingExpensesValue = monthlyTxs
+    .filter((tx: any) => String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().includes('EXPENSE'))
+    .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
+
+  // 4) Potential rent
   const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
   const potentialRentValue = resolveRentDueForMonth({
     monthTenant: monthTenantLocal,
@@ -539,46 +542,46 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     date: selectedMonthDate,
   });
 
-  // 5) NOI (Monthly) = Income - Operating Expenses
+  // 5) NOI
   const noiValue = rentalIncomeValue - operatingExpensesValue;
 
-  // 6) Debt & ratios
-  const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
+  // 6) Debt, cash flow, DSCR
+  const debtPayment = toNum(property?.mortgage?.principalAndInterest);
   const escrow = toNum(property?.mortgage?.escrowAmount);
   const totalDebtPayment = debtPayment + escrow;
 
-  const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
+  const cashFlowValue = noiValue - debtPayment;
   const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
 
-  const economicOccupancyValue =
-    potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
-
+  // 7) Econ occupancy + break-even
+  const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
   const breakEvenRentValue = operatingExpensesValue + totalDebtPayment;
 
-  // 7) Verdict
-  let verdictLabel = 'Stable';
-  let verdictColor = 'bg-blue-100 text-blue-800';
-
-  if (cashFlowValue > 100 && dscrValue > 1.25) {
-    verdictLabel = 'Healthy Cash Flow';
-    verdictColor = 'bg-green-100 text-green-800';
-  } else if (cashFlowValue < 0) {
-    verdictLabel = 'Underperforming';
-    verdictColor = 'bg-red-100 text-red-800';
-  } else if (dscrValue < 1.25 && debtPayment > 0) {
-    verdictLabel = 'High Debt Ratio';
-    verdictColor = 'bg-amber-100 text-amber-800';
-  }
-
-  // Optional: log the real components so you can see WHY NOI is what it is
-  console.log('KPI COMPONENTS', {
+  // ✅ DEBUG (this will prove the fix immediately)
+  console.log("KPI COMPONENTS", {
     monthKey,
+    txListCount: txList.length,
     monthTxCount: monthlyTxs.length,
     rentalIncomeValue,
     operatingExpensesValue,
     potentialRentValue,
     noiValue,
   });
+
+  // Verdict
+  let verdictLabel = "Stable";
+  let verdictColor = "bg-blue-100 text-blue-800";
+
+  if (cashFlowValue > 100 && dscrValue > 1.25) {
+    verdictLabel = "Healthy Cash Flow";
+    verdictColor = "bg-green-100 text-green-800";
+  } else if (cashFlowValue < 0) {
+    verdictLabel = "Underperforming";
+    verdictColor = "bg-red-100 text-red-800";
+  } else if (dscrValue < 1.25 && debtPayment > 0) {
+    verdictLabel = "High Debt Ratio";
+    verdictColor = "bg-amber-100 text-amber-800";
+  }
 
   return {
     noi: noiValue,
@@ -592,18 +595,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   };
 }, [monthlyTransactions, property, selectedMonthDate, selectedMonthKey]);
   
-  useEffect(() => {
-    console.log("KPI DEBUG", {
-      selectedMonthKey,
-      txCount: monthlyTransactions?.length,
-      // monthTxCount: monthlyTxs?.length, // monthlyTxs is not in scope here
-      rentalIncome,
-      // operatingExpenses, // not in scope here
-      potentialRent,
-      noi
-    });
-  },[selectedMonthKey, monthlyTransactions, rentalIncome, potentialRent, noi]);
-
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return 'Analyzing property performance...';
 
@@ -645,13 +636,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const status = getPropertyStatus();
   const currentRent = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
   const totalDebtPayment = toNum(property.mortgage?.principalAndInterest) + toNum(property.mortgage?.escrowAmount);
-
+  
   const getDscrBadge = (ratio: number) => {
     if (!isFinite(ratio) || ratio === 0) return <Badge className="bg-blue-100 text-blue-800">No Debt</Badge>;
     if (ratio >= 1.25) return <Badge className="bg-green-100 text-green-800">Healthy</Badge>;
     if (ratio >= 1.1) return <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50">Watch</Badge>;
     return <Badge variant="destructive">Risk</Badge>;
-  };
+  }
 
   const header = (
     <div className="flex items-start justify-between">
@@ -665,30 +656,27 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             {property.address?.street}, {property.address?.city}
           </p>
         </div>
-        <Badge className={cn('mt-1', verdict.color)}>{verdict.label}</Badge>
+        <Badge className={cn("mt-1", verdict.color)}>{verdict.label}</Badge>
       </div>
 
       <div className="flex items-center gap-2">
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogTrigger asChild>
+            <DialogTrigger asChild>
             <Button variant="outline" onClick={() => handleOpenDialog('general')}>
               <Edit className="mr-2 h-4 w-4" /> Edit Settings
             </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            </DialogTrigger>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Edit Property Settings</DialogTitle>
-              <DialogDescription>Update tenants, mortgage details, and configuration for {property.name}.</DialogDescription>
+                <DialogTitle>Edit Property Settings</DialogTitle>
+                <DialogDescription>Update tenants, mortgage details, and configuration for {property.name}.</DialogDescription>
             </DialogHeader>
-            <PropertyForm
-              initialData={{ id: property.id, ...property }}
-              onSuccess={() => {
-                onUpdate();
-                setIsEditOpen(false);
-              }}
-              defaultTab={formTab}
+            <PropertyForm 
+                initialData={{ id: property.id, ...property }} 
+                onSuccess={() => { onUpdate(); setIsEditOpen(false); }} 
+                defaultTab={formTab} 
             />
-          </DialogContent>
+            </DialogContent>
         </Dialog>
       </div>
     </div>
@@ -698,107 +686,66 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     <>
       <div className="space-y-6 p-6">
         {header}
-
+        
         <div className="space-y-6 pt-4">
-          {/* Investor KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <StatCard
-                      title="NOI (YTD)"
-                      value={noi}
-                      icon={<Wallet className="h-5 w-5 text-green-600" />}
-                      isLoading={loadingTxs}
-                      cardClassName={cn("shadow-lg", noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")}
-                      colorClass={noi >= 0 ? 'text-green-700' : 'text-red-700'}
-                    />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Net Operating Income: Rent minus operating expenses (excludes debt).</p>
-                </TooltipContent>
-              </Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
+            {/* --- Investor KPIs --- */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <TooltipProvider>
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} cardClassName={cn("shadow-lg", noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} colorClass={noi >= 0 ? 'text-green-700' : 'text-red-700'} />
+                    </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
+
+                    <Tooltip><TooltipTrigger asChild><div>
                          <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cn("shadow-lg", cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>NOI minus principal & interest payments. The cash left in your pocket.</p>
-                </TooltipContent>
-              </Tooltip>
+                    </div></TooltipTrigger><TooltipContent><p>NOI minus principal & interest payments. The cash left in your pocket.</p></TooltipContent></Tooltip>
 
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <Card className="shadow-lg h-full">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">DSCR</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="text-2xl font-bold">{!isFinite(dscr) || dscr === 0 ? 'No Debt' : `${dscr.toFixed(2)}x`}</div>
-                        {getDscrBadge(dscr)}
-                      </CardContent>
-                    </Card>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p>
-                </TooltipContent>
-              </Tooltip>
-              
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div>
-                    <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} cardClassName="shadow-lg bg-indigo-50/70 border-indigo-200" />
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-
-          {/* Operational KPIs */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-            <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-            <Card className="shadow-lg"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
-            <StatCard 
-                title="Break-Even Rent" 
-                value={breakEvenRent} 
-                icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
-                isLoading={loadingTxs} 
-                description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'No fixed costs'}
-            />
-          </div>
-
-          <div className="space-y-2 pt-4">
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
-              <div className="bg-slate-200 p-2 rounded-full">
-                <Bot className="h-5 w-5 text-slate-500 shrink-0" />
-              </div>
-              <div>
-                <h4 className="font-semibold text-slate-800">Insight</h4>
-                <p className="text-sm text-slate-600">{getAiInsight}</p>
-              </div>
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <Card className="shadow-lg h-full"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">DSCR</CardTitle></CardHeader><CardContent>
+                            <div className="text-2xl font-bold">{!isFinite(dscr) || dscr === 0 ? 'No Debt' : `${dscr.toFixed(2)}x`}</div>
+                            {getDscrBadge(dscr)}
+                        </CardContent></Card>
+                    </div></TooltipTrigger><TooltipContent><p>Debt Service Coverage Ratio: NOI / Debt Payment. Lenders look for &gt;1.25x.</p></TooltipContent></Tooltip>
+                    
+                    <Tooltip><TooltipTrigger asChild><div>
+                        <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} cardClassName="shadow-lg bg-indigo-50/70 border-indigo-200" />
+                    </div></TooltipTrigger><TooltipContent><p>Actual rent collected ÷ potential rent. Shows vacancy & bad debt impact.</p></TooltipContent></Tooltip>
+                </TooltipProvider>
             </div>
-          </div>
+            
+            {/* --- Operational KPIs --- */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+                <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
+                <Card className="shadow-lg"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
+                <StatCard 
+                    title="Break-Even Rent" 
+                    value={breakEvenRent} 
+                    icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
+                    isLoading={loadingTxs} 
+                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'No fixed costs'}
+                />
+            </div>
+            
+             <div className="space-y-2 pt-4">
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-start gap-3">
+                    <div className="bg-slate-200 p-2 rounded-full"><Bot className="h-5 w-5 text-slate-500 shrink-0" /></div>
+                    <div>
+                        <h4 className="font-semibold text-slate-800">Insight</h4>
+                        <p className="text-sm text-slate-600">{getAiInsight}</p>
+                    </div>
+                </div>
+            </div>
 
-          <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
+            <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
 
-          <Tabs defaultValue="tenants" className="w-full">
+            <Tabs defaultValue="tenants" className="w-full">
             <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
-              <TabsTrigger value="tenants">Tenants</TabsTrigger>
-              <TabsTrigger value="income">Income</TabsTrigger>
-              <TabsTrigger value="expenses">Expenses</TabsTrigger>
-              <TabsTrigger value="deposits">Deposits</TabsTrigger>
-              <TabsTrigger value="documents">Documents</TabsTrigger>
+                <TabsTrigger value="tenants">Tenants</TabsTrigger>
+                <TabsTrigger value="income">Income</TabsTrigger>
+                <TabsTrigger value="expenses">Expenses</TabsTrigger>
+                <TabsTrigger value="deposits">Deposits</TabsTrigger>
+                <TabsTrigger value="documents">Documents</TabsTrigger>
             </TabsList>
             
             <TabsContent value="tenants" className="mt-6">
@@ -886,3 +833,4 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
+
