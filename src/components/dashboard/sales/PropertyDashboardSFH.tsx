@@ -552,9 +552,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
     // 1) Filter transactions to THIS month
     const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
-      const d = toDateSafe(tx?.date);
-      if (!d) return false;
-      return format(d, 'yyyy-MM') === monthKey;
+        const d = toDateSafe(tx?.date);
+        if (!d) return false;
+        return format(d, 'yyyy-MM') === monthKey;
     });
 
     // 2) Calculate ACTUAL rent collected from transactions
