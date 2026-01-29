@@ -116,14 +116,23 @@ const toDateSafe = (v: any): Date | null => {
 function getRentForDate(rentHistory: { amount: any; effectiveDate: any }[], date: Date): number {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  const sorted = [...rentHistory]
-    .map(r => ({ amount: r.amount, effectiveDate: toDateSafe(r.effectiveDate) }))
-    .filter(r => r.effectiveDate)
-    .sort((a, b) => b.effectiveDate!.getTime() - a.effectiveDate!.getTime());
+  // Accept multiple possible keys from DB/UI
+  const normalized = rentHistory
+    .map((r) => ({
+      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
+      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
+    }))
+    .filter((x) => x.amount > 0 && x.effective);
 
-  const applicable = sorted.find(r => r.effectiveDate! <= date);
-  return applicable ? toNum(applicable.amount) : 0;
-}
+  if (normalized.length === 0) return 0;
+
+  // Sort newest effective date first
+  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+
+  // Find most recent rent <= target date
+  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
+  return match ? match.amount : 0;
+};
 
 function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
   if (!tenants || tenants.length === 0) return 0;
@@ -410,7 +419,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                 isVacant: true,
             };
         }
-
+        
         const rentDue = resolveRentDueForMonth({ monthTenant, property: parentProperty, unit, date: viewingDate });
   
           return {
@@ -591,6 +600,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                 </TableRow>
             ) : (
                 rentRoll.map((item) => {
+                    if (!item) return null;
                     const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
                      if (item.isVacant) {
                         return (
