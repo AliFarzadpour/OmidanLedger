@@ -113,26 +113,51 @@ const toDateSafe = (v: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const getRentForDate = (rentHistory: any[] | undefined, date: Date): number => {
+function getRentForDate(rentHistory: { amount: any; effectiveDate: any }[], date: Date): number {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  // Accept multiple possible keys from DB/UI
-  const normalized = rentHistory
-    .map((r) => ({
-      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
-      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
-    }))
-    .filter((x) => x.amount > 0 && x.effective);
+  const sorted = [...rentHistory]
+    .map(r => ({ amount: r.amount, effectiveDate: toDateSafe(r.effectiveDate) }))
+    .filter(r => r.effectiveDate)
+    .sort((a, b) => b.effectiveDate!.getTime() - a.effectiveDate!.getTime());
 
-  if (normalized.length === 0) return 0;
+  const applicable = sorted.find(r => r.effectiveDate! <= date);
+  return applicable ? toNum(applicable.amount) : 0;
+}
 
-  // Sort newest effective date first
-  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
+  if (!tenants || tenants.length === 0) return 0;
 
-  // Find most recent rent <= target date
-  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
-  return match ? match.amount : 0;
-};
+  // flatten all rentHistory across all tenants (property-level fallback)
+  const allHistory = tenants.flatMap(t => Array.isArray(t?.rentHistory) ? t.rentHistory : []);
+  return getRentForDate(allHistory, date);
+}
+
+function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?: any; date: Date }): number {
+  const { monthTenant, property, unit, date } = opts;
+
+  // 1) rentHistory on the actual month tenant
+  const direct = getRentForDate(monthTenant?.rentHistory || [], date);
+  if (direct > 0) return direct;
+
+  // 2) fallback: property-level rent history across ALL tenants
+  const propFallback = getRentForMonthFromPropertyTenants(property?.tenants, date);
+  if (propFallback > 0) return propFallback;
+
+  // 3) fallbacks: tenant legacy fields
+  const tenantRent = toNum(monthTenant?.rentAmount) || toNum(monthTenant?.rent) || toNum(monthTenant?.monthlyRent);
+  if (tenantRent > 0) return tenantRent;
+
+  // 4) unit fallbacks (multi-family)
+  const unitRent = toNum(unit?.financials?.rent) || toNum(unit?.financials?.targetRent) || toNum(unit?.targetRent);
+  if (unitRent > 0) return unitRent;
+
+  // 5) property fallbacks
+  const propRent = toNum(property?.financials?.targetRent) || toNum(property?.financials?.rent) || toNum(property?.targetRent);
+  if (propRent > 0) return propRent;
+
+  return 0;
+}
 
 
 function monthWindow(date: Date): { start: Date; end: Date } {
@@ -359,7 +384,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
           tenantName: `${monthTenant.firstName} ${monthTenant.lastName}`,
           tenantEmail: monthTenant.email,
           tenantPhone: monthTenant.phone,
-          rentDue: getRentForDate(monthTenant.rentHistory, viewingDate),
+          rentDue: resolveRentDueForMonth({ monthTenant, property: p, date: viewingDate }),
           leaseEnd: monthTenant.leaseEnd,
           isVacant: false,
         };
@@ -386,7 +411,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
             };
         }
 
-        const rentDue = getRentForDate(monthTenant.rentHistory, viewingDate) || toNum(unit.financials?.rent) || toNum(unit.financials?.targetRent) || toNum(unit.targetRent) || 0;
+        const rentDue = resolveRentDueForMonth({ monthTenant, property: parentProperty, unit, date: viewingDate });
   
           return {
               uniqueKey: `${unit.propertyId}-${unit.id}-${monthTenant.email || unitIndex}`,
@@ -406,10 +431,10 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
 
     const enrichedRows = combinedRows.map(row => {
-      if (!row) return null;
-      if (row.isVacant) {
-          return { ...row, amountPaid: 0, balance: 0, status: 'unpaid', leaseStatus: 'safe' };
+      if (!row || row.isVacant) {
+          return row;
       }
+
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
       const balance = row.rentDue - amountPaid;
   
@@ -441,6 +466,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
     }).filter(Boolean) as (typeof combinedRows[0] & { amountPaid: number; balance: number; status: 'unpaid' | 'paid' | 'partial' | 'overpaid'; leaseStatus: 'safe' | 'expiring' | 'expired' })[];
 
     enrichedRows.sort((a, b) => {
+        if (!a || !b) return 0;
         const statusSortOrder = { unpaid: 1, partial: 2, overpaid: 3, paid: 4 };
         return statusSortOrder[a.status] - statusSortOrder[b.status];
     });
@@ -566,7 +592,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
             ) : (
                 rentRoll.map((item) => {
                     const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
-                     if ((item as any).isVacant) {
+                     if (item.isVacant) {
                         return (
                             <TableRow key={item.uniqueKey} className="bg-slate-50/50">
                                 <TableCell></TableCell> {/* Lease status dot */}

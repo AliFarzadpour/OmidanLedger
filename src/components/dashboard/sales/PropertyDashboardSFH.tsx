@@ -70,27 +70,51 @@ const toDateSafe = (v: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-const getRentForDate = (rentHistory: any[] | undefined, date: Date): number => {
+function getRentForDate(rentHistory: { amount: any; effectiveDate: any }[], date: Date): number {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  // Accept multiple possible keys from DB/UI
-  const normalized = rentHistory
-    .map((r) => ({
-      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
-      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
-    }))
-    .filter((x) => x.amount > 0 && x.effective);
+  const sorted = [...rentHistory]
+    .map(r => ({ amount: r.amount, effectiveDate: toDateSafe(r.effectiveDate) }))
+    .filter(r => r.effectiveDate)
+    .sort((a, b) => b.effectiveDate!.getTime() - a.effectiveDate!.getTime());
 
-  if (normalized.length === 0) return 0;
+  const applicable = sorted.find(r => r.effectiveDate! <= date);
+  return applicable ? toNum(applicable.amount) : 0;
+}
 
-  // Sort newest effective date first
-  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
+  if (!tenants || tenants.length === 0) return 0;
 
-  // Find most recent rent <= target date
-  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
-  return match ? match.amount : 0;
-};
+  // flatten all rentHistory across all tenants (property-level fallback)
+  const allHistory = tenants.flatMap(t => Array.isArray(t?.rentHistory) ? t.rentHistory : []);
+  return getRentForDate(allHistory, date);
+}
 
+function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?: any; date: Date }): number {
+  const { monthTenant, property, unit, date } = opts;
+
+  // 1) rentHistory on the actual month tenant
+  const direct = getRentForDate(monthTenant?.rentHistory || [], date);
+  if (direct > 0) return direct;
+
+  // 2) fallback: property-level rent history across ALL tenants
+  const propFallback = getRentForMonthFromPropertyTenants(property?.tenants, date);
+  if (propFallback > 0) return propFallback;
+
+  // 3) fallbacks: tenant legacy fields
+  const tenantRent = toNum(monthTenant?.rentAmount) || toNum(monthTenant?.rent) || toNum(monthTenant?.monthlyRent);
+  if (tenantRent > 0) return tenantRent;
+
+  // 4) unit fallbacks (multi-family)
+  const unitRent = toNum(unit?.financials?.rent) || toNum(unit?.financials?.targetRent) || toNum(unit?.targetRent);
+  if (unitRent > 0) return unitRent;
+
+  // 5) property fallbacks
+  const propRent = toNum(property?.financials?.targetRent) || toNum(property?.financials?.rent) || toNum(property?.targetRent);
+  if (propRent > 0) return propRent;
+
+  return 0;
+}
 
 function parseMonthKeyToDate(monthKey: string): Date {
   return parseISO(`${monthKey}-02`); // Use day 2 to avoid timezone issues
@@ -128,7 +152,8 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   return overlappingTenants[0] || null;
 }
 
-const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth }: any) => {
+const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth, viewingDate, property }: any) => {
+    const rentDue = resolveRentDueForMonth({ monthTenant: tenant, property, date: viewingDate });
     return (
         <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
             <div>
@@ -144,7 +169,7 @@ const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLeas
                 <p className="text-sm text-muted-foreground">{tenant.email}</p>
             </div>
             <div className="text-right hidden sm:block">
-                <p className="font-medium">${(getRentForDate(tenant.rentHistory, new Date()) || 0).toLocaleString()}/mo</p>
+                <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
                 <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -441,7 +466,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const cashFlowValue = noiValue - debtPayment;
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
-    const potentialRentValue = monthTenant ? getRentForDate(monthTenant.rentHistory, selectedMonthDate) : 0;
+    const potentialRentValue = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
     const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
     const breakEvenRentValue = operatingExpenses + totalDebtPayment;
@@ -512,7 +537,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   };
 
   const status = getPropertyStatus();
-  const currentRent = monthTenant ? getRentForDate(monthTenant.rentHistory, selectedMonthDate) : (property.financials?.targetRent || 0);
+  const currentRent = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
   const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
   
   const getDscrBadge = (ratio: number) => {
@@ -624,48 +649,50 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             </TabsList>
             
             <TabsContent value="tenants" className="mt-6">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Resident for {selectedMonthKey}</CardTitle>
-                        <CardDescription>
-                        Shows the tenant whose lease overlaps this month. If none, the property is vacant for that month.
-                        </CardDescription>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Resident for {selectedMonthKey}</CardTitle>
+                    <CardDescription>
+                      Shows the tenant whose lease overlaps this month. If none, the property is vacant for that month.
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>
+                      Manage Tenants
+                    </Button>
+                    <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
+                      <UserPlus className="h-4 w-4" /> Create Portal
+                    </Button>
+                  </div>
+                </CardHeader>
+            
+                <CardContent>
+                  {monthTenant ? (
+                    <div className="space-y-3">
+                      <TenantRow
+                        tenant={monthTenant}
+                        index={0}
+                        propertyId={property.id}
+                        landlordId={user.uid}
+                        onUpdate={onUpdate}
+                        onOpenLease={handleOpenLeaseAgent}
+                        isOccupantForMonth={true}
+                        viewingDate={selectedMonthDate}
+                        property={property}
+                      />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>
-                        Manage Tenants
-                        </Button>
-                        <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
-                        <UserPlus className="h-4 w-4" /> Create Portal
-                        </Button>
+                  ) : (
+                    <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                      <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                      <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No lease overlaps this month.
+                      </p>
                     </div>
-                    </CardHeader>
-
-                    <CardContent>
-                    {monthTenant ? (
-                        <div className="space-y-3">
-                        <TenantRow
-                            tenant={monthTenant}
-                            index={0}
-                            propertyId={property.id}
-                            landlordId={user.uid}
-                            onUpdate={onUpdate}
-                            onOpenLease={handleOpenLeaseAgent}
-                            isOccupantForMonth={true}
-                        />
-                        </div>
-                    ) : (
-                        <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                        <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                        <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            No lease overlaps this month.
-                        </p>
-                        </div>
-                    )}
-                    </CardContent>
-                </Card>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
             
             <TabsContent value="income" className="mt-6">
