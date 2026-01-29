@@ -443,27 +443,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
-    
-    const [year, month] = selectedMonthKey.split('-').map(Number);
-    const startDate = format(new Date(year, month - 1, 1), 'yyyy-MM-dd');
-    const endDate = format(endOfMonth(new Date(year, month - 1, 1)), 'yyyy-MM-dd');
-
-    console.log("DEBUG monthlyTransactionsQuery inputs:", {
-      userUid: user?.uid,
-      propertyIdUsedInQuery: property?.id,
-      selectedMonthKey,
-      startDate,
-      endDate,
-    });
-
+  
     return query(
-        collectionGroup(firestore, 'transactions'),
-        where('userId', '==', user.uid),
-        where('costCenter', '==', property.id),
-        where('date', '>=', startDate),
-        where('date', '<=', endDate)
+      collectionGroup(firestore, 'transactions'),
+      where('userId', '==', user.uid),
+      where('costCenter', '==', property.id)
     );
-  }, [firestore, property, user, selectedMonthKey]);
+  }, [firestore, property?.id, user?.uid]);
   
   useEffect(() => {
     console.log("🧪 monthlyTransactionsQuery is", monthlyTransactionsQuery);
@@ -528,11 +514,22 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
     }
   
-    const rentalIncome = (monthlyTransactions || [])
+    const monthKey = selectedMonthKey;
+    const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
+        if (!tx?.date) return false;
+        try {
+            const d = tx.date.toDate ? tx.date.toDate() : parseISO(tx.date);
+            return format(d, 'yyyy-MM') === monthKey;
+        } catch {
+            return false;
+        }
+    });
+
+    const rentalIncome = (monthlyTxs || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
         .reduce((sum, tx) => sum + toNum(tx.amount), 0);
 
-    const operatingExpenses = Math.abs((monthlyTransactions || [])
+    const operatingExpenses = Math.abs((monthlyTxs || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
         .reduce((sum, tx) => sum + toNum(tx.amount), 0));
         
@@ -576,7 +573,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate]);
+  }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate, selectedMonthKey]);
   
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
