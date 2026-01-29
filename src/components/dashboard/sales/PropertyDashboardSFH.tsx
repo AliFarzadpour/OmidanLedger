@@ -1,9 +1,8 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, collectionGroup, getDoc, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -36,14 +35,92 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { isPast, parseISO, format } from 'date-fns';
+import { isPast, parseISO, format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { useSearchParams } from 'next/navigation';
 
-// ... (LeaseAgentModal and PropertyDocuments components remain the same)
+// --- NEW HELPER FUNCTIONS ---
+
+function parseMonthKeyToDate(monthKey: string): Date {
+  return parseISO(`${monthKey}-02`); // Use day 2 to avoid timezone issues
+}
+
+function monthWindow(date: Date): { start: Date; end: Date } {
+  return { start: startOfMonth(date), end: endOfMonth(date) };
+}
+
+function parseDateSafe(dateString: string | undefined): Date | null {
+  if (!dateString) return null;
+  const date = parseISO(dateString);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
+  if (!tenants || tenants.length === 0) return null;
+
+  const { start: monthStart, end: monthEnd } = monthWindow(date);
+
+  const overlappingTenants = tenants.filter(t => {
+    const leaseStart = parseDateSafe(t.leaseStart);
+    const leaseEnd = parseDateSafe(t.leaseEnd);
+
+    // If no dates, can't determine overlap
+    if (!leaseStart || !leaseEnd) return false;
+
+    // Check for overlap: (StartA <= EndB) and (EndA >= StartB)
+    return leaseStart <= monthEnd && leaseEnd >= monthStart;
+  });
+
+  // If multiple tenants overlap (e.g., move-in/move-out), pick the one with the latest start date
+  if (overlappingTenants.length > 1) {
+    return overlappingTenants.sort((a, b) => {
+      const startA = parseDateSafe(a.leaseStart)?.getTime() || 0;
+      const startB = parseDateSafe(b.leaseStart)?.getTime() || 0;
+      return startB - startA; // Sort descending by start date
+    })[0];
+  }
+
+  return overlappingTenants[0] || null;
+}
+
+const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth }: any) => {
+    return (
+        <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
+            <div>
+                <div className="flex items-center gap-2">
+                    <p className="font-medium">{tenant.firstName} {tenant.lastName}</p>
+                    <Badge variant="outline" className={cn('capitalize text-xs h-5', tenant.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-600')}>
+                        {tenant.status}
+                    </Badge>
+                     {isOccupantForMonth && (
+                        <Badge className="bg-primary text-primary-foreground h-5 text-xs">This Month</Badge>
+                    )}
+                </div>
+                <p className="text-sm text-muted-foreground">{tenant.email}</p>
+            </div>
+            <div className="text-right hidden sm:block">
+                <p className="font-medium">${(tenant.rentAmount || 0).toLocaleString()}/mo</p>
+                <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+                <RecordPaymentModal
+                    tenant={{ ...tenant, id: tenant.email || `tenant_${index}` }}
+                    propertyId={propertyId}
+                    landlordId={landlordId}
+                    onSuccess={onUpdate}
+                />
+                <Button variant="ghost" size="icon" onClick={() => onOpenLease(tenant)} title="Auto-Draft Lease">
+                    <Bot className="h-4 w-4 text-slate-500" />
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -63,7 +140,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
       setLoading(false);
-      onOpenChange(false); // Close the modal after action
+      onOpenChange(false);
     }
   };
 
@@ -101,7 +178,6 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
     </Dialog>
   )
 }
-
 
 function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
   const firestore = useFirestore();
@@ -263,10 +339,20 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const { user } = useUser();
   const firestore = useFirestore();
+  const searchParams = useSearchParams();
   const [interestForMonth, setInterestForMonth] = useState(0);
 
-  // DYNAMIC MONTH KEY
-  const monthKey = format(new Date(), 'yyyy-MM');
+  const selectedMonthKey = useMemo(() => {
+    const monthParam = searchParams.get('month');
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      return monthParam;
+    }
+    return format(new Date(), 'yyyy-MM');
+  }, [searchParams]);
+
+  const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
+
+  const monthKey = selectedMonthKey;
   
   const monthlyStatsRef = useMemoFirebase(() => {
     if (!firestore || !property?.id) return null;
@@ -277,7 +363,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   useEffect(() => {
     if (!user || !property?.id) return;
     
-    // Calculate interest for cash flow
     const calculateInterest = async () => {
       if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
           const result = await calculateAmortization({
@@ -286,7 +371,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               principalAndInterest: property.mortgage.principalAndInterest,
               loanStartDate: property.mortgage.purchaseDate,
               loanTermInYears: property.mortgage.loanTerm,
-              targetDate: new Date().toISOString(),
+              targetDate: selectedMonthDate.toISOString(),
           });
           if (result.success) {
               setInterestForMonth(result.interestPaidForMonth || 0);
@@ -294,8 +379,22 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       }
     };
     calculateInterest();
-  }, [user, property]);
+  }, [user, property, selectedMonthDate]);
 
+  const monthTenant = useMemo(() => tenantForMonth(property.tenants, selectedMonthDate), [property, selectedMonthDate]);
+
+  const { activeTenants, pastTenants } = useMemo(() => {
+    if (!property?.tenants) return { activeTenants: [], pastTenants: [] };
+    const active: any[] = [];
+    const past: any[] = [];
+    property.tenants.forEach((t: any) => {
+      const isActive = (t.status || '').toLowerCase() === 'active';
+      if (isActive) active.push(t);
+      else past.push(t);
+    });
+    return { activeTenants: active, pastTenants: past };
+  }, [property]);
+  
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
@@ -311,7 +410,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const cashFlowValue = noiValue - debtPayment;
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
-    const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
+    const potentialRentValue = monthTenant?.rentAmount || 0;
     const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
     const breakEvenRentValue = operatingExpenses + totalDebtPayment;
@@ -342,7 +441,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [monthlyStats, property, interestForMonth]);
+  }, [monthlyStats, property, interestForMonth, monthTenant]);
   
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
@@ -377,17 +476,15 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   if (!property) return <div className="p-8">Property not found.</div>;
   
   const getPropertyStatus = () => {
-    const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
-    if (!activeTenant) return 'Vacant';
-    if (activeTenant.leaseEnd && isPast(parseISO(activeTenant.leaseEnd))) {
+    if (!monthTenant) return 'Vacant';
+    if (monthTenant.leaseEnd && isPast(parseISO(monthTenant.leaseEnd))) {
       return 'Lease Expired';
     }
     return 'Occupied';
   };
 
   const status = getPropertyStatus();
-  const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
-  const currentRent = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
+  const currentRent = monthTenant ? monthTenant.rentAmount : (property.financials?.targetRent || 0);
   const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
   
   const getDscrBadge = (ratio: number) => {
@@ -439,7 +536,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         
         <div className="space-y-6 pt-4">
 
-            {/* --- Investor KPIs --- */}
             <div className="grid grid-cols-4 gap-4">
                 <TooltipProvider>
                     <Tooltip><TooltipTrigger asChild><div>
@@ -463,7 +559,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 </TooltipProvider>
             </div>
             
-            {/* --- Operational KPIs --- */}
             <div className="grid grid-cols-4 gap-4">
                 <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
                 <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
@@ -513,34 +608,57 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {property.tenants && property.tenants.length > 0 ? (
-                    <div className="space-y-4">
-                        {property.tenants.map((t: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center border-b pb-4 last:border-0 last:pb-0">
-                            <div>
-                            <p className="font-medium">{t.firstName} {t.lastName}</p>
-                            <p className="text-sm text-muted-foreground">{t.email}</p>
+                    {(activeTenants.length > 0 || pastTenants.length > 0) ? (
+                    <div className="space-y-6">
+                        {activeTenants.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-sm font-semibold text-green-700 flex items-center gap-2">
+                                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                                    Active Residents
+                                </h3>
+                                {activeTenants.map((t: any, i: number) => (
+                                    <TenantRow 
+                                        key={`active-${i}`} 
+                                        tenant={t} 
+                                        index={i} 
+                                        propertyId={property.id} 
+                                        landlordId={user.uid}
+                                        onUpdate={onUpdate}
+                                        onOpenLease={handleOpenLeaseAgent}
+                                        isOccupantForMonth={monthTenant && t.email === monthTenant.email}
+                                    />
+                                ))}
                             </div>
-                            <div className="text-right">
-                            <p className="font-medium">${(t.rentAmount || 0).toLocaleString()}/mo</p>
-                            <p className="text-xs text-muted-foreground">Lease ends: {t.leaseEnd || 'N/A'}</p>
+                        )}
+                        {activeTenants.length > 0 && pastTenants.length > 0 && (
+                            <div className="relative py-2">
+                                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                                <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Past Residents</span></div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <RecordPaymentModal
-                                    tenant={{...t, id: t.email || `tenant_${i}`}} // Ensure a unique ID
-                                    propertyId={property.id}
-                                    landlordId={user.uid}
-                                    onSuccess={onUpdate}
-                                />
-                                <Button variant="outline" size="sm" onClick={() => handleOpenLeaseAgent(t)} className="gap-1">
-                                    <Bot className="h-4 w-4"/> Auto-Draft Lease
-                                </Button>
+                        )}
+                        {pastTenants.length > 0 && (
+                            <div className="space-y-4 opacity-75 grayscale-[0.3]">
+                                {activeTenants.length === 0 && <h3 className="text-sm font-semibold text-muted-foreground">Past Residents</h3>}
+                                {pastTenants.map((t: any, i: number) => (
+                                    <TenantRow 
+                                        key={`past-${i}`} 
+                                        tenant={t} 
+                                        index={i} 
+                                        propertyId={property.id} 
+                                        landlordId={user.uid}
+                                        onUpdate={onUpdate}
+                                        onOpenLease={handleOpenLeaseAgent}
+                                        isOccupantForMonth={monthTenant && t.email === monthTenant.email}
+                                    />
+                                ))}
                             </div>
-                        </div>
-                        ))}
+                        )}
                     </div>
                     ) : (
-                    <p className="text-muted-foreground text-sm">No tenants recorded. Click "Create Portal" to add one.</p>
+                    <div className="text-center py-6">
+                        <p className="text-muted-foreground text-sm">No tenants recorded.</p>
+                        <Button variant="link" onClick={() => setIsInviteOpen(true)} className="mt-2">Click "Create Portal" to add one.</Button>
+                    </div>
                     )}
                 </CardContent>
                 </Card>
