@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, Timestamp, collectionGroup, where } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -70,17 +70,26 @@ const toDateSafe = (v: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-function getRentForDate(rentHistory: { amount: any; effectiveDate: any }[], date: Date): number {
+const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  const sorted = [...rentHistory]
-    .map(r => ({ amount: r.amount, effectiveDate: toDateSafe(r.effectiveDate) }))
-    .filter(r => r.effectiveDate)
-    .sort((a, b) => b.effectiveDate!.getTime() - a.effectiveDate!.getTime());
+  // Accept multiple possible keys from DB/UI
+  const normalized = rentHistory
+    .map((r) => ({
+      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
+      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
+    }))
+    .filter((x) => x.amount > 0 && x.effective);
 
-  const applicable = sorted.find(r => r.effectiveDate! <= date);
-  return applicable ? toNum(applicable.amount) : 0;
-}
+  if (normalized.length === 0) return 0;
+
+  // Sort newest effective date first
+  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+
+  // Find most recent rent <= target date
+  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
+  return match ? match.amount : 0;
+};
 
 function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
   if (!tenants || tenants.length === 0) return 0;
@@ -115,6 +124,9 @@ function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?
 
   return 0;
 }
+
+
+// --- NEW HELPER FUNCTIONS ---
 
 function parseMonthKeyToDate(monthKey: string): Date {
   return parseISO(`${monthKey}-02`); // Use day 2 to avoid timezone issues
@@ -169,7 +181,9 @@ const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLeas
                 <p className="text-sm text-muted-foreground">{tenant.email}</p>
             </div>
             <div className="text-right hidden sm:block">
-                <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
+                <p className="font-medium">
+                  ${rentDue.toLocaleString()}/mo
+                </p>
                 <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -420,13 +434,43 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
 
-  const monthKey = selectedMonthKey;
+  useEffect(() => {
+    console.log("===== DEBUG PropertyDashboardSFH =====");
+    console.log("selectedMonthKey:", selectedMonthKey);
+    console.log("property?.id:", property?.id);
+    console.log("property keys:", property ? Object.keys(property) : null);
+    console.log("property.name:", property?.name);
+    console.log("property.userId:", property?.userId);
+    console.log("property.address?.street:", property?.address?.street);
+    console.log("======================================");
+  }, [property, selectedMonthKey]);
+
+
+  const monthlyTransactionsQuery = useMemoFirebase(() => {
+    if (!firestore || !property?.id || !user?.uid) return null;
+    
+    const [year, month] = selectedMonthKey.split('-').map(Number);
+    const startDate = format(new Date(year, month - 1, 1), 'yyyy-MM-dd');
+    const endDate = format(endOfMonth(new Date(year, month - 1, 1)), 'yyyy-MM-dd');
+
+    console.log("DEBUG monthlyTransactionsQuery inputs:", {
+      userUid: user?.uid,
+      propertyIdUsedInQuery: property?.id,
+      selectedMonthKey,
+      startDate,
+      endDate,
+    });
+
+    return query(
+        collectionGroup(firestore, 'transactions'),
+        where('userId', '==', user.uid),
+        where('costCenter', '==', property.id),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+    );
+  }, [firestore, property, user, selectedMonthKey]);
   
-  const monthlyStatsRef = useMemoFirebase(() => {
-    if (!firestore || !property?.id) return null;
-    return doc(firestore, 'properties', property.id, 'monthlyStats', monthKey);
-  }, [firestore, property, monthKey]);
-  const { data: monthlyStats, isLoading: loadingTxs } = useDoc(monthlyStatsRef);
+  const { data: monthlyTransactions, isLoading: loadingTxs } = useCollection(monthlyTransactionsQuery);
 
   useEffect(() => {
     if (!user || !property?.id) return;
@@ -456,8 +500,14 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
     }
   
-    const rentalIncome = monthlyStats?.income || 0;
-    const operatingExpenses = Math.abs(monthlyStats?.expenses || 0);
+    const rentalIncome = (monthlyTransactions || [])
+        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const operatingExpenses = Math.abs((monthlyTransactions || [])
+        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
+        .reduce((sum, tx) => sum + tx.amount, 0));
+        
     const noiValue = rentalIncome - operatingExpenses;
   
     const debtPayment = property.mortgage?.principalAndInterest || 0;
@@ -497,7 +547,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [monthlyStats, property, interestForMonth, monthTenant, selectedMonthDate]);
+  }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate]);
   
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
