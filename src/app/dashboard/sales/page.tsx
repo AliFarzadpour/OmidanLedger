@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { 
@@ -16,6 +15,11 @@ import { format, addMonths, subMonths } from 'date-fns';
 export default function SalesHubPage() {
   const router = useRouter();
   const [viewingDate, setViewingDate] = useState(new Date());
+
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   return (
     <div className="space-y-8 p-8">
@@ -35,16 +39,26 @@ export default function SalesHubPage() {
             <Button variant="outline" size="icon" onClick={() => setViewingDate(d => subMonths(d, 1))}>
                 <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="font-semibold text-lg w-36 text-center">{format(viewingDate, 'MMMM yyyy')}</span>
+            <span className="font-semibold text-lg w-36 text-center">
+              {isClient ? format(viewingDate, 'MMMM yyyy') : '...'}
+            </span>
             <Button variant="outline" size="icon" onClick={() => setViewingDate(d => addMonths(d, 1))}>
                 <ChevronRight className="h-4 w-4" />
             </Button>
         </div>
       </div>
 
-      <FinancialPerformance viewingDate={viewingDate} />
-
-      <RentRollTable viewingDate={viewingDate} />
+      {!isClient ? (
+        <div className="space-y-4 pt-4">
+          <div className="h-40 w-full rounded-lg bg-slate-200 animate-pulse" />
+          <div className="h-80 w-full rounded-lg bg-slate-200 animate-pulse" />
+        </div>
+      ) : (
+        <>
+          <FinancialPerformance viewingDate={viewingDate} />
+          <RentRollTable viewingDate={viewingDate} />
+        </>
+      )}
       
     </div>
   );
