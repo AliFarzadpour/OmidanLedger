@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -54,13 +53,15 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { parseISO, format, startOfMonth, endOfMonth, differenceInDays, isPast, startOfYear } from 'date-fns';
+import { isPast, parseISO, format, startOfMonth, endOfMonth, startOfYear, differenceInCalendarMonths } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSearchParams, useRouter } from 'next/navigation';
+
+console.log("✅ USING src/components/dashboard/PropertyDashboardSFH.tsx");
 
 // ---------- Robust helpers ----------
 const toNum = (v: any): number => {
@@ -177,271 +178,20 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   return overlappingTenants[0] || null;
 }
 
-const TenantRow = ({
-  tenant,
-  index,
-  propertyId,
-  landlordId,
-  onUpdate,
-  onOpenLease,
-  isOccupantForMonth,
-  viewingDate,
-  property,
-}: any) => {
-  const rentDue = resolveRentDueForMonth({ monthTenant: tenant, property, date: viewingDate });
-  return (
-    <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
-      <div>
-        <div className="flex items-center gap-2">
-          <p className="font-medium">
-            {tenant.firstName} {tenant.lastName}
-          </p>
-          {isOccupantForMonth && <Badge className="bg-blue-100 text-blue-800">This Month</Badge>}
-          {tenant.status && (
-            <Badge
-              variant="outline"
-              className={cn(
-                'capitalize text-xs h-5',
-                tenant.status?.toLowerCase() === 'active'
-                  ? 'bg-green-100 text-green-800 border-green-200'
-                  : 'bg-slate-100 text-slate-600'
-              )}
-            >
-              {tenant.status}
-            </Badge>
-          )}
-        </div>
-        <p className="text-sm text-muted-foreground">{tenant.email}</p>
-      </div>
+function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
+  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
+    .toUpperCase()
+    .trim();
 
-      <div className="text-right hidden sm:block">
-        <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
-        <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
-      </div>
+  // NOI Income
+  if (raw === "INCOME") return "INCOME";
 
-      <div className="flex items-center gap-2">
-        <RecordPaymentModal
-          tenant={{ ...tenant, id: tenant.email || `tenant_${index}` }}
-          propertyId={propertyId}
-          landlordId={landlordId}
-          onSuccess={onUpdate}
-        />
-        <Button variant="ghost" size="icon" onClick={() => onOpenLease(tenant)} title="Auto-Draft Lease">
-          <Bot className="h-4 w-4 text-slate-500" />
-        </Button>
-      </div>
-    </div>
-  );
-};
+  // NOI Expenses (ONLY operating)
+  if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
 
-function LeaseAgentModal({
-  tenant,
-  propertyId,
-  onOpenChange,
-  isOpen,
-}: {
-  tenant: any;
-  propertyId: string;
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const { toast } = useToast();
-
-  const handleConfirm = async () => {
-    setLoading(true);
-    try {
-      const flowResult = await generateLease({
-        propertyId,
-        tenantId: tenant.email,
-        state: 'TX',
-      });
-      setResult(flowResult);
-      toast({ title: 'Lease Saved!', description: "The lease has been generated and saved to your documents tab." });
-    } catch (error: any) {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
-    } finally {
-      setLoading(false);
-      onOpenChange(false);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Bot className="text-primary" /> AI Agent Confirmation
-          </DialogTitle>
-          <DialogDescription>Please review the AI's plan before proceeding.</DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className="bg-slate-50 p-4 rounded-lg border">
-            <h4 className="font-semibold text-slate-800">Smart Summary</h4>
-            <p className="text-sm text-slate-600 mt-1">
-              I will generate a Texas-compliant lease for {tenant.firstName} {tenant.lastName} and save it to this property’s documents tab.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-slate-800">Legal Disclaimer</h4>
-            <p className="text-xs text-muted-foreground mt-1">
-              This document was generated by an AI assistant. It is not a substitute for legal advice from a qualified attorney.
-              Please review the document carefully before signing.
-            </p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleConfirm} disabled={loading} className="bg-primary hover:bg-primary/90">
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Confirm & Generate
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; landlordId: string }) {
-  const firestore = useFirestore();
-  const storage = useStorage();
-  const { toast } = useToast();
-  const [isUploaderOpen, setUploaderOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
-
-  const docsQuery = useMemoFirebase(() => {
-    if (!firestore || !propertyId) return null;
-    return query(collection(firestore, `properties/${propertyId}/documents`));
-  }, [firestore, propertyId]);
-
-  const [documents, setDocuments] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const refetchDocs = async () => {
-    if (!docsQuery) return;
-    setIsLoading(true);
-    const snap = await getDocs(docsQuery);
-    setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    refetchDocs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [propertyId]);
-
-  const handleDelete = async (docData: any) => {
-    if (!firestore || !storage) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
-        return;
-    }
-    if (!docData?.storagePath) {
-        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
-        return;
-    }
-    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
-
-    try {
-        // Delete from Storage
-        const fileRef = ref(storage, docData.storagePath);
-        await deleteObject(fileRef);
-
-        // Delete from Firestore
-        const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
-        await deleteDoc(docRef);
-
-        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
-    } catch (error: any) {
-        console.error("Deletion Error:", error);
-        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
-    }
-  };
-
-  const getSafeDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A';
-    if (typeof timestamp === 'string') {
-        const date = new Date(timestamp);
-        if (!isNaN(date.getTime())) {
-            return date.toLocaleDateString();
-        }
-    }
-    if (timestamp.seconds) {
-      return new Date(timestamp.seconds * 1000).toLocaleDateString();
-    }
-    try {
-      const date = new Date(timestamp);
-      if (isNaN(date.getTime())) return 'Invalid Date';
-      return date.toLocaleDateString();
-    } catch (e) {
-      return 'Invalid Date';
-    }
-  };
-
-  const onUploadSuccess = () => {
-    refetchDocs();
-    setUploaderOpen(false);
-  }
-
-  return (
-    <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle>Document Storage</CardTitle>
-            <CardDescription>Lease agreements, inspection reports, and other files for this property.</CardDescription>
-          </div>
-          <Button size="sm" onClick={() => setUploaderOpen(true)} className="gap-2">
-            <UploadCloud className="h-4 w-4" /> Upload File
-          </Button>
-        </CardHeader>
-        <CardContent>
-          {isLoading && <p>Loading documents...</p>}
-          {!isLoading && (!documents || documents.length === 0) && (
-            <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
-                <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
-            </div>
-          )}
-          {!isLoading && documents && documents.length > 0 && (
-            <div className="space-y-3">
-              {documents.map((doc: any) => (
-                <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
-                  <div>
-                    <p className="font-medium">{doc.fileName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
-                    {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" size="icon" className="h-8 w-8"><Eye className="h-4 w-4"/></Button>
-                    </a>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
-                        <Trash2 className="h-4 w-4"/>
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      {isUploaderOpen && (
-        <TenantDocumentUploader
-          isOpen={isUploaderOpen}
-          onOpenChange={setUploaderOpen}
-          propertyId={propertyId}
-          landlordId={landlordId}
-          onSuccess={onUploadSuccess}
-        />
-      )}
-    </>
-  )
+  // Everything else should not affect NOI
+  // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
+  return "IGNORE";
 }
 
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any; onUpdate: () => void }) {
@@ -458,6 +208,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   const searchParams = useSearchParams();
   const router = useRouter();
   const [interestForMonth, setInterestForMonth] = useState(0);
+  const [kpiRange, setKpiRange] = useState<'ytd' | 'month'>('ytd'); // ✅ default YTD
 
   const selectedMonthKey = useMemo(() => {
     const monthParam = searchParams.get('month');
@@ -467,7 +218,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
 
   const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
 
-  // --- KPI TX SOURCE (authoritative) ---
+  // ---------------- KPI TX SOURCE (authoritative) ----------------
+  // We fetch txs via getDocs into local state so KPI math always has a real array.
+  const [kpiTxs, setKpiTxs] = useState<any[]>([]);
+  const [kpiLoading, setKpiLoading] = useState(false);
+
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
   
@@ -477,11 +232,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       where('costCenter', '==', property.id)
     );
   }, [firestore, property?.id, user?.uid]);
-  
-  // We fetch txs via getDocs into local state so KPI math always has a real array.
-  const [kpiTxs, setKpiTxs] = useState<any[]>([]);
-  const [kpiLoading, setKpiLoading] = useState(false);
-  
+
   useEffect(() => {
     if (!monthlyTransactionsQuery) {
       setKpiTxs([]);
@@ -534,24 +285,8 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     [property, selectedMonthDate]
   );
   
-  function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
-    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
-      .toUpperCase()
-      .trim();
-  
-    // NOI Income
-    if (raw === "INCOME") return "INCOME";
-  
-    // NOI Expenses (ONLY operating)
-    if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
-  
-    // Everything else should not affect NOI
-    // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
-    return "IGNORE";
-  }
-
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } =
-  useMemo(() => {
+    useMemo(() => {
     if (!property) {
       return {
         noi: 0,
@@ -658,7 +393,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     }
     return 'Property financials appear stable for the current period. Explore rent increase scenarios to optimize performance.';
   }, [kpiLoading, cashFlow, economicOccupancy, dscr, property, potentialRent, rentalIncome, noi]);
-
+  
   const handleOpenDialog = (tab: string) => {
     setFormTab(tab);
     setIsEditOpen(true);
@@ -979,4 +714,269 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   );
 }
 
-    
+const TenantRow = ({
+  tenant,
+  index,
+  propertyId,
+  landlordId,
+  onUpdate,
+  onOpenLease,
+  isOccupantForMonth,
+  viewingDate,
+  property,
+}: any) => {
+  const rentDue = resolveRentDueForMonth({ monthTenant: tenant, property, date: viewingDate });
+  return (
+    <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
+      <div>
+        <div className="flex items-center gap-2">
+          <p className="font-medium">
+            {tenant.firstName} {tenant.lastName}
+          </p>
+          {isOccupantForMonth && <Badge className="bg-blue-100 text-blue-800">This Month</Badge>}
+          {tenant.status && (
+            <Badge
+              variant="outline"
+              className={cn(
+                'capitalize text-xs h-5',
+                tenant.status?.toLowerCase() === 'active'
+                  ? 'bg-green-100 text-green-800 border-green-200'
+                  : 'bg-slate-100 text-slate-600'
+              )}
+            >
+              {tenant.status}
+            </Badge>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground">{tenant.email}</p>
+      </div>
+
+      <div className="text-right hidden sm:block">
+        <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
+        <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <RecordPaymentModal
+          tenant={{ ...tenant, id: tenant.email || `tenant_${index}` }}
+          propertyId={propertyId}
+          landlordId={landlordId}
+          onSuccess={onUpdate}
+        />
+        <Button variant="ghost" size="icon" onClick={() => onOpenLease(tenant)} title="Auto-Draft Lease">
+          <Bot className="h-4 w-4 text-slate-500" />
+        </Button>
+      </div>
+    </div>
+  );
+};
+
+function LeaseAgentModal({
+  tenant,
+  propertyId,
+  onOpenChange,
+  isOpen,
+}: {
+  tenant: any;
+  propertyId: string;
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const { toast } = useToast();
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      const flowResult = await generateLease({
+        propertyId,
+        tenantId: tenant.email,
+        state: 'TX',
+      });
+      setResult(flowResult);
+      toast({ title: 'Lease Saved!', description: "The lease has been generated and saved to your documents tab." });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Error', description: error.message });
+    } finally {
+      setLoading(false);
+      onOpenChange(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Bot className="text-primary" /> AI Agent Confirmation
+          </DialogTitle>
+          <DialogDescription>Please review the AI's plan before proceeding.</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="bg-slate-50 p-4 rounded-lg border">
+            <h4 className="font-semibold text-slate-800">Smart Summary</h4>
+            <p className="text-sm text-slate-600 mt-1">
+              I will generate a Texas-compliant lease for {tenant.firstName} {tenant.lastName} and save it to this property’s documents tab.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-slate-800">Legal Disclaimer</h4>
+            <p className="text-xs text-muted-foreground mt-1">
+              This document was generated by an AI assistant. It is not a substitute for legal advice from a qualified attorney.
+              Please review the document carefully before signing.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleConfirm} disabled={loading} className="bg-primary hover:bg-primary/90">
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            Confirm & Generate
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; landlordId: string }) {
+  const firestore = useFirestore();
+  const storage = useStorage();
+  const { toast } = useToast();
+  const [isUploaderOpen, setUploaderOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+
+  const docsQuery = useMemoFirebase(() => {
+    if (!firestore || !propertyId) return null;
+    return query(collection(firestore, `properties/${propertyId}/documents`));
+  }, [firestore, propertyId]);
+
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const refetchDocs = async () => {
+    if (!docsQuery) return;
+    setIsLoading(true);
+    const snap = await getDocs(docsQuery);
+    setDocuments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    refetchDocs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [propertyId]);
+
+  const handleDelete = async (docData: any) => {
+    if (!firestore || !storage) {
+        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+        return;
+    }
+    if (!docData?.storagePath) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
+        return;
+    }
+    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
+
+    try {
+        // Delete from Storage
+        const fileRef = ref(storage, docData.storagePath);
+        await deleteObject(fileRef);
+
+        // Delete from Firestore
+        const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
+        await deleteDoc(docRef);
+
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+    } catch (error: any) {
+        console.error("Deletion Error:", error);
+        toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
+    }
+  };
+
+  const getSafeDate = (timestamp: any) => {
+    if (!timestamp) return 'N/A';
+    if (typeof timestamp === 'string') {
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString();
+        }
+    }
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    }
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      return date.toLocaleDateString();
+    } catch (e) {
+      return 'Invalid Date';
+    }
+  };
+
+  const onUploadSuccess = () => {
+    refetchDocs();
+    setUploaderOpen(false);
+  }
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Document Storage</CardTitle>
+            <CardDescription>Lease agreements, inspection reports, and other files for this property.</CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setUploaderOpen(true)} className="gap-2">
+            <UploadCloud className="h-4 w-4" /> Upload File
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {isLoading && <p>Loading documents...</p>}
+          {!isLoading && (!documents || documents.length === 0) && (
+            <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
+                <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
+            </div>
+          )}
+          {!isLoading && documents && documents.length > 0 && (
+            <div className="space-y-3">
+              {documents.map((doc: any) => (
+                <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
+                  <div>
+                    <p className="font-medium">{doc.fileName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
+                    {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="icon" className="h-8 w-8"><Eye className="h-4 w-4"/></Button>
+                    </a>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
+                        <Trash2 className="h-4 w-4"/>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      {isUploaderOpen && (
+        <TenantDocumentUploader
+          isOpen={isUploaderOpen}
+          onOpenChange={setUploaderOpen}
+          propertyId={propertyId}
+          landlordId={landlordId}
+          onSuccess={onUploadSuccess}
+        />
+      )}
+    </>
+  )
+}
