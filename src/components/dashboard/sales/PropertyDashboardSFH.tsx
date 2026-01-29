@@ -73,12 +73,22 @@ const toDateSafe = (v: any): Date | null => {
 const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  const sorted = [...rentHistory].sort(
-    (a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime()
-  );
+  // Accept multiple possible keys from DB/UI
+  const normalized = rentHistory
+    .map((r) => ({
+      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
+      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
+    }))
+    .filter((x) => x.amount > 0 && x.effective);
 
-  const applicable = sorted.find(r => new Date(r.effectiveDate) <= date);
-  return applicable ? toNum(applicable.amount) : 0;
+  if (normalized.length === 0) return 0;
+
+  // Sort newest effective date first
+  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+
+  // Find most recent rent <= target date
+  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
+  return match ? match.amount : 0;
 };
 
 function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
@@ -457,7 +467,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     );
   }, [firestore, property, user, selectedMonthKey]);
   
-  const { data: monthlyTransactions, isLoading: loadingTxs } = useCollection(monthlyTransactionsQuery);
+  const { data: monthlyTransactions, isLoading: loadingTxs, error: txError } = useCollection(monthlyTransactionsQuery);
+
+  useEffect(() => {
+    if (txError) {
+      console.error("🔥 monthlyTransactionsQuery ERROR:", txError);
+    }
+  }, [txError]);
 
   useEffect(() => {
     console.log("selectedMonthKey", selectedMonthKey);
@@ -495,14 +511,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     }
   
     const rentalIncome = (monthlyTransactions || [])
-      .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
-      .reduce((sum, tx) => sum + toNum(tx.amount), 0);
+        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
+        .reduce((sum, tx) => sum + toNum(tx.amount), 0);
 
-    const operatingExpenses = Math.abs(
-      (monthlyTransactions || [])
+    const operatingExpenses = Math.abs((monthlyTransactions || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
-        .reduce((sum, tx) => sum + toNum(tx.amount), 0)
-    );
+        .reduce((sum, tx) => sum + toNum(tx.amount), 0));
         
     const noiValue = rentalIncome - operatingExpenses;
   
@@ -779,5 +793,3 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
-
-    
