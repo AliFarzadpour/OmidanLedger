@@ -1,9 +1,7 @@
-
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, Timestamp, getDoc } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, Timestamp } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -404,7 +402,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     calculateInterest();
   }, [user, property, selectedMonthDate]);
 
-  const monthTenant = useMemo(() => tenantForMonth(property.tenants, selectedMonthDate), [property, selectedMonthDate]);
+  const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
   
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
@@ -604,48 +602,48 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             </TabsList>
             
             <TabsContent value="tenants" className="mt-6">
-                <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                        <CardTitle>Resident for {selectedMonthKey}</CardTitle>
-                        <CardDescription>
-                        Shows the tenant whose lease overlaps this month. If none, the property is vacant for that month.
-                        </CardDescription>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Resident for {selectedMonthKey}</CardTitle>
+                    <CardDescription>
+                      Shows the tenant whose lease overlaps this month. If none, the property is vacant for that month.
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>
+                      Manage Tenants
+                    </Button>
+                    <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
+                      <UserPlus className="h-4 w-4" /> Create Portal
+                    </Button>
+                  </div>
+                </CardHeader>
+            
+                <CardContent>
+                  {monthTenant ? (
+                    <div className="space-y-3">
+                      <TenantRow
+                        tenant={monthTenant}
+                        index={0}
+                        propertyId={property.id}
+                        landlordId={user.uid}
+                        onUpdate={onUpdate}
+                        onOpenLease={handleOpenLeaseAgent}
+                        isOccupantForMonth={true}
+                      />
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>
-                        Manage Tenants
-                        </Button>
-                        <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
-                        <UserPlus className="h-4 w-4" /> Create Portal
-                        </Button>
+                  ) : (
+                    <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                      <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                      <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No lease overlaps this month.
+                      </p>
                     </div>
-                    </CardHeader>
-
-                    <CardContent>
-                    {monthTenant ? (
-                        <div className="space-y-3">
-                        <TenantRow
-                            tenant={monthTenant}
-                            index={0}
-                            propertyId={property.id}
-                            landlordId={user.uid}
-                            onUpdate={onUpdate}
-                            onOpenLease={handleOpenLeaseAgent}
-                            isOccupantForMonth={true}
-                        />
-                        </div>
-                    ) : (
-                        <div className="text-center py-10 border-2 border-dashed rounded-lg">
-                        <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-                        <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            No lease overlaps this month.
-                        </p>
-                        </div>
-                    )}
-                    </CardContent>
-                </Card>
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
             
             <TabsContent value="income" className="mt-6">
