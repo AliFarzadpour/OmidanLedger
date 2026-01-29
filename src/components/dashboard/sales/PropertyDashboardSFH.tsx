@@ -73,22 +73,12 @@ const toDateSafe = (v: any): Date | null => {
 const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
-  // Accept multiple possible keys from DB/UI
-  const normalized = rentHistory
-    .map((r) => ({
-      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
-      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
-    }))
-    .filter((x) => x.amount > 0 && x.effective);
+  const sorted = [...rentHistory].sort(
+    (a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime()
+  );
 
-  if (normalized.length === 0) return 0;
-
-  // Sort newest effective date first
-  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
-
-  // Find most recent rent <= target date
-  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
-  return match ? match.amount : 0;
+  const applicable = sorted.find(r => new Date(r.effectiveDate) <= date);
+  return applicable ? toNum(applicable.amount) : 0;
 };
 
 function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
@@ -181,9 +171,7 @@ const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLeas
                 <p className="text-sm text-muted-foreground">{tenant.email}</p>
             </div>
             <div className="text-right hidden sm:block">
-                <p className="font-medium">
-                  ${rentDue.toLocaleString()}/mo
-                </p>
+                <p className="font-medium">${rentDue.toLocaleString()}/mo</p>
                 <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -445,7 +433,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     console.log("======================================");
   }, [property, selectedMonthKey]);
 
-
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
     
@@ -471,6 +458,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   }, [firestore, property, user, selectedMonthKey]);
   
   const { data: monthlyTransactions, isLoading: loadingTxs } = useCollection(monthlyTransactionsQuery);
+
+  useEffect(() => {
+    console.log("selectedMonthKey", selectedMonthKey);
+    console.log("property.id", property?.id);
+    console.log("monthlyTransactions length", monthlyTransactions?.length);
+    console.log("monthlyTransactions first", monthlyTransactions?.[0]);
+  }, [selectedMonthKey, property?.id, monthlyTransactions]);
 
   useEffect(() => {
     if (!user || !property?.id) return;
