@@ -100,7 +100,7 @@ const toNum = (v: any): number => {
 // --- MONTH-AWARE HELPER FUNCTIONS ---
 function parseDateSafe(dateString: string | undefined): Date | null {
   if (!dateString) return null;
-  const date = parseISO(dateString);
+  const date = new Date(dateString); // Use new Date() for flexible parsing
   return isNaN(date.getTime()) ? null : date;
 }
 
