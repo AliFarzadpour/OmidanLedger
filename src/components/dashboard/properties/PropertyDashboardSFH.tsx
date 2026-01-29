@@ -43,25 +43,53 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 
+// ---------- Robust helpers (copy/paste) ----------
 const toNum = (v: any): number => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-    if (typeof v === "string") {
-      const cleaned = v.replace(/[^0-9.-]/g, "", ""); // strips $ and commas safely
-      const n = parseFloat(cleaned);
-      return Number.isFinite(n) ? n : 0;
-    }
-    return 0;
-  };
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
 
-  function getRentForDate(rentHistory: {amount: number; effectiveDate: string}[], date: Date): number {
-    if (!rentHistory || rentHistory.length === 0) return 0;
-    // Sort history by effective date descending
-    const sortedHistory = [...rentHistory].sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
-    // Find the most recent rent that is before or on the given date
-    const applicableRent = sortedHistory.find(r => new Date(r.effectiveDate) <= date);
-    return applicableRent ? toNum(applicableRent.amount) : 0;
-}
+  if (typeof v === "string") {
+    const cleaned = v.replace(/[^0-9.-]/g, ""); // <- FIXED (2 args only)
+    const n = parseFloat(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  return 0;
+};
+
+const toDateSafe = (v: any): Date | null => {
+  if (!v) return null;
+
+  // Firestore Timestamp
+  if (v instanceof Timestamp) return v.toDate();
+  if (typeof v === "object" && typeof v.seconds === "number") {
+    return new Date(v.seconds * 1000);
+  }
+
+  // String or Date
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const getRentForDate = (rentHistory: any[] | undefined, date: Date): number => {
+  if (!rentHistory || rentHistory.length === 0) return 0;
+
+  // Accept multiple possible keys from DB/UI
+  const normalized = rentHistory
+    .map((r) => ({
+      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
+      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
+    }))
+    .filter((x) => x.amount > 0 && x.effective);
+
+  if (normalized.length === 0) return 0;
+
+  // Sort newest effective date first
+  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+
+  // Find most recent rent <= target date
+  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
+  return match ? match.amount : 0;
+};
 
 // --- NEW HELPER FUNCTIONS ---
 
@@ -73,20 +101,14 @@ function monthWindow(date: Date): { start: Date; end: Date } {
   return { start: startOfMonth(date), end: endOfMonth(date) };
 }
 
-function parseDateSafe(dateString: string | undefined): Date | null {
-  if (!dateString) return null;
-  const date = new Date(dateString); // Use new Date() for flexible parsing
-  return isNaN(date.getTime()) ? null : date;
-}
-
 function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   if (!tenants || tenants.length === 0) return null;
 
   const { start: monthStart, end: monthEnd } = monthWindow(date);
 
   const overlappingTenants = tenants.filter(t => {
-    const leaseStart = parseDateSafe(t.leaseStart);
-    const leaseEnd = parseDateSafe(t.leaseEnd);
+    const leaseStart = toDateSafe(t.leaseStart);
+    const leaseEnd = toDateSafe(t.leaseEnd);
 
     // If no dates, can't determine overlap
     if (!leaseStart || !leaseEnd) return false;
@@ -98,8 +120,8 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   // If multiple tenants overlap (e.g., move-in/move-out), pick the one with the latest start date
   if (overlappingTenants.length > 1) {
     return overlappingTenants.sort((a, b) => {
-      const startA = parseDateSafe(a.leaseStart)?.getTime() || 0;
-      const startB = parseDateSafe(b.leaseStart)?.getTime() || 0;
+      const startA = toDateSafe(a.leaseStart)?.getTime() || 0;
+      const startB = toDateSafe(b.leaseStart)?.getTime() || 0;
       return startB - startA; // Sort descending by start date
     })[0];
   }
@@ -107,7 +129,7 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   return overlappingTenants[0] || null;
 }
 
-const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth }: any) => {
+const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth, viewingDate }: any) => {
     return (
         <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
             <div>
@@ -123,7 +145,7 @@ const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLeas
                 <p className="text-sm text-muted-foreground">{tenant.email}</p>
             </div>
             <div className="text-right hidden sm:block">
-                <p className="font-medium">${(getRentForDate(tenant.rentHistory, new Date()) || 0).toLocaleString()}/mo</p>
+                <p className="font-medium">${getRentForDate(tenant.rentHistory, viewingDate).toLocaleString()}/mo</p>
                 <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -632,6 +654,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                         onUpdate={onUpdate}
                         onOpenLease={handleOpenLeaseAgent}
                         isOccupantForMonth={true}
+                        viewingDate={selectedMonthDate}
                       />
                     </div>
                   ) : (
@@ -685,3 +708,5 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
+
+    
