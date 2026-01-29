@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import { doc, collection, query, deleteDoc, getDocs, Timestamp } from 'firebase/firestore';
+import { doc, collection, query, deleteDoc, getDocs, Timestamp, collectionGroup, where } from 'firebase/firestore';
 import { useFirestore, useUser, useCollection, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -432,13 +432,23 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
 
-  const monthKey = selectedMonthKey;
+  const monthlyTransactionsQuery = useMemoFirebase(() => {
+    if (!firestore || !property?.id || !user?.uid) return null;
+    
+    const [year, month] = selectedMonthKey.split('-').map(Number);
+    const startDate = format(new Date(year, month - 1, 1), 'yyyy-MM-dd');
+    const endDate = format(endOfMonth(new Date(year, month - 1, 1)), 'yyyy-MM-dd');
+
+    return query(
+        collectionGroup(firestore, 'transactions'),
+        where('userId', '==', user.uid),
+        where('costCenter', '==', property.id),
+        where('date', '>=', startDate),
+        where('date', '<=', endDate)
+    );
+  }, [firestore, property, user, selectedMonthKey]);
   
-  const monthlyStatsRef = useMemoFirebase(() => {
-    if (!firestore || !property?.id) return null;
-    return doc(firestore, 'properties', property.id, 'monthlyStats', monthKey);
-  }, [firestore, property, monthKey]);
-  const { data: monthlyStats, isLoading: loadingTxs } = useDoc(monthlyStatsRef);
+  const { data: monthlyTransactions, isLoading: loadingTxs } = useCollection(monthlyTransactionsQuery);
 
   useEffect(() => {
     if (!user || !property?.id) return;
@@ -468,8 +478,14 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
     }
   
-    const rentalIncome = monthlyStats?.income || 0;
-    const operatingExpenses = Math.abs(monthlyStats?.expenses || 0);
+    const rentalIncome = (monthlyTransactions || [])
+        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
+        .reduce((sum, tx) => sum + tx.amount, 0);
+
+    const operatingExpenses = Math.abs((monthlyTransactions || [])
+        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
+        .reduce((sum, tx) => sum + tx.amount, 0));
+        
     const noiValue = rentalIncome - operatingExpenses;
   
     const debtPayment = property.mortgage?.principalAndInterest || 0;
@@ -509,7 +525,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [monthlyStats, property, interestForMonth, monthTenant, selectedMonthDate]);
+  }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate]);
   
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
