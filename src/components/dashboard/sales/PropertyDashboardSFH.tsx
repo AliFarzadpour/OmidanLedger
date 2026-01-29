@@ -226,7 +226,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
             <div className="bg-slate-50 p-4 rounded-lg border">
                 <h4 className="font-semibold text-slate-800">Smart Summary</h4>
                 <p className="text-sm text-slate-600 mt-1">
-                    I will generate a Texas-compliant lease for {tenant.firstName} {tenant.lastName} and save it to this property's documents tab.
+                    I will generate a Texas-compliant lease for ${tenant.firstName} ${tenant.lastName} and save it to this property's documents tab.
                 </p>
             </div>
             <div>
@@ -495,12 +495,14 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     }
   
     const rentalIncome = (monthlyTransactions || [])
-        .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
-        .reduce((sum, tx) => sum + tx.amount, 0);
+      .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
+      .reduce((sum, tx) => sum + toNum(tx.amount), 0);
 
-    const operatingExpenses = Math.abs((monthlyTransactions || [])
+    const operatingExpenses = Math.abs(
+      (monthlyTransactions || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
-        .reduce((sum, tx) => sum + tx.amount, 0));
+        .reduce((sum, tx) => sum + toNum(tx.amount), 0)
+    );
         
     const noiValue = rentalIncome - operatingExpenses;
   
@@ -777,3 +779,5 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
+
+    
