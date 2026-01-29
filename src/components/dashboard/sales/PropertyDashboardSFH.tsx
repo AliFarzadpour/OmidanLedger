@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -464,18 +463,21 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         where('date', '<=', endDate)
     );
   }, [firestore, property, user, selectedMonthKey]);
-  
+
   useEffect(() => {
-    if (!monthlyTransactionsQuery) return;
+    console.log("🧪 monthlyTransactionsQuery is", monthlyTransactionsQuery);
+  
+    if (!monthlyTransactionsQuery) {
+      console.log("🧪 monthlyTransactionsQuery is NULL (not running getDocs)");
+      return;
+    }
   
     (async () => {
       try {
         console.log("🧪 Running getDocs() for monthlyTransactionsQuery...");
         const snap = await getDocs(monthlyTransactionsQuery);
         console.log("✅ getDocs count =", snap.size);
-  
-        const first = snap.docs[0]?.data();
-        console.log("✅ first doc data =", first);
+        console.log("✅ first doc data =", snap.docs[0]?.data());
       } catch (e) {
         console.error("❌ getDocs FAILED:", e);
       }
