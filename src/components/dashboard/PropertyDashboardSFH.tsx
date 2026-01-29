@@ -12,7 +12,7 @@ import {
   collectionGroup,
   where,
 } from 'firebase/firestore';
-import { useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
+import { useFirestore, useUser, useMemoFirebase, useDoc } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import {
@@ -217,11 +217,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
 
   const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
 
-  // ---------------- KPI TX SOURCE (authoritative) ----------------
-  // We fetch txs via getDocs into local state so KPI math always has a real array.
-  const [kpiTxs, setKpiTxs] = useState<any[]>([]);
-  const [kpiLoading, setKpiLoading] = useState(false);
-
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
   
@@ -231,6 +226,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       where('costCenter', '==', property.id)
     );
   }, [firestore, property?.id, user?.uid]);
+
+  // ---------------- KPI TX SOURCE (authoritative) ----------------
+  // We fetch txs via getDocs into local state so KPI math always has a real array.
+  const [kpiTxs, setKpiTxs] = useState<any[]>([]);
+  const [kpiLoading, setKpiLoading] = useState(false);
 
   useEffect(() => {
     if (!monthlyTransactionsQuery) {
@@ -258,6 +258,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       cancelled = true;
     };
   }, [monthlyTransactionsQuery]);
+
 
   useEffect(() => {
     if (!user || !property?.id) return;
@@ -297,9 +298,8 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
         verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
       };
     }
-
+  
     const monthKey = selectedMonthKey;
-
     const periodEnd = endOfMonth(selectedMonthDate);
     const periodStart =
       kpiRange === 'ytd' ? startOfYear(selectedMonthDate) : startOfMonth(selectedMonthDate);
@@ -309,31 +309,39 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
         ? differenceInCalendarMonths(periodEnd, startOfYear(selectedMonthDate)) + 1
         : 1;
 
+    const txList: any[] = Array.isArray(kpiTxs)
+      ? kpiTxs
+      : [];
+  
     // 1) Filter txs to THIS month
-    const periodTxs = kpiTxs.filter((tx: any) => {
+    const periodTxs = txList.filter((tx: any) => {
       const d = toDateSafe(tx?.date);
       if (!d) return false;
       return d >= periodStart && d <= periodEnd;
     });
-
+  
     // 2) Sum INCOME (actual collected)
     const rentalIncomeValue = periodTxs
       .filter((tx: any) => normalizeL0(tx) === 'INCOME')
-      .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
+      .reduce((sum: number, tx: any) => {
+        const amt = toNum(tx?.amount);
+        // rent collected should contribute positively
+        return sum + (amt >= 0 ? amt : Math.abs(amt));
+      }, 0);
   
     // 3) Sum Operating Expenses
     const operatingExpensesValue = periodTxs
       .filter((tx: any) => normalizeL0(tx) === 'OPERATING_EXPENSE')
       .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
-
-    // 4) Potential rent (from tenant/property rent logic)
+  
+    // 4) Potential rent (from tenant/property rent fields) as fallback
     const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
     const potentialRentMonthly = resolveRentDueForMonth({
-      monthTenant: monthTenantLocal,
-      property,
-      date: selectedMonthDate,
-    });
-    
+        monthTenant: monthTenantLocal,
+        property,
+        date: selectedMonthDate,
+      });
+      
     const potentialRentValue = potentialRentMonthly * monthsElapsed;
   
     // 5) NOI (Monthly) = Income - Operating Expenses
@@ -347,6 +355,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
+    // Economic Occupancy: actual collected / potential
     const economicOccupancyValue =
       potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
   
@@ -367,20 +376,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       verdictColor = "bg-amber-100 text-amber-800";
     }
   
-    console.log("KPI COMPONENTS", {
-      kpiRange,
-      monthKey,
-      periodStart: periodStart.toISOString(),
-      periodEnd: periodEnd.toISOString(),
-      txListCount: kpiTxs.length,
-      periodTxCount: periodTxs.length,
-      rentalIncomeValue,
-      operatingExpensesValue,
-      potentialRentMonthly,
-      potentialRentValue,
-      noiValue,
-    });
-  
     return {
       noi: noiValue,
       cashFlow: cashFlowValue,
@@ -392,6 +387,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       verdict: { label: verdictLabel, color: verdictColor },
     };
   }, [kpiTxs, property, selectedMonthDate, selectedMonthKey, kpiRange]);
+
 
   const getAiInsight = useMemo(() => {
     if (kpiLoading) return 'Analyzing property performance...';
@@ -464,6 +460,26 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       </div>
 
       <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 rounded-lg bg-muted p-1">
+          <Button
+            type="button"
+            variant={kpiRange === 'ytd' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setKpiRange('ytd')}
+            className={cn('w-full transition-all', kpiRange === 'ytd' && 'shadow-sm')}
+          >
+            YTD
+          </Button>
+          <Button
+            type="button"
+            variant={kpiRange === 'month' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setKpiRange('month')}
+            className={cn('w-full transition-all', kpiRange === 'month' && 'shadow-sm')}
+          >
+            Monthly
+          </Button>
+        </div>
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogTrigger asChild>
             <Button variant="outline" onClick={() => handleOpenDialog('general')}>
@@ -499,24 +515,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
         {header}
 
         <div className="space-y-6 pt-4">
-          <div className="flex items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant={kpiRange === 'ytd' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setKpiRange('ytd')}
-            >
-              YTD
-            </Button>
-            <Button
-              type="button"
-              variant={kpiRange === 'month' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setKpiRange('month')}
-            >
-              Monthly
-            </Button>
-          </div>
           {/* Investor KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <TooltipProvider>
@@ -1019,3 +1017,5 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; lan
     </>
   )
 }
+
+    
