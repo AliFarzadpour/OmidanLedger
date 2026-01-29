@@ -483,37 +483,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     }
   }, [txError]);
   
-  useEffect(() => {
-    console.log("selectedMonthKey", selectedMonthKey);
-    console.log("property.id", property?.id);
-    console.log("monthlyTransactions length", monthlyTransactions?.length);
-    console.log("monthlyTransactions first", monthlyTransactions?.[0]);
-  }, [selectedMonthKey, property?.id, monthlyTransactions]);
-  
-
-  useEffect(() => {
-    if (!user || !property?.id) return;
-    
-    const calculateInterest = async () => {
-      if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
-          const result = await calculateAmortization({
-              principal: property.mortgage.originalLoanAmount,
-              annualRate: property.mortgage.interestRate,
-              principalAndInterest: property.mortgage.principalAndInterest,
-              loanStartDate: property.mortgage.purchaseDate,
-              loanTermInYears: property.mortgage.loanTerm,
-              targetDate: selectedMonthDate.toISOString(),
-          });
-          if (result.success) {
-              setInterestForMonth(result.interestPaidForMonth || 0);
-          }
-      }
-    };
-    calculateInterest();
-  }, [user, property, selectedMonthDate]);
-
-  const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
-  
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
@@ -523,9 +492,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
     // 1) Filter transactions to THIS month
     const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
-        const d = toDateSafe(tx?.date);
-        if (!d) return false;
-        return format(d, 'yyyy-MM') === monthKey;
+      const d = toDateSafe(tx?.date);
+      if (!d) return false;
+      return format(d, 'yyyy-MM') === monthKey;
     });
 
     // 2) Calculate ACTUAL rent collected from transactions
@@ -537,8 +506,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const operatingExpenses = monthlyTxs
         .filter(tx => String(tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
         .reduce((sum, tx) => sum + Math.abs(toNum(tx.amount)), 0);
-
-    // 4) Calculate monthly NOI
+        
     const noiValue = rentalIncome - operatingExpenses;
   
     const debtPayment = toNum(property.mortgage?.principalAndInterest);
@@ -548,7 +516,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const dscrValue = totalDebtPayment > 0 ? (noiValue / totalDebtPayment) : Infinity;
   
     const potentialRentValue = resolveRentDueForMonth({
-        monthTenant,
+        monthTenant: tenantForMonth(property?.tenants, selectedMonthDate),
         property,
         date: selectedMonthDate
     });
@@ -584,9 +552,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate, selectedMonthKey]);
+  }, [monthlyTransactions, property, selectedMonthDate, selectedMonthKey]);
   
-  useEffect(() => {
+   useEffect(() => {
     console.log("KPI DEBUG", {
       selectedMonthKey,
       txCount: monthlyTransactions?.length,
@@ -597,8 +565,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       noi
     });
   },[selectedMonthKey, monthlyTransactions, rentalIncome, potentialRent, noi]);
-  
 
+  const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
+  
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return 'Analyzing property performance...';
 
@@ -706,7 +675,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                       value={noi}
                       icon={<Wallet className="h-5 w-5 text-green-600" />}
                       isLoading={loadingTxs}
-                      cardClassName={cn(noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")}
+                      cardClassName={cn("shadow-lg", noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")}
                       colorClass={noi >= 0 ? 'text-green-700' : 'text-red-700'}
                     />
                   </div>
@@ -719,16 +688,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div>
-                    <StatCard
-                      title="Cash Flow After Debt"
-                      value={cashFlow}
-                      icon={<TrendingUp className="h-5 w-5 text-slate-500" />}
-                      isLoading={loadingTxs}
-                      colorClass={cashFlow >= 0 ? 'text-green-600' : 'text-red-600'}
-                      cardClassName={cn(
-                        cashFlow >= 0 ? 'bg-green-50/70 border-green-200' : 'bg-red-50/70 border-red-200'
-                      )}
-                    />
+                    <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cn("shadow-lg", cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -758,15 +718,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div>
-                    <StatCard
-                      title="Economic Occupancy"
-                      value={economicOccupancy}
-                      format="percent"
-                      icon={<Users className="h-5 w-5 text-slate-500" />}
-                      isLoading={loadingTxs}
-                      description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`}
-                      cardClassName="bg-indigo-50/70 border-indigo-200"
-                    />
+                    <StatCard title="Economic Occupancy" value={economicOccupancy} format="percent" icon={<Users className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} description={`${formatCurrency(potentialRent - rentalIncome)} unpaid`} cardClassName="shadow-lg bg-indigo-50/70 border-indigo-200" />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -780,20 +732,13 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
             <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
-            <Card className="shadow-lg h-full">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium">Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-xl font-bold capitalize">{status}</div>
-              </CardContent>
-            </Card>
-            <StatCard
-              title="Break-Even Rent"
-              value={breakEvenRent}
-              icon={<AlertTriangle className="h-5 w-5 text-slate-500" />}
-              isLoading={loadingTxs}
-              description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(potentialRent - breakEvenRent)}` : 'No fixed costs'}
+            <Card className="shadow-lg"><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
+            <StatCard 
+                title="Break-Even Rent" 
+                value={breakEvenRent} 
+                icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
+                isLoading={loadingTxs} 
+                description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'No fixed costs'}
             />
           </div>
 
@@ -809,7 +754,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             </div>
           </div>
 
-          <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog} />
+          <PropertySetupBanner propertyId={property.id} propertyData={property} onOpenSettings={handleOpenDialog}/>
 
           <Tabs defaultValue="tenants" className="w-full">
             <TabsList className="grid w-full grid-cols-6 lg:w-[850px]">
@@ -818,9 +763,8 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               <TabsTrigger value="expenses">Expenses</TabsTrigger>
               <TabsTrigger value="deposits">Deposits</TabsTrigger>
               <TabsTrigger value="documents">Documents</TabsTrigger>
-              <TabsTrigger value="documents" className="hidden" />
             </TabsList>
-
+            
             <TabsContent value="tenants" className="mt-6">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -839,7 +783,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     </Button>
                   </div>
                 </CardHeader>
-
+            
                 <CardContent>
                   {monthTenant ? (
                     <div className="space-y-3">
@@ -859,29 +803,31 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     <div className="text-center py-10 border-2 border-dashed rounded-lg">
                       <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
                       <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
-                      <p className="text-xs text-muted-foreground mt-1">No lease overlaps this month.</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        No lease overlaps this month.
+                      </p>
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
-
+            
             <TabsContent value="income" className="mt-6">
-              <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
+                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="income" />
             </TabsContent>
-
+            
             <TabsContent value="expenses" className="mt-6">
-              <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
+                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="expenses" />
             </TabsContent>
 
             <TabsContent value="deposits" className="mt-6">
-              <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
+                <PropertyFinancials propertyId={property.id} propertyName={property.name} view="deposits" />
             </TabsContent>
 
             <TabsContent value="documents" className="mt-6">
-              <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
+                <PropertyDocuments propertyId={property.id} landlordId={user.uid} />
             </TabsContent>
-          </Tabs>
+            </Tabs>
         </div>
       </div>
 
@@ -893,13 +839,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
           landlordId={user.uid}
         />
       )}
-
       {isLeaseAgentOpen && selectedTenantForLease && (
         <LeaseAgentModal
-          isOpen={isLeaseAgentOpen}
-          onOpenChange={setLeaseAgentOpen}
-          tenant={selectedTenantForLease}
-          propertyId={property.id}
+            isOpen={isLeaseAgentOpen}
+            onOpenChange={setLeaseAgentOpen}
+            tenant={selectedTenantForLease}
+            propertyId={property.id}
         />
       )}
     </>
