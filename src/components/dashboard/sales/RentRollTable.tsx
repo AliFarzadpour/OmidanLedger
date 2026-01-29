@@ -113,7 +113,7 @@ const toDateSafe = (v: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-function getRentForDate(rentHistory: { amount: any; effectiveDate: any }[], date: Date): number {
+const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
   // Accept multiple possible keys from DB/UI
@@ -133,6 +133,7 @@ function getRentForDate(rentHistory: { amount: any; effectiveDate: any }[], date
   const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
   return match ? match.amount : 0;
 };
+
 
 function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
   if (!tenants || tenants.length === 0) return 0;
@@ -600,7 +601,6 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                 </TableRow>
             ) : (
                 rentRoll.map((item) => {
-                    if (!item) return null;
                     const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
                      if (item.isVacant) {
                         return (
