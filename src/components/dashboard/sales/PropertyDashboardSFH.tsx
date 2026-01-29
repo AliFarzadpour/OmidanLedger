@@ -87,17 +87,16 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   return overlappingTenants[0] || null;
 }
 
-const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth }: any) => {
+const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease }: any) => {
     return (
         <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
             <div>
                 <div className="flex items-center gap-2">
                     <p className="font-medium">{tenant.firstName} {tenant.lastName}</p>
-                    <Badge variant="outline" className={cn('capitalize text-xs h-5', tenant.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-600')}>
-                        {tenant.status}
-                    </Badge>
-                     {isOccupantForMonth && (
-                        <Badge className="bg-primary text-primary-foreground h-5 text-xs">This Month</Badge>
+                    {tenant.status && (
+                        <Badge variant="outline" className={cn('capitalize text-xs h-5', tenant.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-600')}>
+                            {tenant.status}
+                        </Badge>
                     )}
                 </div>
                 <p className="text-sm text-muted-foreground">{tenant.email}</p>
@@ -121,6 +120,7 @@ const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLeas
     );
 };
 
+
 function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant: any, propertyId: string, isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -140,7 +140,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
       toast({ variant: 'destructive', title: 'Error', description: error.message });
     } finally {
       setLoading(false);
-      onOpenChange(false);
+      onOpenChange(false); // Close the modal after action
     }
   };
 
@@ -178,6 +178,7 @@ function LeaseAgentModal({ tenant, propertyId, onOpenChange, isOpen }: { tenant:
     </Dialog>
   )
 }
+
 
 function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, landlordId: string}) {
   const firestore = useFirestore();
@@ -384,13 +385,18 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const monthTenant = useMemo(() => tenantForMonth(property.tenants, selectedMonthDate), [property, selectedMonthDate]);
 
   const { activeTenants, pastTenants } = useMemo(() => {
-    if (!property?.tenants) return { activeTenants: [], pastTenants: [] };
+    if (!property?.tenants) {
+      return { activeTenants: [], pastTenants: [] };
+    }
     const active: any[] = [];
     const past: any[] = [];
     property.tenants.forEach((t: any) => {
       const isActive = (t.status || '').toLowerCase() === 'active';
-      if (isActive) active.push(t);
-      else past.push(t);
+      if (isActive) {
+        active.push(t);
+      } else {
+        past.push(t);
+      }
     });
     return { activeTenants: active, pastTenants: past };
   }, [property]);
@@ -536,6 +542,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         
         <div className="space-y-6 pt-4">
 
+            {/* --- Investor KPIs --- */}
             <div className="grid grid-cols-4 gap-4">
                 <TooltipProvider>
                     <Tooltip><TooltipTrigger asChild><div>
@@ -559,6 +566,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 </TooltipProvider>
             </div>
             
+            {/* --- Operational KPIs --- */}
             <div className="grid grid-cols-4 gap-4">
                 <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
                 <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
@@ -594,74 +602,41 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             </TabsList>
             
             <TabsContent value="tenants" className="mt-6">
-                <Card>
+              <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                    <div>
-                    <CardTitle>Current Residents</CardTitle>
-                    <CardDescription>Lease details for this property.</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
-                    <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
-                        <UserPlus className="h-4 w-4" /> Create Portal
+                  <div>
+                    <CardTitle>Resident for {format(selectedMonthDate, 'MMMM yyyy')}</CardTitle>
+                    <CardDescription>
+                      Showing the tenant with an active lease during the selected month.
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>
+                      Manage All Tenants
                     </Button>
-                    </div>
+                    <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
+                      <UserPlus className="h-4 w-4" /> Create Portal
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                    {(activeTenants.length > 0 || pastTenants.length > 0) ? (
-                    <div className="space-y-6">
-                        {activeTenants.length > 0 && (
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-green-700 flex items-center gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                                    Active Residents
-                                </h3>
-                                {activeTenants.map((t: any, i: number) => (
-                                    <TenantRow 
-                                        key={`active-${i}`} 
-                                        tenant={t} 
-                                        index={i} 
-                                        propertyId={property.id} 
-                                        landlordId={user.uid}
-                                        onUpdate={onUpdate}
-                                        onOpenLease={handleOpenLeaseAgent}
-                                        isOccupantForMonth={monthTenant && t.email === monthTenant.email}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                        {activeTenants.length > 0 && pastTenants.length > 0 && (
-                            <div className="relative py-2">
-                                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                                <div className="relative flex justify-center text-xs uppercase"><span className="bg-background px-2 text-muted-foreground">Past Residents</span></div>
-                            </div>
-                        )}
-                        {pastTenants.length > 0 && (
-                            <div className="space-y-4 opacity-75 grayscale-[0.3]">
-                                {activeTenants.length === 0 && <h3 className="text-sm font-semibold text-muted-foreground">Past Residents</h3>}
-                                {pastTenants.map((t: any, i: number) => (
-                                    <TenantRow 
-                                        key={`past-${i}`} 
-                                        tenant={t} 
-                                        index={i} 
-                                        propertyId={property.id} 
-                                        landlordId={user.uid}
-                                        onUpdate={onUpdate}
-                                        onOpenLease={handleOpenLeaseAgent}
-                                        isOccupantForMonth={monthTenant && t.email === monthTenant.email}
-                                    />
-                                ))}
-                            </div>
-                        )}
+                  {monthTenant ? (
+                    <TenantRow
+                      tenant={monthTenant}
+                      index={0}
+                      propertyId={property.id}
+                      landlordId={user.uid}
+                      onUpdate={onUpdate}
+                      onOpenLease={handleOpenLeaseAgent}
+                    />
+                  ) : (
+                    <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                      <p className="font-semibold">Vacant for {format(selectedMonthDate, 'MMMM yyyy')}</p>
+                      <p className="text-sm text-muted-foreground mt-1">No active lease found for this period.</p>
                     </div>
-                    ) : (
-                    <div className="text-center py-6">
-                        <p className="text-muted-foreground text-sm">No tenants recorded.</p>
-                        <Button variant="link" onClick={() => setIsInviteOpen(true)} className="mt-2">Click "Create Portal" to add one.</Button>
-                    </div>
-                    )}
+                  )}
                 </CardContent>
-                </Card>
+              </Card>
             </TabsContent>
             
             <TabsContent value="income" className="mt-6">
