@@ -520,14 +520,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     }
   
     const monthKey = selectedMonthKey;
+
     const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
-        if (!tx?.date) return false;
-        try {
-            const d = tx.date.toDate ? tx.date.toDate() : parseISO(tx.date);
-            return format(d, 'yyyy-MM') === monthKey;
-        } catch {
-            return false;
-        }
+        const d = toDateSafe(tx?.date);
+        if (!d) return false;
+        return format(d, 'yyyy-MM') === monthKey;
     });
 
     const rentalIncome = (monthlyTxs || [])
