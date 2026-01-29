@@ -580,7 +580,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
                             </TableRow>
                         )
                     }
-                    return item && (
+                    return (
                         <TableRow key={item.uniqueKey}>
                             <TableCell>
                             <TooltipProvider>
