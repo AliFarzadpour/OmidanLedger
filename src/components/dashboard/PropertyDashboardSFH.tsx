@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -179,24 +180,22 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
 }
 
 function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
-  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
-    .toUpperCase()
-    .trim();
-
-  // NOI Income
-  if (raw === "INCOME") return "INCOME";
-
-  // NOI Expenses (ONLY operating)
-  if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
-
-  // Everything else should not affect NOI
-  // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
-  return "IGNORE";
+    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
+      .toUpperCase()
+      .trim();
+  
+    // NOI Income
+    if (raw === "INCOME") return "INCOME";
+  
+    // NOI Expenses (ONLY operating)
+    if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
+  
+    // Everything else should not affect NOI
+    // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
+    return "IGNORE";
 }
 
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any; onUpdate: () => void }) {
-  console.log("✅ USING src/components/dashboard/PropertyDashboardSFH.tsx");
-
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isLeaseAgentOpen, setLeaseAgentOpen] = useState(false);
@@ -208,7 +207,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   const searchParams = useSearchParams();
   const router = useRouter();
   const [interestForMonth, setInterestForMonth] = useState(0);
-  const [kpiRange, setKpiRange] = useState<'ytd' | 'month'>('ytd'); // ✅ default YTD
+  const [kpiRange, setKpiRange] = useState<'ytd' | 'month'>('ytd');
 
   const selectedMonthKey = useMemo(() => {
     const monthParam = searchParams.get('month');
@@ -238,9 +237,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       setKpiTxs([]);
       return;
     }
-  
+
     let cancelled = false;
-  
+
     (async () => {
       try {
         setKpiLoading(true);
@@ -254,7 +253,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
         if (!cancelled) setKpiLoading(false);
       }
     })();
-  
+
     return () => {
       cancelled = true;
     };
@@ -285,92 +284,133 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     [property, selectedMonthDate]
   );
   
-  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } =
-    useMemo(() => {
-    if (!property) {
-      return {
-        noi: 0,
-        cashFlow: 0,
-        dscr: 0,
-        economicOccupancy: 0,
-        breakEvenRent: 0,
-        rentalIncome: 0,
-        potentialRent: 0,
-        verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
-      };
-    }
+// --- KPI CALC (FIXED) ---
+// Put this helper near your other helpers (top of file), OR keep it right above the KPI useMemo.
+function normalizeL0Any(tx: any): string {
+  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().trim();
+  if (raw === 'INCOME') return 'INCOME';
+  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'ASSET') return 'ASSET';
+  if (raw === 'LIABILITY') return 'LIABILITY';
+  if (raw === 'EQUITY') return 'EQUITY';
+  if (raw.includes('INCOME')) return 'INCOME';
+  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
+  return raw || 'UNKNOWN';
+}
 
-    const startOfYearDate = startOfYear(new Date());
-    const txList: any[] = kpiTxs;
-  
-    // 1) Filter txs to THIS YEAR
-    const yearlyTxs = txList.filter((tx: any) => {
-      const d = toDateSafe(tx?.date);
-      if (!d) return false;
-      return d >= startOfYearDate;
-    });
-  
-    // 2) Sum INCOME (actual collected) for YTD
-    const rentalIncomeValue = yearlyTxs
-      .filter((tx: any) => normalizeL0(tx) === 'INCOME')
-      .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
-  
-    // 3) Sum Operating Expenses for YTD
-    const operatingExpensesValue = yearlyTxs
-      .filter((tx: any) => normalizeL0(tx) === 'OPERATING_EXPENSE')
-      .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
-  
-    // 4) Potential rent (for current month)
-    const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
-    const potentialRentValue = resolveRentDueForMonth({
-      monthTenant: monthTenantLocal,
-      property,
-      date: selectedMonthDate,
-    });
-  
-    // 5) YTD NOI = YTD Income - YTD Operating Expenses
-    const noiValue = rentalIncomeValue - operatingExpensesValue;
-  
-    // 6) Debt & ratios (these remain monthly calculations)
-    const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
-    const escrow = toNum(property?.mortgage?.escrowAmount);
-    const totalDebtPayment = debtPayment + escrow;
-  
-    const cashFlowValue = (noiValue / 12) - debtPayment; // Rough monthly cashflow from YTD NOI
-    const dscrValue = totalDebtPayment > 0 ? (noiValue / 12) / totalDebtPayment : Infinity; // DSCR based on monthly average
-  
-    const economicOccupancyValue =
-      potentialRentValue > 0 ? (rentalIncomeValue / (potentialRentValue * 12)) * 100 : 0; // YTD Occupancy
-  
-    const breakEvenRentValue = (operatingExpensesValue / 12) + totalDebtPayment;
-  
-    // 7) Verdict
-    let verdictLabel = 'Stable';
-    let verdictColor = 'bg-blue-100 text-blue-800';
-  
-    if (cashFlowValue > 100 && dscrValue > 1.25) {
-      verdictLabel = 'Healthy Cash Flow';
-      verdictColor = 'bg-green-100 text-green-800';
-    } else if (cashFlowValue < 0) {
-      verdictLabel = 'Underperforming';
-      verdictColor = 'bg-red-100 text-red-800';
-    } else if (dscrValue < 1.25 && debtPayment > 0) {
-      verdictLabel = 'High Debt Ratio';
-      verdictColor = 'bg-amber-100 text-amber-800';
-    }
-  
+const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
+  if (!property) {
     return {
-      noi: noiValue,
-      cashFlow: cashFlowValue,
-      dscr: dscrValue,
-      economicOccupancy: economicOccupancyValue,
-      breakEvenRent: breakEvenRentValue,
-      rentalIncome: rentalIncomeValue,
-      potentialRent: potentialRentValue,
-      verdict: { label: verdictLabel, color: verdictColor },
+      noi: 0,
+      cashFlow: 0,
+      dscr: 0,
+      economicOccupancy: 0,
+      breakEvenRent: 0,
+      rentalIncome: 0,
+      potentialRent: 0,
+      verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
     };
-  }, [kpiTxs, property, selectedMonthDate]);
+  }
 
+  const monthKey = selectedMonthKey;
+
+  const periodEnd = endOfMonth(selectedMonthDate);
+  const periodStart =
+    kpiRange === 'ytd' ? startOfYear(selectedMonthDate) : startOfMonth(selectedMonthDate);
+  
+  const monthsElapsed =
+    kpiRange === 'ytd'
+      ? differenceInCalendarMonths(periodEnd, startOfYear(selectedMonthDate)) + 1
+      : 1;
+
+  // 1) Filter txs to THIS month
+  const periodTxs = kpiTxs.filter((tx: any) => {
+    const d = toDateSafe(tx?.date);
+    if (!d) return false;
+    return d >= periodStart && d <= periodEnd;
+  });
+
+  // 2) Sum INCOME (actual collected)
+  const rentalIncomeValue = periodTxs
+    .filter((tx: any) => normalizeL0Any(tx) === 'INCOME')
+    .reduce((sum: number, tx: any) => {
+      const amt = toNum(tx?.amount);
+      // rent collected should contribute positively
+      return sum + (amt >= 0 ? amt : Math.abs(amt));
+    }, 0);
+
+  // 3) Sum Operating Expenses
+  const operatingExpensesValue = periodTxs
+    .filter((tx: any) => normalizeL0Any(tx) === 'OPERATING EXPENSE')
+    .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
+
+  // 4) Potential rent (from tenant/property rent logic)
+  const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
+  const potentialRentMonthly = resolveRentDueForMonth({
+    monthTenant: monthTenantLocal,
+    property,
+    date: selectedMonthDate,
+  });
+
+  const potentialRentValue = potentialRentMonthly * monthsElapsed;
+
+  // 5) NOI (Monthly) = Income - Operating Expenses
+  const noiValue = rentalIncomeValue - operatingExpensesValue;
+
+  // 6) Debt & ratios
+  const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
+  const escrow = toNum(property?.mortgage?.escrowAmount);
+  const totalDebtPayment = debtPayment + escrow;
+
+  const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
+  const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
+
+  // 7) Econ occupancy + break-even
+  const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
+  const breakEvenRentValue = operatingExpensesValue + totalDebtPayment;
+
+  // ✅ DEBUG (this will prove the fix immediately)
+  console.log("KPI COMPONENTS", {
+    kpiRange,
+    monthKey,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
+    txListCount: kpiTxs.length,
+    periodTxCount: periodTxs.length,
+    rentalIncomeValue,
+    operatingExpensesValue,
+    potentialRentMonthly,
+    potentialRentValue,
+    noiValue,
+  });
+
+  // Verdict
+  let verdictLabel = "Stable";
+  let verdictColor = "bg-blue-100 text-blue-800";
+
+  if (cashFlowValue > 100 && dscrValue > 1.25) {
+    verdictLabel = "Healthy Cash Flow";
+    verdictColor = "bg-green-100 text-green-800";
+  } else if (cashFlowValue < 0) {
+    verdictLabel = "Underperforming";
+    verdictColor = "bg-red-100 text-red-800";
+  } else if (dscrValue < 1.25 && debtPayment > 0) {
+    verdictLabel = "High Debt Ratio";
+    verdictColor = "bg-amber-100 text-amber-800";
+  }
+
+  return {
+    noi: noiValue,
+    cashFlow: cashFlowValue,
+    dscr: dscrValue,
+    economicOccupancy: economicOccupancyValue,
+    breakEvenRent: breakEvenRentValue,
+    rentalIncome: rentalIncomeValue,
+    potentialRent: potentialRentValue,
+    verdict: { label: verdictLabel, color: verdictColor },
+  };
+}, [kpiTxs, property, selectedMonthDate, selectedMonthKey, kpiRange]);
 
   const getAiInsight = useMemo(() => {
     if (kpiLoading) return 'Analyzing property performance...';
