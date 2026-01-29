@@ -410,6 +410,21 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
   )
 }
 
+// --- KPI CALC (FIXED) ---
+// Put this helper near your other helpers (top of file), OR keep it right above the KPI useMemo.
+function normalizeL0Any(tx: any): string {
+  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().trim();
+  if (raw === 'INCOME') return 'INCOME';
+  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'EXPENSE') return 'OPERATING EXPENSE';
+  if (raw === 'ASSET') return 'ASSET';
+  if (raw === 'LIABILITY') return 'LIABILITY';
+  if (raw === 'EQUITY') return 'EQUITY';
+  if (raw.includes('INCOME')) return 'INCOME';
+  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
+  return raw || 'UNKNOWN';
+}
+
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any, onUpdate: () => void }) {
   console.log("✅ USING src/components/dashboard/PropertyDashboardSFH.tsx");
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -454,107 +469,130 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     );
   }, [firestore, property?.id, user?.uid]);
   
+  const { data: monthlyTransactions, isLoading: loadingTxs } = useCollection(monthlyTransactionsQuery);
+  
   useEffect(() => {
-    console.log("🧪 monthlyTransactionsQuery is", monthlyTransactionsQuery);
-  
-    if (!monthlyTransactionsQuery) {
-      console.log("🧪 monthlyTransactionsQuery is NULL (not running getDocs)");
-      return;
-    }
-  
-    (async () => {
-      try {
-        console.log("🧪 Running getDocs() for monthlyTransactionsQuery...");
-        const snap = await getDocs(monthlyTransactionsQuery);
-        console.log("✅ getDocs count =", snap.size);
-        console.log("✅ first doc data =", snap.docs[0]?.data());
-      } catch (e) {
-        console.error("❌ getDocs FAILED:", e);
+    if (!user || !property?.id) return;
+    
+    const calculateInterest = async () => {
+      if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
+          const result = await calculateAmortization({
+              principal: property.mortgage.originalLoanAmount,
+              annualRate: property.mortgage.interestRate,
+              principalAndInterest: property.mortgage.principalAndInterest,
+              loanStartDate: property.mortgage.purchaseDate,
+              loanTermInYears: property.mortgage.loanTerm,
+              targetDate: selectedMonthDate.toISOString(),
+          });
+          if (result.success) {
+              setInterestForMonth(result.interestPaidForMonth || 0);
+          }
       }
-    })();
-  }, [monthlyTransactionsQuery]);
-  
+    };
+    calculateInterest();
+  }, [user, property, selectedMonthDate]);
 
-  const { data: monthlyTransactions, isLoading: loadingTxs, error: txError } = useCollection(monthlyTransactionsQuery);
-
-  useEffect(() => {
-    if (txError) {
-        console.error('🔥 monthlyTransactionsQuery ERROR:', txError);
-    }
-  }, [txError]);
+  const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
   
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
-    if (!property) {
-      return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
-    }
-
-    const monthKey = selectedMonthKey;
-
-    // 1) Filter transactions to THIS month
-    const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
-      const d = toDateSafe(tx?.date);
-      if (!d) return false;
-      return format(d, 'yyyy-MM') === monthKey;
-    });
-
-    // 2) Calculate ACTUAL rent collected from transactions
-    const rentalIncome = monthlyTxs
-        .filter(tx => String(tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
-        .reduce((sum, tx) => sum + Math.abs(toNum(tx.amount)), 0);
-
-    // 3) Calculate operating expenses (absolute value)
-    const operatingExpenses = monthlyTxs
-        .filter(tx => String(tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
-        .reduce((sum, tx) => sum + Math.abs(toNum(tx.amount)), 0);
-        
-    const noiValue = rentalIncome - operatingExpenses;
-  
-    const debtPayment = toNum(property.mortgage?.principalAndInterest);
-    const totalDebtPayment = debtPayment + toNum(property.mortgage?.escrowAmount);
-  
-    const cashFlowValue = noiValue - debtPayment;
-    const dscrValue = totalDebtPayment > 0 ? (noiValue / totalDebtPayment) : Infinity;
-  
-    const potentialRentValue = resolveRentDueForMonth({
-        monthTenant: tenantForMonth(property?.tenants, selectedMonthDate),
-        property,
-        date: selectedMonthDate
-    });
-
-    const economicOccupancyValue =
-      potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
-    
-    const breakEvenRentValue = operatingExpenses + totalDebtPayment;
-    const surplus = rentalIncome - breakEvenRentValue;
-    
-    let verdictLabel = "Stable";
-    let verdictColor = "bg-blue-100 text-blue-800";
-  
-    if (cashFlowValue > 100 && dscrValue > 1.25) {
-        verdictLabel = "Healthy Cash Flow";
-        verdictColor = "bg-green-100 text-green-800";
-    } else if (cashFlowValue < 0) {
-        verdictLabel = "Underperforming";
-        verdictColor = "bg-red-100 text-red-800";
-    } else if (dscrValue < 1.25 && debtPayment > 0) {
-        verdictLabel = "High Debt Ratio";
-        verdictColor = "bg-amber-100 text-amber-800";
-    }
-  
-    return { 
-      noi: noiValue, 
-      cashFlow: cashFlowValue, 
-      dscr: dscrValue, 
-      economicOccupancy: economicOccupancyValue, 
-      breakEvenRent: breakEvenRentValue,
-      surplus,
-      rentalIncome: rentalIncome, 
-      potentialRent: potentialRentValue,
-      verdict: { label: verdictLabel, color: verdictColor },
+  if (!property) {
+    return {
+      noi: 0,
+      cashFlow: 0,
+      dscr: 0,
+      economicOccupancy: 0,
+      breakEvenRent: 0,
+      rentalIncome: 0,
+      potentialRent: 0,
+      verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
     };
-  }, [monthlyTransactions, property, selectedMonthDate, selectedMonthKey]);
+  }
+
+  const monthKey = selectedMonthKey;
+
+  // 1) Filter txs to THIS month (robust date parsing)
+  const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
+    const d = toDateSafe(tx?.date);
+    if (!d) return false;
+    return format(d, 'yyyy-MM') === monthKey;
+  });
+
+  // 2) Sum INCOME (actual collected)
+  const rentalIncomeValue = monthlyTxs
+    .filter((tx: any) => normalizeL0Any(tx) === 'INCOME')
+    .reduce((sum: number, tx: any) => {
+      const amt = toNum(tx?.amount);
+      // rent collected should contribute positively
+      return sum + (amt >= 0 ? amt : Math.abs(amt));
+    }, 0);
+
+  // 3) Sum Operating Expenses
+  const operatingExpensesValue = monthlyTxs
+    .filter((tx: any) => normalizeL0Any(tx) === 'OPERATING EXPENSE')
+    .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
+
+  // 4) Potential rent (from tenant/property rent logic)
+  const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
+  const potentialRentValue = resolveRentDueForMonth({
+    monthTenant: monthTenantLocal,
+    property,
+    date: selectedMonthDate,
+  });
+
+  // 5) NOI (Monthly) = Income - Operating Expenses
+  const noiValue = rentalIncomeValue - operatingExpensesValue;
+
+  // 6) Debt & ratios
+  const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
+  const escrow = toNum(property?.mortgage?.escrowAmount);
+  const totalDebtPayment = debtPayment + escrow;
+
+  const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
+  const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
+
+  const economicOccupancyValue =
+    potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
+
+  const breakEvenRentValue = operatingExpensesValue + totalDebtPayment;
+
+  // 7) Verdict
+  let verdictLabel = 'Stable';
+  let verdictColor = 'bg-blue-100 text-blue-800';
+
+  if (cashFlowValue > 100 && dscrValue > 1.25) {
+    verdictLabel = 'Healthy Cash Flow';
+    verdictColor = 'bg-green-100 text-green-800';
+  } else if (cashFlowValue < 0) {
+    verdictLabel = 'Underperforming';
+    verdictColor = 'bg-red-100 text-red-800';
+  } else if (dscrValue < 1.25 && debtPayment > 0) {
+    verdictLabel = 'High Debt Ratio';
+    verdictColor = 'bg-amber-100 text-amber-800';
+  }
+
+  // Optional: log the real components so you can see WHY NOI is what it is
+  console.log('KPI COMPONENTS', {
+    monthKey,
+    monthTxCount: monthlyTxs.length,
+    rentalIncomeValue,
+    operatingExpensesValue,
+    potentialRentValue,
+    noiValue,
+  });
+
+  return {
+    noi: noiValue,
+    cashFlow: cashFlowValue,
+    dscr: dscrValue,
+    economicOccupancy: economicOccupancyValue,
+    breakEvenRent: breakEvenRentValue,
+    rentalIncome: rentalIncomeValue,
+    potentialRent: potentialRentValue,
+    verdict: { label: verdictLabel, color: verdictColor },
+  };
+}, [monthlyTransactions, property, selectedMonthDate, selectedMonthKey]);
   
-   useEffect(() => {
+  useEffect(() => {
     console.log("KPI DEBUG", {
       selectedMonthKey,
       txCount: monthlyTransactions?.length,
@@ -566,8 +604,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     });
   },[selectedMonthKey, monthlyTransactions, rentalIncome, potentialRent, noi]);
 
-  const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
-  
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return 'Analyzing property performance...';
 
@@ -671,7 +707,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                 <TooltipTrigger asChild>
                   <div>
                     <StatCard
-                      title="NOI (Monthly)"
+                      title="NOI (YTD)"
                       value={noi}
                       icon={<Wallet className="h-5 w-5 text-green-600" />}
                       isLoading={loadingTxs}
@@ -688,7 +724,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div>
-                    <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cn("shadow-lg", cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} />
+                         <StatCard title="Cash Flow After Debt" value={cashFlow} icon={<TrendingUp className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} colorClass={cashFlow >= 0 ? "text-green-600" : "text-red-600"} cardClassName={cn("shadow-lg", cashFlow >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} />
                   </div>
                 </TooltipTrigger>
                 <TooltipContent>
@@ -850,5 +886,3 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     </>
   );
 }
-
-    
