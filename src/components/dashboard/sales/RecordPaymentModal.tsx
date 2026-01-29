@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState } from 'react';
@@ -41,7 +42,14 @@ export function RecordPaymentModal({
   buttonText?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [amount, setAmount] = useState(tenant.rentAmount || '');
+  
+  const [amount, setAmount] = useState(() => {
+    if (!tenant.rentHistory || tenant.rentHistory.length === 0) return tenant.rentAmount || '';
+    const sorted = [...tenant.rentHistory].sort((a: any, b: any) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
+    const mostRecentRent = sorted.find(r => new Date(r.effectiveDate) <= new Date());
+    return mostRecentRent?.amount || sorted[0]?.amount || '';
+  });
+
   const [method, setMethod] = useState('Zelle');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();

@@ -29,6 +29,11 @@ import { PropertyFinancials } from './property-financials';
 import { generateRulesForProperty } from '@/lib/rule-engine';
 import { calculateAmortization } from '@/actions/amortization-actions';
 
+const rentHistorySchema = z.object({
+    amount: z.coerce.number().min(0, "Rent must be positive"),
+    effectiveDate: z.string().min(1, "Date is required"),
+});
+
 // --- SCHEMA DEFINITION (BUILDING-LEVEL) ---
 const propertySchema = z.object({
   name: z.string().min(1, "Nickname is required"),
@@ -48,7 +53,7 @@ const propertySchema = z.object({
       status: z.enum(['active', 'past']).default('active'),
       leaseStart: z.string().optional(),
       leaseEnd: z.string().optional(),
-      rentAmount: z.coerce.number().optional(),
+      rentHistory: z.array(rentHistorySchema).optional(),
       deposit: z.coerce.number().optional(),
   })).optional(),
   access: z.object({
@@ -182,6 +187,46 @@ const DEFAULT_VALUES: Partial<PropertyFormValues> = {
   depreciation: { method: 'SL', usefulLife: 27.5 }
 };
 
+// Sub-component for managing rent history
+const TenantRentHistory = ({ tenantIndex, control }: { tenantIndex: number; control: any }) => {
+    const { fields, append, remove } = useFieldArray({
+      control,
+      name: `tenants.${tenantIndex}.rentHistory`,
+    });
+  
+    return (
+      <div className="space-y-2 p-3 bg-slate-100/70 border rounded-md">
+        <Label className="text-xs font-semibold">Rent History</Label>
+        {fields.map((field, index) => (
+          <div key={field.id} className="flex items-center gap-2">
+            <Controller
+              control={control}
+              name={`tenants.${tenantIndex}.rentHistory.${index}.effectiveDate`}
+              render={({ field }) => <Input type="date" className="h-8" {...field} />}
+            />
+            <Controller
+              control={control}
+              name={`tenants.${tenantIndex}.rentHistory.${index}.amount`}
+              render={({ field }) => <Input type="number" placeholder="Amount" className="h-8" {...field} />}
+            />
+            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => remove(index)}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full h-8 border-dashed"
+          onClick={() => append({ effectiveDate: new Date().toISOString().split('T')[0], amount: 0 })}
+        >
+          <Plus className="mr-2 h-4 w-4" /> Add Rent Step
+        </Button>
+      </div>
+    );
+  };
+
 export function PropertyForm({ 
   onSuccess, 
   initialData,
@@ -210,7 +255,7 @@ export function PropertyForm({
         ...initialData,
         utilities: initialData.utilities || DEFAULT_VALUES.utilities,
         preferredVendors: initialData.preferredVendors || DEFAULT_VALUES.preferredVendors,
-        tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active' })) || DEFAULT_VALUES.tenants,
+        tenants: initialData.tenants?.map((t: any) => ({ ...t, status: t.status || 'active', rentHistory: t.rentHistory || [] })) || DEFAULT_VALUES.tenants,
         access: initialData.access || DEFAULT_VALUES.access,
         mortgage: { ...DEFAULT_VALUES.mortgage, ...initialData.mortgage },
         management: { ...DEFAULT_VALUES.management, ...initialData.management },
@@ -498,10 +543,8 @@ export function PropertyForm({
                                         <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...form.register(`tenants.${originalIndex}.leaseStart`)} /></div>
                                         <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...form.register(`tenants.${originalIndex}.leaseEnd`)} /></div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1"><Label className="text-xs">Rent Amount ($)</Label><Input type="number" {...form.register(`tenants.${originalIndex}.rentAmount`, { valueAsNumber: true })} /></div>
-                                        <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...form.register(`tenants.${originalIndex}.deposit`, { valueAsNumber: true })} /></div>
-                                    </div>
+                                    <TenantRentHistory tenantIndex={originalIndex} control={form.control} />
+                                    <div className="space-y-1"><Label className="text-xs">Deposit Held ($)</Label><Input type="number" {...form.register(`tenants.${originalIndex}.deposit`, { valueAsNumber: true })} /></div>
                                   <div className="space-y-1"><Label className="text-xs">Status</Label>
                                     <Controller
                                         name={`tenants.${originalIndex}.status`}
@@ -521,7 +564,7 @@ export function PropertyForm({
                             );
                         })}
                         {activeTenants.length === 0 && <p className="text-sm text-center text-muted-foreground py-4">No active tenants.</p>}
-                        <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', status: 'active', rentAmount: 0, deposit: 0 })}><Plus className="mr-2 h-4 w-4" /> Add Tenant</Button>
+                        <Button type="button" variant="outline" className="w-full border-dashed" onClick={() => tenantFields.append({ firstName: '', lastName: '', email: '', status: 'active', rentHistory: [{effectiveDate: new Date().toISOString().split('T')[0], amount: 0}], deposit: 0 })}><Plus className="mr-2 h-4 w-4" /> Add Tenant</Button>
                     </CardContent>
                 </Card>
 

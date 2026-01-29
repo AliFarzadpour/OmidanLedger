@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -43,13 +44,77 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useSearchParams } from 'next/navigation';
 
+const toNum = (v: any): number => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+    if (typeof v === "string") {
+      const cleaned = v.replace(/[^0-9.-]/g, "", ""); // strips $ and commas safely
+      const n = parseFloat(cleaned);
+      return Number.isFinite(n) ? n : 0;
+    }
+    return 0;
+  };
 
-const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease }: any) => {
+  function getRentForDate(rentHistory: {amount: number; effectiveDate: string}[], date: Date): number {
+    if (!rentHistory || rentHistory.length === 0) return 0;
+    // Sort history by effective date descending
+    const sortedHistory = [...rentHistory].sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
+    // Find the most recent rent that is before or on the given date
+    const applicableRent = sortedHistory.find(r => new Date(r.effectiveDate) <= date);
+    return applicableRent ? toNum(applicableRent.amount) : 0;
+}
+
+// --- NEW HELPER FUNCTIONS ---
+
+function parseMonthKeyToDate(monthKey: string): Date {
+  return parseISO(`${monthKey}-02`); // Use day 2 to avoid timezone issues
+}
+
+function monthWindow(date: Date): { start: Date; end: Date } {
+  return { start: startOfMonth(date), end: endOfMonth(date) };
+}
+
+function parseDateSafe(dateString: string | undefined): Date | null {
+  if (!dateString) return null;
+  const date = parseISO(dateString);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
+  if (!tenants || tenants.length === 0) return null;
+
+  const { start: monthStart, end: monthEnd } = monthWindow(date);
+
+  const overlappingTenants = tenants.filter(t => {
+    const leaseStart = parseDateSafe(t.leaseStart);
+    const leaseEnd = parseDateSafe(t.leaseEnd);
+
+    // If no dates, can't determine overlap
+    if (!leaseStart || !leaseEnd) return false;
+
+    // Check for overlap: (StartA <= EndB) and (EndA >= StartB)
+    return leaseStart <= monthEnd && leaseEnd >= monthStart;
+  });
+
+  // If multiple tenants overlap (e.g., move-in/move-out), pick the one with the latest start date
+  if (overlappingTenants.length > 1) {
+    return overlappingTenants.sort((a, b) => {
+      const startA = parseDateSafe(a.leaseStart)?.getTime() || 0;
+      const startB = parseDateSafe(b.leaseStart)?.getTime() || 0;
+      return startB - startA; // Sort descending by start date
+    })[0];
+  }
+
+  return overlappingTenants[0] || null;
+}
+
+const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLease, isOccupantForMonth }: any) => {
     return (
         <div className="flex justify-between items-center border p-3 rounded-lg bg-slate-50/50">
             <div>
                 <div className="flex items-center gap-2">
                     <p className="font-medium">{tenant.firstName} {tenant.lastName}</p>
+                    {isOccupantForMonth && <Badge className="bg-blue-100 text-blue-800">This Month</Badge>}
                     {tenant.status && (
                         <Badge variant="outline" className={cn('capitalize text-xs h-5', tenant.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-slate-100 text-slate-600')}>
                             {tenant.status}
@@ -59,7 +124,7 @@ const TenantRow = ({ tenant, index, propertyId, landlordId, onUpdate, onOpenLeas
                 <p className="text-sm text-muted-foreground">{tenant.email}</p>
             </div>
             <div className="text-right hidden sm:block">
-                <p className="font-medium">${(tenant.rentAmount || 0).toLocaleString()}/mo</p>
+                <p className="font-medium">${(getRentForDate(tenant.rentHistory, new Date()) || 0).toLocaleString()}/mo</p>
                 <p className="text-xs text-muted-foreground">Lease ends: {tenant.leaseEnd || 'N/A'}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -297,10 +362,20 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const { user } = useUser();
   const firestore = useFirestore();
+  const searchParams = useSearchParams();
   const [interestForMonth, setInterestForMonth] = useState(0);
 
-  // DYNAMIC MONTH KEY
-  const monthKey = format(new Date(), 'yyyy-MM');
+  const selectedMonthKey = useMemo(() => {
+    const monthParam = searchParams.get('month');
+    if (monthParam && /^\d{4}-\d{2}$/.test(monthParam)) {
+      return monthParam;
+    }
+    return format(new Date(), 'yyyy-MM');
+  }, [searchParams]);
+
+  const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
+
+  const monthKey = selectedMonthKey;
   
   const monthlyStatsRef = useMemoFirebase(() => {
     if (!firestore || !property?.id) return null;
@@ -311,7 +386,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   useEffect(() => {
     if (!user || !property?.id) return;
     
-    // Calculate interest for cash flow
     const calculateInterest = async () => {
       if (property.mortgage?.hasMortgage === 'yes' && property.mortgage.originalLoanAmount) {
           const result = await calculateAmortization({
@@ -320,7 +394,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
               principalAndInterest: property.mortgage.principalAndInterest,
               loanStartDate: property.mortgage.purchaseDate,
               loanTermInYears: property.mortgage.loanTerm,
-              targetDate: new Date().toISOString(),
+              targetDate: selectedMonthDate.toISOString(),
           });
           if (result.success) {
               setInterestForMonth(result.interestPaidForMonth || 0);
@@ -328,29 +402,9 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       }
     };
     calculateInterest();
-  }, [user, property]);
+  }, [user, property, selectedMonthDate]);
 
-  // SEPARATE ACTIVE AND PAST TENANTS
-  const { activeTenants, pastTenants } = useMemo(() => {
-    if (!property?.tenants) {
-      return { activeTenants: [], pastTenants: [] };
-    }
-    
-    const active: any[] = [];
-    const past: any[] = [];
-
-    property.tenants.forEach((t: any) => {
-      // robust check: handles 'Active', 'active', 'ACTIVE'
-      const isActive = (t.status || '').toLowerCase() === 'active';
-      if (isActive) {
-        active.push(t);
-      } else {
-        past.push(t);
-      }
-    });
-
-    return { activeTenants: active, pastTenants: past };
-  }, [property]);
+  const monthTenant = useMemo(() => tenantForMonth(property.tenants, selectedMonthDate), [property, selectedMonthDate]);
   
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
@@ -367,7 +421,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const cashFlowValue = noiValue - debtPayment;
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
-    const potentialRentValue = property.tenants?.filter((t: any) => t.status === 'active').reduce((sum: number, t: any) => sum + (t.rentAmount || 0), 0) || 0;
+    const potentialRentValue = monthTenant ? getRentForDate(monthTenant.rentHistory, selectedMonthDate) : 0;
     const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
     const breakEvenRentValue = operatingExpenses + totalDebtPayment;
@@ -398,7 +452,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [monthlyStats, property, interestForMonth]);
+  }, [monthlyStats, property, interestForMonth, monthTenant, selectedMonthDate]);
   
   const getAiInsight = useMemo(() => {
     if (loadingTxs) return "Analyzing property performance...";
@@ -433,17 +487,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   if (!property) return <div className="p-8">Property not found.</div>;
   
   const getPropertyStatus = () => {
-    const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
-    if (!activeTenant) return 'Vacant';
-    if (activeTenant.leaseEnd && isPast(parseISO(activeTenant.leaseEnd))) {
-      return 'Lease Expired';
-    }
-    return 'Occupied';
+    // Month-based status: if a tenant overlaps the selected month, it's occupied for that month.
+    return monthTenant ? 'Occupied' : 'Vacant';
   };
 
   const status = getPropertyStatus();
-  const activeTenant = property.tenants?.find((t: any) => t.status === 'active');
-  const currentRent = activeTenant ? activeTenant.rentAmount : (property.financials?.targetRent || 0);
+  const currentRent = monthTenant ? getRentForDate(monthTenant.rentHistory, selectedMonthDate) : (property.financials?.targetRent || 0);
   const totalDebtPayment = (property.mortgage?.principalAndInterest || 0) + (property.mortgage?.escrowAmount || 0);
   
   const getDscrBadge = (ratio: number) => {
@@ -556,81 +605,46 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             
             <TabsContent value="tenants" className="mt-6">
                 <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                    <CardHeader className="flex flex-row items-center justify-between">
                     <div>
-                    <CardTitle>Current Residents</CardTitle>
-                    <CardDescription>Lease details for this property.</CardDescription>
+                        <CardTitle>Resident for {selectedMonthKey}</CardTitle>
+                        <CardDescription>
+                        Shows the tenant whose lease overlaps this month. If none, the property is vacant for that month.
+                        </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>Manage Tenants</Button>
-                    <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleOpenDialog('tenants')}>
+                        Manage Tenants
+                        </Button>
+                        <Button size="sm" onClick={() => setIsInviteOpen(true)} className="gap-2">
                         <UserPlus className="h-4 w-4" /> Create Portal
-                    </Button>
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {(activeTenants.length > 0 || pastTenants.length > 0) ? (
-                    <div className="space-y-6">
-                        {/* --- Active Tenants Section --- */}
-                        {activeTenants.length > 0 && (
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-semibold text-green-700 flex items-center gap-2">
-                                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                                    Active Residents
-                                </h3>
-                                {activeTenants.map((t: any, i: number) => (
-                                    <TenantRow 
-                                        key={`active-${i}`} 
-                                        tenant={t} 
-                                        index={i} 
-                                        propertyId={property.id} 
-                                        landlordId={user.uid}
-                                        onUpdate={onUpdate}
-                                        onOpenLease={handleOpenLeaseAgent}
-                                    />
-                                ))}
-                            </div>
-                        )}
-
-                        {/* --- Visual Divider (Only if we have both types) --- */}
-                        {activeTenants.length > 0 && pastTenants.length > 0 && (
-                            <div className="relative py-2">
-                                <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t" />
-                                </div>
-                                <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-background px-2 text-muted-foreground">Past Residents</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* --- Past Tenants Section --- */}
-                        {pastTenants.length > 0 && (
-                            <div className="space-y-4 opacity-75 grayscale-[0.3]">
-                                {activeTenants.length === 0 && <h3 className="text-sm font-semibold text-muted-foreground">Past Residents</h3>}
-                                {pastTenants.map((t: any, i: number) => (
-                                    <TenantRow 
-                                        key={`past-${i}`} 
-                                        tenant={t} 
-                                        index={i} 
-                                        propertyId={property.id} 
-                                        landlordId={user.uid}
-                                        onUpdate={onUpdate}
-                                        onOpenLease={handleOpenLeaseAgent}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                    ) : (
-                    <div className="text-center py-6">
-                        <p className="text-muted-foreground text-sm">No tenants recorded.</p>
-                        <Button variant="link" onClick={() => setIsInviteOpen(true)} className="mt-2">
-                            Click "Create Portal" to add one.
                         </Button>
                     </div>
+                    </CardHeader>
+
+                    <CardContent>
+                    {monthTenant ? (
+                        <div className="space-y-3">
+                        <TenantRow
+                            tenant={monthTenant}
+                            index={0}
+                            propertyId={property.id}
+                            landlordId={user.uid}
+                            onUpdate={onUpdate}
+                            onOpenLease={handleOpenLeaseAgent}
+                            isOccupantForMonth={true}
+                        />
+                        </div>
+                    ) : (
+                        <div className="text-center py-10 border-2 border-dashed rounded-lg">
+                        <Users className="h-10 w-10 mx-auto text-slate-300 mb-2" />
+                        <p className="text-sm font-medium">Vacant for {selectedMonthKey}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            No lease overlaps this month.
+                        </p>
+                        </div>
                     )}
-                </CardContent>
+                    </CardContent>
                 </Card>
             </TabsContent>
             

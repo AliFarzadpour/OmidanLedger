@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -43,7 +44,7 @@ interface Tenant {
     email: string;
     phone?: string;
     status: 'active' | 'past';
-    rentAmount: number | string;
+    rentHistory: { amount: number; effectiveDate: string }[];
     leaseEnd?: string;
     leaseStart?: string; // Ensure leaseStart is part of the type
 }
@@ -131,6 +132,15 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   }
 
   return overlappingTenants[0] || null;
+}
+
+function getRentForDate(rentHistory: {amount: number; effectiveDate: string}[], date: Date): number {
+    if (!rentHistory || rentHistory.length === 0) return 0;
+    // Sort history by effective date descending
+    const sortedHistory = [...rentHistory].sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
+    // Find the most recent rent that is before or on the given date
+    const applicableRent = sortedHistory.find(r => new Date(r.effectiveDate) <= date);
+    return applicableRent ? toNum(applicableRent.amount) : 0;
 }
 
 
@@ -312,7 +322,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
           tenantName: `${monthTenant.firstName} ${monthTenant.lastName}`,
           tenantEmail: monthTenant.email,
           tenantPhone: monthTenant.phone,
-          rentDue: toNum(monthTenant.rentAmount),
+          rentDue: getRentForDate(monthTenant.rentHistory, viewingDate),
           leaseEnd: monthTenant.leaseEnd,
         };
       }).filter(Boolean);
@@ -324,15 +334,10 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
         const monthTenant = tenantForMonth(unit.tenants, viewingDate);
         if (!monthTenant) return null;
 
-        const rentDue =
-            toNum(monthTenant.rentAmount) ||
-            toNum(unit.financials?.rent) ||
-            toNum(unit.financials?.targetRent) ||
-            toNum(unit.targetRent) ||
-            0;
+        const rentDue = getRentForDate(monthTenant.rentHistory, viewingDate) || toNum(unit.financials?.rent) || toNum(unit.financials?.targetRent) || toNum(unit.targetRent) || 0;
   
           return {
-              uniqueKey: `${unit.propertyId}-${unit.id}-${monthTenant.email || tenantIndex}`,
+              uniqueKey: `${unit.propertyId}-${unit.id}-${monthTenant.email || unitIndex}`,
               propertyId: unit.propertyId,
               unitId: unit.id,
               propertyName: `${parentProperty.name} #${unit.unitNumber}`,

@@ -57,11 +57,22 @@
               "status": { "type": "string", "enum": ["active", "past"], "description": "The current status of the tenant's lease." },
               "leaseStart": { "type": "string", "format": "date" },
               "leaseEnd": { "type": "string", "format": "date" },
-              "rentAmount": { "type": "number" },
+              "rentHistory": {
+                "type": "array",
+                "description": "A history of rent amounts with their effective dates.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "amount": { "type": "number" },
+                    "effectiveDate": { "type": "string", "format": "date" }
+                  },
+                  "required": ["amount", "effectiveDate"]
+                }
+              },
               "rentDueDate": { "type": "number" },
               "lateFeeAmount": { "type": "number" }
             },
-            "required": ["firstName", "lastName", "email", "rentAmount", "rentDueDate"]
+            "required": ["firstName", "lastName", "email", "rentDueDate"]
           }
         },
         "access": {
@@ -299,7 +310,18 @@
               "status": { "type": "string", "enum": ["active", "past"], "description": "The current status of the tenant's lease." },
               "leaseStart": { "type": "string", "format": "date" },
               "leaseEnd": { "type": "string", "format": "date" },
-              "rentAmount": { "type": "number" },
+              "rentHistory": {
+                "type": "array",
+                "description": "A history of rent amounts with their effective dates.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "amount": { "type": "number" },
+                    "effectiveDate": { "type": "string", "format": "date" }
+                  },
+                  "required": ["amount", "effectiveDate"]
+                }
+              },
               "deposit": { "type": "number" }
             },
             "required": ["firstName", "lastName", "email"]
