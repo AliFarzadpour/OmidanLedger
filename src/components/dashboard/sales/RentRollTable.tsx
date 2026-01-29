@@ -332,8 +332,24 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
       .filter(p => p.type === 'single-family' || p.type === 'condo')
       .map((p, propIndex) => {
         const monthTenant = tenantForMonth(p.tenants, viewingDate);
-        if (!monthTenant) return null;
-        
+
+        // VACANT ROW
+        if (!monthTenant) {
+          return {
+            uniqueKey: `${p.id}-vacant-${propIndex}`,
+            propertyId: p.id,
+            unitId: null,
+            propertyName: p.name,
+            tenantId: `vacant-${p.id}`,
+            tenantName: `Vacant`,
+            tenantEmail: '',
+            tenantPhone: '',
+            rentDue: 0,
+            leaseEnd: null,
+            isVacant: true,
+          };
+        }
+
         return {
           uniqueKey: `${p.id}-${monthTenant.email || propIndex}`,
           propertyId: p.id,
@@ -345,15 +361,30 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
           tenantPhone: monthTenant.phone,
           rentDue: getRentForDate(monthTenant.rentHistory, viewingDate),
           leaseEnd: monthTenant.leaseEnd,
+          isVacant: false,
         };
-      }).filter(Boolean);
+      });
   
     const multiFamilyRows = (allUnits || []).map((unit, unitIndex) => {
         const parentProperty = propertyMap.get(unit.propertyId);
         if (!parentProperty) return null;
     
         const monthTenant = tenantForMonth(unit.tenants, viewingDate);
-        if (!monthTenant) return null;
+        if (!monthTenant) {
+             return {
+                uniqueKey: `${unit.propertyId}-${unit.id}-vacant`,
+                propertyId: unit.propertyId,
+                unitId: unit.id,
+                propertyName: `${parentProperty.name} #${unit.unitNumber}`,
+                tenantId: `vacant-${unit.id}`,
+                tenantName: 'Vacant',
+                tenantEmail: '',
+                tenantPhone: '',
+                rentDue: 0,
+                leaseEnd: null,
+                isVacant: true,
+            };
+        }
 
         const rentDue = getRentForDate(monthTenant.rentHistory, viewingDate) || toNum(unit.financials?.rent) || toNum(unit.financials?.targetRent) || toNum(unit.targetRent) || 0;
   
@@ -368,6 +399,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
               tenantPhone: monthTenant.phone,
               rentDue,
               leaseEnd: monthTenant.leaseEnd,
+              isVacant: false,
           };
         }).filter(Boolean);
   
@@ -375,6 +407,9 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
 
     const enrichedRows = combinedRows.map(row => {
       if (!row) return null;
+      if (row.isVacant) {
+          return { ...row, amountPaid: 0, balance: 0, status: 'unpaid', leaseStatus: 'safe' };
+      }
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
       const balance = row.rentDue - amountPaid;
   
@@ -416,7 +451,7 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
   
   const unpaidTenants = useMemo(() => {
     return rentRoll.filter(item => {
-      if (!item) return false;
+      if (!item || (item as any).isVacant) return false;
       const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
       return (item.status === 'unpaid' || item.status === 'partial') && !invoiceStatus.sent;
     });
@@ -531,6 +566,20 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
             ) : (
                 rentRoll.map((item) => {
                     const invoiceStatus = hasInvoiceBeenSent(item.tenantEmail, viewingDate);
+                     if ((item as any).isVacant) {
+                        return (
+                            <TableRow key={item.uniqueKey} className="bg-slate-50/50">
+                                <TableCell></TableCell> {/* Lease status dot */}
+                                <TableCell className="font-medium text-muted-foreground">{item.propertyName}</TableCell>
+                                <TableCell className="italic text-muted-foreground">{item.tenantName}</TableCell>
+                                <TableCell>{formatCurrency(0)}</TableCell>
+                                <TableCell className="text-right">{formatCurrency(0)}</TableCell>
+                                <TableCell></TableCell> {/* Assign payment icon */}
+                                <TableCell><Badge variant="secondary">Vacant</Badge></TableCell>
+                                <TableCell className="text-right"></TableCell> {/* Actions */}
+                            </TableRow>
+                        )
+                    }
                     return item && (
                         <TableRow key={item.uniqueKey}>
                             <TableCell>
