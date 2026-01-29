@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   doc,
   collection,
@@ -12,7 +12,7 @@ import {
   collectionGroup,
   where,
 } from 'firebase/firestore';
-import { useFirestore, useUser, useMemoFirebase } from '@/firebase';
+import { useFirestore, useUser, useMemoFirebase, useCollection } from '@/firebase';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import {
@@ -54,13 +54,13 @@ import { useStorage } from '@/firebase';
 import { generateLease } from '@/ai/flows/lease-flow';
 import { formatCurrency } from '@/lib/format';
 import { ref, deleteObject } from 'firebase/storage';
-import { parseISO, format, startOfMonth, endOfMonth, differenceInDays, isPast } from 'date-fns';
+import { parseISO, format, startOfMonth, endOfMonth, differenceInDays, isPast, startOfYear } from 'date-fns';
 import { calculateAmortization } from '@/actions/amortization-actions';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 // ---------- Robust helpers ----------
 const toNum = (v: any): number => {
@@ -86,24 +86,10 @@ const toDateSafe = (v: any): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
-// L0 normalization so we don’t miss categories
-function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
-    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
-      .toUpperCase()
-      .trim();
-  
-    // NOI Income
-    if (raw === "INCOME") return "INCOME";
-  
-    // NOI Expenses (ONLY operating)
-    if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
-  
-    // Everything else should not affect NOI
-    // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
-    return "IGNORE";
-}
-
-const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
+const getRentForDate = (
+  rentHistory: { amount: any; effectiveDate: any }[],
+  date: Date
+): number => {
   if (!rentHistory || rentHistory.length === 0) return 0;
 
   const normalized = rentHistory
@@ -120,13 +106,23 @@ const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date
   return match ? match.amount : 0;
 };
 
-function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
+function getRentForMonthFromPropertyTenants(
+  tenants: any[] | undefined,
+  date: Date
+): number {
   if (!tenants || tenants.length === 0) return 0;
-  const allHistory = tenants.flatMap((t) => (Array.isArray(t?.rentHistory) ? t.rentHistory : []));
+  const allHistory = tenants.flatMap((t) =>
+    Array.isArray(t?.rentHistory) ? t.rentHistory : []
+  );
   return getRentForDate(allHistory, date);
 }
 
-function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?: any; date: Date }): number {
+function resolveRentDueForMonth(opts: {
+  monthTenant?: any;
+  property?: any;
+  unit?: any;
+  date: Date;
+}): number {
   const { monthTenant, property, unit, date } = opts;
 
   const direct = getRentForDate(monthTenant?.rentHistory || [], date);
@@ -460,6 +456,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   const { user } = useUser();
   const firestore = useFirestore();
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [interestForMonth, setInterestForMonth] = useState(0);
 
   const selectedMonthKey = useMemo(() => {
@@ -473,7 +470,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   // --- KPI TX SOURCE (authoritative) ---
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
-
+  
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
@@ -484,15 +481,15 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   // We fetch txs via getDocs into local state so KPI math always has a real array.
   const [kpiTxs, setKpiTxs] = useState<any[]>([]);
   const [kpiLoading, setKpiLoading] = useState(false);
-
+  
   useEffect(() => {
     if (!monthlyTransactionsQuery) {
       setKpiTxs([]);
       return;
     }
-
+  
     let cancelled = false;
-
+  
     (async () => {
       try {
         setKpiLoading(true);
@@ -506,7 +503,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
         if (!cancelled) setKpiLoading(false);
       }
     })();
-
+  
     return () => {
       cancelled = true;
     };
@@ -554,7 +551,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   }
 
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } =
-    useMemo(() => {
+  useMemo(() => {
     if (!property) {
       return {
         noi: 0,
@@ -981,3 +978,5 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     </>
   );
 }
+
+    
