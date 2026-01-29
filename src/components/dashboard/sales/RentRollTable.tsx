@@ -25,7 +25,7 @@ import { formatCurrency } from '@/lib/format';
 import { CreateChargeDialog } from './CreateChargeDialog';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, isSameMonth, parseISO, differenceInDays, isPast } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { getDocs, collection, query, limit, where, doc, collectionGroup } from 'firebase/firestore';
+import { getDocs, collection, query, limit, where, doc, collectionGroup, Timestamp } from 'firebase/firestore';
 import { batchCreateTenantInvoices } from '@/actions/batch-invoice-actions';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -86,23 +86,54 @@ interface Charge {
 }
 
 
+// ---------- Robust helpers (copy/paste) ----------
 const toNum = (v: any): number => {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+
   if (typeof v === "string") {
-    const cleaned = v.replace(/[^0-9.-]/g, "", ""); // strips $ and commas safely
+    const cleaned = v.replace(/[^0-9.-]/g, ""); // <- FIXED (2 args only)
     const n = parseFloat(cleaned);
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
 };
 
-// --- MONTH-AWARE HELPER FUNCTIONS ---
-function parseDateSafe(dateString: string | undefined): Date | null {
-  if (!dateString) return null;
-  const date = new Date(dateString); // Use new Date() for flexible parsing
-  return isNaN(date.getTime()) ? null : date;
-}
+const toDateSafe = (v: any): Date | null => {
+  if (!v) return null;
+
+  // Firestore Timestamp
+  if (v instanceof Timestamp) return v.toDate();
+  if (typeof v === "object" && typeof v.seconds === "number") {
+    return new Date(v.seconds * 1000);
+  }
+
+  // String or Date
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const getRentForDate = (rentHistory: any[] | undefined, date: Date): number => {
+  if (!rentHistory || rentHistory.length === 0) return 0;
+
+  // Accept multiple possible keys from DB/UI
+  const normalized = rentHistory
+    .map((r) => ({
+      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
+      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
+    }))
+    .filter((x) => x.amount > 0 && x.effective);
+
+  if (normalized.length === 0) return 0;
+
+  // Sort newest effective date first
+  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+
+  // Find most recent rent <= target date
+  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
+  return match ? match.amount : 0;
+};
+
 
 function monthWindow(date: Date): { start: Date; end: Date } {
   return { start: startOfMonth(date), end: endOfMonth(date) };
@@ -114,8 +145,8 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
   const { start: monthStart, end: monthEnd } = monthWindow(date);
 
   const overlappingTenants = tenants.filter(t => {
-    const leaseStart = parseDateSafe(t.leaseStart);
-    const leaseEnd = parseDateSafe(t.leaseEnd);
+    const leaseStart = toDateSafe(t.leaseStart);
+    const leaseEnd = toDateSafe(t.leaseEnd);
 
     if (!leaseStart || !leaseEnd) return false;
 
@@ -125,24 +156,14 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
 
   if (overlappingTenants.length > 1) {
     return overlappingTenants.sort((a, b) => {
-      const startA = parseDateSafe(a.leaseStart)?.getTime() || 0;
-      const startB = parseDateSafe(b.leaseStart)?.getTime() || 0;
+      const startA = toDateSafe(a.leaseStart)?.getTime() || 0;
+      const startB = toDateSafe(b.leaseStart)?.getTime() || 0;
       return startB - startA; // Sort descending by start date, newest lease wins
     })[0];
   }
 
   return overlappingTenants[0] || null;
 }
-
-function getRentForDate(rentHistory: {amount: number; effectiveDate: string}[], date: Date): number {
-    if (!rentHistory || rentHistory.length === 0) return 0;
-    // Sort history by effective date descending
-    const sortedHistory = [...rentHistory].sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
-    // Find the most recent rent that is before or on the given date
-    const applicableRent = sortedHistory.find(r => new Date(r.effectiveDate) <= date);
-    return applicableRent ? toNum(applicableRent.amount) : 0;
-}
-
 
 // Helper function to fetch units in chunks
 function chunk<T>(arr: T[], size = 10) {
