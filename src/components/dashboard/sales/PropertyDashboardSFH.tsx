@@ -386,9 +386,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string, lan
                             Confirm Delete?
                         </Button>
                     ) : (
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => setIsDeleting(doc.id)}>
-                            <Trash2 className="h-4 w-4"/>
-                        </Button>
+                        <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-500" onClick={() => setIsDeleting(doc.id)}><Trash2 className="h-4 w-4"/></Button>
                     )}
                   </div>
                 </div>
@@ -467,8 +465,25 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     );
   }, [firestore, property, user, selectedMonthKey]);
   
-  const { data: monthlyTransactions, isLoading: loadingTxs, error: txError } = useCollection(monthlyTransactionsQuery);
+  useEffect(() => {
+    if (!monthlyTransactionsQuery) return;
+  
+    (async () => {
+      try {
+        console.log("🧪 Running getDocs() for monthlyTransactionsQuery...");
+        const snap = await getDocs(monthlyTransactionsQuery);
+        console.log("✅ getDocs count =", snap.size);
+  
+        const first = snap.docs[0]?.data();
+        console.log("✅ first doc data =", first);
+      } catch (e) {
+        console.error("❌ getDocs FAILED:", e);
+      }
+    })();
+  }, [monthlyTransactionsQuery]);
 
+  const { data: monthlyTransactions, isLoading: loadingTxs, error: txError } = useCollection(monthlyTransactionsQuery);
+  
   useEffect(() => {
     if (txError) {
       console.error("🔥 monthlyTransactionsQuery ERROR:", txError);
