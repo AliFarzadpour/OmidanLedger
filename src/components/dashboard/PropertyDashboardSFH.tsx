@@ -180,19 +180,19 @@ function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
 }
 
 function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
-    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
-      .toUpperCase()
-      .trim();
-  
-    // NOI Income
-    if (raw === "INCOME") return "INCOME";
-  
-    // NOI Expenses (ONLY operating)
-    if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
-  
-    // Everything else should not affect NOI
-    // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
-    return "IGNORE";
+  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
+    .toUpperCase()
+    .trim();
+
+  // NOI Income
+  if (raw === "INCOME") return "INCOME";
+
+  // NOI Expenses (ONLY operating)
+  if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
+
+  // Everything else should not affect NOI
+  // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
+  return "IGNORE";
 }
 
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any; onUpdate: () => void }) {
@@ -207,7 +207,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   const searchParams = useSearchParams();
   const router = useRouter();
   const [interestForMonth, setInterestForMonth] = useState(0);
-  const [kpiRange, setKpiRange] = useState<'ytd' | 'month'>('ytd');
+  const [kpiRange, setKpiRange] = useState<'ytd' | 'month'>('ytd'); // ✅ default YTD
 
   const selectedMonthKey = useMemo(() => {
     const monthParam = searchParams.get('month');
@@ -284,133 +284,114 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     [property, selectedMonthDate]
   );
   
-// --- KPI CALC (FIXED) ---
-// Put this helper near your other helpers (top of file), OR keep it right above the KPI useMemo.
-function normalizeL0Any(tx: any): string {
-  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().trim();
-  if (raw === 'INCOME') return 'INCOME';
-  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
-  if (raw === 'EXPENSE') return 'OPERATING EXPENSE';
-  if (raw === 'ASSET') return 'ASSET';
-  if (raw === 'LIABILITY') return 'LIABILITY';
-  if (raw === 'EQUITY') return 'EQUITY';
-  if (raw.includes('INCOME')) return 'INCOME';
-  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
-  return raw || 'UNKNOWN';
-}
+  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
+    if (!property) {
+      return {
+        noi: 0,
+        cashFlow: 0,
+        dscr: 0,
+        economicOccupancy: 0,
+        breakEvenRent: 0,
+        rentalIncome: 0,
+        potentialRent: 0,
+        verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
+      };
+    }
 
-const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
-  if (!property) {
-    return {
-      noi: 0,
-      cashFlow: 0,
-      dscr: 0,
-      economicOccupancy: 0,
-      breakEvenRent: 0,
-      rentalIncome: 0,
-      potentialRent: 0,
-      verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' },
-    };
-  }
+    const monthKey = selectedMonthKey;
 
-  const monthKey = selectedMonthKey;
+    const periodEnd = endOfMonth(selectedMonthDate);
+    const periodStart =
+      kpiRange === 'ytd' ? startOfYear(selectedMonthDate) : startOfMonth(selectedMonthDate);
+    
+    const monthsElapsed =
+      kpiRange === 'ytd'
+        ? differenceInCalendarMonths(periodEnd, startOfYear(selectedMonthDate)) + 1
+        : 1;
 
-  const periodEnd = endOfMonth(selectedMonthDate);
-  const periodStart =
-    kpiRange === 'ytd' ? startOfYear(selectedMonthDate) : startOfMonth(selectedMonthDate);
+    // 1) Filter txs to THIS month
+    const periodTxs = kpiTxs.filter((tx: any) => {
+      const d = toDateSafe(tx?.date);
+      if (!d) return false;
+      return d >= periodStart && d <= periodEnd;
+    });
+
+    // 2) Sum INCOME (actual collected)
+    const rentalIncomeValue = periodTxs
+      .filter((tx: any) => normalizeL0(tx) === 'INCOME')
+      .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
   
-  const monthsElapsed =
-    kpiRange === 'ytd'
-      ? differenceInCalendarMonths(periodEnd, startOfYear(selectedMonthDate)) + 1
-      : 1;
+    // 3) Sum Operating Expenses
+    const operatingExpensesValue = periodTxs
+      .filter((tx: any) => normalizeL0(tx) === 'OPERATING_EXPENSE')
+      .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
 
-  // 1) Filter txs to THIS month
-  const periodTxs = kpiTxs.filter((tx: any) => {
-    const d = toDateSafe(tx?.date);
-    if (!d) return false;
-    return d >= periodStart && d <= periodEnd;
-  });
-
-  // 2) Sum INCOME (actual collected)
-  const rentalIncomeValue = periodTxs
-    .filter((tx: any) => normalizeL0Any(tx) === 'INCOME')
-    .reduce((sum: number, tx: any) => {
-      const amt = toNum(tx?.amount);
-      // rent collected should contribute positively
-      return sum + (amt >= 0 ? amt : Math.abs(amt));
-    }, 0);
-
-  // 3) Sum Operating Expenses
-  const operatingExpensesValue = periodTxs
-    .filter((tx: any) => normalizeL0Any(tx) === 'OPERATING EXPENSE')
-    .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
-
-  // 4) Potential rent (from tenant/property rent logic)
-  const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
-  const potentialRentMonthly = resolveRentDueForMonth({
-    monthTenant: monthTenantLocal,
-    property,
-    date: selectedMonthDate,
-  });
-
-  const potentialRentValue = potentialRentMonthly * monthsElapsed;
-
-  // 5) NOI (Monthly) = Income - Operating Expenses
-  const noiValue = rentalIncomeValue - operatingExpensesValue;
-
-  // 6) Debt & ratios
-  const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
-  const escrow = toNum(property?.mortgage?.escrowAmount);
-  const totalDebtPayment = debtPayment + escrow;
-
-  const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
-  const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
-
-  // 7) Econ occupancy + break-even
-  const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
-  const breakEvenRentValue = operatingExpensesValue + totalDebtPayment;
-
-  // ✅ DEBUG (this will prove the fix immediately)
-  console.log("KPI COMPONENTS", {
-    kpiRange,
-    monthKey,
-    periodStart: periodStart.toISOString(),
-    periodEnd: periodEnd.toISOString(),
-    txListCount: kpiTxs.length,
-    periodTxCount: periodTxs.length,
-    rentalIncomeValue,
-    operatingExpensesValue,
-    potentialRentMonthly,
-    potentialRentValue,
-    noiValue,
-  });
-
-  // Verdict
-  let verdictLabel = "Stable";
-  let verdictColor = "bg-blue-100 text-blue-800";
-
-  if (cashFlowValue > 100 && dscrValue > 1.25) {
-    verdictLabel = "Healthy Cash Flow";
-    verdictColor = "bg-green-100 text-green-800";
-  } else if (cashFlowValue < 0) {
-    verdictLabel = "Underperforming";
-    verdictColor = "bg-red-100 text-red-800";
-  } else if (dscrValue < 1.25 && debtPayment > 0) {
-    verdictLabel = "High Debt Ratio";
-    verdictColor = "bg-amber-100 text-amber-800";
-  }
-
-  return {
-    noi: noiValue,
-    cashFlow: cashFlowValue,
-    dscr: dscrValue,
-    economicOccupancy: economicOccupancyValue,
-    breakEvenRent: breakEvenRentValue,
-    rentalIncome: rentalIncomeValue,
-    potentialRent: potentialRentValue,
-    verdict: { label: verdictLabel, color: verdictColor },
-  };
-}, [kpiTxs, property, selectedMonthDate, selectedMonthKey, kpiRange]);
+    // 4) Potential rent (from tenant/property rent logic)
+    const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
+    const potentialRentMonthly = resolveRentDueForMonth({
+      monthTenant: monthTenantLocal,
+      property,
+      date: selectedMonthDate,
+    });
+    
+    const potentialRentValue = potentialRentMonthly * monthsElapsed;
+  
+    // 5) NOI (Monthly) = Income - Operating Expenses
+    const noiValue = rentalIncomeValue - operatingExpensesValue;
+  
+    // 6) Debt & ratios
+    const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
+    const escrow = toNum(property?.mortgage?.escrowAmount);
+    const totalDebtPayment = debtPayment + escrow;
+  
+    const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
+    const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
+  
+    const economicOccupancyValue =
+      potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
+  
+    const breakEvenRentValue = operatingExpensesValue + totalDebtPayment;
+  
+    // 7) Verdict
+    let verdictLabel = "Stable";
+    let verdictColor = "bg-blue-100 text-blue-800";
+  
+    if (cashFlowValue > 100 && dscrValue > 1.25) {
+      verdictLabel = "Healthy Cash Flow";
+      verdictColor = "bg-green-100 text-green-800";
+    } else if (cashFlowValue < 0) {
+      verdictLabel = "Underperforming";
+      verdictColor = "bg-red-100 text-red-800";
+    } else if (dscrValue < 1.25 && debtPayment > 0) {
+      verdictLabel = "High Debt Ratio";
+      verdictColor = "bg-amber-100 text-amber-800";
+    }
+  
+    console.log("KPI COMPONENTS", {
+      kpiRange,
+      monthKey,
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      txListCount: kpiTxs.length,
+      periodTxCount: periodTxs.length,
+      rentalIncomeValue,
+      operatingExpensesValue,
+      potentialRentMonthly,
+      potentialRentValue,
+      noiValue,
+    });
+  
+    return {
+      noi: noiValue,
+      cashFlow: cashFlowValue,
+      dscr: dscrValue,
+      economicOccupancy: economicOccupancyValue,
+      breakEvenRent: breakEvenRentValue,
+      rentalIncome: rentalIncomeValue,
+      potentialRent: potentialRentValue,
+      verdict: { label: verdictLabel, color: verdictColor },
+    };
+  }, [kpiTxs, property, selectedMonthDate, selectedMonthKey, kpiRange]);
 
   const getAiInsight = useMemo(() => {
     if (kpiLoading) return 'Analyzing property performance...';
@@ -518,6 +499,24 @@ const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, pot
         {header}
 
         <div className="space-y-6 pt-4">
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant={kpiRange === 'ytd' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setKpiRange('ytd')}
+            >
+              YTD
+            </Button>
+            <Button
+              type="button"
+              variant={kpiRange === 'month' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setKpiRange('month')}
+            >
+              Monthly
+            </Button>
+          </div>
           {/* Investor KPIs */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <TooltipProvider>
@@ -525,7 +524,7 @@ const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, pot
                 <TooltipTrigger asChild>
                   <div>
                     <StatCard
-                      title="NOI (YTD)"
+                      title={`NOI (${kpiRange === 'ytd' ? 'YTD' : 'Monthly'})`}
                       value={noi}
                       icon={<Wallet className="h-5 w-5 text-green-600" />}
                       isLoading={kpiLoading}
@@ -546,7 +545,7 @@ const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, pot
                 <TooltipTrigger asChild>
                   <div>
                     <StatCard
-                      title="Cash Flow After Debt"
+                      title={`Cash Flow After Debt (${kpiRange === 'ytd' ? 'YTD' : 'Monthly'})`}
                       value={cashFlow}
                       icon={<TrendingUp className="h-5 w-5 text-slate-500" />}
                       isLoading={kpiLoading}
