@@ -432,6 +432,17 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
 
   const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
 
+  useEffect(() => {
+    console.log("===== DEBUG PropertyDashboardSFH =====");
+    console.log("selectedMonthKey:", selectedMonthKey);
+    console.log("property?.id:", property?.id);
+    console.log("property keys:", property ? Object.keys(property) : null);
+    console.log("property.name:", property?.name);
+    console.log("property.userId:", property?.userId);
+    console.log("property.address?.street:", property?.address?.street);
+    console.log("======================================");
+  }, [property, selectedMonthKey]);
+
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
     
