@@ -534,10 +534,12 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   }, [firestore, property?.id, user?.uid, selectedMonthKey]);
   
   useEffect(() => {
+    console.log("🧪 monthlyTransactionsQuery is", monthlyTransactionsQuery);
+  
     if (!monthlyTransactionsQuery) {
-        console.log("🧪 monthlyTransactionsQuery is NULL (not running getDocs)");
-        return;
-    };
+      console.log("🧪 monthlyTransactionsQuery is NULL (not running getDocs)");
+      return;
+    }
   
     (async () => {
       try {
@@ -589,7 +591,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
 
   const monthTenant = useMemo(() => tenantForMonth(property?.tenants, selectedMonthDate), [property, selectedMonthDate]);
   
-  /* ------------------------- KPI CALC (FIXED) ------------------------- */
   const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
     if (!property) {
       return {
@@ -604,73 +605,79 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       };
     }
   
-    const monthKey = selectedMonthKey;
+    const monthKey = selectedMonthKey; // "2026-01"
 
+    // 1) Filter transactions to THIS month
     const monthlyTxs = (monthlyTransactions || []).filter((tx: any) => {
-        const d = toDateSafe(tx?.date);
-        if (!d) return false;
+      if (!tx?.date) return false;
+      try {
+        const d = tx.date.toDate ? tx.date.toDate() : parseISO(tx.date);
         return format(d, 'yyyy-MM') === monthKey;
+      } catch {
+        return false;
+      }
     });
 
-    const rentalIncomeVal = monthlyTxs
-      .filter((tx: any) => normalizeL0(tx) === 'INCOME')
-      .reduce((sum: number, tx: any) => sum + toNum(tx.amount), 0);
+    // 2) Calculate ACTUAL rent collected from transactions
+    const rentalIncome = monthlyTxs
+      .filter(tx => String(tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
+      .reduce((sum, tx) => sum + Math.abs(toNum(tx.amount)), 0);
 
-    const operatingExpensesVal = Math.abs(
-      monthlyTxs
-        .filter((tx: any) => {
-          const l0 = normalizeL0(tx);
-          return l0 === 'EXPENSE' || l0 === 'OPERATING EXPENSE';
-        })
-        .reduce((sum: number, tx: any) => sum + toNum(tx.amount), 0)
-    );
+    // 3) Calculate operating expenses (absolute value)
+    const operatingExpenses = monthlyTxs
+      .filter(tx => String(tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
+      .reduce((sum, tx) => sum + Math.abs(toNum(tx.amount)), 0);
 
-    const potentialRentVal = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
-    
-    const noiVal = rentalIncomeVal - operatingExpensesVal;
-  
+    // 4) Potential rent (from tenant/property rent fields) as fallback
+    const potentialRentValue = resolveRentDueForMonth({
+      monthTenant,
+      property,
+      date: selectedMonthDate
+    });
+
+    // 5) IMPORTANT FIX:
+    // NOI should be based on ACTUAL income if we have it.
+    // If no income posted yet, fallback to potential rent.
+    const noiBaseIncome = rentalIncome > 0 ? rentalIncome : potentialRentValue;
+    const noiValue = noiBaseIncome - operatingExpenses;
+
+    // Debt
     const debtPayment = toNum(property.mortgage?.principalAndInterest);
-    const escrow = toNum(property.mortgage?.escrowAmount);
-    const totalDebtPayment = debtPayment + escrow;
-  
-    const cashFlowVal = noiVal - totalDebtPayment;
-    const dscrVal = totalDebtPayment > 0 ? noiVal / totalDebtPayment : Infinity;
-  
-    const economicOccupancyVal = potentialRentVal > 0 ? (rentalIncomeVal / potentialRentVal) * 100 : 0;
-    const breakEvenRentVal = operatingExpensesVal + totalDebtPayment;
-    
+    const totalDebtPayment = debtPayment + toNum(property.mortgage?.escrowAmount);
+
+    // Cash flow uses NOI minus debt (still fine)
+    const cashFlowValue = noiValue - debtPayment;
+    const dscrValue = totalDebtPayment > 0 ? (noiValue / totalDebtPayment) : Infinity;
+
+    // Economic Occupancy: actual collected / potential
+    const economicOccupancyValue =
+      potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
+
+    const breakEvenRentValue = operatingExpenses + totalDebtPayment;
+    const surplus = noiBaseIncome - breakEvenRentValue;
+
     let verdictLabel = "Stable";
     let verdictColor = "bg-blue-100 text-blue-800";
   
-    if (cashFlowVal > 100 && dscrVal > 1.25) {
+    if (cashFlowValue > 100 && dscrValue > 1.25) {
         verdictLabel = "Healthy Cash Flow";
         verdictColor = "bg-green-100 text-green-800";
-    } else if (cashFlowVal < 0) {
+    } else if (cashFlowValue < 0) {
         verdictLabel = "Underperforming";
         verdictColor = "bg-red-100 text-red-800";
-    } else if (dscrVal < 1.25 && debtPayment > 0) {
+    } else if (dscrValue < 1.25 && debtPayment > 0) {
         verdictLabel = "High Debt Ratio";
         verdictColor = "bg-amber-100 text-amber-800";
     }
   
-    // optional quick debug (safe to keep for now)
-    console.log('KPI DEBUG', {
-      selectedMonthKey: monthKey,
-      allTxCount: monthlyTransactions?.length || 0,
-      monthTxCount: monthlyTxs.length,
-      incomeSum: rentalIncomeVal,
-      expenseSum: operatingExpensesVal,
-      noi: noiVal,
-    });
-
     return {
-      noi: noiVal,
-      cashFlow: cashFlowVal,
-      dscr: dscrVal,
-      economicOccupancy: economicOccupancyVal,
-      breakEvenRent: breakEvenRentVal,
-      rentalIncome: rentalIncomeVal,
-      potentialRent: potentialRentVal,
+      noi: noiValue,
+      cashFlow: cashFlowValue,
+      dscr: dscrValue,
+      economicOccupancy: economicOccupancyValue,
+      breakEvenRent: breakEvenRentValue,
+      rentalIncome: rentalIncome,
+      potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
   }, [monthlyTransactions, property, interestForMonth, monthTenant, selectedMonthDate, selectedMonthKey]);
