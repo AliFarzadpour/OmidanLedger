@@ -492,7 +492,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       console.error("🔥 monthlyTransactionsQuery ERROR:", txError);
     }
   }, [txError]);
-
+  
   useEffect(() => {
     console.log("selectedMonthKey", selectedMonthKey);
     console.log("property.id", property?.id);
@@ -528,15 +528,23 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
     }
   
+    // This is the ACTUAL collected rent for the period
     const rentalIncome = (monthlyTransactions || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
         .reduce((sum, tx) => sum + toNum(tx.amount), 0);
 
+    // These are the ACTUAL operating expenses for the period
     const operatingExpenses = Math.abs((monthlyTransactions || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
         .reduce((sum, tx) => sum + toNum(tx.amount), 0));
         
-    const noiValue = rentalIncome - operatingExpenses;
+    // This is the POTENTIAL rent due for the month based on lease terms
+    const potentialRentValue = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
+    
+    // --- START OF FIX ---
+    // NOI is now calculated based on POTENTIAL rent, not just collected rent, to give a pro-forma view.
+    const noiValue = potentialRentValue - operatingExpenses;
+    // --- END OF FIX ---
   
     const debtPayment = property.mortgage?.principalAndInterest || 0;
     const totalDebtPayment = debtPayment + (property.mortgage?.escrowAmount || 0);
@@ -544,11 +552,15 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const cashFlowValue = noiValue - debtPayment;
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
-    const potentialRentValue = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
+    // Economic occupancy remains based on ACTUAL collected rent vs potential.
     const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
     const breakEvenRentValue = operatingExpenses + totalDebtPayment;
-    const surplus = rentalIncome - breakEvenRentValue;
+
+    // --- START OF FIX ---
+    // Surplus is also based on POTENTIAL rent to be consistent with the NOI calculation.
+    const surplus = potentialRentValue - breakEvenRentValue;
+    // --- END OF FIX ---
     
     let verdictLabel = "Stable";
     let verdictColor = "bg-blue-100 text-blue-800";
@@ -701,7 +713,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                     value={breakEvenRent} 
                     icon={<AlertTriangle className="h-5 w-5 text-slate-500" />} 
                     isLoading={loadingTxs} 
-                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(rentalIncome - breakEvenRent)}` : 'No fixed costs'}
+                    description={breakEvenRent > 0 ? `Surplus: ${formatCurrency(potentialRent - breakEvenRent)}` : 'No fixed costs'}
                 />
             </div>
             
