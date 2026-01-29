@@ -444,6 +444,11 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
   
+    console.log("DEBUG monthlyTransactionsQuery inputs:", {
+      userUid: user?.uid,
+      propertyIdUsedInQuery: property?.id,
+    });
+  
     return query(
       collectionGroup(firestore, 'transactions'),
       where('userId', '==', user.uid),
@@ -535,7 +540,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         
     const potentialRentValue = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
     
-    const noiValue = potentialRentValue - operatingExpenses;
+    const noiValue = rentalIncome - operatingExpenses;
   
     const debtPayment = property.mortgage?.principalAndInterest || 0;
     const totalDebtPayment = debtPayment + (property.mortgage?.escrowAmount || 0);
@@ -672,7 +677,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
                         <StatCard 
                           title="NOI (Monthly)" 
                           value={noi} 
-                          icon={<Wallet className="h-5 w-5 text-slate-500" />} 
+                          icon={<Wallet className="h-5 w-5 text-slate-500"/>} 
                           isLoading={loadingTxs} 
                           cardClassName={cn(noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} 
                           colorClass={noi >= 0 ? "text-green-700" : "text-red-700"}
