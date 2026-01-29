@@ -528,23 +528,17 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
       return { noi: 0, cashFlow: 0, dscr: 0, economicOccupancy: 0, breakEvenRent: 0, rentalIncome: 0, potentialRent: 0, verdict: { label: 'Analyzing...', color: 'bg-gray-100 text-gray-800' } };
     }
   
-    // This is the ACTUAL collected rent for the period
     const rentalIncome = (monthlyTransactions || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase() === 'INCOME')
         .reduce((sum, tx) => sum + toNum(tx.amount), 0);
 
-    // These are the ACTUAL operating expenses for the period
     const operatingExpenses = Math.abs((monthlyTransactions || [])
         .filter(tx => (tx.categoryHierarchy?.l0 || '').toUpperCase().includes('EXPENSE'))
         .reduce((sum, tx) => sum + toNum(tx.amount), 0));
         
-    // This is the POTENTIAL rent due for the month based on lease terms
     const potentialRentValue = resolveRentDueForMonth({ monthTenant, property, date: selectedMonthDate });
     
-    // --- START OF FIX ---
-    // NOI is now calculated based on POTENTIAL rent, not just collected rent, to give a pro-forma view.
     const noiValue = potentialRentValue - operatingExpenses;
-    // --- END OF FIX ---
   
     const debtPayment = property.mortgage?.principalAndInterest || 0;
     const totalDebtPayment = debtPayment + (property.mortgage?.escrowAmount || 0);
@@ -552,15 +546,10 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
     const cashFlowValue = noiValue - debtPayment;
     const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
   
-    // Economic occupancy remains based on ACTUAL collected rent vs potential.
     const economicOccupancyValue = potentialRentValue > 0 ? (rentalIncome / potentialRentValue) * 100 : 0;
     
     const breakEvenRentValue = operatingExpenses + totalDebtPayment;
-
-    // --- START OF FIX ---
-    // Surplus is also based on POTENTIAL rent to be consistent with the NOI calculation.
     const surplus = potentialRentValue - breakEvenRentValue;
-    // --- END OF FIX ---
     
     let verdictLabel = "Stable";
     let verdictColor = "bg-blue-100 text-blue-800";
@@ -683,7 +672,14 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <TooltipProvider>
                     <Tooltip><TooltipTrigger asChild><div>
-                        <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} cardClassName="bg-green-50/70 border-green-200" />
+                        <StatCard 
+                          title="NOI (Monthly)" 
+                          value={noi} 
+                          icon={<Wallet className="h-5 w-5 text-slate-500" />} 
+                          isLoading={loadingTxs} 
+                          cardClassName={cn(noi >= 0 ? "bg-green-50/70 border-green-200" : "bg-red-50/70 border-red-200")} 
+                          colorClass={noi >= 0 ? "text-green-700" : "text-red-700"}
+                        />
                     </div></TooltipTrigger><TooltipContent><p>Net Operating Income: Rent minus operating expenses (excludes debt).</p></TooltipContent></Tooltip>
 
                     <Tooltip><TooltipTrigger asChild><div>

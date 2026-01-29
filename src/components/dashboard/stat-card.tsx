@@ -16,11 +16,12 @@ type StatCardProps = {
   isLoading?: boolean;
   format?: 'currency' | 'percent' | 'months';
   cardClassName?: string;
+  colorClass?: string;
   delta?: number;
   deltaInverted?: boolean;
 };
 
-export function StatCard({ title, value, icon, description, isLoading, format = 'currency', cardClassName, delta, deltaInverted = false }: StatCardProps) {
+export function StatCard({ title, value, icon, description, isLoading, format = 'currency', cardClassName, colorClass, delta, deltaInverted = false }: StatCardProps) {
   
   const formattedValue = () => {
     if (format === 'percent') {
@@ -46,7 +47,7 @@ export function StatCard({ title, value, icon, description, isLoading, format = 
           <Skeleton className="h-8 w-3/4" />
         ) : (
             <>
-              <div className="text-xl font-bold">{formattedValue()}</div>
+              <div className={cn("text-xl font-bold", colorClass)}>{formattedValue()}</div>
               {delta !== undefined && isFinite(delta) && (
                   <div className={cn(
                       "flex items-center gap-1 text-xs font-semibold",
