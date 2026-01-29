@@ -3,7 +3,7 @@
 
 import { useFirestore, useDoc, useMemoFirebase, useCollection } from '@/firebase';
 import { doc, collection, query, writeBatch, deleteDoc, addDoc, where } from 'firebase/firestore';
-import { PropertyDashboardSFH } from '@/components/dashboard/properties/PropertyDashboardSFH';
+import { PropertyDashboardSFH } from '@/components/dashboard/PropertyDashboardSFH';
 import { Loader2, ArrowLeft, Bot, Building, Plus, Edit, UploadCloud, Eye, Download, Trash2, FileText, BookOpen } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -343,10 +343,7 @@ export default function PropertyDetailPage() {
 
   const unitsQuery = useMemoFirebase(() => {
     if (!firestore || !id || !user) return null;
-    return query(
-        collection(firestore, 'properties', id, 'units'),
-        where("userId", "==", user.uid)
-    );
+    return query(collection(firestore, 'properties', id, 'units'));
   }, [firestore, id, user, refreshKey]);
 
   const { data: units, isLoading: isLoadingUnits, refetch: refetchUnits } = useCollection(unitsQuery);
@@ -459,3 +456,5 @@ export default function PropertyDetailPage() {
   // Otherwise, return your original Single Family interface
   return <PropertyDashboardSFH property={property} onUpdate={() => setRefreshKey(k => k + 1)} />;
 }
+
+    
