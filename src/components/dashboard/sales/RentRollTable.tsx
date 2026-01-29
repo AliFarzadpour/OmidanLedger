@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useMemo, useState, useCallback, useEffect } from 'react';
@@ -46,6 +45,7 @@ interface Tenant {
     status: 'active' | 'past';
     rentAmount: number | string;
     leaseEnd?: string;
+    leaseStart?: string; // Ensure leaseStart is part of the type
 }
 
 interface Unit {
@@ -95,6 +95,43 @@ const toNum = (v: any): number => {
   }
   return 0;
 };
+
+// --- MONTH-AWARE HELPER FUNCTIONS ---
+function parseDateSafe(dateString: string | undefined): Date | null {
+  if (!dateString) return null;
+  const date = parseISO(dateString);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+function monthWindow(date: Date): { start: Date; end: Date } {
+  return { start: startOfMonth(date), end: endOfMonth(date) };
+}
+
+function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
+  if (!tenants || tenants.length === 0) return null;
+
+  const { start: monthStart, end: monthEnd } = monthWindow(date);
+
+  const overlappingTenants = tenants.filter(t => {
+    const leaseStart = parseDateSafe(t.leaseStart);
+    const leaseEnd = parseDateSafe(t.leaseEnd);
+
+    if (!leaseStart || !leaseEnd) return false;
+
+    // Overlap condition: (StartA <= EndB) and (EndA >= StartB)
+    return leaseStart <= monthEnd && leaseEnd >= monthStart;
+  });
+
+  if (overlappingTenants.length > 1) {
+    return overlappingTenants.sort((a, b) => {
+      const startA = parseDateSafe(a.leaseStart)?.getTime() || 0;
+      const startB = parseDateSafe(b.leaseStart)?.getTime() || 0;
+      return startB - startA; // Sort descending by start date, newest lease wins
+    })[0];
+  }
+
+  return overlappingTenants[0] || null;
+}
 
 
 // Helper function to fetch units in chunks
@@ -262,56 +299,56 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
   
     const singleFamilyRows = (properties || [])
       .filter(p => p.type === 'single-family' || p.type === 'condo')
-      .flatMap((p, propIndex) => {
-        const activeTenants = p.tenants?.filter(t => t.status === 'active') || [];
-        return activeTenants.map((t, tenantIndex) => ({
-          uniqueKey: `${p.id}-${t.email || tenantIndex}`,
+      .map((p, propIndex) => {
+        const monthTenant = tenantForMonth(p.tenants, viewingDate);
+        if (!monthTenant) return null;
+        
+        return {
+          uniqueKey: `${p.id}-${monthTenant.email || propIndex}`,
           propertyId: p.id,
           unitId: null,
           propertyName: p.name,
-          tenantId: t.id || t.email,
-          tenantName: `${t.firstName} ${t.lastName}`,
-          tenantEmail: t.email,
-          tenantPhone: t.phone,
-          rentDue: toNum(t.rentAmount),
-          leaseEnd: t.leaseEnd,
-        }));
-      });
+          tenantId: monthTenant.id || monthTenant.email,
+          tenantName: `${monthTenant.firstName} ${monthTenant.lastName}`,
+          tenantEmail: monthTenant.email,
+          tenantPhone: monthTenant.phone,
+          rentDue: toNum(monthTenant.rentAmount),
+          leaseEnd: monthTenant.leaseEnd,
+        };
+      }).filter(Boolean);
   
-    const multiFamilyRows = (allUnits || []).flatMap((unit, unitIndex) => {
+    const multiFamilyRows = (allUnits || []).map((unit, unitIndex) => {
         const parentProperty = propertyMap.get(unit.propertyId);
-        if (!parentProperty) return [];
+        if (!parentProperty) return null;
     
-        const activeTenants = (unit.tenants || []).filter(t => t.status === 'active');
-        if (activeTenants.length === 0) return [];
-        
-        return activeTenants.map((t, tenantIndex) => {
-          const rentDue =
-              toNum(t.rentAmount) ||
-              toNum(unit.financials?.rent) ||
-              toNum(unit.financials?.targetRent) ||
-              toNum(unit.targetRent) ||
-              0;
+        const monthTenant = tenantForMonth(unit.tenants, viewingDate);
+        if (!monthTenant) return null;
+
+        const rentDue =
+            toNum(monthTenant.rentAmount) ||
+            toNum(unit.financials?.rent) ||
+            toNum(unit.financials?.targetRent) ||
+            toNum(unit.targetRent) ||
+            0;
   
           return {
-              uniqueKey: `${unit.propertyId}-${unit.id}-${t.email || tenantIndex}`,
+              uniqueKey: `${unit.propertyId}-${unit.id}-${monthTenant.email || tenantIndex}`,
               propertyId: unit.propertyId,
               unitId: unit.id,
               propertyName: `${parentProperty.name} #${unit.unitNumber}`,
-              tenantId: t.id || t.email,
-              tenantName: `${t.firstName} ${t.lastName}`,
-              tenantEmail: t.email,
-              tenantPhone: t.phone,
+              tenantId: monthTenant.id || monthTenant.email,
+              tenantName: `${monthTenant.firstName} ${monthTenant.lastName}`,
+              tenantEmail: monthTenant.email,
+              tenantPhone: monthTenant.phone,
               rentDue,
-              leaseEnd: t.leaseEnd,
+              leaseEnd: monthTenant.leaseEnd,
           };
-        });
-      });
+        }).filter(Boolean);
   
     const combinedRows = [...singleFamilyRows, ...multiFamilyRows];
-    const visibleRows = combinedRows;
 
-    const enrichedRows = visibleRows.map(row => {
+    const enrichedRows = combinedRows.map(row => {
+      if (!row) return null;
       const amountPaid = (row.unitId ? incomeByPropertyOrUnit[row.unitId] : 0) || incomeByPropertyOrUnit[row.propertyId] || 0;
       const balance = row.rentDue - amountPaid;
   
@@ -340,24 +377,16 @@ export function RentRollTable({ viewingDate }: { viewingDate: Date }) {
         status: paymentStatus,
         leaseStatus
       };
-    });
+    }).filter(Boolean) as (typeof combinedRows[0] & { amountPaid: number; balance: number; status: 'unpaid' | 'paid' | 'partial' | 'overpaid'; leaseStatus: 'safe' | 'expiring' | 'expired' })[];
 
-    // Sort the rows: Unpaid > Partial > Overpaid > Paid
     enrichedRows.sort((a, b) => {
-        const statusSortOrder = {
-            unpaid: 1,
-            partial: 2,
-            overpaid: 3,
-            paid: 4,
-        };
-        const statusA = statusSortOrder[a.status];
-        const statusB = statusSortOrder[b.status];
-        return statusA - statusB;
+        const statusSortOrder = { unpaid: 1, partial: 2, overpaid: 3, paid: 4 };
+        return statusSortOrder[a.status] - statusSortOrder[b.status];
     });
 
     return enrichedRows;
   
-  }, [properties, allUnits, incomeByPropertyOrUnit]);
+  }, [properties, allUnits, incomeByPropertyOrUnit, viewingDate]);
   
   const unpaidTenants = useMemo(() => {
     return rentRoll.filter(item => {
