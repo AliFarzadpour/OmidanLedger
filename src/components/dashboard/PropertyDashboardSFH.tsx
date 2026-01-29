@@ -87,17 +87,20 @@ const toDateSafe = (v: any): Date | null => {
 };
 
 // L0 normalization so we don’t miss categories
-function normalizeL0Any(tx: any): string {
-  const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || '').toUpperCase().trim();
-  if (raw === 'INCOME') return 'INCOME';
-  if (raw === 'OPERATING EXPENSE') return 'OPERATING EXPENSE';
-  if (raw === 'EXPENSE') return 'OPERATING EXPENSE';
-  if (raw === 'ASSET') return 'ASSET';
-  if (raw === 'LIABILITY') return 'LIABILITY';
-  if (raw === 'EQUITY') return 'EQUITY';
-  if (raw.includes('INCOME')) return 'INCOME';
-  if (raw.includes('EXPENSE')) return 'OPERATING EXPENSE';
-  return raw || 'UNKNOWN';
+function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
+    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
+      .toUpperCase()
+      .trim();
+  
+    // NOI Income
+    if (raw === "INCOME") return "INCOME";
+  
+    // NOI Expenses (ONLY operating)
+    if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
+  
+    // Everything else should not affect NOI
+    // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
+    return "IGNORE";
 }
 
 const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
@@ -339,51 +342,47 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; lan
 
   const handleDelete = async (docData: any) => {
     if (!firestore || !storage) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
-      return;
+        toast({ variant: 'destructive', title: 'Error', description: 'Firebase services not available.' });
+        return;
     }
-
-    let fileRef;
-    if (docData?.storagePath) fileRef = ref(storage, docData.storagePath);
-    else if (docData?.downloadUrl) fileRef = ref(storage, docData.downloadUrl);
-    else {
-      toast({ variant: 'destructive', title: 'Cannot Delete', description: 'No file path found in document.' });
-      return;
+    if (!docData?.storagePath) {
+        toast({ variant: 'destructive', title: 'Cannot Delete', description: 'Document metadata is missing storage path.' });
+        return;
     }
+    if (!confirm(`Are you sure you want to delete ${docData.fileName}?`)) return;
 
     try {
-      await deleteObject(fileRef);
-      const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
-      await deleteDoc(docRef);
-      toast({ title: 'Document Deleted', description: `${docData.fileName} removed successfully.` });
-      refetchDocs();
-    } catch (error: any) {
-      console.error('Deletion Error:', error);
-      if (error.code === 'storage/object-not-found') {
+        // Delete from Storage
+        const fileRef = ref(storage, docData.storagePath);
+        await deleteObject(fileRef);
+
+        // Delete from Firestore
         const docRef = doc(firestore, `properties/${propertyId}/documents`, docData.id);
         await deleteDoc(docRef);
-        toast({ title: 'Cleaned Up', description: 'File was missing from storage, so database record was removed.' });
-        refetchDocs();
-      } else if (error.code === 'storage/unauthorized') {
-        toast({ variant: 'destructive', title: 'Permission Denied', description: 'You do not have permission to delete this file.' });
-      } else {
+
+        toast({ title: 'Document Deleted', description: `${docData.fileName} has been removed.` });
+    } catch (error: any) {
+        console.error("Deletion Error:", error);
         toast({ variant: 'destructive', title: 'Deletion Failed', description: error.message });
-      }
     }
   };
 
   const getSafeDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
     if (typeof timestamp === 'string') {
-      const date = new Date(timestamp);
-      if (!isNaN(date.getTime())) return date.toLocaleDateString();
+        const date = new Date(timestamp);
+        if (!isNaN(date.getTime())) {
+            return date.toLocaleDateString();
+        }
     }
-    if (timestamp.seconds) return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000).toLocaleDateString();
+    }
     try {
       const date = new Date(timestamp);
       if (isNaN(date.getTime())) return 'Invalid Date';
       return date.toLocaleDateString();
-    } catch {
+    } catch (e) {
       return 'Invalid Date';
     }
   };
@@ -391,7 +390,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; lan
   const onUploadSuccess = () => {
     refetchDocs();
     setUploaderOpen(false);
-  };
+  }
 
   return (
     <>
@@ -405,65 +404,30 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; lan
             <UploadCloud className="h-4 w-4" /> Upload File
           </Button>
         </CardHeader>
-
         <CardContent>
           {isLoading && <p>Loading documents...</p>}
-
           {!isLoading && (!documents || documents.length === 0) && (
             <div className="text-center py-10 border-2 border-dashed rounded-lg">
-              <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2" />
-              <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
+                <FileText className="h-10 w-10 mx-auto text-slate-300 mb-2"/>
+                <p className="text-sm text-muted-foreground">No documents uploaded for this property yet.</p>
             </div>
           )}
-
           {!isLoading && documents && documents.length > 0 && (
             <div className="space-y-3">
-              {documents.map((docItem: any) => (
-                <div key={docItem.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
+              {documents.map((doc: any) => (
+                <div key={doc.id} className="flex items-start justify-between p-3 bg-slate-50 border rounded-md">
                   <div>
-                    <p className="font-medium">{docItem.fileName}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Type: {docItem.fileType} | Uploaded: {getSafeDate(docItem.uploadedAt)}
-                    </p>
-                    {docItem.description && (
-                      <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{docItem.description}</p>
-                    )}
+                    <p className="font-medium">{doc.fileName}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Type: {doc.fileType} | Uploaded: {getSafeDate(doc.uploadedAt)}</p>
+                    {doc.description && <p className="text-sm text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">{doc.description}</p>}
                   </div>
-
                   <div className="flex items-center gap-1">
-                    <a href={docItem.downloadUrl} target="_blank" rel="noopener noreferrer">
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <Eye className="h-3 w-3" /> View
-                      </Button>
+                    <a href={doc.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="icon" className="h-8 w-8"><Eye className="h-4 w-4"/></Button>
                     </a>
-                    <a href={docItem.downloadUrl} download>
-                      <Button variant="outline" size="sm" className="gap-1">
-                        <Download className="h-3 w-3" /> Download
-                      </Button>
-                    </a>
-
-                    {isDeleting === docItem.id ? (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          handleDelete(docItem);
-                          setIsDeleting(null);
-                        }}
-                      >
-                        Confirm Delete?
-                      </Button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-500"
-                        onClick={() => setIsDeleting(docItem.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:bg-red-50" onClick={() => handleDelete(doc)}>
+                        <Trash2 className="h-4 w-4"/>
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -471,7 +435,6 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; lan
           )}
         </CardContent>
       </Card>
-
       {isUploaderOpen && (
         <TenantDocumentUploader
           isOpen={isUploaderOpen}
@@ -482,7 +445,7 @@ function PropertyDocuments({ propertyId, landlordId }: { propertyId: string; lan
         />
       )}
     </>
-  );
+  )
 }
 
 export function PropertyDashboardSFH({ property, onUpdate }: { property: any; onUpdate: () => void }) {
@@ -508,10 +471,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
   const selectedMonthDate = useMemo(() => parseMonthKeyToDate(selectedMonthKey), [selectedMonthKey]);
 
   // --- KPI TX SOURCE (authoritative) ---
-  // We fetch txs via getDocs into local state so KPI math always has a real array.
-  const [kpiTxs, setKpiTxs] = useState<any[]>([]);
-  const [kpiLoading, setKpiLoading] = useState(false);
-
   const monthlyTransactionsQuery = useMemoFirebase(() => {
     if (!firestore || !property?.id || !user?.uid) return null;
 
@@ -521,7 +480,10 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       where('costCenter', '==', property.id)
     );
   }, [firestore, property?.id, user?.uid]);
-
+  
+  // We fetch txs via getDocs into local state so KPI math always has a real array.
+  const [kpiTxs, setKpiTxs] = useState<any[]>([]);
+  const [kpiLoading, setKpiLoading] = useState(false);
 
   useEffect(() => {
     if (!monthlyTransactionsQuery) {
@@ -537,7 +499,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
         const snap = await getDocs(monthlyTransactionsQuery);
         const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         if (!cancelled) setKpiTxs(rows);
-        console.log("KPI TX FETCH", { count: rows.length, first: rows[0] });
       } catch (e) {
         console.error("KPI TX FETCH FAILED", e);
         if (!cancelled) setKpiTxs([]);
@@ -550,7 +511,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       cancelled = true;
     };
   }, [monthlyTransactionsQuery]);
-
 
   useEffect(() => {
     if (!user || !property?.id) return;
@@ -577,7 +537,24 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
     [property, selectedMonthDate]
   );
   
-  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } = useMemo(() => {
+  function normalizeL0(tx: any): "INCOME" | "OPERATING_EXPENSE" | "IGNORE" {
+    const raw = String(tx?.categoryHierarchy?.l0 || tx?.primaryCategory || tx?.l0 || "")
+      .toUpperCase()
+      .trim();
+  
+    // NOI Income
+    if (raw === "INCOME") return "INCOME";
+  
+    // NOI Expenses (ONLY operating)
+    if (raw === "OPERATING EXPENSE" || raw === "OPERATING_EXPENSE") return "OPERATING_EXPENSE";
+  
+    // Everything else should not affect NOI
+    // (ASSET/LIABILITY/EQUITY/DEPOSIT/TRANSFER/DEBT SERVICE/etc.)
+    return "IGNORE";
+  }
+
+  const { noi, cashFlow, dscr, economicOccupancy, breakEvenRent, rentalIncome, potentialRent, verdict } =
+    useMemo(() => {
     if (!property) {
       return {
         noi: 0,
@@ -591,32 +568,27 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       };
     }
 
-    const monthKey = selectedMonthKey;
-
+    const startOfYearDate = startOfYear(new Date());
     const txList: any[] = kpiTxs;
   
-    // 1) Filter txs to THIS month
-    const monthlyTxs = txList.filter((tx: any) => {
+    // 1) Filter txs to THIS YEAR
+    const yearlyTxs = txList.filter((tx: any) => {
       const d = toDateSafe(tx?.date);
       if (!d) return false;
-      return format(d, 'yyyy-MM') === monthKey;
+      return d >= startOfYearDate;
     });
   
-    // 2) Sum INCOME (actual collected)
-    const rentalIncomeValue = monthlyTxs
-      .filter((tx: any) => normalizeL0Any(tx) === 'INCOME')
-      .reduce((sum: number, tx: any) => {
-        const amt = toNum(tx?.amount);
-        // rent collected should contribute positively
-        return sum + (amt >= 0 ? amt : Math.abs(amt));
-      }, 0);
-  
-    // 3) Sum Operating Expenses
-    const operatingExpensesValue = monthlyTxs
-      .filter((tx: any) => normalizeL0Any(tx) === 'OPERATING EXPENSE')
+    // 2) Sum INCOME (actual collected) for YTD
+    const rentalIncomeValue = yearlyTxs
+      .filter((tx: any) => normalizeL0(tx) === 'INCOME')
       .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
   
-    // 4) Potential rent (from tenant/property rent logic)
+    // 3) Sum Operating Expenses for YTD
+    const operatingExpensesValue = yearlyTxs
+      .filter((tx: any) => normalizeL0(tx) === 'OPERATING_EXPENSE')
+      .reduce((sum: number, tx: any) => sum + Math.abs(toNum(tx?.amount)), 0);
+  
+    // 4) Potential rent (for current month)
     const monthTenantLocal = tenantForMonth(property?.tenants, selectedMonthDate);
     const potentialRentValue = resolveRentDueForMonth({
       monthTenant: monthTenantLocal,
@@ -624,21 +596,21 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       date: selectedMonthDate,
     });
   
-    // 5) NOI (Monthly) = Income - Operating Expenses
+    // 5) YTD NOI = YTD Income - YTD Operating Expenses
     const noiValue = rentalIncomeValue - operatingExpensesValue;
   
-    // 6) Debt & ratios
+    // 6) Debt & ratios (these remain monthly calculations)
     const debtPayment = toNum(property?.mortgage?.principalAndInterest); // P&I only
     const escrow = toNum(property?.mortgage?.escrowAmount);
     const totalDebtPayment = debtPayment + escrow;
   
-    const cashFlowValue = noiValue - debtPayment; // matches your UI tooltip (NOI minus P&I)
-    const dscrValue = totalDebtPayment > 0 ? noiValue / totalDebtPayment : Infinity;
+    const cashFlowValue = (noiValue / 12) - debtPayment; // Rough monthly cashflow from YTD NOI
+    const dscrValue = totalDebtPayment > 0 ? (noiValue / 12) / totalDebtPayment : Infinity; // DSCR based on monthly average
   
     const economicOccupancyValue =
-      potentialRentValue > 0 ? (rentalIncomeValue / potentialRentValue) * 100 : 0;
+      potentialRentValue > 0 ? (rentalIncomeValue / (potentialRentValue * 12)) * 100 : 0; // YTD Occupancy
   
-    const breakEvenRentValue = operatingExpensesValue + totalDebtPayment;
+    const breakEvenRentValue = (operatingExpensesValue / 12) + totalDebtPayment;
   
     // 7) Verdict
     let verdictLabel = 'Stable';
@@ -655,15 +627,6 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       verdictColor = 'bg-amber-100 text-amber-800';
     }
   
-    console.log('KPI COMPONENTS', {
-      monthKey,
-      monthTxCount: monthlyTxs.length,
-      rentalIncomeValue,
-      operatingExpensesValue,
-      potentialRentValue,
-      noiValue,
-    });
-  
     return {
       noi: noiValue,
       cashFlow: cashFlowValue,
@@ -674,7 +637,8 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
       potentialRent: potentialRentValue,
       verdict: { label: verdictLabel, color: verdictColor },
     };
-  }, [kpiTxs, property, selectedMonthDate, selectedMonthKey]);
+  }, [kpiTxs, property, selectedMonthDate]);
+
 
   const getAiInsight = useMemo(() => {
     if (kpiLoading) return 'Analyzing property performance...';
@@ -789,7 +753,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any; on
                 <TooltipTrigger asChild>
                   <div>
                     <StatCard
-                      title="NOI (Monthly)"
+                      title="NOI (YTD)"
                       value={noi}
                       icon={<Wallet className="h-5 w-5 text-green-600" />}
                       isLoading={kpiLoading}
