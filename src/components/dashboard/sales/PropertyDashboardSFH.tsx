@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -463,7 +464,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         where('date', '<=', endDate)
     );
   }, [firestore, property, user, selectedMonthKey]);
-
+  
   useEffect(() => {
     console.log("🧪 monthlyTransactionsQuery is", monthlyTransactionsQuery);
   
@@ -667,7 +668,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
         <div className="space-y-6 pt-4">
 
             {/* --- Investor KPIs --- */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <TooltipProvider>
                     <Tooltip><TooltipTrigger asChild><div>
                         <StatCard title="NOI (Monthly)" value={noi} icon={<Wallet className="h-5 w-5 text-green-600"/>} isLoading={loadingTxs} cardClassName="bg-green-50/70 border-green-200" />
@@ -691,7 +692,7 @@ export function PropertyDashboardSFH({ property, onUpdate }: { property: any, on
             </div>
             
             {/* --- Operational KPIs --- */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <StatCard title="Debt Payment" value={totalDebtPayment} icon={<Landmark className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
                 <StatCard title="Current Rent" value={currentRent} icon={<FileText className="h-5 w-5 text-slate-500" />} isLoading={loadingTxs} />
                 <Card><CardHeader className="pb-2"><CardTitle className="text-sm font-medium">Status</CardTitle></CardHeader><CardContent><div className="text-xl font-bold capitalize">{status}</div></CardContent></Card>
