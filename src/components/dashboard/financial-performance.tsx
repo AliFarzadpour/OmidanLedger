@@ -2,9 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useFirestore, useUser } from '@/firebase';
-import { collectionGroup, query, where, getDocs, collection } from 'firebase/firestore';
+import { collectionGroup, query, where, getDocs, collection, Timestamp } from 'firebase/firestore';
 import { ArrowUpRight, ArrowDownRight, DollarSign, RefreshCw, Loader2, Users, TrendingUp, AlertTriangle } from 'lucide-react';
-import { format, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfMonth, endOfMonth, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { recalculateAllStats } from '@/actions/update-property-stats';
 import { useToast } from '@/hooks/use-toast';
@@ -63,12 +63,113 @@ const toNum = (v: any): number => {
   if (v === null || v === undefined) return 0;
   if (typeof v === "number") return Number.isFinite(v) ? v : 0;
   if (typeof v === "string") {
-    const cleaned = v.replace(/[^0-9.-]/g, "", ""); // strips $ and commas safely
+    const cleaned = v.replace(/[^0-9.-]/g, ""); // strips $ and commas safely
     const n = parseFloat(cleaned);
     return Number.isFinite(n) ? n : 0;
   }
   return 0;
 };
+
+const toDateSafe = (v: any): Date | null => {
+  if (!v) return null;
+
+  // Firestore Timestamp
+  if (v instanceof Timestamp) return v.toDate();
+  if (typeof v === "object" && typeof v.seconds === "number") {
+    return new Date(v.seconds * 1000);
+  }
+
+  // String or Date
+  const d = v instanceof Date ? v : new Date(v);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const getRentForDate = (rentHistory: { amount: any; effectiveDate: any }[], date: Date): number => {
+  if (!rentHistory || rentHistory.length === 0) return 0;
+
+  // Accept multiple possible keys from DB/UI
+  const normalized = rentHistory
+    .map((r) => ({
+      amount: toNum(r?.amount ?? r?.rent ?? r?.value),
+      effective: toDateSafe(r?.effectiveDate ?? r?.date ?? r?.startDate ?? r?.from),
+    }))
+    .filter((x) => x.amount > 0 && x.effective);
+
+  if (normalized.length === 0) return 0;
+
+  // Sort newest effective date first
+  normalized.sort((a, b) => (b.effective!.getTime() - a.effective!.getTime()));
+
+  // Find most recent rent <= target date
+  const match = normalized.find((r) => r.effective!.getTime() <= date.getTime());
+  return match ? match.amount : 0;
+};
+
+
+function getRentForMonthFromPropertyTenants(tenants: any[] | undefined, date: Date): number {
+  if (!tenants || tenants.length === 0) return 0;
+
+  // flatten all rentHistory across all tenants (property-level fallback)
+  const allHistory = tenants.flatMap(t => Array.isArray(t?.rentHistory) ? t.rentHistory : []);
+  return getRentForDate(allHistory, date);
+}
+
+function resolveRentDueForMonth(opts: { monthTenant?: any; property?: any; unit?: any; date: Date }): number {
+  const { monthTenant, property, unit, date } = opts;
+
+  // 1) rentHistory on the actual month tenant
+  const direct = getRentForDate(monthTenant?.rentHistory || [], date);
+  if (direct > 0) return direct;
+
+  // 2) fallback: property-level rent history across ALL tenants
+  const propFallback = getRentForMonthFromPropertyTenants(property?.tenants, date);
+  if (propFallback > 0) return propFallback;
+
+  // 3) fallbacks: tenant legacy fields
+  const tenantRent = toNum(monthTenant?.rentAmount) || toNum(monthTenant?.rent) || toNum(monthTenant?.monthlyRent);
+  if (tenantRent > 0) return tenantRent;
+
+  // 4) unit fallbacks (multi-family)
+  const unitRent = toNum(unit?.financials?.rent) || toNum(unit?.financials?.targetRent) || toNum(unit?.targetRent);
+  if (unitRent > 0) return unitRent;
+
+  // 5) property fallbacks
+  const propRent = toNum(property?.financials?.targetRent) || toNum(property?.financials?.rent) || toNum(property?.targetRent);
+  if (propRent > 0) return propRent;
+
+  return 0;
+}
+
+
+function monthWindow(date: Date): { start: Date; end: Date } {
+  return { start: startOfMonth(date), end: endOfMonth(date) };
+}
+
+function tenantForMonth(tenants: any[] | undefined, date: Date): any | null {
+  if (!tenants || tenants.length === 0) return null;
+
+  const { start: monthStart, end: monthEnd } = monthWindow(date);
+
+  const overlappingTenants = tenants.filter(t => {
+    const leaseStart = toDateSafe(t.leaseStart);
+    const leaseEnd = toDateSafe(t.leaseEnd);
+
+    if (!leaseStart || !leaseEnd) return false;
+
+    // Overlap condition: (StartA <= EndB) and (EndA >= StartB)
+    return leaseStart <= monthEnd && leaseEnd >= monthStart;
+  });
+
+  if (overlappingTenants.length > 1) {
+    return overlappingTenants.sort((a, b) => {
+      const startA = toDateSafe(a.leaseStart)?.getTime() || 0;
+      const startB = toDateSafe(b.leaseStart)?.getTime() || 0;
+      return startB - startA; // Sort descending by start date, newest lease wins
+    })[0];
+  }
+
+  return overlappingTenants[0] || null;
+}
 
 
 export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
@@ -133,28 +234,27 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
     let collectedRent = 0;
     let potentialRent = 0;
     
-    properties.forEach(prop => {
-        if (prop.type === 'single-family' || prop.type === 'condo') {
-            (prop.tenants || []).forEach((tenant: any) => {
-                if (tenant.status === 'active') {
-                    potentialRent += toNum(tenant.rentAmount);
-                }
-            });
+    const propertyMap = new Map((properties || []).map(p => [p.id, p]));
+
+    // Single-family properties
+    (properties || [])
+      .filter(p => p.type === 'single-family' || p.type === 'condo')
+      .forEach(p => {
+        const monthTenant = tenantForMonth(p.tenants, viewingDate);
+        if (monthTenant) {
+            potentialRent += resolveRentDueForMonth({ monthTenant, property: p, date: viewingDate });
         }
     });
 
-    allUnits.forEach(unit => {
-        (unit.tenants || []).forEach((tenant: any) => {
-            if (tenant.status === 'active') {
-                 const rentDue =
-                    toNum(tenant.rentAmount) ||
-                    toNum(unit.financials?.rent) ||
-                    toNum(unit.financials?.targetRent) ||
-                    toNum(unit.targetRent) ||
-                    0;
-                potentialRent += rentDue;
-            }
-        });
+    // Multi-family units
+    (allUnits || []).forEach(unit => {
+        const parentProperty = propertyMap.get(unit.propertyId);
+        if (!parentProperty) return;
+
+        const monthTenant = tenantForMonth(unit.tenants, viewingDate);
+        if (monthTenant) {
+            potentialRent += resolveRentDueForMonth({ monthTenant, property: parentProperty, unit, date: viewingDate });
+        }
     });
     
     const tenantPayments = new Map<string, number>();
@@ -181,7 +281,7 @@ export function FinancialPerformance({ viewingDate }: { viewingDate: Date }) {
         collectedRent,
         potentialRent,
     };
-  }, [transactions, properties, allUnits]);
+  }, [transactions, properties, allUnits, viewingDate]);
 
 
   const handleRecalculate = async () => {
