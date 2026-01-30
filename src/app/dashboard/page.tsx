@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -17,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { StatCard } from '@/components/dashboard/stat-card';
 import { ExpenseChart } from '@/components/dashboard/expense-chart';
 import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
-import { RecentTransactions } from '@/components/dashboard/recent-transactions';
 
 import { DollarSign, CreditCard, Activity, AlertCircle, Percent, Banknote, Landmark } from 'lucide-react';
 import { startOfMonth, endOfMonth, subMonths, startOfYear, endOfYear, format, differenceInDays, subYears, parseISO } from 'date-fns';
@@ -148,7 +146,6 @@ const calculateStats = (transactions: Transaction[], properties: Property[], cal
     const cashFlowData = Array.from(cashFlowMap.entries()).map(([date, val]) => ({ date, ...val })).sort((a, b) => (a.date > b.date ? 1 : -1));
 
     return {
-        filteredTransactions: transactions.slice(0, 5),
         totalIncome,
         operatingExpenses,
         netIncome,
@@ -338,10 +335,6 @@ export default function DashboardPage() {
         <div className="lg:col-span-2 flex h-full">
             <ExpenseChart data={stats.expenseBreakdown} isLoading={isLoading} />
         </div>
-      </div>
-      
-      <div className="grid grid-cols-1 gap-8">
-          <RecentTransactions transactions={stats.filteredTransactions} isLoading={isLoading} />
       </div>
 
     </div>
