@@ -55,6 +55,14 @@ export function HowItWorks() {
                       height={338}
                       className="rounded-lg shadow-xl border-4 border-white"
                     />
+                  ) : index === 1 ? (
+                    <Image
+                      src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2Fconnecting%20banks.png?alt=media&token=cc9ff6bf-7ad4-4856-b765-f75dea89771b"
+                      alt="A screenshot showing how to connect bank accounts in OmidanLedger using Plaid."
+                      width={600}
+                      height={338}
+                      className="rounded-lg shadow-xl border-4 border-white"
+                    />
                   ) : (
                     // Placeholder for other images/animations
                     <div className="aspect-video w-full bg-slate-200 rounded-lg shadow-md" />
