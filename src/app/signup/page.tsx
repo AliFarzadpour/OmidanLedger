@@ -19,7 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Logo } from '@/components/logo';
 import { useAuth, useUser } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select';
 import { createUserWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
 import { initializeUserSchema } from '@/actions/user-init';
+import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 
 /** Initiate email/password sign-up (non-blocking). */
 export function initiateEmailSignUp(authInstance: Auth, email: string, password: string, trade: string, onError?: (error: AuthError) => void): void {
@@ -112,13 +113,13 @@ export default function SignupPage() {
   if (isUserLoading || user) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center bg-background">
-        <p>Loading...</p>
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-background">
+    <div className="flex min-h-screen w-full items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md shadow-2xl">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
@@ -222,10 +223,25 @@ export default function SignupPage() {
               />
 
               <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Creating Account...' : 'Create Account'}
+                {form.formState.isSubmitting ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating Account...</>
+                ) : 'Create Account'}
               </Button>
             </form>
           </Form>
+
+          <div className="relative my-6">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+          <GoogleLoginButton />
+          
         </CardContent>
         <CardFooter className="flex flex-col gap-4">
           <div className="text-center text-sm">
