@@ -5,7 +5,7 @@ import { AppProviders } from '@/components/AppProviders';
 
 
 export const metadata: Metadata = {
-  title: 'OmidanLedger | All-in-One Rent & Expense Tracking for Landlords',
+  title: 'FiscalFlow | Modern Financial Management',
   description: 'Simplify your property management. Track rent, manage expenses, and generate real-time financial reports in one secure dashboard. Sign in or start today.',
   keywords: 'finance, bookkeeping, accounting, real estate, landlord, rent tracking, expense management, AI finance',
 };
@@ -28,7 +28,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className={cn('font-body antialiased')}>
+      <body className={cn('font-body antialiased bg-background')}>
         <AppProviders>
           {children}
         </AppProviders>

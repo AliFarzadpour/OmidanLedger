@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -16,21 +17,17 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
 import { useAuth, useUser } from '@/firebase';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Lock, Banknote, Loader2, FileText } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { signInWithEmailAndPassword, type Auth, type AuthError } from 'firebase/auth';
-import { Helmet } from 'react-helmet-async';
 import { GoogleLoginButton } from '@/components/auth/GoogleLoginButton';
 
 /** Initiate email/password sign-in (non-blocking). */
 export function initiateEmailSignIn(authInstance: Auth, email: string, password: string, onError?: (error: AuthError) => void): void {
-  // CRITICAL: Call signInWithEmailAndPassword directly. Do NOT use 'await signInWithEmailAndPassword(...)'.
   signInWithEmailAndPassword(authInstance, email, password).catch(onError);
-  // Code continues immediately. Auth state change is handled by onAuthStateChanged listener.
 }
 
 
@@ -73,94 +70,20 @@ export default function LoginPage() {
       setAuthError(errorMessage);
     });
   };
-
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "OmidanLedger",
-    "applicationCategory": "FinanceApplication",
-    "operatingSystem": "Web",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD",
-      "description": "Free beta testing phase"
-    },
-    "description": "A modern financial management platform for real estate investors and landlords.",
-    "featureList": "Automated Bookkeeping, AI-Powered Categorization, Real-time Reporting"
-  };
   
   if (isUserLoading || user) {
     return (
       <div className="flex min-h-screen w-full items-center justify-center bg-background">
-        <p>Loading...</p>
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="w-full min-h-screen grid lg:grid-cols-2">
-      <Helmet>
-        {/* 1. Basic Meta Tags */}
-        <title>OmidanLedger | Free Landlord Rent Tracking & Financial Software</title>
-        <meta 
-          name="description" 
-          content="Simplify your property management. Track rent, manage expenses, and generate real-time financial reports in one secure dashboard. Free for landlords." 
-        />
-        
-        {/* 2. Open Graph (for nicer links on LinkedIn/Facebook) */}
-        <meta property="og:title" content="OmidanLedger - All-in-One Financial Command Center" />
-        <meta property="og:description" content="Automated bookkeeping and expense tracking for real estate investors." />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://omidanledger.net/" />
-        
-        {/* 3. The 'Invisible' Schema Code for AI Bots */}
-        <script type="application/ld+json">
-          {JSON.stringify(structuredData)}
-        </script>
-      </Helmet>
-      <div className="hidden lg:flex flex-col items-start justify-center bg-slate-50 p-12 text-slate-800">
-        <div className="mb-8">
-            <Logo />
-        </div>
-        <h1 className="text-3xl font-bold tracking-tight">Your All-in-One Financial Command Center</h1>
-        <p className="mt-4 text-slate-600 leading-relaxed">
-          OmidanLedger is a modern financial management platform designed for real estate investors and property managers. Our goal is to simplify your bookkeeping, automate expense tracking, and provide you with clear, actionable financial insights.
-        </p>
-
-        <div className="mt-8 space-y-4 text-slate-600">
-            <div className="flex gap-4">
-                <Banknote className="h-6 w-6 text-primary shrink-0 mt-1"/>
-                <div>
-                    <h3 className="font-semibold">Automated Bookkeeping</h3>
-                    <p className="text-sm">Connect bank accounts via Plaid for secure, automatic transaction syncing and categorization.</p>
-                </div>
-            </div>
-             <div className="flex gap-4">
-                <Lock className="h-6 w-6 text-primary shrink-0 mt-1"/>
-                <div>
-                    <h3 className="font-semibold">AI-Powered Categorization</h3>
-                    <p className="text-sm">Our AI engine learns your spending habits and automatically suggests categories for your review.</p>
-                </div>
-            </div>
-             <div className="flex gap-4">
-                <FileText className="h-6 w-6 text-primary shrink-0 mt-1"/>
-                <div>
-                    <h3 className="font-semibold">Real-time Reporting</h3>
-                    <p className="text-sm">Generate Profit & Loss statements, rent rolls, and other crucial reports with a single click.</p>
-                </div>
-            </div>
-        </div>
-
-        <div className="mt-10 border-t border-slate-200 pt-6 text-sm text-slate-500">
-            <p><span className="font-semibold">No Obligation:</span> This application is currently in a beta testing phase and is free to use. There is no commitment required.</p>
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md shadow-2xl">
-            <CardHeader className="space-y-1 text-center pt-8">
-              <div className="flex justify-center mb-4 lg:hidden">
+    <div className="flex min-h-screen w-full items-center justify-center bg-slate-50 p-4">
+        <Card className="w-full max-w-md shadow-xl">
+            <CardHeader className="space-y-2 text-center pt-8">
+              <div className="flex justify-center mb-4">
                 <Logo />
               </div>
               <CardTitle className="text-2xl font-bold">Welcome Back</CardTitle>
@@ -222,7 +145,7 @@ export default function LoginPage() {
                     <span className="w-full border-t" />
                 </div>
                 <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">
+                    <span className="bg-card px-2 text-muted-foreground">
                     Or continue with
                     </span>
                 </div>
@@ -232,16 +155,12 @@ export default function LoginPage() {
             <CardFooter className="flex flex-col gap-4">
               <div className="text-center text-sm">
                 New here?{' '}
-                <Link href="/signup" className="underline">
+                <Link href="/signup" className="underline font-semibold hover:text-primary">
                   Create a free account
                 </Link>
               </div>
             </CardFooter>
-          </Card>
-          <footer className="w-full py-4 text-center text-sm text-muted-foreground mt-8">
-            <Link href="/privacy" className="hover:underline">Privacy Policy</Link>
-        </footer>
-      </div>
+        </Card>
     </div>
   );
 }
