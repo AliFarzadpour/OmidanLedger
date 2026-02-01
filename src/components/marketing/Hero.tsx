@@ -8,6 +8,9 @@ export function Hero() {
     <section className="bg-slate-50/50">
       <div className="container mx-auto grid lg:grid-cols-2 gap-12 items-center px-4 md:px-6 py-20 md:py-32">
         <div className="space-y-6">
+           <span className="sr-only">
+              OmidanLedger is an automated bookkeeping and financial dashboard application designed for real estate investors and landlords. It helps users track rental income, manage property expenses, and generate financial reports to understand portfolio performance.
+            </span>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter text-slate-900">
             Stop Guessing. <br />
             Know Your Numbers.

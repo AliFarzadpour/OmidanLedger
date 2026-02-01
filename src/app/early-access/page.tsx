@@ -8,7 +8,22 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
     title: 'Free Early Access | OmidanLedger',
-    description: 'Join the OmidanLedger early access program and get 6 months free. Help shape the future of landlord financial management.',
+    description: 'Join the OmidanLedger early access program and get 6 months free. Help shape the future of landlord financial management with no credit card required.',
+    openGraph: {
+        title: 'Join the OmidanLedger Free Early Access Program',
+        description: 'Get 6 months free, provide feedback, and lock in a lifetime discount on the best financial tool for landlords.',
+        url: 'https://omidanledger.com/early-access',
+        siteName: 'OmidanLedger',
+        images: [
+            {
+                url: 'https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FScreenshot%20omidanledger%20Dashboard.png?alt=media&token=0932bb0c-c929-4280-917f-b691d187d052', // Using the same OG image for consistency
+                width: 1200,
+                height: 630,
+            },
+        ],
+        locale: 'en_US',
+        type: 'website',
+    },
 };
 
 export default function EarlyAccessPage() {

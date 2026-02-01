@@ -1,11 +1,5 @@
-# See https://www.robotstxt.org/robotstxt.html for documentation on how to use the robots.txt file
-#
-# To allow all robots to crawl your site, use the following:
 User-agent: *
-Allow: /
+Disallow: /api/
+Disallow: /login/
 
-# To disallow all robots from crawling your site, use the following:
-# User-agent: *
-# Disallow: /
-
-Sitemap: /sitemap.xml
+Sitemap: https://omidanledger.com/sitemap.xml
