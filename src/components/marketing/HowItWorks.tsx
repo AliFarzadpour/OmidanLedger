@@ -73,8 +73,13 @@ export function HowItWorks() {
                       className="rounded-lg shadow-xl border-4 border-white"
                     />
                   ) : (
-                    // Placeholder for other images/animations
-                    <div className="aspect-video w-full bg-slate-200 rounded-lg shadow-md" />
+                    <Image
+                      src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FScreenshot%20omidanledger%20Dashboard.png?alt=media&token=0932bb0c-c929-4280-917f-b691d187d052"
+                      alt="A screenshot of the OmidanLedger dashboard showing financial reports."
+                      width={600}
+                      height={338}
+                      className="rounded-lg shadow-xl border-4 border-white"
+                    />
                   )}
                 </div>
               </div>
