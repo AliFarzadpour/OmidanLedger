@@ -1,4 +1,3 @@
-
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
 
@@ -22,7 +21,7 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">Company</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="#" className="hover:text-white">About Us</Link></li>
+              <li><Link href="#" className="hover:text-white">About</Link></li>
               <li><Link href="/early-access" className="hover:text-white">Early Access</Link></li>
             </ul>
           </div>
@@ -35,7 +34,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-12 border-t border-slate-700 pt-8 text-center text-sm text-slate-400">
-          <p>&copy; {new Date().getFullYear()} OmidanLedger. All rights reserved.</p>
+          <p>&copy; 2026 OmidanLedger. All rights reserved.</p>
         </div>
       </div>
     </footer>

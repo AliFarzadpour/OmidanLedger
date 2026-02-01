@@ -1,27 +1,26 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, FileText, ShieldCheck, Sparkles, CreditCard, BadgeCheck } from 'lucide-react';
+import { Building2, FileText, ShieldCheck, CreditCard, BadgeCheck } from 'lucide-react';
 
 const featureList = [
   {
     icon: <CreditCard className="h-8 w-8 text-primary" />,
     title: 'Automated Bookkeeping',
-    description: 'Securely link your bank accounts with Plaid. Transactions are automatically imported and categorized, saving you hours of manual data entry.',
+    description: 'Securely link your bank accounts with Plaid. Transactions are imported and organized automatically — no manual entry.',
   },
   {
     icon: <Building2 className="h-8 w-8 text-primary" />,
     title: 'Portfolio-Level View',
-    description: "Finally, a single dashboard for your entire portfolio's performance. Track income, expenses, and NOI across all your properties.",
+    description: "See income, expenses, and NOI across all properties in one place. Finally understand your portfolio at a glance.",
   },
   {
     icon: <FileText className="h-8 w-8 text-primary" />,
     title: 'Tax-Ready Reports',
-    description: 'Generate Profit & Loss statements, cash flow reports, and Schedule E summaries with one click. Make tax time a breeze.',
+    description: 'Generate Profit & Loss, cash flow, and Schedule E summaries in one click. Tax time without the scramble.',
   },
   {
     icon: <ShieldCheck className="h-8 w-8 text-primary" />,
     title: 'Bank-Level Security',
-    description: "We use Plaid to link your accounts, meaning we never see or store your bank credentials. Your data is protected with read-only access.",
+    description: "We use Plaid with read-only access. We never see or store your bank credentials.",
   },
 ];
 
@@ -31,12 +30,12 @@ export function Features() {
       <div className="container mx-auto px-4 md:px-6">
         <div className="text-center max-w-3xl mx-auto space-y-4 mb-12">
           <BadgeCheck className="h-10 w-10 text-primary mx-auto" />
-          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Built for Landlords, Not Accountants</h2>
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Built for Landlords — Not Accountants</h2>
           <p className="text-lg text-slate-600">
-            We focus on the metrics that matter for real estate investors. Less accounting jargon, more actionable insights.
+            We focus on the metrics that matter to real estate investors. Less accounting jargon. More clarity, control, and confidence.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-8">
           {featureList.map((feature) => (
             <Card key={feature.title} className="text-center shadow-sm hover:shadow-lg transition-shadow">
               <CardHeader>
