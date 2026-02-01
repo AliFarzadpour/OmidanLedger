@@ -1,3 +1,4 @@
+
 import Image from 'next/image';
 
 const steps = [
@@ -59,6 +60,14 @@ export function HowItWorks() {
                     <Image
                       src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2Fconnecting%20banks.png?alt=media&token=cc9ff6bf-7ad4-4856-b765-f75dea89771b"
                       alt="A screenshot showing how to connect bank accounts in OmidanLedger using Plaid."
+                      width={600}
+                      height={338}
+                      className="rounded-lg shadow-xl border-4 border-white"
+                    />
+                  ) : index === 2 ? (
+                    <Image
+                      src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FScreenshot%20Transactions.png?alt=media&token=0b767975-035c-451c-8f6c-7d809d255b5c"
+                      alt="A screenshot showing how to review transactions in OmidanLedger."
                       width={600}
                       height={338}
                       className="rounded-lg shadow-xl border-4 border-white"
