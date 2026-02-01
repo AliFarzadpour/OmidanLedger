@@ -1,3 +1,4 @@
+import Image from 'next/image';
 
 const steps = [
   {
@@ -45,8 +46,19 @@ export function HowItWorks() {
                   <h4 className="text-2xl font-bold mt-2">{step.title}</h4>
                   <p className="text-slate-600 mt-2 max-w-sm md:ml-auto">{step.description}</p>
                 </div>
-                <div className={`aspect-video bg-slate-200 rounded-lg shadow-md ${index % 2 === 1 ? 'md:order-1' : ''}`}>
-                    {/* Placeholder for image/animation */}
+                <div className={`aspect-video bg-slate-200 rounded-lg shadow-md overflow-hidden ${index % 2 === 1 ? 'md:order-1' : ''}`}>
+                  {index === 0 ? (
+                    <Image
+                      src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FAdding%20properties.png?alt=media&token=4d490e9f-ec2a-4467-8401-4d61d398161c"
+                      alt="A screenshot showing how to add properties in OmidanLedger."
+                      width={800}
+                      height={450}
+                      className="rounded-lg shadow-md object-cover w-full h-full"
+                    />
+                  ) : (
+                    // Placeholder for other images/animations
+                    <div className="w-full h-full" />
+                  )}
                 </div>
               </div>
             ))}
