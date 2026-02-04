@@ -9,6 +9,12 @@ export function Footer() {
           <div className="space-y-4">
             <Logo />
             <p className="text-sm">The all-in-one financial dashboard for landlords.</p>
+            <div className="pt-2">
+                <h3 className="font-semibold text-white mb-2">Contact Support</h3>
+                <a href="mailto:support@omidanledger.com" className="text-sm text-primary hover:underline">
+                    support@omidanledger.com
+                </a>
+            </div>
           </div>
           <div>
             <h3 className="font-semibold text-white mb-4">Product</h3>
@@ -22,12 +28,15 @@ export function Footer() {
             <h3 className="font-semibold text-white mb-4">Company</h3>
             <ul className="space-y-2 text-sm">
               <li><Link href="#" className="hover:text-white">About</Link></li>
+              <li><Link href="#faq" className="hover:text-white">FAQ</Link></li>
               <li><Link href="/early-access" className="hover:text-white">Early Access</Link></li>
+               <li><Link href="#" className="hover:text-white">Contact</Link></li>
             </ul>
           </div>
           <div>
             <h3 className="font-semibold text-white mb-4">Legal</h3>
             <ul className="space-y-2 text-sm">
+              <li><Link href="#" className="hover:text-white">Disclaimer</Link></li>
               <li><Link href="/privacy" className="hover:text-white">Privacy Policy</Link></li>
               <li><Link href="#" className="hover:text-white">Terms of Service</Link></li>
             </ul>
