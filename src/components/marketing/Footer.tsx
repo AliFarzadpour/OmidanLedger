@@ -1,3 +1,4 @@
+
 import Link from 'next/link';
 import { Logo } from '@/components/logo';
 
@@ -27,18 +28,18 @@ export function Footer() {
           <div>
             <h3 className="font-semibold text-white mb-4">Company</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="#" className="hover:text-white">About</Link></li>
-              <li><Link href="#faq" className="hover:text-white">FAQ</Link></li>
+              <li><Link href="/about" className="hover:text-white">About</Link></li>
+              <li><Link href="/faq" className="hover:text-white">FAQ</Link></li>
               <li><Link href="/early-access" className="hover:text-white">Early Access</Link></li>
-               <li><Link href="#" className="hover:text-white">Contact</Link></li>
+               <li><Link href="mailto:support@omidanledger.com" className="hover:text-white">Contact</Link></li>
             </ul>
           </div>
           <div>
             <h3 className="font-semibold text-white mb-4">Legal</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link href="#" className="hover:text-white">Disclaimer</Link></li>
+              <li><Link href="/disclaimer" className="hover:text-white">Disclaimer</Link></li>
               <li><Link href="/privacy" className="hover:text-white">Privacy Policy</Link></li>
-              <li><Link href="#" className="hover:text-white">Terms of Service</Link></li>
+              <li><Link href="/terms" className="hover:text-white">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

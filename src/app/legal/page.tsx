@@ -15,7 +15,7 @@ export default function LegalPage() {
   const legalLinks = [
     { href: '/privacy', title: 'Privacy Policy', description: 'How we handle your data.' },
     { href: '/disclaimer', title: 'Disclaimer', description: 'Important limitations of our service.' },
-    { href: '#', title: 'Terms of Service', description: 'The rules for using our application.' },
+    { href: '/terms', title: 'Terms of Service', description: 'The rules for using our application.' },
   ];
 
   return (
