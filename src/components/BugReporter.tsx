@@ -6,7 +6,6 @@ import { useUser } from "@/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { reportBug } from "@/actions/report-bug-action";
 import { Button } from "@/components/ui/button";
-import { Bug } from "lucide-react";
 
 export default function BugReporter() {
   const [isOpen, setIsOpen] = useState(false);
@@ -73,7 +72,7 @@ export default function BugReporter() {
         onClick={handleCapture}
         className="h-12 w-12 rounded-full"
       >
-        <Bug className="h-6 w-6" />
+        <span className="text-2xl">🐞</span>
         <span className="sr-only">Report Bug</span>
       </Button>
     );
