@@ -67,7 +67,7 @@ export default function BugReporter() {
     return (
       <Button
         id="bug-trigger-btn"
-        variant="destructive"
+        variant="ghost"
         size="icon"
         onClick={handleCapture}
         className="h-12 w-12 rounded-full"
