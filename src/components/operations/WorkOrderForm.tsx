@@ -7,7 +7,7 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
@@ -198,15 +198,83 @@ export function WorkOrderForm({ initialData }: { initialData?: any }) {
                       <SelectTrigger><SelectValue placeholder="Select a category..." /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="Plumbing">Plumbing</SelectItem>
-                      <SelectItem value="HVAC">HVAC</SelectItem>
-                      <SelectItem value="Electrical">Electrical</SelectItem>
-                      <SelectItem value="Appliance">Appliance</SelectItem>
-                      <SelectItem value="Turnover">Turnover</SelectItem>
-                      <SelectItem value="Cleaning">Cleaning</SelectItem>
-                      <SelectItem value="Landscaping">Landscaping</SelectItem>
-                      <SelectItem value="Other">Other</SelectItem>
-                    </SelectContent>
+                      <SelectGroup>
+                          <SelectLabel>Core Trades</SelectLabel>
+                          <SelectItem value="Plumbing">Plumbing</SelectItem>
+                          <SelectItem value="Electrical">Electrical</SelectItem>
+                          <SelectItem value="HVAC">HVAC</SelectItem>
+                          <SelectItem value="Carpentry">Carpentry</SelectItem>
+                          <SelectItem value="Appliance Repair">Appliance Repair</SelectItem>
+                          <SelectItem value="General Maintenance">General Maintenance</SelectItem>
+                          <SelectItem value="Handyman">Handyman</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Interior & Finishes</SelectLabel>
+                          <SelectItem value="Drywall">Drywall</SelectItem>
+                          <SelectItem value="Painting">Painting</SelectItem>
+                          <SelectItem value="Flooring">Flooring</SelectItem>
+                          <SelectItem value="Tile & Grout">Tile & Grout</SelectItem>
+                          <SelectItem value="Cabinetry">Cabinetry</SelectItem>
+                          <SelectItem value="Countertops">Countertops</SelectItem>
+                          <SelectItem value="Doors & Windows">Doors & Windows</SelectItem>
+                          <SelectItem value="Closet / Shelving">Closet / Shelving</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Exterior & Structure</SelectLabel>
+                          <SelectItem value="Roofing">Roofing</SelectItem>
+                          <SelectItem value="Siding">Siding</SelectItem>
+                          <SelectItem value="Fencing / Gates">Fencing / Gates</SelectItem>
+                          <SelectItem value="Deck / Patio">Deck / Patio</SelectItem>
+                          <SelectItem value="Concrete">Concrete</SelectItem>
+                          <SelectItem value="Foundation">Foundation</SelectItem>
+                          <SelectItem value="Stucco">Stucco</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Cleaning & Turnover</SelectLabel>
+                          <SelectItem value="Cleaning">Cleaning</SelectItem>
+                          <SelectItem value="Deep Cleaning">Deep Cleaning</SelectItem>
+                          <SelectItem value="Turnover / Make-Ready">Turnover / Make-Ready</SelectItem>
+                          <SelectItem value="Junk Removal">Junk Removal</SelectItem>
+                          <SelectItem value="Carpet Cleaning">Carpet Cleaning</SelectItem>
+                          <SelectItem value="Pressure Washing">Pressure Washing</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Grounds & Outdoor</SelectLabel>
+                          <SelectItem value="Landscaping">Landscaping</SelectItem>
+                          <SelectItem value="Tree Service">Tree Service</SelectItem>
+                          <SelectItem value="Irrigation / Sprinklers">Irrigation / Sprinklers</SelectItem>
+                          <SelectItem value="Snow Removal">Snow Removal</SelectItem>
+                          <SelectItem value="Pool / Spa">Pool / Spa</SelectItem>
+                          <SelectItem value="Pest Control">Pest Control</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Safety & Compliance</SelectLabel>
+                          <SelectItem value="Locks / Locksmith">Locks / Locksmith</SelectItem>
+                          <SelectItem value="Fire Safety">Fire Safety</SelectItem>
+                          <SelectItem value="Smoke / CO Detectors">Smoke / CO Detectors</SelectItem>
+                          <SelectItem value="Security Systems">Security Systems</SelectItem>
+                          <SelectItem value="Code Compliance">Code Compliance</SelectItem>
+                          <SelectItem value="Inspections">Inspections</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Utilities & Systems</SelectLabel>
+                          <SelectItem value="Gas Line">Gas Line</SelectItem>
+                          <SelectItem value="Water Heater">Water Heater</SelectItem>
+                          <SelectItem value="Sewer / Drain">Sewer / Drain</SelectItem>
+                          <SelectItem value="Smart Home / Low Voltage">Smart Home / Low Voltage</SelectItem>
+                          <SelectItem value="Internet / Cable">Internet / Cable</SelectItem>
+                      </SelectGroup>
+                      <SelectGroup>
+                          <SelectLabel>Administrative / Other</SelectLabel>
+                          <SelectItem value="Vendor Visit">Vendor Visit</SelectItem>
+                          <SelectItem value="Inspection Only">Inspection Only</SelectItem>
+                          <SelectItem value="Estimate / Quote">Estimate / Quote</SelectItem>
+                          <SelectItem value="Warranty Work">Warranty Work</SelectItem>
+                          <SelectItem value="Insurance Related">Insurance Related</SelectItem>
+                          <SelectItem value="HOA Related">HOA Related</SelectItem>
+                          <SelectItem value="Other">Other</SelectItem>
+                      </SelectGroup>
+                  </SelectContent>
                   </Select>
                   <FormMessage />
                 </FormItem>
