@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, updateDoc } from 'firebase/firestore'; 
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Trash2, Phone, Mail, Loader2, Edit2, Tag, ArrowLeft } from 'lucide-react';
+import { Search, Plus, Trash2, Phone, Mail, Loader2, Edit2, Tag, ArrowLeft, ArrowUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 
@@ -53,6 +52,8 @@ const EXPENSE_CATEGORIES = [
   "Supplies", "Taxes", "Travel", "Utilities"
 ].sort();
 
+type SortKey = 'role' | 'name' | 'defaultCategory';
+
 export default function VendorManager() {
   const { user } = useUser();
   const firestore = useFirestore();
@@ -66,8 +67,11 @@ export default function VendorManager() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingVendor, setEditingVendor] = useState<any>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({ name: '', role: '', phone: '', email: '', company: '', defaultCategory: '' });
+
+  const [sortConfig, setSortConfig] = useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'name', direction: 'ascending' });
 
   const fetchVendors = async () => {
     if (!user || !firestore) return;
@@ -111,12 +115,18 @@ export default function VendorManager() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Remove this vendor?")) return;
+    if (!firestore) return;
     try {
-      await deleteDoc(doc(firestore, 'vendors', id));
-      toast({ title: "Deleted", description: "Vendor removed." });
-      fetchVendors();
-    } catch (error) { console.error(error); }
+        const docRef = doc(firestore, 'vendors', id);
+        await deleteDoc(docRef);
+        toast({ title: "Deleted", description: "Vendor removed." });
+        fetchVendors();
+    } catch (error: any) {
+        console.error("Error deleting vendor: ", error);
+        toast({ variant: "destructive", title: "Deletion Failed", description: error.message });
+    } finally {
+        setDeletingId(null);
+    }
   };
 
   const openEdit = (vendor: any) => {
@@ -131,11 +141,53 @@ export default function VendorManager() {
     });
     setIsAddOpen(true);
   };
+  
+  const filteredAndSortedVendors = useMemo(() => {
+    let sortableItems = [...vendors];
+    
+    if (searchTerm) {
+      const lowercasedFilter = searchTerm.toLowerCase();
+      sortableItems = sortableItems.filter(v => 
+        v.name?.toLowerCase().includes(lowercasedFilter) || 
+        v.role?.toLowerCase().includes(lowercasedFilter) ||
+        v.defaultCategory?.toLowerCase().includes(lowercasedFilter)
+      );
+    }
+    
+    sortableItems.sort((a, b) => {
+        const key = sortConfig.key;
+        let valA = a[key] || '';
+        let valB = b[key] || '';
 
-  const filteredVendors = vendors.filter(v => 
-    v.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    v.role?.toLowerCase().includes(searchTerm.toLowerCase())
+        if (key === 'name') {
+            valA = (a.name || '') + (a.company || '');
+            valB = (b.name || '') + (b.company || '');
+        }
+
+        if (valA < valB) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+        }
+        if (valA > valB) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+        }
+        return 0;
+    });
+
+    return sortableItems;
+  }, [vendors, searchTerm, sortConfig]);
+
+  const requestSort = (key: SortKey) => {
+    let direction: 'ascending' | 'descending' = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+        direction = 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
+  
+  const getSortIcon = (key: SortKey) => (
+    sortConfig.key === key ? <ArrowUpDown className="h-4 w-4 inline ml-1" /> : <ArrowUpDown className="h-4 w-4 inline ml-1 opacity-30" />
   );
+
 
   return (
     <div className="p-8 space-y-8">
@@ -170,9 +222,9 @@ export default function VendorManager() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Role</TableHead>
-                <TableHead>Vendor</TableHead>
-                <TableHead>Default Category</TableHead>
+                <TableHead><Button variant="ghost" className="pl-0" onClick={() => requestSort('role')}>Role{getSortIcon('role')}</Button></TableHead>
+                <TableHead><Button variant="ghost" className="pl-0" onClick={() => requestSort('name')}>Vendor{getSortIcon('name')}</Button></TableHead>
+                <TableHead><Button variant="ghost" className="pl-0" onClick={() => requestSort('defaultCategory')}>Default Category{getSortIcon('defaultCategory')}</Button></TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -180,10 +232,10 @@ export default function VendorManager() {
             <TableBody>
               {loading ? (
                  <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground"/></TableCell></TableRow>
-              ) : filteredVendors.length === 0 ? (
+              ) : filteredAndSortedVendors.length === 0 ? (
                  <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">No vendors found.</TableCell></TableRow>
               ) : (
-                 filteredVendors.map((vendor) => (
+                 filteredAndSortedVendors.map((vendor) => (
                   <TableRow key={vendor.id}>
                     <TableCell>
                        <Badge variant="outline" className="font-normal">{vendor.role}</Badge>
@@ -212,7 +264,11 @@ export default function VendorManager() {
                     </TableCell>
                     <TableCell className="text-right">
                        <Button variant="ghost" size="icon" onClick={() => openEdit(vendor)}><Edit2 className="h-4 w-4 text-slate-500 hover:text-blue-600"/></Button>
-                       <Button variant="ghost" size="icon" onClick={() => handleDelete(vendor.id)}><Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600"/></Button>
+                       {deletingId === vendor.id ? (
+                         <Button variant="destructive" size="sm" onClick={() => handleDelete(vendor.id)}>Confirm</Button>
+                       ) : (
+                         <Button variant="ghost" size="icon" onClick={() => setDeletingId(vendor.id)}><Trash2 className="h-4 w-4 text-slate-500 hover:text-red-600"/></Button>
+                       )}
                     </TableCell>
                   </TableRow>
                  ))
