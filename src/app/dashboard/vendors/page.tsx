@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -202,7 +201,12 @@ export default function VendorManager() {
                     <TableCell>
                        <div className="space-y-1 text-sm">
                           {vendor.phone && <div className="flex items-center gap-2"><Phone className="h-3 w-3 text-slate-400"/> {vendor.phone}</div>}
-                          {vendor.email && <div className="flex items-center gap-2"><Mail className="h-3 w-3 text-slate-400"/> {vendor.email}</div>}
+                          {vendor.email && (
+                            <div className="flex items-center gap-2">
+                              <Mail className="h-3 w-3 text-slate-400"/> 
+                              <a href={`mailto:${vendor.email}`} className="hover:underline">{vendor.email}</a>
+                            </div>
+                          )}
                        </div>
                     </TableCell>
                     <TableCell className="text-right">
