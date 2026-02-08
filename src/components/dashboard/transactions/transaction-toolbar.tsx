@@ -77,7 +77,7 @@ export function TransactionToolbar({
     <div className="flex flex-col md:flex-row items-end justify-between gap-4 py-4">
       
       {/* Search & Filters */}
-      <div className="flex flex-1 flex-wrap items-end space-x-2 w-full">
+      <div className="flex flex-1 flex-wrap items-end gap-2 w-full">
         <div className="flex-grow min-w-[200px]">
           <Label>Search</Label>
           <Input

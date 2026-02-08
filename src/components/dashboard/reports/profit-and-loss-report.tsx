@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
@@ -385,13 +384,13 @@ export function ProfitAndLossReport() {
   return (
     <>
       <div className="p-8 space-y-6 max-w-7xl mx-auto">
-        <div className="flex justify-between items-end bg-muted/50 p-6 rounded-xl border">
+        <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-muted/50 p-6 rounded-xl border">
           <div className="flex flex-col gap-4">
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
                 <div className="grid gap-2"><Label>Start Date</Label><Input type="date" value={dates.from} onChange={e => setDates(d => ({ ...d, from: e.target.value }))} /></div>
                 <div className="grid gap-2"><Label>End Date</Label><Input type="date" value={dates.to} onChange={e => setDates(d => ({ ...d, to: e.target.value }))} /></div>
             </div>
-             <div className="flex gap-2">
+             <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => setDateRange('thisMonth')}>This Month</Button>
                 <Button variant="outline" size="sm" onClick={() => setDateRange('thisQuarter')}>This Quarter</Button>
                 <Button variant="outline" size="sm" onClick={() => setDateRange('thisYear')}>This Year</Button>

@@ -478,7 +478,7 @@ export function PropertyForm({
                   <Input {...form.register('name')} />
                   {form.formState.errors.name && <span className="text-red-500 text-xs">Required</span>}
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Type</Label>
                     <Controller
                         name="type"
@@ -503,7 +503,7 @@ export function PropertyForm({
                   <Input placeholder="123 Main St" {...form.register('address.street')} />
                   {form.formState.errors.address?.street && <span className="text-red-500 text-xs">Required</span>}
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                  <div className="grid gap-2">
                     <Input placeholder="City" {...form.register('address.city')} />
                     {form.formState.errors.address?.city && <span className="text-red-500 text-xs">Required</span>}
@@ -530,15 +530,15 @@ export function PropertyForm({
                             const originalIndex = tenantFields.fields.findIndex(f => f.id === field.id);
                             return (
                                 <div key={field.id} className="p-4 bg-slate-50 rounded-lg border space-y-3">
-                                  <div className="grid grid-cols-2 gap-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                       <div className="space-y-1"><Label className="text-xs">First Name *</Label><Input {...form.register(`tenants.${originalIndex}.firstName`)} /></div>
                                       <div className="space-y-1"><Label className="text-xs">Last Name *</Label><Input {...form.register(`tenants.${originalIndex}.lastName`)} /></div>
                                   </div>
-                                   <div className="grid grid-cols-2 gap-4">
+                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="space-y-1"><Label className="text-xs">Email *</Label><Input type="email" {...form.register(`tenants.${originalIndex}.email`)} /></div>
                                         <div className="space-y-1"><Label className="text-xs">Phone</Label><Input {...form.register(`tenants.${originalIndex}.phone`)} /></div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t">
                                         <div className="space-y-1"><Label className="text-xs">Lease Start</Label><Input type="date" {...form.register(`tenants.${originalIndex}.leaseStart`)} /></div>
                                         <div className="space-y-1"><Label className="text-xs">Lease End</Label><Input type="date" {...form.register(`tenants.${originalIndex}.leaseEnd`)} /></div>
                                     </div>
@@ -608,7 +608,7 @@ export function PropertyForm({
           <Card>
             <CardHeader><CardTitle>Access Information</CardTitle><CardDescription>Gate codes, lockbox details, and access notes.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Front Gate Code</Label><Input {...form.register('access.gateCode')} /></div>
                 <div className="grid gap-2"><Label>Lockbox Code</Label><Input {...form.register('access.lockboxCode')} /></div>
               </div>
@@ -637,22 +637,22 @@ export function PropertyForm({
                {form.watch('management.isManaged') === 'professional' && (
                  <div className="space-y-4 animate-in fade-in slide-in-from-top-4">
                     <Separator />
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <div className="grid gap-2"><Label>Company Name</Label><Input placeholder="ABC Property Mgmt" {...form.register('management.companyName')} /></div>
                        <div className="grid gap-2"><Label>Manager Name</Label><Input placeholder="John Doe" {...form.register('management.managerName')} /></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <div className="grid gap-2"><Label>Email</Label><Input placeholder="contact@abc.com" {...form.register('management.email')} /></div>
                        <div className="grid gap-2"><Label>Phone</Label><Input placeholder="(555) 555-5555" {...form.register('management.phone')} /></div>
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <div className="grid gap-2"><Label className="flex items-center gap-1"><Globe className="h-3 w-3"/> Website</Label><Input placeholder="www.abc-mgmt.com" {...form.register('management.website')} /></div>
                        <div className="grid gap-2"><Label className="flex items-center gap-1"><MapPin className="h-3 w-3"/> Mailing Address</Label><Input placeholder="PO Box 123" {...form.register('management.address')} /></div>
                     </div>
                     <div className="p-4 bg-slate-50 border rounded-lg">
                        <Label className="mb-2 block font-semibold text-slate-700">Fee Structure</Label>
-                       <div className="grid grid-cols-12 gap-4 mb-3">
-                          <div className="col-span-4"><Label className="text-xs">Monthly Fee</Label>
+                       <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 mb-3">
+                          <div className="col-span-1 sm:col-span-4"><Label className="text-xs">Monthly Fee</Label>
                             <Controller
                                 name="management.feeType"
                                 control={form.control}
@@ -664,9 +664,9 @@ export function PropertyForm({
                                 )}
                             />
                           </div>
-                          <div className="col-span-8"><Label className="text-xs">Value</Label><Input type="number" placeholder="10" {...form.register('management.feeValue')} /></div>
+                          <div className="col-span-1 sm:col-span-8"><Label className="text-xs">Value</Label><Input type="number" placeholder="10" {...form.register('management.feeValue')} /></div>
                        </div>
-                       <div className="grid grid-cols-2 gap-4">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Leasing Fee</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.leasingFee')} /></div></div>
                           <div className="grid gap-2"><Label className="text-xs text-muted-foreground">Renewal Fee</Label><div className="relative"><DollarSign className="absolute left-2 top-2.5 h-3 w-3 text-muted-foreground"/><Input type="number" className="pl-7" {...form.register('management.renewalFee')} /></div></div>
                        </div>
@@ -681,7 +681,7 @@ export function PropertyForm({
           <Card>
             <CardHeader><CardTitle>Loan & Purchase Information</CardTitle></CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 p-4 bg-slate-50 border rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 border rounded-lg">
                   <div className="grid gap-2"><Label>Purchase Price</Label><Input type="number" {...form.register('mortgage.purchasePrice')} /></div>
                   <div className="grid gap-2"><Label>Purchase Date</Label><Input type="date" {...form.register('mortgage.purchaseDate')} /></div>
               </div>
@@ -691,7 +691,7 @@ export function PropertyForm({
                     name="mortgage.hasMortgage"
                     control={form.control}
                     render={({ field }) => (
-                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-2 gap-4">
                             <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="m-yes" /><Label htmlFor="m-yes">Yes</Label></div>
                             <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="m-no" /><Label htmlFor="m-no">No</Label></div>
                         </RadioGroup>
@@ -702,16 +702,16 @@ export function PropertyForm({
                 <>
                   <div className="p-4 border rounded-lg bg-blue-50/20 space-y-4">
                     <Label className="font-bold text-blue-800">Loan Origination Details</Label>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="grid gap-2"><Label>Original Loan Amount</Label><Input type="number" {...form.register('mortgage.originalLoanAmount')} placeholder="e.g., 250000" /></div>
                         <div className="grid gap-2"><Label>Loan Term (Years)</Label><Input type="number" {...form.register('mortgage.loanTerm')} placeholder="e.g., 30" /></div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Lender Name</Label><Input {...form.register('mortgage.lenderName')} /></div>
                     <div className="grid gap-2"><Label>Account Number</Label><Input {...form.register('mortgage.accountNumber')} /></div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-2">
                         <Label>Principal & Interest</Label>
                         <Input type="number" {...form.register('mortgage.principalAndInterest')} placeholder="e.g. 1500" />
@@ -722,7 +722,7 @@ export function PropertyForm({
                     </div>
                   </div>
                    <p className="text-xs text-muted-foreground -mt-4">Your total payment to the lender is the sum of Principal/Interest and Escrow.</p>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="grid gap-2"><Label>Interest Rate (%)</Label><Input type="number" step="0.01" {...form.register('mortgage.interestRate')} /></div>
                     <div className="grid gap-2"><Label>Current Loan Balance</Label>
                         <div className="flex items-center gap-2">
@@ -736,7 +736,7 @@ export function PropertyForm({
                   </div>
                   <div className="p-4 border rounded-md bg-slate-50">
                     <Label className="mb-2 block font-semibold text-slate-700">This escrow amount is for:</Label>
-                    <div className="flex gap-6">
+                    <div className="flex flex-wrap gap-6">
                       <div className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesTax')} /><span className="text-sm">Property Tax</span></div>
                       <div className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesInsurance')} /><span className="text-sm">Insurance</span></div>
                       <div className="flex items-center gap-2"><input type="checkbox" className="h-4 w-4" {...form.register('mortgage.escrow.includesHoa')} /><span className="text-sm">HOA Fees</span></div>
@@ -752,19 +752,19 @@ export function PropertyForm({
           <Card>
             <CardHeader><CardTitle>Depreciation Details</CardTitle><CardDescription>Enter details to estimate annual depreciation for tax purposes.</CardDescription></CardHeader>
             <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>In-Service Date (Closing Date)</Label><Input type="date" {...form.register('depreciation.inServiceDate')} /></div>
                     <div className="space-y-2"><Label>Purchase Price</Label><Input type="number" {...form.register('depreciation.purchasePrice')} /></div>
                 </div>
                 <div className="p-4 bg-slate-50 border rounded-lg">
                     <Label className="font-semibold text-slate-700 mb-2 block">Basis Calculation</Label>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2"><Label>Land Value</Label><Input type="number" {...form.register('depreciation.landValue')} /></div>
                         <div className="space-y-2"><Label>Closing Costs</Label><Input type="number" {...form.register('depreciation.closingCosts')} /></div>
                     </div>
                     <div className="space-y-2 mt-4"><Label>Capital Improvements</Label><Input type="number" {...form.register('depreciation.improvementBasis')} /></div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2"><Label>Method</Label>
                         <Controller
                             name="depreciation.method"
@@ -783,7 +783,7 @@ export function PropertyForm({
                     <div className="space-y-2"><Label>Useful Life (Years)</Label><Input type="number" step="0.5" {...form.register('depreciation.usefulLife')} /></div>
                 </div>
                  <Separator />
-                 <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
                     <div className="space-y-1">
                         <Label className="text-blue-800">Depreciable Basis</Label>
                         <Input disabled readOnly value={form.watch('depreciation.depreciableBasis')?.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} />
@@ -801,7 +801,7 @@ export function PropertyForm({
           <div className="space-y-6">
             <Card>
               <CardHeader><CardTitle>Property Tax</CardTitle></CardHeader>
-              <CardContent className="grid grid-cols-2 gap-4">
+              <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="grid gap-2"><Label>Tax Parcel ID</Label><Input placeholder="Found on tax bill" {...form.register('taxAndInsurance.taxParcelId')} /></div>
                 <div className="grid gap-2"><Label>Annual Tax Amount</Label><Input type="number" {...form.register('taxAndInsurance.propertyTaxAmount')} /></div>
               </CardContent>
@@ -809,7 +809,7 @@ export function PropertyForm({
             <Card>
               <CardHeader><CardTitle>Home Insurance</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="grid gap-2"><Label>Insurance Provider</Label><Input placeholder="State Farm, Geico..." {...form.register('taxAndInsurance.insuranceProvider')} /></div>
                   <div className="grid gap-2"><Label>Policy Number</Label><Input {...form.register('taxAndInsurance.policyNumber')} /></div>
                 </div>
@@ -817,7 +817,7 @@ export function PropertyForm({
                   <Label>Annual Premium ($)</Label>
                   <Input type="number" {...form.register('taxAndInsurance.annualPremium')} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="grid gap-2"><Label>Policy Start Date</Label><Input type="date" {...form.register('taxAndInsurance.policyStartDate')} /></div>
                   <div className="grid gap-2"><Label>Policy End Date</Label><Input type="date" {...form.register('taxAndInsurance.policyEndDate')} /></div>
                 </div>
@@ -836,7 +836,7 @@ export function PropertyForm({
                     name="hoa.hasHoa"
                     control={form.control}
                     render={({ field }) => (
-                        <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-4">
+                        <RadioGroup onValueChange={field.onChange} value={field.value} className="grid grid-cols-2 gap-4">
                             <div className="flex items-center space-x-2"><RadioGroupItem value="yes" id="h-yes" /><Label htmlFor="h-yes">Yes</Label></div>
                             <div className="flex items-center space-x-2"><RadioGroupItem value="no" id="h-no" /><Label htmlFor="h-no">No</Label></div>
                         </RadioGroup>
@@ -845,7 +845,7 @@ export function PropertyForm({
                 </div>
                 {form.watch('hoa.hasHoa') === 'yes' && (
                   <>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                        <div className="grid gap-2"><Label>Fee Amount</Label><Input type="number" {...form.register('hoa.fee')} /></div>
                        <div className="grid gap-2"><Label>Frequency</Label>
                           <Controller
@@ -866,7 +866,7 @@ export function PropertyForm({
                        </div>
                     </div>
                     <Separator />
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                        <div className="grid gap-2"><Label>Contact Name</Label><Input placeholder="Mgmt Office" {...form.register('hoa.contactName')} /></div>
                        <div className="grid gap-2"><Label>Phone</Label><Input {...form.register('hoa.contactPhone')} /></div>
                        <div className="grid gap-2"><Label>Email</Label><Input {...form.register('hoa.contactEmail')} /></div>
