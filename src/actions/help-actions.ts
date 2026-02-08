@@ -1,3 +1,4 @@
+
 'use server';
 
 import 'server-only';
@@ -10,13 +11,17 @@ import fs from 'fs';
 import path from 'path';
 
 // --- CONFIGURATION ---
-// CRITICAL FIX: Always use 2.5-flash (1.5 is retired/404)
-const GENERATION_MODEL = 'gemini-2.5-flash'; 
-// Using embedding-001 as a stable alternative to fix the issue.
-const EMBEDDING_MODEL = 'embedding-001'; 
+const GENERATION_MODEL = 'gemini-2.5-flash';
 
-const FRIENDLY_ERROR_MSG = 'The Omidan Ledger Help Assistant is currently unavailable. Please try again later.';
-const MIN_CONTENT_LENGTH = 20;
+// FIX: embedding-001 is shut down; use the stable Gemini embedding model
+const EMBEDDING_MODEL = 'gemini-embedding-001';
+
+// Split min lengths: questions can be short; articles should be longer
+const MIN_QUERY_LENGTH = 4;
+const MIN_DOC_LENGTH = 20;
+
+const FRIENDLY_ERROR_MSG =
+  'The Omidan Ledger Help Assistant is currently unavailable. Please try again later.';
 
 // --- HELPER: Hybrid File Reader ---
 function readCodebase(dir: string, fileList: string[] = []): string[] {
@@ -42,35 +47,57 @@ function readCodebase(dir: string, fileList: string[] = []): string[] {
 }
 
 // --- 1. Embedding Function ---
-type EmbeddingResult = | { ok: true; embedding: number[] } | { ok: false; error: string };
+type EmbeddingResult =
+  | { ok: true; embedding: number[] }
+  | { ok: false; error: string };
 
-async function embedText(text: string): Promise<EmbeddingResult> {
+async function embedText(
+  text: string,
+  mode: 'query' | 'document' = 'document'
+): Promise<EmbeddingResult> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return { ok: false, error: 'Server configuration error: Missing API Key.' };
 
-  if (!text || text.trim().length < MIN_CONTENT_LENGTH) {
-    return { ok: false, error: `Content too short (min ${MIN_CONTENT_LENGTH} chars).` };
+  const minLen = mode === 'query' ? MIN_QUERY_LENGTH : MIN_DOC_LENGTH;
+  const cleaned = (text ?? '').trim();
+
+  if (cleaned.length < minLen) {
+    return { ok: false, error: `Text too short for ${mode} embedding (min ${minLen} chars).` };
   }
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`;
+    // Use documented header auth instead of ?key=
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`;
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      },
       body: JSON.stringify({
         model: `models/${EMBEDDING_MODEL}`,
-        content: { parts: [{ text: text }] }
-      })
+        content: { parts: [{ text: cleaned }] },
+        // Optional but helps retrieval quality for RAG (supported on newer models)
+        taskType: mode === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT',
+      }),
     });
 
-    if (!response.ok) return { ok: false, error: `Google API Error: ${response.statusText}` };
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      return { ok: false, error: `Embedding API error: ${response.status} ${response.statusText} ${body}` };
+    }
 
     const data = await response.json();
     const v = data?.embedding?.values;
-    if (!Array.isArray(v)) return { ok: false, error: 'Invalid response format.' };
+
+    if (!Array.isArray(v) || v.length === 0) {
+      return { ok: false, error: 'Invalid embedding response format (missing embedding.values).' };
+    }
+
     return { ok: true, embedding: v };
   } catch (err: any) {
-    return { ok: false, error: `Embedding failed: ${err.message}` };
+    return { ok: false, error: `Embedding failed: ${err?.message || String(err)}` };
   }
 }
 
@@ -110,12 +137,15 @@ export async function generateSpecificArticle(userId: string, topic: string) {
 
   // USING GENERATION_MODEL CONSTANT (gemini-2.5-flash)
   const apiKey = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
 
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey!,
+      },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: deepPrompt }] }],
         generationConfig: { responseMimeType: "application/json" }
@@ -190,12 +220,15 @@ export async function generateHelpArticlesFromCodebase(userId: string, targetCat
   `;
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
 
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey!,
+      },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: deepPrompt }] }],
         generationConfig: { responseMimeType: "application/json" }
@@ -266,43 +299,73 @@ export async function indexHelpArticles(userId: string): Promise<{ ok: boolean; 
 
 // --- 5. Ask RAG ---
 export async function askHelpRag(question: string) {
-  if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) return { answer: FRIENDLY_ERROR_MSG, sources: [] };
-  if (!question.trim()) return { answer: "Please ask a question.", sources: [] };
+  if (!(process.env.NEXT_PUBLIC_ENABLE_HELP_RAG === 'true')) {
+    return { answer: FRIENDLY_ERROR_MSG, sources: [] };
+  }
+
+  const q = (question ?? '').trim();
+  if (!q) return { answer: "Please ask a question.", sources: [] };
 
   try {
     const db = getAdminDb();
-    const questionEmbeddingResult = await embedText(question);
-    if (!questionEmbeddingResult.ok) return { answer: "I'm having trouble analyzing your question.", sources: [] };
-    
+
+    // IMPORTANT: use mode='query' so short questions don't get blocked
+    const questionEmbeddingResult = await embedText(q, 'query');
+    if (!questionEmbeddingResult.ok) {
+      console.error('[HelpRAG] Query embedding failed:', questionEmbeddingResult.error);
+      return { answer: "I'm having trouble analyzing your question.", sources: [] };
+    }
+
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
     if (snapshot.empty) return { answer: "The knowledge base is empty.", sources: [] };
 
     const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
     const sources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
 
-    if (sources.length === 0) return { answer: "Sorry, I couldn't find any relevant help articles.", sources: [] };
+    if (sources.length === 0) {
+      return { answer: "Sorry, I couldn't find any relevant help articles.", sources: [] };
+    }
 
-    const context = sources.map((s, i) => `Source ${i+1}: ${s.title}\n${s.body}`).join('\n\n---\n\n');
-    const systemPrompt = `You are a helpful AI assistant for Omidan Ledger. Answer the user's question based ONLY on the provided sources below.`;
-    
+    const context = sources
+      .map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`)
+      .join('\n\n---\n\n');
+
+    const systemPrompt =
+      `You are a helpful AI assistant for Omidan Ledger. ` +
+      `Answer the user's question based ONLY on the provided sources below.`;
+
     const apiKey = process.env.GEMINI_API_KEY;
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey!,
+      },
       body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: `${systemPrompt}\n\nQuestion: ${question}\n\nSources:\n${context}` }] }]
-      })
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: `${systemPrompt}\n\nQuestion: ${q}\n\nSources:\n${context}` }],
+          },
+        ],
+      }),
     });
 
-    if (!response.ok) return { answer: "I found relevant articles (below), but couldn't summarize them.", sources: sources };
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      console.error('[HelpRAG] Summary generation failed:', response.status, body);
+      return { answer: "I found relevant articles (below), but couldn't summarize them.", sources };
+    }
 
     const data = await response.json();
-    const answer = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a summary.";
+    const answer =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a summary.";
 
     return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
   } catch (error: any) {
+    console.error('[HelpRAG] System error:', error);
     return { answer: "System error.", sources: [] };
   }
 }
