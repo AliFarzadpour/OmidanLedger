@@ -12,8 +12,8 @@ import path from 'path';
 // --- CONFIGURATION ---
 // CRITICAL FIX: Always use 2.5-flash (1.5 is retired/404)
 const GENERATION_MODEL = 'gemini-2.5-flash'; 
-// CRITICAL FIX: Use text-embedding-004 for stable indexing
-const EMBEDDING_MODEL = 'text-embedding-004'; 
+// Using embedding-001 as a stable alternative to fix the issue.
+const EMBEDDING_MODEL = 'embedding-001'; 
 
 const FRIENDLY_ERROR_MSG = 'The Omidan Ledger Help Assistant is currently unavailable. Please try again later.';
 const MIN_CONTENT_LENGTH = 20;
