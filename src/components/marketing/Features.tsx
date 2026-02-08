@@ -1,16 +1,16 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, FileText, ShieldCheck, CreditCard, BadgeCheck } from 'lucide-react';
+import { Building2, FileText, ShieldCheck, CreditCard, BadgeCheck, BarChart2 } from 'lucide-react';
 
 const featureList = [
   {
     icon: <CreditCard className="h-8 w-8 text-primary" />,
     title: 'Automated Bookkeeping',
-    description: 'Securely link your bank accounts with Plaid. Transactions are imported and organized automatically — no manual entry.',
+    description: 'Securely connect your bank and credit card accounts using Plaid. Transactions are imported and categorized automatically — no manual entry.',
   },
   {
     icon: <Building2 className="h-8 w-8 text-primary" />,
     title: 'Portfolio-Level View',
-    description: "See income, expenses, and NOI across all properties in one place. Finally understand your portfolio at a glance.",
+    description: "See income, expenses, and NOI across all properties in one place. Understand your entire portfolio at a glance.",
   },
   {
     icon: <FileText className="h-8 w-8 text-primary" />,
@@ -20,7 +20,7 @@ const featureList = [
   {
     icon: <ShieldCheck className="h-8 w-8 text-primary" />,
     title: 'Bank-Level Security',
-    description: "We use Plaid with read-only access. We never see or store your bank credentials.",
+    description: "Plaid provides read-only access. We never see or store your bank credentials.",
   },
 ];
 
@@ -32,8 +32,17 @@ export function Features() {
           <BadgeCheck className="h-10 w-10 text-primary mx-auto" />
           <h2 className="text-3xl md:text-4xl font-bold tracking-tight">Built for Landlords — Not Accountants</h2>
           <p className="text-lg text-slate-600">
-            We focus on the metrics that matter to real estate investors. Less accounting jargon. More clarity, control, and confidence.
+            OmidanLedger focuses on the metrics that matter to real estate investors. Less accounting jargon. More clarity, control, and confidence.
           </p>
+          <div className="p-4 bg-slate-50 border rounded-lg">
+             <div className="flex items-center justify-center gap-2 font-semibold text-slate-700">
+                <BarChart2 className="h-5 w-5 text-primary" />
+                <span>Metrics Highlight:</span>
+             </div>
+             <p className="text-sm text-slate-500 mt-2">
+                Cash Flow • NOI • Income vs Expenses • Per-Property Performance • Schedule E Categories
+             </p>
+          </div>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-2 gap-8">
           {featureList.map((feature) => (
