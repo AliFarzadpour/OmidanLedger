@@ -19,7 +19,7 @@ import {
   DollarSign, // Icon for Billing
   Wrench, // Icon for Operations
   LifeBuoy,
-  Bug, // New Icon for Bug Report
+  LogOut, // New Icon for Logout
 } from "lucide-react";
 
 import {
@@ -39,7 +39,7 @@ import {
   TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip";
-import { useUser, useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { useUser, useCollection, useFirestore, useMemoFirebase, useAuth } from "@/firebase";
 import { isSuperAdmin } from "@/lib/auth-utils";
 import { Logo } from "@/components/logo";
 import { collection, query, where } from "firebase/firestore";
@@ -163,6 +163,12 @@ const data = {
       icon: LifeBuoy,
       advanced: false,
     },
+    {
+      title: "Logout",
+      action: "logout",
+      icon: LogOut,
+      advanced: false,
+    },
   ]
 };
 
@@ -171,6 +177,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const { user } = useUser();
   const firestore = useFirestore();
+  const auth = useAuth();
   const [isAdmin, setIsAdmin] = React.useState(false);
   const helpEnabled = isHelpEnabled();
 
@@ -188,6 +195,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }, [user]);
 
+  const handleLogout = async () => {
+    await auth.signOut();
+    router.push('/login');
+  };
+
   const renderMenuItem = (item: any) => {
     if (item.title === 'Help' && !helpEnabled) {
       return null;
@@ -195,7 +207,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     
     const isActive = item.url === '/dashboard' 
       ? pathname === item.url 
-      : pathname.startsWith(item.url);
+      : item.url ? pathname.startsWith(item.url) : false;
     
     const isDisabled = inSetupMode && item.advanced;
 
@@ -203,7 +215,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarMenuItem key={item.title}>
         <SidebarMenuButton 
           isActive={isActive} 
-          onClick={() => !isDisabled && router.push(item.url)} 
+          onClick={() => {
+            if (isDisabled) return;
+            if (item.action === 'logout') {
+              handleLogout();
+            } else if (item.url) {
+              router.push(item.url);
+            }
+          }} 
           disabled={isDisabled}
           className={cn('h-10 mb-1 transition-all', 
             isActive ? "bg-white shadow-sm font-medium text-blue-700 border border-slate-100" : "text-slate-600 hover:bg-white/50",
