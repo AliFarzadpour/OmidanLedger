@@ -24,7 +24,7 @@ import { TransactionToolbar } from './transaction-toolbar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { BatchEditDialog } from './batch-edit-dialog';
 import { CATEGORY_MAP, L0Category } from '@/lib/categories';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Loader2, PlusCircle } from 'lucide-react';
 
 const primaryCategoryColors: Record<string, string> = {
@@ -39,6 +39,7 @@ interface DataSource {
   id: string;
   accountName: string;
   bankName: string;
+  accountNumber?: string;
   plaidAccessToken?: string;
 }
 
@@ -180,30 +181,6 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
       setIsSyncing(false);
     }
   };
-
-  const handleCategoryChange = (transaction: Transaction, newCategories: { l0: string; l1: string; l2: string; l3: string; }) => {
-    if (!user || !firestore) return;
-    const transactionRef = doc(firestore, `users/${user.uid}/bankAccounts/${dataSource.id}/transactions`, transaction.id);
-    
-    const updateData = { 
-        categoryHierarchy: newCategories,
-        confidence: 1.0, 
-        status: 'posted',
-        reviewStatus: 'approved'
-    };
-    
-    updateDocumentNonBlocking(transactionRef, updateData);
-
-    learnCategoryMapping({
-        transactionDescription: transaction.description,
-        primaryCategory: newCategories.l0,
-        secondaryCategory: newCategories.l1,
-        subcategory: newCategories.l2,
-        details: newCategories.l3,
-        userId: user.uid,
-    });
-    toast({ title: "Updated", description: "Category saved and rule learned." });
-  };
   
   const handleSelectionChange = (id: string, checked: boolean) => {
     setSelectedIds(prev => 
@@ -307,7 +284,7 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <CardTitle>Transaction History</CardTitle>
-            <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName}</span></CardDescription>
+            <CardDescription>Viewing transactions for: <span className="font-semibold text-primary">{dataSource.accountName} ({dataSource.accountNumber})</span></CardDescription>
           </div>
           <div className="flex gap-2">
             {!isPlaidAccount && (
@@ -395,32 +372,54 @@ const [rebuildStartDate, setRebuildStartDate] = useState<string>(() => {
                   </TableRow>
                 ))
               ) : sortedTransactions.length > 0 ? (
-                sortedTransactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                     <TableCell className="p-2">
-                        <Checkbox 
-                            checked={selectedIds.includes(transaction.id)}
-                            onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
-                        />
-                    </TableCell>
-                    <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div></TableCell>
-                    <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
-                    <TableCell className="align-top py-4">
-                        <CategoryEditor transaction={transaction} onSave={handleCategoryChange} />
-                    </TableCell>
-                     <TableCell className="align-top py-4 text-xs text-muted-foreground">
-                        {transaction.costCenter && propertyMap[transaction.costCenter] ? propertyMap[transaction.costCenter] : 'N/A'}
-                    </TableCell>
-                    <TableCell 
-                        className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}
-                    >
-                      {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
-                    </TableCell>
-                     <TableCell className="align-top py-4 text-right">
-                       <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
-                    </TableCell>
-                  </TableRow>
-                ))
+                sortedTransactions.map((transaction) => {
+                  const cats = transaction.categoryHierarchy || { l0: 'Uncategorized', l1: '', l2: '', l3: '' };
+                  return (
+                    <TableRow key={transaction.id}>
+                      <TableCell className="p-2">
+                          <Checkbox 
+                              checked={selectedIds.includes(transaction.id)}
+                              onCheckedChange={(checked) => handleSelectionChange(transaction.id, !!checked)}
+                          />
+                      </TableCell>
+                      <TableCell className="align-top py-4"><div className="text-sm text-muted-foreground">{new Date(transaction.date + 'T00:00:00').toLocaleDateString()}</div></TableCell>
+                      <TableCell className="align-top py-4"><div className="font-medium max-w-[300px]">{transaction.description}</div></TableCell>
+                      <TableCell className="align-top py-4">
+                          <div 
+                              className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start"
+                              onClick={() => {
+                                  setSelectedIds([transaction.id]);
+                                  setBatchEditDialogOpen(true);
+                              }}
+                          >
+                              <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0?.toUpperCase()] || 'bg-slate-100')}>
+                                  {cats.l0}
+                                  <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
+                              </Badge>
+                              <span className="text-xs text-muted-foreground pl-1 mt-0.5">
+                                  {cats.l1} {'>'} {cats.l2}
+                              </span>
+                              {cats.l3 && (
+                                  <span className="text-xs text-muted-foreground pl-1 font-medium">
+                                  {cats.l3}
+                              </span>
+                              )}
+                          </div>
+                      </TableCell>
+                      <TableCell className="align-top py-4 text-xs text-muted-foreground">
+                          {transaction.costCenter && propertyMap[transaction.costCenter] ? propertyMap[transaction.costCenter] : 'N/A'}
+                      </TableCell>
+                      <TableCell 
+                          className={cn('text-right font-medium align-top py-4', transaction.amount > 0 ? 'text-green-600' : 'text-foreground')}
+                      >
+                        {transaction.amount > 0 ? '+' : ''}{new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(transaction.amount)}
+                      </TableCell>
+                      <TableCell className="align-top py-4 text-right">
+                        <StatusFlagEditor transaction={transaction} dataSource={dataSource} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
               ) : (
                 <TableRow><TableCell colSpan={7} className="h-24 text-center">No transactions found.</TableCell></TableRow>
               )}
@@ -497,117 +496,4 @@ function StatusFlagEditor({ transaction, dataSource }: { transaction: Transactio
   );
 }
 
-function HierarchicalCategorySelector({ l0, setL0, l1, setL1, l2, setL2 }: {
-  l0: string; setL0: (val: string) => void;
-  l1: string; setL1: (val: string) => void;
-  l2: string; setL2: (val: string) => void;
-}) {
-  const l1Options = l0 && CATEGORY_MAP[l0 as L0Category] ? Object.keys(CATEGORY_MAP[l0 as L0Category]) : [];
-  const l2Options = (l0 && l1 && CATEGORY_MAP[l0 as L0Category] && (CATEGORY_MAP[l0 as L0Category] as any)[l1]) ? (CATEGORY_MAP[l0 as L0Category] as any)[l1] : [];
-
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-3 items-center gap-4">
-        <Label htmlFor="l0">L0</Label>
-        <Select value={l0} onValueChange={val => { setL0(val); setL1(''); setL2(''); }}>
-            <SelectTrigger id="l0" className="col-span-2 h-8"><SelectValue /></SelectTrigger>
-            <SelectContent>
-                {Object.keys(CATEGORY_MAP).map(key => <SelectItem key={key} value={key}>{key}</SelectItem>)}
-            </SelectContent>
-        </Select>
-      </div>
-       <div className="grid grid-cols-3 items-center gap-4">
-        <Label htmlFor="l1">L1</Label>
-        <div className="col-span-2 flex gap-1">
-            <Select value={l1} onValueChange={val => { setL1(val); setL2(''); }} disabled={!l0}>
-                <SelectTrigger id="l1" className="h-8"><SelectValue placeholder="Select L1..." /></SelectTrigger>
-                <SelectContent>
-                    {l1Options.map((key: string) => <SelectItem key={key} value={key}>{key}</SelectItem>)}
-                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
-                </SelectContent>
-            </Select>
-            {l1 === '--add-new--' && <Input placeholder="New L1 Category" onChange={e => setL1(e.target.value)} className="h-8"/>}
-        </div>
-      </div>
-       <div className="grid grid-cols-3 items-center gap-4">
-        <Label htmlFor="l2">L2</Label>
-         <div className="col-span-2 flex gap-1">
-            <Select value={l2} onValueChange={val => { setL2(val); }} disabled={!l1 || l1 === '--add-new--'}>
-                <SelectTrigger id="l2" className="h-8"><SelectValue placeholder="Select L2..." /></SelectTrigger>
-                <SelectContent>
-                    {l2Options.map((opt: string) => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                    <SelectItem value="--add-new--"><span className="flex items-center gap-2"><PlusCircle className="h-4 w-4" /> Add New...</span></SelectItem>
-                </SelectContent>
-            </Select>
-            {l2 === '--add-new--' && <Input placeholder="New L2 Category" onChange={e => setL2(e.target.value)} className="h-8"/>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-
-function CategoryEditor({ transaction, onSave }: { transaction: Transaction, onSave: (tx: Transaction, cats: { l0: string, l1: string, l2: string, l3: string }) => void }) {
-    const [isOpen, setIsOpen] = useState(false);
-    const cats = transaction.categoryHierarchy || { l0: '', l1: '', l2: '', l3: '' };
     
-    const [l0, setL0] = useState(cats.l0);
-    const [l1, setL1] = useState(cats.l1);
-    const [l2, setL2] = useState(cats.l2);
-    const [l3, setL3] = useState(cats.l3);
-
-    useEffect(() => {
-      if(isOpen) {
-        setL0(cats.l0);
-        setL1(cats.l1);
-        setL2(cats.l2);
-        setL3(cats.l3);
-      }
-    }, [cats, isOpen]);
-
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        const newCats = { l0, l1, l2, l3 };
-        onSave(transaction, newCats);
-        setIsOpen(false);
-    };
-
-    return (
-        <Popover open={isOpen} onOpenChange={setIsOpen}>
-            <PopoverTrigger asChild>
-                <div className="flex flex-col cursor-pointer group hover:opacity-80 transition-opacity items-start">
-                    <Badge variant="outline" className={cn('w-fit border-0 font-semibold px-2 py-1', primaryCategoryColors[cats.l0?.toUpperCase()] || 'bg-slate-100')}>
-                        {cats.l0}
-                        <Pencil className="ml-2 h-3 w-3 opacity-0 group-hover:opacity-100" />
-                    </Badge>
-                    <span className="text-xs text-muted-foreground pl-1 mt-0.5">
-                        {cats.l1} {'>'} {cats.l2}
-                    </span>
-                    {cats.l3 && (
-                         <span className="text-xs text-muted-foreground pl-1 font-medium">
-                            {cats.l3}
-                        </span>
-                    )}
-                </div>
-            </PopoverTrigger>
-            <PopoverContent className="w-96">
-                <form onSubmit={handleSubmit} className="grid gap-4">
-                    <div className="space-y-2">
-                        <h4 className="font-medium leading-none">Edit Category</h4>
-                        <p className="text-sm text-muted-foreground">Confirm or correct the assignment.</p>
-                    </div>
-                    
-                    <HierarchicalCategorySelector l0={l0} setL0={setL0} l1={l1} setL1={setL1} l2={l2} setL2={setL2} />
-
-                    <div className="grid gap-2">
-                        <Label htmlFor="l3">Details (L3)</Label>
-                        <Input id="l3" value={l3} onChange={(e) => setL3(e.target.value)} className="h-8" />
-                    </div>
-
-                    <Button type="submit">Confirm & Save</Button>
-                </form>
-            </PopoverContent>
-        </Popover>
-    );
-}
