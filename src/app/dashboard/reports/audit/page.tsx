@@ -1,18 +1,21 @@
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser, useFirestore } from '@/firebase';
 import { collection, query, getDocs } from 'firebase/firestore';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FinancialIntegrityReport } from '@/components/dashboard/reports/audit/FinancialIntegrityReport';
 import { TaxReadinessReport } from '@/components/dashboard/reports/audit/TaxReadinessReport';
 import type { Transaction, AuditIssue } from '@/components/dashboard/reports/audit/types';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 
 export default function FinancialAuditPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
 
@@ -57,17 +60,28 @@ export default function FinancialAuditPage() {
   }
 
   return (
-      <Tabs defaultValue="integrity" className="p-8 max-w-6xl mx-auto space-y-6">
+    <div className="p-8 max-w-6xl mx-auto space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Financial Audit</h1>
+          <p className="text-muted-foreground">Scan transactions for errors, inconsistencies, and tax readiness.</p>
+        </div>
+      </div>
+      <Tabs defaultValue="integrity" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="integrity">Financial Integrity</TabsTrigger>
             <TabsTrigger value="tax">Tax Readiness</TabsTrigger>
         </TabsList>
-        <TabsContent value="integrity">
+        <TabsContent value="integrity" className="mt-6">
             <FinancialIntegrityReport transactions={allTransactions} onRefresh={runAudit} />
         </TabsContent>
-        <TabsContent value="tax">
+        <TabsContent value="tax" className="mt-6">
             <TaxReadinessReport transactions={allTransactions} />
         </TabsContent>
       </Tabs>
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUser, useFirestore, useCollection } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import { startOfYear, endOfYear, format } from 'date-fns';
@@ -14,12 +15,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlayCircle, Loader2 } from 'lucide-react';
+import { PlayCircle, Loader2, ArrowLeft } from 'lucide-react';
 import GeneralLedger from '@/components/dashboard/reports/general-ledger-report';
 
 export default function GeneralLedgerPage() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
 
   const [accounts, setAccounts] = useState<any[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
@@ -53,9 +55,14 @@ export default function GeneralLedgerPage() {
 
   return (
     <div className="space-y-8 p-4 md:p-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">General Ledger Report</h1>
-        <p className="text-muted-foreground">A detailed history of all transactions for a specific account.</p>
+      <div className="flex items-center gap-4">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight">General Ledger Report</h1>
+            <p className="text-muted-foreground">A detailed history of all transactions for a specific account.</p>
+        </div>
       </div>
 
       <div className="flex flex-col md:flex-row justify-between items-end gap-4 bg-muted/50 p-6 rounded-xl border">

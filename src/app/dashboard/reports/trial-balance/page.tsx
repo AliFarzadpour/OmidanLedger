@@ -1,17 +1,20 @@
 'use client';
 
 import { useMemo, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { useFirestore, useUser } from '@/firebase';
 import { formatCurrency } from '@/lib/format';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Scale } from 'lucide-react';
+import { Loader2, Scale, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 export default function TrialBalanceReport() {
   const { user } = useUser();
   const firestore = useFirestore();
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [accountBalances, setAccountBalances] = useState<any[]>([]);
 
@@ -72,8 +75,14 @@ export default function TrialBalanceReport() {
   return (
     <div className="p-8 max-w-5xl mx-auto space-y-6">
       <div className="flex items-center gap-3 mb-2">
+        <Button variant="ghost" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-5 w-5" />
+        </Button>
         <Scale className="h-8 w-8 text-primary" />
-        <h1 className="text-3xl font-bold tracking-tight">Trial Balance</h1>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Trial Balance</h1>
+          <p className="text-muted-foreground">Verify debits and credits across all accounts.</p>
+        </div>
       </div>
 
       <Card className="shadow-lg border-t-4 border-t-primary">
