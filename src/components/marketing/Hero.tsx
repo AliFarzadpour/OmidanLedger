@@ -38,37 +38,22 @@ export function Hero() {
               <p className="text-sm text-muted-foreground mt-2">6 months free • No credit card required • Read-only bank access</p>
           </div>
         </div>
-        <Card className="shadow-2xl">
-          <CardHeader className="text-center p-6">
-            <CardTitle className="text-2xl font-bold">6 Months of Free Early Access</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 p-6 pt-0">
-            <ul className="space-y-3 text-left">
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-1 shrink-0" />
-                  <span>Unlimited properties and units</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-1 shrink-0" />
-                  <span>Unlimited bank and credit card connections</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-1 shrink-0" />
-                  <span>Full access to all current and future features</span>
-                </li>
-                 <li className="flex items-start gap-3">
-                  <CheckCircle2 className="h-5 w-5 text-primary mt-1 shrink-0" />
-                  <span>Founding-member lifetime discount</span>
-                </li>
-            </ul>
-            <div className="text-xs text-muted-foreground flex items-center justify-center gap-4 pt-4 border-t">
-                <ShieldCheck className="h-4 w-4" />
-                <span>Powered by Plaid</span>
-                <span>Bank-level encryption</span>
-                <span>We never store credentials</span>
+        <div className="flex flex-col items-center gap-4">
+            <p className="text-sm text-center text-slate-600">“Built for landlords who want clarity — not spreadsheets.”</p>
+            <div className="rounded-lg overflow-hidden border-4 border-white shadow-2xl w-full">
+                <video
+                    src="https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FVideo_Generation_Request.mp4?alt=media&token=72b9c871-a465-40d1-9bd7-48caaeb2ccc7"
+                    autoPlay
+                    muted
+                    loop
+                    playsInline // Important for mobile browsers
+                    className="w-full h-auto"
+                />
             </div>
-          </CardContent>
-        </Card>
+            <Button asChild size="lg" className="w-full mt-4 h-12 text-lg">
+                <Link href="/early-access">Join Free Early Access</Link>
+            </Button>
+        </div>
       </div>
     </section>
   );
