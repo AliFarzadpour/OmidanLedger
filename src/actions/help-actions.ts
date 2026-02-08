@@ -13,7 +13,6 @@ import path from 'path';
 // --- CONFIGURATION ---
 const GENERATION_MODEL = 'gemini-2.5-flash';
 
-// FIX: embedding-001 is shut down; use the stable Gemini embedding model
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 
 // Split min lengths: questions can be short; articles should be longer
@@ -309,30 +308,57 @@ export async function askHelpRag(question: string) {
   try {
     const db = getAdminDb();
 
-    // IMPORTANT: use mode='query' so short questions don't get blocked
+    // Embed the user's question
     const questionEmbeddingResult = await embedText(q, 'query');
     if (!questionEmbeddingResult.ok) {
       console.error('[HelpRAG] Query embedding failed:', questionEmbeddingResult.error);
       return { answer: "I'm having trouble analyzing your question.", sources: [] };
     }
 
-    const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
-    if (snapshot.empty) return { answer: "The knowledge base is empty.", sources: [] };
-
-    const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
-    const sources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
-
-    if (sources.length === 0) {
-      return { answer: "Sorry, I couldn't find any relevant help articles.", sources: [] };
+    // --- CONTEXT GATHERING ---
+    // 1. Get source code context
+    const srcDir = path.join(process.cwd(), 'src');
+    let codebaseContext = "CONTEXT: No source code available.";
+    if (fs.existsSync(srcDir)) {
+      try {
+        const files = readCodebase(srcDir);
+        // Limit context size to be safe
+        const allCode = files.join('\n').substring(0, 800000); 
+        codebaseContext = `\n\n--- SOURCE CODE CONTEXT ---\n${allCode}`;
+      } catch (err) { 
+        console.error("Failed to read codebase for RAG:", err);
+      }
     }
 
-    const context = sources
-      .map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`)
-      .join('\n\n---\n\n');
+    // 2. Get Firestore article context
+    const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
+    let firestoreContext = "CONTEXT: No help articles found.";
+    let sources: HelpArticle[] = [];
+    
+    if (!snapshot.empty) {
+      const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
+      sources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
+      if (sources.length > 0) {
+        firestoreContext = sources
+          .map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`)
+          .join('\n\n---\n\n');
+      }
+    }
 
+    // 3. Combine contexts
+    const combinedContext = `
+      --- HELP ARTICLES ---
+      ${firestoreContext}
+      
+      ${codebaseContext}
+    `;
+
+    // 4. Generate Answer
     const systemPrompt =
       `You are a helpful AI assistant for Omidan Ledger. ` +
-      `Answer the user's question based ONLY on the provided sources below.`;
+      `Answer the user's question based on the provided HELP ARTICLES and SOURCE CODE CONTEXT below. Prioritize the help articles if they are relevant.`;
+
+    const finalPrompt = `${systemPrompt}\n\nQuestion: ${q}\n\nCONTEXT:\n${combinedContext}`;
 
     const apiKey = process.env.GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
@@ -347,7 +373,7 @@ export async function askHelpRag(question: string) {
         contents: [
           {
             role: "user",
-            parts: [{ text: `${systemPrompt}\n\nQuestion: ${q}\n\nSources:\n${context}` }],
+            parts: [{ text: finalPrompt }],
           },
         ],
       }),
@@ -366,9 +392,10 @@ export async function askHelpRag(question: string) {
     return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
   } catch (error: any) {
     console.error('[HelpRAG] System error:', error);
-    return { answer: "System error.", sources: [] };
+    return { answer: "A system error occurred while trying to answer your question.", sources: [] };
   }
 }
+
 
 // --- 6. Get All Articles (For KB Manager) ---
 export async function getAllHelpArticles(userId: string) {
