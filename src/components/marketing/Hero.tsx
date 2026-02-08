@@ -2,18 +2,31 @@
 
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, Volume2, VolumeX } from 'lucide-react';
+import { CheckCircle2, Volume2, VolumeX, Play, Pause } from 'lucide-react';
 import Link from 'next/link';
 
 export function Hero() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isMuted, setIsMuted] = useState(true);
+  const [isPlaying, setIsPlaying] = useState(true);
 
   const toggleMute = () => {
     if (videoRef.current) {
       const newMutedState = !videoRef.current.muted;
       videoRef.current.muted = newMutedState;
       setIsMuted(newMutedState);
+    }
+  };
+
+  const togglePlay = () => {
+    if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPlaying(true);
+      } else {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      }
     }
   };
 
@@ -63,6 +76,15 @@ export function Hero() {
                     playsInline
                     className="w-full h-auto"
                 />
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={togglePlay}
+                    className="absolute bottom-3 right-14 rounded-full bg-black/30 text-white hover:bg-black/50 hover:text-white"
+                    aria-label={isPlaying ? "Pause video" : "Play video"}
+                >
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                </Button>
                 <Button 
                     variant="ghost" 
                     size="icon" 
