@@ -110,8 +110,8 @@ export default function MarketingHomePage() {
         <Pricing />
 
         {/* --- AI STRIP (BEFORE FAQ) --- */}
-        <section className="mx-auto mt-12 w-full max-w-6xl px-4">
-          <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border bg-background p-6 shadow-sm sm:flex-row sm:items-center">
+        <section className="mx-auto mt-12 mb-16 w-full max-w-6xl px-4">
+          <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border bg-background p-6 shadow-lg sm:flex-row sm:items-center">
             <div>
               <h3 className="text-lg font-semibold">Have a specific question?</h3>
               <p className="text-sm text-muted-foreground">
