@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Hero } from '@/components/marketing/Hero';
@@ -10,12 +11,79 @@ import { Header } from '@/components/marketing/Header';
 import { EarlyAccessStrip } from '@/components/marketing/EarlyAccessStrip';
 import { Pricing } from '@/components/marketing/Pricing';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
+import { useState } from 'react';
+import { askHelpRag } from '@/actions/help-actions';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Sparkles, BrainCircuit } from 'lucide-react';
+import { marked } from 'marked';
+import Image from 'next/image';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 const HERO_AI_VIDEO_URL =
   "https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FAvatar_Reads_Script_Video_Generated.mp4?alt=media&token=52489cf9-a2a1-4068-8309-35f4deb93a67";
 
+// Copied from help-assistant.tsx to render markdown and images
+function AnswerRenderer({ content }: { content: string }) {
+  if (!content) return null;
+
+  const parts = content.split(/(\[IMAGE:.*?\])/g);
+
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700">
+      {parts.map((part, index) => {
+        const imageMatch = part.match(/\[IMAGE:(.*?)\]/);
+        if (imageMatch) {
+          const imageUrl = imageMatch[1].trim();
+          return (
+            <div key={index} className="my-4 rounded-lg border overflow-hidden">
+              <Image
+                src={imageUrl}
+                alt="Help assistant image"
+                width={500}
+                height={300}
+                className="w-full h-auto"
+              />
+            </div>
+          );
+        } else {
+          return <div key={index} dangerouslySetInnerHTML={{ __html: marked.parse(part) }} />;
+        }
+      })}
+    </div>
+  );
+}
 
 export default function MarketingHomePage() {
+  const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [answer, setAnswer] = useState<string | null>(null);
+  const [sources, setSources] = useState<any[]>([]);
+  const { toast } = useToast();
+
+  const handleAsk = async () => {
+    if (!query.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Please enter a question.',
+      });
+      return;
+    }
+    setIsLoading(true);
+    setAnswer(null);
+    setSources([]);
+    try {
+      const result = await askHelpRag(query);
+      setAnswer(result.answer);
+      setSources(result.sources);
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Error', description: e.message });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="bg-white text-slate-800">
       <Header />
@@ -39,23 +107,28 @@ export default function MarketingHomePage() {
                 </p>
               </div>
 
-              {/* Input + button (wire to your AI help later) */}
+              {/* Input + button */}
               <div className="flex flex-col gap-3 sm:flex-row">
                 <input
                   className="h-11 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                   placeholder='Try: "Is Plaid read-only and secure?"'
-                  // TODO: wire to your AI help endpoint
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
+                  disabled={isLoading}
                 />
-                <button
-                  className="h-11 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:opacity-90"
-                  // TODO: wire to your AI help endpoint
+                <Button
+                  className="h-11"
+                  onClick={handleAsk}
+                  disabled={isLoading}
                   type="button"
                 >
+                  {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
                   Ask AI
-                </button>
+                </Button>
               </div>
 
-              {/* Sample questions (clickable pills - wire later) */}
+              {/* Sample questions */}
               <div className="flex flex-wrap gap-2">
                 {[
                   "Is Plaid read-only and secure?",
@@ -68,7 +141,8 @@ export default function MarketingHomePage() {
                     key={q}
                     type="button"
                     className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-                    // TODO: set input value + submit to AI
+                    onClick={() => setQuery(q)}
+                    disabled={isLoading}
                   >
                     {q}
                   </button>
@@ -80,7 +154,7 @@ export default function MarketingHomePage() {
               </p>
             </div>
 
-            {/* Right: Video (your provided link) */}
+            {/* Right: Video */}
             <div className="overflow-hidden rounded-xl border bg-muted">
               <div className="aspect-video w-full">
                 <video
@@ -102,6 +176,45 @@ export default function MarketingHomePage() {
             </div>
           </div>
         </section>
+        
+        {/* AI Response Area */}
+        {isLoading && (
+            <div className="mx-auto w-full max-w-6xl px-4 mb-12">
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center h-48 gap-3 text-center">
+                        <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                        <p className="text-muted-foreground">Our AI is thinking...</p>
+                    </CardContent>
+                </Card>
+            </div>
+        )}
+
+        {answer && (
+            <section className="mx-auto w-full max-w-6xl px-4 animate-in fade-in-50 mb-12">
+                <Card className="bg-blue-50/50 border-blue-100">
+                    <CardHeader>
+                        <CardTitle className="text-sm font-medium text-blue-900 flex items-center gap-2">
+                            <BrainCircuit className="h-5 w-5 text-blue-600" /> Answer from Omidan AI
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <AnswerRenderer content={answer} />
+                        {sources.length > 0 && (
+                            <div className="pt-3 border-t border-blue-200">
+                                <p className="text-xs font-semibold text-blue-800 mb-2">Sources:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {sources.map((s, i) => (
+                                        <Badge key={i} variant="secondary" className="bg-white hover:bg-white text-[10px] text-slate-600 border-blue-200">
+                                            {s.title}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </section>
+        )}
 
         <EarlyAccessStrip />
         <Features />
@@ -121,7 +234,6 @@ export default function MarketingHomePage() {
             <button
               className="h-11 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground hover:opacity-90"
               type="button"
-              // TODO: open the AI panel / scroll to AI section
               onClick={() => {
                 const el = document.getElementById("ai-invite");
                 el?.scrollIntoView({ behavior: "smooth", block: "start" });
