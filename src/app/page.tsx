@@ -175,7 +175,7 @@ export default function MarketingHomePage() {
             </div>
 
             {/* Right: Video */}
-            <div className="overflow-hidden rounded-xl shadow-lg relative">
+            <div className="overflow-hidden rounded-xl border-4 border-white shadow-2xl relative">
               <div className="aspect-video w-full" onClick={togglePlay}>
                 <video
                   ref={videoRef}
@@ -188,7 +188,7 @@ export default function MarketingHomePage() {
                   preload="metadata"
                 />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent flex justify-between items-center">
+              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent flex justify-end items-center gap-2">
                   <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="text-white hover:bg-white/20 hover:text-white">
                     {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                   </Button>
@@ -280,3 +280,5 @@ export default function MarketingHomePage() {
     </div>
   );
 }
+
+    
