@@ -132,7 +132,7 @@ export default function MarketingHomePage() {
                <div className="flex flex-col gap-3 rounded-lg border bg-slate-50 p-3 focus-within:ring-2 focus-within:ring-ring">
                 <input
                   className="h-11 w-full rounded-md border-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
-                  placeholder='Try: "What tax reports do I get?"'
+                  placeholder='Try: "What tax reports do I get for Schedule E?"'
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
@@ -144,9 +144,13 @@ export default function MarketingHomePage() {
                   type="button"
                 >
                   {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Ask AI
+                  Get Answer
                 </Button>
               </div>
+              
+              <p className="text-xs text-muted-foreground px-1">
+                Answers come from OmidanLedger’s actual features and reports.
+              </p>
 
               {/* Sample questions */}
               <div className="flex flex-wrap gap-2">
@@ -166,10 +170,7 @@ export default function MarketingHomePage() {
                   </button>
                 ))}
               </div>
-
-              <p className="text-xs text-muted-foreground">
-                Tip: Ask about your exact situation (units, LLCs, bank accounts). The AI will guide you.
-              </p>
+              
             </div>
 
             {/* Right: Video */}
@@ -195,16 +196,12 @@ export default function MarketingHomePage() {
                   </Button>
               </div>
               <div className="bg-slate-900 px-4 py-3 text-white -mt-1">
-                <p className="text-sm font-medium">Not sure if it fits your rentals?</p>
-                <p className="text-xs text-slate-300">
-                  Ask a question above—get a direct answer in seconds.
-                </p>
+                <p className="text-sm font-medium">Not sure if it fits your rentals? Ask a question above.</p>
               </div>
             </div>
           </Card>
         </section>
         
-        {/* AI Response Area */}
         {isLoading && (
             <div className="mx-auto w-full max-w-6xl px-4 mb-12">
                 <Card>
