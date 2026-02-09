@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 const HERO_AI_VIDEO_URL =
-  "https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FAvatar_Reads_Script_Video_Generated.mp4?alt=media&token=52489cf9-a2a1-4068-8309-35f4deb93a67";
+  "https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FVideo_Generation_for_Fintech_AI.mp4?alt=media&token=7ff46a59-69ff-421f-b6b3-c27b815dbb03";
 
 // Copied from help-assistant.tsx to render markdown and images
 function AnswerRenderer({ content }: { content: string }) {
@@ -92,7 +92,7 @@ export default function MarketingHomePage() {
 
         {/* --- AI INVITE (ABOVE THE FOLD) --- */}
         <section id="ai-invite" className="mx-auto mt-8 mb-12 w-full max-w-6xl px-4">
-          <div className="grid gap-6 rounded-2xl border border-slate-100 bg-white p-8 shadow-xl md:grid-cols-2 md:items-center">
+          <Card className="grid gap-6 p-8 md:grid-cols-2 md:items-center shadow-2xl">
             {/* Left: AI prompt */}
             <div className="space-y-4">
               <div className="space-y-1">
@@ -158,9 +158,7 @@ export default function MarketingHomePage() {
                 <video
                   className="h-full w-full object-cover"
                   src={HERO_AI_VIDEO_URL}
-                  autoPlay
-                  muted
-                  loop
+                  controls
                   playsInline
                   preload="metadata"
                 />
@@ -172,7 +170,7 @@ export default function MarketingHomePage() {
                 </p>
               </div>
             </div>
-          </div>
+          </Card>
         </section>
         
         {/* AI Response Area */}
