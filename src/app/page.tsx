@@ -11,10 +11,10 @@ import { Header } from '@/components/marketing/Header';
 import { EarlyAccessStrip } from '@/components/marketing/EarlyAccessStrip';
 import { Pricing } from '@/components/marketing/Pricing';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { askHelpRag } from '@/actions/help-actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Sparkles, BrainCircuit } from 'lucide-react';
+import { Loader2, Sparkles, BrainCircuit, Play, Pause, VolumeX, Volume2 } from 'lucide-react';
 import { marked } from 'marked';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,6 +61,28 @@ export default function MarketingHomePage() {
   const [answer, setAnswer] = useState<string | null>(null);
   const [sources, setSources] = useState<any[]>([]);
   const { toast } = useToast();
+  
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isMuted, setIsMuted] = useState(true);
+
+  const togglePlay = () => {
+    if (videoRef.current?.paused) {
+      videoRef.current?.play();
+      setIsPlaying(true);
+    } else {
+      videoRef.current?.pause();
+      setIsPlaying(false);
+    }
+  };
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted;
+      setIsMuted(videoRef.current.muted);
+    }
+  };
+
 
   const handleAsk = async () => {
     if (!query.trim()) {
@@ -92,7 +114,7 @@ export default function MarketingHomePage() {
 
         {/* --- AI INVITE (ABOVE THE FOLD) --- */}
         <section id="ai-invite" className="mx-auto mt-8 mb-12 w-full max-w-6xl px-4">
-          <Card className="grid gap-6 p-8 md:grid-cols-2 md:items-center shadow-2xl">
+          <Card className="grid gap-6 rounded-2xl border bg-background p-6 shadow-2xl md:grid-cols-2 md:items-center">
             {/* Left: AI prompt */}
             <div className="space-y-4">
               <div className="space-y-1">
@@ -111,7 +133,7 @@ export default function MarketingHomePage() {
                <div className="flex flex-col gap-3 rounded-lg border bg-slate-50 p-3 focus-within:ring-2 focus-within:ring-ring">
                 <input
                   className="h-11 w-full rounded-md border-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
-                  placeholder='Try: "Is Plaid read-only and secure?"'
+                  placeholder='Try: "Is my bank data safe and secure?"'
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
@@ -153,17 +175,28 @@ export default function MarketingHomePage() {
             </div>
 
             {/* Right: Video */}
-            <div className="overflow-hidden rounded-xl">
-              <div className="aspect-video w-full">
+            <div className="overflow-hidden rounded-xl shadow-lg relative">
+              <div className="aspect-video w-full" onClick={togglePlay}>
                 <video
-                  className="h-full w-full object-cover"
+                  ref={videoRef}
+                  className="h-full w-full object-cover cursor-pointer"
                   src={HERO_AI_VIDEO_URL}
-                  controls
+                  autoPlay
+                  muted
+                  loop
                   playsInline
                   preload="metadata"
                 />
               </div>
-              <div className="bg-slate-900 px-4 py-3 text-white">
+              <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/50 to-transparent flex justify-between items-center">
+                  <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); togglePlay(); }} className="text-white hover:bg-white/20 hover:text-white">
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={(e) => { e.stopPropagation(); toggleMute(); }} className="text-white hover:bg-white/20 hover:text-white">
+                     {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+                  </Button>
+              </div>
+              <div className="bg-slate-900 px-4 py-3 text-white -mt-1">
                 <p className="text-sm font-medium">Not sure if it fits your rentals?</p>
                 <p className="text-xs text-slate-300">
                   Ask a question above—get a direct answer in seconds.
