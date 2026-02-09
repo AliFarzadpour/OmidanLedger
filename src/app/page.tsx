@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Hero } from '@/components/marketing/Hero';
@@ -133,7 +132,7 @@ export default function MarketingHomePage() {
                <div className="flex flex-col gap-3 rounded-lg border bg-slate-50 p-3 focus-within:ring-2 focus-within:ring-ring">
                 <input
                   className="h-11 w-full rounded-md border-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
-                  placeholder='Try: "Is my bank data safe and secure?"'
+                  placeholder='Try: "What tax reports do I get?"'
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleAsk(); } }}
@@ -154,7 +153,6 @@ export default function MarketingHomePage() {
                 {[
                   "Is my bank data safe and secure?",
                   "Can it handle multiple properties and LLCs?",
-                  "What tax reports do I get (Schedule E)?",
                   "Can I export reports for my CPA?",
                 ].map((q) => (
                   <button
@@ -280,5 +278,3 @@ export default function MarketingHomePage() {
     </div>
   );
 }
-
-    
