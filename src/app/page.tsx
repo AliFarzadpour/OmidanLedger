@@ -92,14 +92,14 @@ export default function MarketingHomePage() {
 
         {/* --- AI INVITE (ABOVE THE FOLD) --- */}
         <section id="ai-invite" className="mx-auto mt-8 mb-12 w-full max-w-6xl px-4">
-          <div className="grid gap-6 rounded-2xl border bg-background p-6 shadow-lg md:grid-cols-2 md:items-center">
+          <div className="grid gap-6 rounded-2xl border border-slate-100 bg-white p-8 shadow-xl md:grid-cols-2 md:items-center">
             {/* Left: AI prompt */}
             <div className="space-y-4">
               <div className="space-y-1">
-                <p className="text-sm font-medium text-muted-foreground">
+                <p className="text-sm font-medium text-primary">
                   Instant answers
                 </p>
-                <h2 className="text-2xl font-semibold tracking-tight">
+                <h2 className="text-2xl font-bold tracking-tight text-slate-900">
                   Ask the OmidanLedger AI anything
                 </h2>
                 <p className="text-sm text-muted-foreground">
@@ -108,9 +108,9 @@ export default function MarketingHomePage() {
               </div>
 
               {/* Input + button */}
-              <div className="flex flex-col gap-3 sm:flex-row">
+               <div className="flex flex-col gap-3 rounded-lg border bg-slate-50 p-3 focus-within:ring-2 focus-within:ring-ring">
                 <input
-                  className="h-11 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  className="h-11 w-full rounded-md border-0 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground"
                   placeholder='Try: "Is Plaid read-only and secure?"'
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -118,7 +118,6 @@ export default function MarketingHomePage() {
                   disabled={isLoading}
                 />
                 <Button
-                  className="h-11"
                   onClick={handleAsk}
                   disabled={isLoading}
                   type="button"
@@ -131,16 +130,15 @@ export default function MarketingHomePage() {
               {/* Sample questions */}
               <div className="flex flex-wrap gap-2">
                 {[
-                  "Is Plaid read-only and secure?",
+                  "Is my bank data safe and secure?",
                   "Can it handle multiple properties and LLCs?",
                   "What tax reports do I get (Schedule E)?",
-                  "Is my bank data safe and secure?",
                   "Can I export reports for my CPA?",
                 ].map((q) => (
                   <button
                     key={q}
                     type="button"
-                    className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+                    className="rounded-full border bg-white px-3 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                     onClick={() => setQuery(q)}
                     disabled={isLoading}
                   >
@@ -155,7 +153,7 @@ export default function MarketingHomePage() {
             </div>
 
             {/* Right: Video */}
-            <div className="overflow-hidden rounded-xl border bg-muted">
+            <div className="overflow-hidden rounded-xl">
               <div className="aspect-video w-full">
                 <video
                   className="h-full w-full object-cover"
@@ -167,9 +165,9 @@ export default function MarketingHomePage() {
                   preload="metadata"
                 />
               </div>
-              <div className="px-4 py-3">
+              <div className="bg-slate-900 px-4 py-3 text-white">
                 <p className="text-sm font-medium">Not sure if it fits your rentals?</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-slate-300">
                   Ask a question above—get a direct answer in seconds.
                 </p>
               </div>
@@ -224,7 +222,7 @@ export default function MarketingHomePage() {
 
         {/* --- AI STRIP (BEFORE FAQ) --- */}
         <section className="mx-auto mt-12 mb-16 w-full max-w-6xl px-4">
-          <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border bg-background p-6 shadow-lg sm:flex-row sm:items-center">
+          <div className="flex flex-col items-start justify-between gap-3 rounded-2xl border bg-background p-6 shadow-xl sm:flex-row sm:items-center">
             <div>
               <h3 className="text-lg font-semibold">Have a specific question?</h3>
               <p className="text-sm text-muted-foreground">
