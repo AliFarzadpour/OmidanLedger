@@ -23,8 +23,8 @@ export default function MarketingHomePage() {
         <Hero />
 
         {/* --- AI INVITE (ABOVE THE FOLD) --- */}
-        <section id="ai-invite" className="mx-auto mt-8 w-full max-w-6xl px-4">
-          <div className="grid gap-6 rounded-2xl border bg-background p-6 shadow-sm md:grid-cols-2 md:items-center">
+        <section id="ai-invite" className="mx-auto mt-8 mb-12 w-full max-w-6xl px-4">
+          <div className="grid gap-6 rounded-2xl border bg-background p-6 shadow-lg md:grid-cols-2 md:items-center">
             {/* Left: AI prompt */}
             <div className="space-y-4">
               <div className="space-y-1">
