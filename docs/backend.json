@@ -18,7 +18,12 @@
           "description": "Vector embedding for semantic search."
         },
         "enabled": { "type": "boolean" },
-        "sourcePaths": { "type": "array", "items": { "type": "string" } }
+        "sourcePaths": { "type": "array", "items": { "type": "string" } },
+        "imageUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "An optional URL to an image illustrating the article's content."
+        }
       },
       "required": ["title", "body"]
     },
@@ -965,3 +970,5 @@
     "reasoning": "The Firestore structure is designed to ensure Authorization Independence and support the application's core features. It leverages path-based ownership for user-specific data. User data is stored under `/users/{userId}`, providing a clear path-based ownership model. Bank accounts are a subcollection of the user document. Transactions are nested under bank accounts. The `Transaction` entity includes a denormalized `userId` to support efficient and secure `collectionGroup` queries. A top-level `vendors` collection is added, secured by a `userId` field within each document. A new `documents` subcollection is added under each user to store tenant-specific files securely."
   }
 }
+
+    

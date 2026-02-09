@@ -324,8 +324,14 @@ export async function askHelpRag(question: string) {
     // Retrieve relevant source code from the filesystem
     const codeContext = getRelevantSourceCode(process.cwd());
 
-    const articleContext = articleSources.length > 0 
-      ? articleSources.map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`).join('\n\n---\n\n')
+    const articleContext = articleSources.length > 0
+      ? articleSources.map((s, i) => {
+          let sourceText = `Source ${i + 1}: ${s.title}\n${s.body}`;
+          if (s.imageUrl) {
+            sourceText += `\nImage for Source ${i + 1}: ${s.imageUrl}`;
+          }
+          return sourceText;
+        }).join('\n\n---\n\n')
       : "No relevant help articles found.";
 
     const systemPrompt =
@@ -338,6 +344,10 @@ export async function askHelpRag(question: string) {
 - Use the code ONLY to understand HOW the application works in order to answer "how-to" questions.
 - Your answer should be a user-friendly explanation, NOT a code walkthrough.
 
+**IMAGE INSTRUCTION:**
+- If a source includes an 'Image for Source' URL, and that image is directly relevant to answering the user's question, you MUST embed it in your response using the exact format: [IMAGE: your_image_url_here.png]
+- Place the [IMAGE: ...] tag where the image makes the most sense in your explanation. Do NOT show an image if it is not relevant.
+
 **CONTEXT - HELP ARTICLES:**
 ${articleContext}
 
@@ -347,7 +357,7 @@ ${codeContext}
 **USER'S QUESTION:**
 ${q}
 
-Based on the context above, and strictly following the security directive, provide a clear, helpful answer. If the context does not contain the answer, say that you couldn't find the information.`;
+Based on the context above, and strictly following all directives, provide a clear, helpful answer. If the context does not contain the answer, say that you couldn't find the information.`;
 
     const apiKey = process.env.GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
@@ -403,3 +413,5 @@ export async function deleteHelpArticle(userId: string, articleId: string) {
   await db.collection('help_articles').doc(articleId).delete();
   return { success: true };
 }
+
+    

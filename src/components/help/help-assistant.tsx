@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -24,13 +25,40 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Sparkles, BrainCircuit, FilePlus, ListTree, PlusCircle, Trash2, Search, RefreshCw, HelpCircle, Wrench, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { marked } from 'marked';
+import Image from 'next/image';
 
-// --- Markdown Helper ---
-function Markdown({ content }: { content: string }) {
+// New component to render the answer, parsing for image tags
+function AnswerRenderer({ content }: { content: string }) {
   if (!content) return null;
-  const html = marked.parse(content);
-  return <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700" dangerouslySetInnerHTML={{ __html: html }} />;
+
+  const parts = content.split(/(\[IMAGE:.*?\])/g);
+
+  return (
+    <div className="prose prose-sm dark:prose-invert max-w-none text-slate-700">
+      {parts.map((part, index) => {
+        const imageMatch = part.match(/\[IMAGE:(.*?)\]/);
+        if (imageMatch) {
+          const imageUrl = imageMatch[1];
+          return (
+            <div key={index} className="my-4 rounded-lg border overflow-hidden">
+              <Image
+                src={imageUrl}
+                alt="Help assistant image"
+                width={500}
+                height={300}
+                className="w-full h-auto"
+              />
+            </div>
+          );
+        } else {
+          // Render text parts as Markdown
+          return <div key={index} dangerouslySetInnerHTML={{ __html: marked.parse(part) }} />;
+        }
+      })}
+    </div>
+  );
 }
+
 
 export function HelpAssistant() {
   const { user } = useUser();
@@ -188,7 +216,7 @@ export function HelpAssistant() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Markdown content={answer} />
+                  <AnswerRenderer content={answer} />
                   
                   {sources.length > 0 && (
                     <div className="pt-3 border-t border-blue-200">
@@ -274,3 +302,5 @@ export function HelpAssistant() {
     </Sheet>
   );
 }
+
+    
