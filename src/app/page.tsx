@@ -155,6 +155,7 @@ export default function MarketingHomePage() {
               {/* Sample questions */}
               <div className="flex flex-wrap gap-2">
                 {[
+                  "What tax reports do I get for Schedule E?",
                   "Is my bank data safe and secure?",
                   "Can it handle multiple properties and LLCs?",
                   "Can I export reports for my CPA?",
