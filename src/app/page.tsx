@@ -134,7 +134,7 @@ export default function MarketingHomePage() {
                   "Is Plaid read-only and secure?",
                   "Can it handle multiple properties and LLCs?",
                   "What tax reports do I get (Schedule E)?",
-                  "How long does setup take?",
+                  "Is my bank data safe and secure?",
                   "Can I export reports for my CPA?",
                 ].map((q) => (
                   <button
