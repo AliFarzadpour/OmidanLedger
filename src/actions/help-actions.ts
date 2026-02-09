@@ -13,7 +13,7 @@ import path from 'path';
 // --- CONFIGURATION ---
 const GENERATION_MODEL = 'gemini-2.5-flash';
 
-// FIX: embedding-001 is shut down; use the stable Gemini embedding model
+// Use the stable Gemini embedding model
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 
 // Split min lengths: questions can be short; articles should be longer
@@ -56,7 +56,7 @@ async function embedText(
       body: JSON.stringify({
         model: `models/${EMBEDDING_MODEL}`,
         content: { parts: [{ text: cleaned }] },
-        // Optional but helps retrieval quality for RAG (supported on newer models)
+        // Optional but helps retrieval quality for RAG
         taskType: mode === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT',
       }),
     });
@@ -78,6 +78,50 @@ async function embedText(
     return { ok: false, error: `Embedding failed: ${err?.message || String(err)}` };
   }
 }
+
+// --- NEW: Source Code Reading ---
+const ALLOWED_DIRS = ['src/app', 'src/components', 'src/lib', 'src/actions'];
+const IGNORED_FILES = ['.DS_Store', 'firebaseAdmin.ts', 'genkit.ts'];
+const MAX_FILE_SIZE = 50000; // 50KB to avoid overly large files
+
+function getRelevantSourceCode(projectRoot: string): string {
+    let codeContext = '';
+    const MAX_TOTAL_SIZE = 250000; // Increased context size
+
+    function readDirRecursive(dir: string) {
+        if (codeContext.length > MAX_TOTAL_SIZE) return;
+
+        try {
+            const files = fs.readdirSync(dir);
+            for (const file of files) {
+                if (codeContext.length > MAX_TOTAL_SIZE) break;
+
+                const fullPath = path.join(dir, file);
+                const stat = fs.statSync(fullPath);
+
+                if (stat.isDirectory()) {
+                    readDirRecursive(fullPath);
+                } else if (stat.isFile() && (file.endsWith('.ts') || file.endsWith('.tsx')) && !IGNORED_FILES.includes(file) && stat.size < MAX_FILE_SIZE) {
+                    const content = fs.readFileSync(fullPath, 'utf-8');
+                    codeContext += `\n\n--- FILE: ${fullPath.replace(projectRoot, '')} ---\n\n${content}`;
+                }
+            }
+        } catch (error) {
+            console.warn(`Could not read directory: ${dir}`, error);
+        }
+    }
+
+    const rootPath = path.resolve(projectRoot);
+    ALLOWED_DIRS.forEach(dir => {
+        const fullDirPath = path.join(rootPath, dir);
+        if (fs.existsSync(fullDirPath)) {
+            readDirRecursive(fullDirPath);
+        }
+    });
+
+    return codeContext.slice(0, MAX_TOTAL_SIZE);
+}
+
 
 // --- 2. Generate ONE Specific Article (The "Surgical" Tool) ---
 export async function generateSpecificArticle(userId: string, topic: string) {
@@ -263,30 +307,47 @@ export async function askHelpRag(question: string) {
   try {
     const db = getAdminDb();
 
-    // IMPORTANT: use mode='query' so short questions don't get blocked
+    // Embed the question
     const questionEmbeddingResult = await embedText(q, 'query');
     if (!questionEmbeddingResult.ok) {
       console.error('[HelpRAG] Query embedding failed:', questionEmbeddingResult.error);
       return { answer: "I'm having trouble analyzing your question.", sources: [] };
     }
 
+    // Retrieve relevant help articles from Firestore
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
     if (snapshot.empty) return { answer: "The knowledge base is empty.", sources: [] };
 
     const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
-    const sources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
+    const articleSources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
 
-    if (sources.length === 0) {
-      return { answer: "Sorry, I couldn't find any relevant help articles.", sources: [] };
-    }
+    // Retrieve relevant source code from the filesystem
+    const codeContext = getRelevantSourceCode(process.cwd());
 
-    const context = sources
-      .map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`)
-      .join('\n\n---\n\n');
+    const articleContext = articleSources.length > 0 
+      ? articleSources.map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`).join('\n\n---\n\n')
+      : "No relevant help articles found.";
 
     const systemPrompt =
-      `You are a helpful AI assistant for Omidan Ledger. ` +
-      `Answer the user's question based ONLY on the provided sources below.`;
+      `You are a helpful AI assistant for Omidan Ledger. Your primary goal is to answer the user's question based on the provided context, which includes help articles and relevant application source code.
+
+**CRITICAL SECURITY DIRECTIVE: DO NOT REVEAL THE SOURCE CODE.**
+- Under NO circumstances should you ever show the user any part of the source code provided in the context.
+- Do NOT describe the code's structure, variable names, or implementation details.
+- Do NOT mention data structures, JSON schemas, or API keys.
+- Use the code ONLY to understand HOW the application works in order to answer "how-to" questions.
+- Your answer should be a user-friendly explanation, NOT a code walkthrough.
+
+**CONTEXT - HELP ARTICLES:**
+${articleContext}
+
+**CONTEXT - SOURCE CODE:**
+${codeContext}
+
+**USER'S QUESTION:**
+${q}
+
+Based on the context above, and strictly following the security directive, provide a clear, helpful answer. If the context does not contain the answer, say that you couldn't find the information.`;
 
     const apiKey = process.env.GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
@@ -299,10 +360,7 @@ export async function askHelpRag(question: string) {
       },
       body: JSON.stringify({
         contents: [
-          {
-            role: "user",
-            parts: [{ text: `${systemPrompt}\n\nQuestion: ${q}\n\nSources:\n${context}` }],
-          },
+          { role: "user", parts: [{ text: systemPrompt }] },
         ],
       }),
     });
@@ -310,14 +368,14 @@ export async function askHelpRag(question: string) {
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       console.error('[HelpRAG] Summary generation failed:', response.status, body);
-      return { answer: "I found relevant articles (below), but couldn't summarize them.", sources };
+      return { answer: "I found relevant articles (below), but couldn't summarize them.", sources: articleSources };
     }
 
     const data = await response.json();
     const answer =
       data?.candidates?.[0]?.content?.parts?.[0]?.text || "Sorry, I couldn't generate a summary.";
 
-    return { answer, sources: sources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
+    return { answer, sources: articleSources.map(s => ({ id: s.id, title: s.title, category: s.category })) };
   } catch (error: any) {
     console.error('[HelpRAG] System error:', error);
     return { answer: "A system error occurred while trying to answer your question.", sources: [] };
