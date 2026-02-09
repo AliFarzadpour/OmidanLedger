@@ -414,4 +414,42 @@ export async function deleteHelpArticle(userId: string, articleId: string) {
   return { success: true };
 }
 
+// --- NEW: Get Single Article ---
+export async function getHelpArticle(userId: string, articleId: string) {
+  if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
+  const db = getAdminDb();
+  const docRef = db.collection('help_articles').doc(articleId);
+  const docSnap = await docRef.get();
+  if (!docSnap.exists) throw new Error("Article not found.");
+  return { id: docSnap.id, ...docSnap.data() };
+}
+
+// --- NEW: Update Article ---
+const HelpArticleSchema = z.object({
+    title: z.string().min(1, "Title is required."),
+    category: z.string().min(1, "Category is required."),
+    body: z.string().min(1, "Body is required."),
+    imageUrl: z.string().url().optional().or(z.literal('')),
+});
+
+export async function updateHelpArticle(userId: string, articleId: string, data: z.infer<typeof HelpArticleSchema>) {
+    if (!await isSuperAdmin(userId)) throw new Error("Permission denied.");
+    
+    const validation = HelpArticleSchema.safeParse(data);
+    if (!validation.success) {
+        throw new Error(validation.error.errors.map(e => e.message).join(', '));
+    }
+    
+    const db = getAdminDb();
+    const docRef = db.collection('help_articles').doc(articleId);
+
+    // If we update the content, we should clear the embedding so it gets re-indexed.
+    await docRef.update({
+        ...validation.data,
+        updatedAt: new Date(),
+        embedding: [], // Force re-indexing
+    });
+
+    return { success: true };
+}
     
