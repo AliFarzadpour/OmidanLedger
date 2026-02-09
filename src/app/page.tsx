@@ -170,7 +170,9 @@ export default function MarketingHomePage() {
                   </button>
                 ))}
               </div>
-              
+              <p className="text-xs text-muted-foreground px-1 pt-2">
+                Tip: Ask about your exact situation (units, LLCs, bank accounts). The AI will guide you.
+              </p>
             </div>
 
             {/* Right: Video */}
