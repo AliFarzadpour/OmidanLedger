@@ -38,7 +38,7 @@ function AnswerRenderer({ content }: { content: string }) {
       {parts.map((part, index) => {
         const imageMatch = part.match(/\[IMAGE:(.*?)\]/);
         if (imageMatch) {
-          const imageUrl = imageMatch[1];
+          const imageUrl = imageMatch[1].trim(); // FIX: Trim whitespace from the URL
           return (
             <div key={index} className="my-4 rounded-lg border overflow-hidden">
               <Image
@@ -302,5 +302,3 @@ export function HelpAssistant() {
     </Sheet>
   );
 }
-
-    
