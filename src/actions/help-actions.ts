@@ -421,7 +421,21 @@ export async function getHelpArticle(userId: string, articleId: string) {
   const docRef = db.collection('help_articles').doc(articleId);
   const docSnap = await docRef.get();
   if (!docSnap.exists) throw new Error("Article not found.");
-  return { id: docSnap.id, ...docSnap.data() };
+  
+  const data = docSnap.data();
+
+  if (!data) {
+    throw new Error("Article not found or data is empty.");
+  }
+
+  // Sanitize Firestore Timestamps to be serializable for client components
+  const sanitizedData = {
+    ...data,
+    updatedAt: data.updatedAt?.toDate()?.toISOString() ?? null,
+    embeddingUpdatedAt: data.embeddingUpdatedAt?.toDate()?.toISOString() ?? null,
+  };
+
+  return { id: docSnap.id, ...sanitizedData };
 }
 
 // --- NEW: Update Article ---
@@ -452,4 +466,6 @@ export async function updateHelpArticle(userId: string, articleId: string, data:
 
     return { success: true };
 }
+    
+
     
