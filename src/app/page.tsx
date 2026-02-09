@@ -10,7 +10,7 @@ import { Header } from '@/components/marketing/Header';
 import { EarlyAccessStrip } from '@/components/marketing/EarlyAccessStrip';
 import { Pricing } from '@/components/marketing/Pricing';
 import { FinalCTA } from '@/components/marketing/FinalCTA';
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { askHelpRag } from '@/actions/help-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Sparkles, BrainCircuit, Play, Pause, VolumeX, Volume2 } from 'lucide-react';
@@ -64,6 +64,7 @@ export default function MarketingHomePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
+  const answerSectionRef = useRef<HTMLDivElement>(null);
 
   const togglePlay = () => {
     if (videoRef.current?.paused) {
@@ -104,6 +105,12 @@ export default function MarketingHomePage() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (answer && answerSectionRef.current) {
+      answerSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [answer]);
 
   return (
     <div className="bg-white text-slate-800">
@@ -155,8 +162,8 @@ export default function MarketingHomePage() {
               {/* Sample questions */}
               <div className="flex flex-wrap gap-2">
                 {[
-                  "What tax reports do I get for Schedule E?",
                   "Is my bank data safe and secure?",
+                  "What tax reports do I get for Schedule E?",
                   "Can it handle multiple properties and LLCs?",
                   "Can I export reports for my CPA?",
                 ].map((q) => (
@@ -217,7 +224,7 @@ export default function MarketingHomePage() {
         )}
 
         {answer && (
-            <section className="mx-auto w-full max-w-6xl px-4 animate-in fade-in-50 mb-12">
+            <section ref={answerSectionRef} className="mx-auto w-full max-w-6xl px-4 animate-in fade-in-50 mb-12">
                 <Card className="bg-blue-50/50 border-blue-100">
                     <CardHeader>
                         <CardTitle className="text-sm font-medium text-blue-900 flex items-center gap-2">
