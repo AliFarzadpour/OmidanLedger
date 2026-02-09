@@ -13,6 +13,7 @@ import path from 'path';
 // --- CONFIGURATION ---
 const GENERATION_MODEL = 'gemini-2.5-flash';
 
+// FIX: embedding-001 is shut down; use the stable Gemini embedding model
 const EMBEDDING_MODEL = 'gemini-embedding-001';
 
 // Split min lengths: questions can be short; articles should be longer
@@ -22,28 +23,6 @@ const MIN_DOC_LENGTH = 20;
 const FRIENDLY_ERROR_MSG =
   'The Omidan Ledger Help Assistant is currently unavailable. Please try again later.';
 
-// --- HELPER: Hybrid File Reader ---
-function readCodebase(dir: string, fileList: string[] = []): string[] {
-  if (!fs.existsSync(dir)) return [];
-  const files = fs.readdirSync(dir);
-  files.forEach((file) => {
-    const filePath = path.join(dir, file);
-    try {
-      const stat = fs.statSync(filePath);
-      if (stat.isDirectory()) {
-        if (file !== 'node_modules' && file !== '.next' && file !== '.git' && file !== 'fonts') {
-          readCodebase(filePath, fileList);
-        }
-      } else {
-        if (/\.(tsx|ts|js|jsx)$/.test(file)) {
-          const content = fs.readFileSync(filePath, 'utf8');
-          fileList.push(`\n--- FILE: ${filePath} ---\n${content}`);
-        }
-      }
-    } catch (err) { }
-  });
-  return fileList;
-}
 
 // --- 1. Embedding Function ---
 type EmbeddingResult =
@@ -109,16 +88,6 @@ export async function generateSpecificArticle(userId: string, topic: string) {
 
   const db = getAdminDb();
 
-  const srcDir = path.join(process.cwd(), 'src');
-  let promptSourceContext = "CONTEXT: Production Mode.";
-  if (fs.existsSync(srcDir)) {
-    try {
-      const files = readCodebase(srcDir);
-      const allCode = files.join('\n').substring(0, 1500000); 
-      promptSourceContext = `SOURCE CODE CONTEXT:\n${allCode}`;
-    } catch (err) { }
-  }
-
   const deepPrompt = `
     You are the Lead Technical Writer for 'Omidan Ledger'.
     YOUR TASK: Write ONE comprehensive help article about this specific topic: "${topic}".
@@ -128,13 +97,10 @@ export async function generateSpecificArticle(userId: string, topic: string) {
     2. **BODY**: Detailed Step-by-Step instructions. Define terms if asked.
     3. **CATEGORY**: Choose the most relevant category (Real Estate, Accounting, or Admin).
     
-    ${promptSourceContext}
-    
     OUTPUT FORMAT (Strict JSON):
     { "articles": [ { "title": "...", "category": "...", "body": "...", "tags": [] } ] }
   `;
 
-  // USING GENERATION_MODEL CONSTANT (gemini-2.5-flash)
   const apiKey = process.env.GEMINI_API_KEY;
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
 
@@ -200,21 +166,10 @@ export async function generateHelpArticlesFromCodebase(userId: string, targetCat
 
   const categoryPrompt = categories[activeCategory as keyof typeof categories];
 
-  const srcDir = path.join(process.cwd(), 'src');
-  let promptSourceContext = "CONTEXT: Production Mode.";
-  if (fs.existsSync(srcDir)) {
-    try {
-      const files = readCodebase(srcDir);
-      const allCode = files.join('\n').substring(0, 1500000); 
-      promptSourceContext = `SOURCE CODE CONTEXT:\n${allCode}`;
-    } catch (err) { }
-  }
-
   const deepPrompt = `
     You are the Lead Technical Writer for 'Omidan Ledger'.
     YOUR TASK: Generate 10-15 comprehensive help articles covering ONLY: ${categoryPrompt}
     CRITICAL WRITING RULES: Title short, Body detailed step-by-step.
-    ${promptSourceContext}
     OUTPUT FORMAT (Strict JSON): { "articles": [ { "title": "...", "category": "...", "body": "...", "tags": [] } ] }
   `;
 
@@ -308,57 +263,30 @@ export async function askHelpRag(question: string) {
   try {
     const db = getAdminDb();
 
-    // Embed the user's question
+    // IMPORTANT: use mode='query' so short questions don't get blocked
     const questionEmbeddingResult = await embedText(q, 'query');
     if (!questionEmbeddingResult.ok) {
       console.error('[HelpRAG] Query embedding failed:', questionEmbeddingResult.error);
       return { answer: "I'm having trouble analyzing your question.", sources: [] };
     }
 
-    // --- CONTEXT GATHERING ---
-    // 1. Get source code context
-    const srcDir = path.join(process.cwd(), 'src');
-    let codebaseContext = "CONTEXT: No source code available.";
-    if (fs.existsSync(srcDir)) {
-      try {
-        const files = readCodebase(srcDir);
-        // Limit context size to be safe
-        const allCode = files.join('\n').substring(0, 800000); 
-        codebaseContext = `\n\n--- SOURCE CODE CONTEXT ---\n${allCode}`;
-      } catch (err) { 
-        console.error("Failed to read codebase for RAG:", err);
-      }
-    }
-
-    // 2. Get Firestore article context
     const snapshot = await db.collection('help_articles').where('enabled', '==', true).get();
-    let firestoreContext = "CONTEXT: No help articles found.";
-    let sources: HelpArticle[] = [];
-    
-    if (!snapshot.empty) {
-      const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
-      sources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
-      if (sources.length > 0) {
-        firestoreContext = sources
-          .map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`)
-          .join('\n\n---\n\n');
-      }
+    if (snapshot.empty) return { answer: "The knowledge base is empty.", sources: [] };
+
+    const allArticles = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as HelpArticle[];
+    const sources = retrieveTopK(questionEmbeddingResult.embedding, allArticles, 5);
+
+    if (sources.length === 0) {
+      return { answer: "Sorry, I couldn't find any relevant help articles.", sources: [] };
     }
 
-    // 3. Combine contexts
-    const combinedContext = `
-      --- HELP ARTICLES ---
-      ${firestoreContext}
-      
-      ${codebaseContext}
-    `;
+    const context = sources
+      .map((s, i) => `Source ${i + 1}: ${s.title}\n${s.body}`)
+      .join('\n\n---\n\n');
 
-    // 4. Generate Answer
     const systemPrompt =
       `You are a helpful AI assistant for Omidan Ledger. ` +
-      `Answer the user's question based on the provided HELP ARTICLES and SOURCE CODE CONTEXT below. Prioritize the help articles if they are relevant.`;
-
-    const finalPrompt = `${systemPrompt}\n\nQuestion: ${q}\n\nCONTEXT:\n${combinedContext}`;
+      `Answer the user's question based ONLY on the provided sources below.`;
 
     const apiKey = process.env.GEMINI_API_KEY;
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${GENERATION_MODEL}:generateContent`;
@@ -373,7 +301,7 @@ export async function askHelpRag(question: string) {
         contents: [
           {
             role: "user",
-            parts: [{ text: finalPrompt }],
+            parts: [{ text: `${systemPrompt}\n\nQuestion: ${q}\n\nSources:\n${context}` }],
           },
         ],
       }),
