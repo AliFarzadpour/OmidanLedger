@@ -52,14 +52,14 @@ export default function RootLayout({
               t.src=v;s=b.getElementsByTagName(e)[0];
               s.parentNode.insertBefore(t,s)}(window, document,'script',
               'https://connect.facebook.net/en_US/fbevents.js');
-              fbq('init', '1526992311724619');
+              fbq('init', '1976560903216138');
               fbq('track', 'PageView');
             `,
           }}
         />
         <noscript
           dangerouslySetInnerHTML={{
-            __html: `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1526992311724619&ev=PageView&noscript=1" />`,
+            __html: `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1976560903216138&ev=PageView&noscript=1" />`,
           }}
         />
         {/* End Meta Pixel Code */}
