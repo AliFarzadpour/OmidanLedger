@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Hero } from '@/components/marketing/Hero';
@@ -162,7 +163,7 @@ export default function MarketingHomePage() {
               {/* Sample questions */}
               <div className="flex flex-wrap gap-2">
                 {[
-                  "Is my bank data safe and secure?",
+                  "What was my total income last month?",
                   "What tax reports do I get for Schedule E?",
                   "Can it handle multiple properties and LLCs?",
                   "Can I export reports for my CPA?",
