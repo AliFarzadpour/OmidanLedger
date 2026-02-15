@@ -20,6 +20,7 @@ import {
   Wrench, // Icon for Operations
   LifeBuoy,
   LogOut, // New Icon for Logout
+  Database, // Icon for Seeding
 } from "lucide-react";
 
 import {
@@ -139,6 +140,12 @@ const data = {
       title: "System Health",
       url: "/admin/health",
       icon: Activity,
+      advanced: false,
+    },
+    {
+      title: "Data Seeding",
+      url: "/admin/seeding",
+      icon: Database,
       advanced: false,
     }
   ],
