@@ -36,18 +36,33 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // scripts/seed-sample-user.ts
 const admin = __importStar(require("firebase-admin"));
 const uuid_1 = require("uuid");
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 // --- CONFIGURATION ---
 const TARGET_USER_EMAIL = 'sampledata@example.com';
 // 1. Initialize Firebase Admin SDK
 function initializeAdminApp() {
     try {
-        // Use Application Default Credentials, which is the standard for server environments.
-        // It automatically finds the service account from the environment it's running in.
-        if (admin.apps.length === 0) {
-            admin.initializeApp({
-                credential: admin.credential.applicationDefault(),
-            });
+        if (admin.apps.length > 0) {
+            return;
         }
+        let projectId;
+        const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
+        if (fs.existsSync(serviceAccountPath)) {
+            const serviceAccount = require(serviceAccountPath);
+            projectId = serviceAccount.project_id;
+        }
+        else {
+            projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
+        }
+        if (!projectId) {
+            // Fallback to the one defined in apphosting.yaml if others aren't present
+            projectId = 'studio-7576922301-bac28';
+        }
+        admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId: projectId,
+        });
     }
     catch (error) {
         console.error("Error initializing Firebase Admin SDK:", error);

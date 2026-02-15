@@ -12,33 +12,44 @@ const TARGET_USER_EMAIL = 'sampledata@example.com';
 
 // 1. Initialize Firebase Admin SDK
 function initializeAdminApp() {
-  try {
-    if (admin.apps.length > 0) {
+  if (admin.apps.length > 0) {
+    return;
+  }
+
+  // Attempt to initialize from the B64 environment variable first.
+  const serviceAccountB64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64;
+  if (serviceAccountB64) {
+    try {
+      const serviceAccountJson = Buffer.from(serviceAccountB64, 'base64').toString('ascii');
+      const serviceAccount = JSON.parse(serviceAccountJson);
+      
+      // The private key in JSON often has escaped newlines.
+      if (serviceAccount.private_key) {
+        serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+      }
+
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id
+      });
+      console.log('Initialized Firebase Admin with B64 service account.');
       return;
+    } catch (e: any) {
+      console.warn('Could not initialize from B64 env var, falling back.', e.message);
     }
+  }
 
-    let projectId: string | undefined;
-    const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
-
-    if (fs.existsSync(serviceAccountPath)) {
-      const serviceAccount = require(serviceAccountPath);
-      projectId = serviceAccount.project_id;
-    } else {
-      projectId = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT;
-    }
-
-    if (!projectId) {
-      // Fallback to the one defined in apphosting.yaml if others aren't present
-      projectId = 'studio-7576922301-bac28';
-    }
-
-    admin.initializeApp({
-      credential: admin.credential.applicationDefault(),
-      projectId: projectId,
-    });
+  // Fallback for local dev or other environments
+  try {
+      console.log('B64 env var not found, trying Application Default Credentials.');
+      admin.initializeApp({
+          // Use ADC with an explicit project ID
+          credential: admin.credential.applicationDefault(),
+          projectId: 'studio-7576922301-bac28',
+      });
   } catch (error) {
-    console.error("Error initializing Firebase Admin SDK:", error);
-    process.exit(1);
+      console.error("FATAL: Could not initialize Firebase Admin SDK.", error);
+      process.exit(1);
   }
 }
 
