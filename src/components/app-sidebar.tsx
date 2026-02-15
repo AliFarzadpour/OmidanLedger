@@ -142,16 +142,16 @@ const data = {
       icon: Activity,
       advanced: false,
     },
+  ],
+
+  // Zone 3: System
+  system: [
     {
       title: "Data Seeding",
       url: "/admin/seeding",
       icon: Database,
       advanced: false,
-    }
-  ],
-
-  // Zone 3: System
-  system: [
+    },
     {
       title: "Settings",
       url: "/dashboard/settings",
