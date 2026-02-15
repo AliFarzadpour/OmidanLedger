@@ -1,12 +1,11 @@
 
 'use server';
 
-import { getAdminDb } from '@/lib/firebaseAdmin';
-import { getAuth } from 'firebase-admin/auth';
+import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin-utils';
 import { isSuperAdmin } from '@/lib/auth-utils';
 
 const db = getAdminDb();
-const auth = getAuth();
+const auth = getAdminAuth();
 
 /**
  * Fetches all users from Firebase Auth and merges their role from Firestore.
