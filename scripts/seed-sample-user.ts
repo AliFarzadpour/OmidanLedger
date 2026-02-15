@@ -37,7 +37,7 @@ const auth = admin.auth();
 // Function to delete all data for a specific user
 async function deleteExistingData(userId: string) {
     console.log(`Deleting existing data for user ${userId}...`);
-    const collectionsToDelete = ['bankAccounts', 'properties', 'vendors', 'invoices', 'bills', 'tenantProfiles', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
+    const collectionsToDelete = ['properties', 'vendors', 'invoices', 'bills', 'tenantProfiles', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
     const batch = db.batch();
 
     for (const collectionName of collectionsToDelete) {
@@ -49,7 +49,7 @@ async function deleteExistingData(userId: string) {
     }
     
     // Deleting user subcollections
-    const userSubcollections = ['categoryMappings', 'admin_invoices', 'charges', 'settings'];
+    const userSubcollections = ['bankAccounts', 'categoryMappings', 'admin_invoices', 'charges', 'settings', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
      for (const collectionName of userSubcollections) {
         const snapshot = await db.collection('users').doc(userId).collection(collectionName).get();
         if (!snapshot.empty) {
@@ -132,7 +132,7 @@ async function runSeeder() {
           leaseStart: '2023-08-01', leaseEnd: '2024-07-31', status: 'active',
           rentHistory: [{ amount: 2500, effectiveDate: '2023-08-01'}]
       }],
-      mortgage: { hasMortgage: 'yes', lenderName: 'Wells Fargo Home Mortgage', principalAndInterest: 1850, escrowAmount: 450 },
+      mortgage: { hasMortgage: 'yes', originalLoanAmount: 300000, loanTerm: 30, interestRate: 6.5, purchaseDate: '2022-01-15', lenderName: 'Wells Fargo Home Mortgage', principalAndInterest: 1850, escrowAmount: 450 },
   });
 
   // Multi-Family Home
@@ -202,7 +202,92 @@ async function runSeeder() {
   createTx(creditCardAccountId, 'HEB Grocery', -124.30, '2024-02-14', '', {l0: 'EQUITY', l1: 'Owner / Shareholder Equity', l2: 'Owner Distributions', l3: 'Personal Groceries'});
   createTx(checkingAccountId, 'Online Payment to Amex', -500, '2024-02-28', '', {l0: 'ASSET', l1: 'Cash Movement', l2: 'Internal Transfer', l3: 'Credit Card Payment'});
   
-  // 7. Commit the batch
+  // --- 7. Create Operations Center Data ---
+  const workOrderId1 = uuidv4();
+  const workOrderId2 = uuidv4();
+  const threadId1 = uuidv4();
+  const taskId1 = uuidv4();
+
+  // Work Order for the Lake House
+  batch.set(db.collection('users').doc(userId).collection('opsWorkOrders').doc(workOrderId1), {
+      id: workOrderId1,
+      userId,
+      propertyId: sfhId,
+      title: 'Fix Leaky Kitchen Faucet',
+      description: 'Tenant Alice Johnson reported a constant drip from the kitchen faucet.',
+      category: 'Plumbing',
+      priority: 'High',
+      status: 'New',
+      createdAt: new Date('2024-03-05T10:00:00Z').toISOString(),
+      updatedAt: new Date('2024-03-05T10:00:00Z').toISOString(),
+      createdBy: 'System Seed',
+  });
+
+  // Work Order for Downtown Apt 101
+  batch.set(db.collection('users').doc(userId).collection('opsWorkOrders').doc(workOrderId2), {
+      id: workOrderId2,
+      userId,
+      propertyId: mfhId,
+      unitId: unit1Id,
+      title: 'AC Not Cooling',
+      description: 'Tenant Bob Williams reports the AC is running but not cooling the unit.',
+      category: 'HVAC',
+      priority: 'Normal',
+      status: 'Scheduled',
+      scheduledAt: new Date('2024-03-10T14:00:00Z').toISOString(),
+      createdAt: new Date('2024-03-08T18:00:00Z').toISOString(),
+      updatedAt: new Date('2024-03-09T09:00:00Z').toISOString(),
+      createdBy: 'System Seed',
+  });
+
+  // Communication Thread for the Leaky Faucet
+  batch.set(db.collection('users').doc(userId).collection('opsThreads').doc(threadId1), {
+      uid: threadId1,
+      subject: 'Re: Leaky Kitchen Faucet',
+      status: 'open',
+      priority: 'high',
+      propertyId: sfhId,
+      tenantId: 'alice.j@example.com', // Using email as a reference for sample data
+      lastMessageAt: new Date('2024-03-05T11:05:00Z').toISOString(),
+      createdAt: new Date('2024-03-05T10:05:00Z').toISOString(),
+      updatedAt: new Date('2024-03-05T11:05:00Z').toISOString(),
+  });
+
+  // Messages for the thread
+  const messageId1 = uuidv4();
+  const messageId2 = uuidv4();
+  batch.set(db.collection('users').doc(userId).collection('opsThreads').doc(threadId1).collection('messages').doc(messageId1), {
+      uid: messageId1,
+      threadId: threadId1,
+      senderType: 'tenant',
+      senderName: 'Alice Johnson',
+      senderEmail: 'alice.j@example.com',
+      body: 'Hi, just confirming the plumber is scheduled for tomorrow at 2 PM. Will that work?',
+      createdAt: new Date('2024-03-05T10:05:00Z').toISOString(),
+  });
+   batch.set(db.collection('users').doc(userId).collection('opsThreads').doc(threadId1).collection('messages').doc(messageId2), {
+      uid: messageId2,
+      threadId: threadId1,
+      senderType: 'landlord',
+      senderName: 'Sample Landlord',
+      senderEmail: TARGET_USER_EMAIL,
+      body: 'Yes, that works. Thanks for confirming, Alice!',
+      createdAt: new Date('2024-03-05T11:05:00Z').toISOString(),
+  });
+
+  // A standalone task
+  batch.set(db.collection('users').doc(userId).collection('opsTasks').doc(taskId1), {
+      uid: taskId1,
+      title: 'Renew business license by end of month',
+      status: 'todo',
+      priority: 'normal',
+      dueDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+  });
+
+
+  // 8. Commit the batch
   try {
     await batch.commit();
     console.log(`\n🎉 Success! Sample data has been seeded for ${TARGET_USER_EMAIL}.`);
