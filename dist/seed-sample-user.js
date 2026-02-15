@@ -35,25 +35,18 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 // scripts/seed-sample-user.ts
 const admin = __importStar(require("firebase-admin"));
-const path = __importStar(require("path"));
-const fs = __importStar(require("fs"));
 const uuid_1 = require("uuid");
 // --- CONFIGURATION ---
 const TARGET_USER_EMAIL = 'sampledata@example.com';
 // 1. Initialize Firebase Admin SDK
 function initializeAdminApp() {
-    const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
     try {
-        if (fs.existsSync(serviceAccountPath)) {
-            const serviceAccount = require(serviceAccountPath);
-            if (admin.apps.length === 0) {
-                admin.initializeApp({
-                    credential: admin.credential.cert(serviceAccount)
-                });
-            }
-        }
-        else {
-            throw new Error("service-account.json not found. Please ensure it exists in your project root.");
+        // Use Application Default Credentials, which is the standard for server environments.
+        // It automatically finds the service account from the environment it's running in.
+        if (admin.apps.length === 0) {
+            admin.initializeApp({
+                credential: admin.credential.applicationDefault(),
+            });
         }
     }
     catch (error) {
