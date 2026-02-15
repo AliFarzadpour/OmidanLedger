@@ -6,8 +6,6 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
-import fs from 'node:fs';
-import path from 'node:path';
 
 type ServiceAccount = {
   project_id?: string;
@@ -15,13 +13,15 @@ type ServiceAccount = {
   client_email?: string;
 };
 
-function normalizePrivateKey(key: string) {
-  return key.replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+function normalizePrivateKey(key: string): string {
+    return key.replace(/\\n/g, '\n');
 }
 
-function loadServiceAccountFromB64(): ServiceAccount | null {
+function getServiceAccount(): ServiceAccount {
   const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_KEY_B64;
-  if (!b64 || !b64.trim()) return null;
+  if (!b64 || !b64.trim()) {
+    throw new Error('CRITICAL: Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64 environment variable.');
+  }
 
   let raw: string;
   try {
@@ -32,61 +32,27 @@ function loadServiceAccountFromB64(): ServiceAccount | null {
 
   try {
     const sa = JSON.parse(raw) as ServiceAccount;
-    if (sa.private_key) sa.private_key = normalizePrivateKey(sa.private_key);
+    if (sa.private_key) {
+      sa.private_key = normalizePrivateKey(sa.private_key);
+    }
     return sa;
   } catch (err: any) {
     throw new Error(`Failed to parse decoded FIREBASE_SERVICE_ACCOUNT_KEY_B64 JSON: ${err?.message || err}`);
   }
 }
 
-function loadServiceAccountFromLocalFile(): ServiceAccount | null {
-  const p = path.join(process.cwd(), '.secrets', 'firebase-service-account.json');
-  if (!fs.existsSync(p)) return null;
-
-  try {
-    const raw = fs.readFileSync(p, 'utf8');
-    const sa = JSON.parse(raw) as ServiceAccount;
-    if (sa.private_key) sa.private_key = normalizePrivateKey(sa.private_key);
-    return sa;
-  } catch (err: any) {
-    throw new Error(`Failed to read/parse ${p}. Is it valid JSON? ${err?.message || err}`);
-  }
-}
-
-function getServiceAccount(): ServiceAccount {
-  const fromB64 = loadServiceAccountFromB64();
-  if (fromB64) return fromB64;
-
-  const fromFile = loadServiceAccountFromLocalFile();
-  if (fromFile) return fromFile;
-
-  throw new Error(
-    'CRITICAL: Missing FIREBASE_SERVICE_ACCOUNT_KEY_B64. ' +
-      'For production: add it as an App Hosting secret. ' +
-      'For dev: create .secrets/firebase-service-account.json with a real Firebase Admin SDK key.'
-  );
-}
-
 function ensureAdminInitialized() {
-  if (getApps().length) return;
+  if (getApps().length > 0) {
+    return;
+  }
 
   const serviceAccount = getServiceAccount();
 
-  if (!serviceAccount.project_id) throw new Error('Firebase Admin service account missing project_id.');
-  if (!serviceAccount.client_email) throw new Error('Firebase Admin service account missing client_email.');
-  if (!serviceAccount.private_key) throw new Error('Firebase Admin service account missing private_key.');
-
-  // IMPORTANT: Use a SERVER env var, not NEXT_PUBLIC_*
-  const bucketName = (process.env.FIREBASE_STORAGE_BUCKET || '')
-    .replace('gs://', '')
-    .trim();
-
-  if (!bucketName) {
-    throw new Error(
-      'CRITICAL: Missing FIREBASE_STORAGE_BUCKET. ' +
-        'Set FIREBASE_STORAGE_BUCKET to: studio-7576922301-bac28.firebasestorage.app'
-    );
+  if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
+    throw new Error('Firebase Admin service account is missing required fields (project_id, client_email, private_key).');
   }
+
+  const bucketName = process.env.FIREBASE_STORAGE_BUCKET || 'studio-7576922301-bac28.firebasestorage.app';
 
   initializeApp({
     credential: cert(serviceAccount as any),
