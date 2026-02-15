@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -35,7 +36,7 @@ export function Hero() {
           </ul>
            <div className="pt-4">
               <Button asChild size="lg" className="h-12 text-lg">
-                <Link href="/early-access">Join Free Early Access</Link>
+                <Link href="/signup">Start My Free Ledger</Link>
               </Button>
               <p className="text-sm text-muted-foreground mt-2">6 months free • No credit card required • Read-only bank access</p>
           </div>
