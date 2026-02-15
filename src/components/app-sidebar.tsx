@@ -136,6 +136,12 @@ const data = {
       icon: DollarSign,
       advanced: false,
     },
+     {
+      title: "Data Seeding",
+      url: "/admin/seeding",
+      icon: Database,
+      advanced: false,
+    },
     {
       title: "System Health",
       url: "/admin/health",
@@ -146,12 +152,6 @@ const data = {
 
   // Zone 3: System
   system: [
-    {
-      title: "Data Seeding",
-      url: "/admin/seeding",
-      icon: Database,
-      advanced: false,
-    },
     {
       title: "Settings",
       url: "/dashboard/settings",

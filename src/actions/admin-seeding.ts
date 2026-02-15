@@ -1,7 +1,7 @@
+
 'use server';
 
-import { getAdminDb } from '@/lib/firebaseAdmin';
-import { getAuth } from 'firebase-admin/auth';
+import { getAdminDb, getAuth } from '@/lib/firebase-admin-utils';
 import { isSuperAdmin } from '@/lib/auth-utils';
 import { faker } from '@faker-js/faker';
 import { v4 as uuidv4 } from 'uuid';
@@ -9,38 +9,52 @@ import { v4 as uuidv4 } from 'uuid';
 const TARGET_USER_EMAIL = 'sampledata@example.com';
 
 async function deleteExistingData(userId: string, db: FirebaseFirestore.Firestore) {
-    console.log(`Deleting existing data for user ${userId}...`);
-    const collectionsToDelete = ['properties', 'vendors', 'invoices', 'bills', 'tenantProfiles', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
+    console.log(`[SEEDER] Deleting data for user: ${userId}`);
     const batch = db.batch();
+    let deleteCount = 0;
 
+    // --- Top-level collections ---
+    const collectionsToDelete = ['properties', 'vendors', 'invoices', 'bills'];
     for (const collectionName of collectionsToDelete) {
         const snapshot = await db.collection(collectionName).where('userId', '==', userId).get();
         if (!snapshot.empty) {
-            console.log(`- Deleting ${snapshot.size} documents from ${collectionName}`);
-            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            console.log(`[SEEDER] Found ${snapshot.size} docs in ${collectionName} to delete.`);
+            snapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+                deleteCount++;
+            });
         }
     }
-    
-    // Deleting user subcollections
-    const userSubcollections = ['bankAccounts', 'categoryMappings', 'admin_invoices', 'charges', 'settings', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
-     for (const collectionName of userSubcollections) {
-        const snapshot = await db.collection('users').doc(userId).collection(collectionName).get();
+
+    // --- User subcollections ---
+    const userSubcollections = ['bankAccounts', 'categoryMappings', 'admin_invoices', 'charges', 'settings', 'opsThreads', 'opsTasks', 'opsWorkOrders', 'tenantProfiles'];
+    for (const subCollection of userSubcollections) {
+        const snapshot = await db.collection('users').doc(userId).collection(subCollection).get();
         if (!snapshot.empty) {
-            console.log(`- Deleting ${snapshot.size} documents from users/${userId}/${collectionName}`);
-            snapshot.docs.forEach(doc => batch.delete(doc.ref));
+            console.log(`[SEEDER] Found ${snapshot.size} docs in users/${userId}/${subCollection} to delete.`);
+            snapshot.docs.forEach(doc => {
+                batch.delete(doc.ref);
+                deleteCount++;
+            });
         }
     }
     
-    await batch.commit();
-    console.log('Existing data cleared.');
+    if (deleteCount > 0) {
+        console.log(`[SEEDER] Committing batch to delete ${deleteCount} documents.`);
+        await batch.commit();
+        console.log(`[SEEDER] Deletion complete.`);
+    } else {
+        console.log(`[SEEDER] No existing data found to delete.`);
+    }
 }
 
+
 export async function seedSampleData(currentUserId: string) {
-    // 1. Authorize - Temporarily removed for testing
-    // const isAdmin = await isSuperAdmin(currentUserId);
-    // if (!isAdmin) {
-    //     throw new Error('Permission Denied: You must be an admin to perform this action.');
-    // }
+    // 1. Authorize
+    const isAdmin = await isSuperAdmin(currentUserId);
+    if (!isAdmin) {
+        throw new Error('Permission Denied: You must be an admin to perform this action.');
+    }
 
     const adminAuth = getAuth();
     const db = getAdminDb();
@@ -61,7 +75,7 @@ export async function seedSampleData(currentUserId: string) {
     await deleteExistingData(userId, db);
 
     const batch = db.batch();
-
+    console.log('[SEEDER] Preparing to commit creation batch...');
     // 4. Create/Update User Document
     const userRef = db.collection('users').doc(userId);
     batch.set(userRef, {
@@ -173,9 +187,9 @@ export async function seedSampleData(currentUserId: string) {
     createTx(checkingAccountId, 'City of Austin Utilities', -150, '2024-02-25', mfhId, {l0: 'OPERATING EXPENSE', l1: 'Property Operations (Rentals)', l2: 'Line 17: Utilities', l3: 'Downtown Apts - Common Area'});
     createTx(checkingAccountId, 'Home Depot', -250.78, '2024-02-20', sfhId, {l0: 'OPERATING EXPENSE', l1: 'Repairs', l2: 'Line 14: Repairs', l3: 'Plumbing parts'});
     createTx(checkingAccountId, 'AT&T Internet', -80, '2024-02-18', mfhId, {l0: 'OPERATING EXPENSE', l1: 'Property Operations (Rentals)', l2: 'Line 17: Utilities', l3: 'Common Area Internet'});
-    createTx(creditCardAccountId, 'Amazon - Supplies', -75.50, '', {l0: 'OPERATING EXPENSE', l1: 'Office & Administrative (Business)', l2: 'Schedule C, Line 22 — Supplies', l3: 'Office Supplies'});
-    createTx(creditCardAccountId, 'HEB Grocery', -124.30, '', {l0: 'EQUITY', l1: 'Owner / Shareholder Equity', l2: 'Owner Distributions', l3: 'Personal Groceries'});
-    createTx(checkingAccountId, 'Online Payment to Amex', -500, '', {l0: 'ASSET', l1: 'Cash Movement', l2: 'Internal Transfer', l3: 'Credit Card Payment'});
+    createTx(creditCardAccountId, 'Amazon - Supplies', -75.50, '2024-02-15', '', {l0: 'OPERATING EXPENSE', l1: 'Office & Administrative (Business)', l2: 'Schedule C, Line 22 — Supplies', l3: 'Office Supplies'});
+    createTx(creditCardAccountId, 'HEB Grocery', -124.30, '2024-02-14', '', {l0: 'EQUITY', l1: 'Owner / Shareholder Equity', l2: 'Owner Distributions', l3: 'Personal Groceries'});
+    createTx(checkingAccountId, 'Online Payment to Amex', -500, '2024-02-28', '', {l0: 'ASSET', l1: 'Cash Movement', l2: 'Internal Transfer', l3: 'Credit Card Payment'});
   
     // --- 8. Create Operations Center Data ---
     const workOrderId1 = uuidv4();
@@ -263,6 +277,7 @@ export async function seedSampleData(currentUserId: string) {
 
     // --- 9. Commit the batch ---
     await batch.commit();
+    console.log('[SEEDER] Creation batch committed successfully.');
 
     return { success: true, message: `Successfully seeded data for ${TARGET_USER_EMAIL}.` };
 }

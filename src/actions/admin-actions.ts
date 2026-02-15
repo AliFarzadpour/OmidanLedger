@@ -2,8 +2,64 @@
 'use server';
 
 import { getAdminDb } from '@/lib/firebaseAdmin';
+import { getAuth } from 'firebase-admin/auth';
+import { isSuperAdmin } from '@/lib/auth-utils';
 
 const db = getAdminDb();
+const auth = getAuth();
+
+/**
+ * Fetches all users from Firebase Auth and merges their role from Firestore.
+ * This is an admin-only action.
+ */
+export async function getAllUsers(currentUserId: string) {
+    if (!await isSuperAdmin(currentUserId)) {
+        throw new Error("Permission Denied: You must be an admin to access user data.");
+    }
+
+    try {
+        const listUsersResult = await auth.listUsers(1000);
+        const users = listUsersResult.users;
+
+        const userRoles = await Promise.all(users.map(async (user) => {
+            const userDoc = await db.collection('users').doc(user.uid).get();
+            const role = userDoc.exists ? userDoc.data()?.role : 'user';
+            return {
+                uid: user.uid,
+                email: user.email,
+                displayName: user.displayName,
+                role: role,
+                disabled: user.disabled,
+                lastSignInTime: user.metadata.lastSignInTime,
+            };
+        }));
+
+        return userRoles;
+    } catch (error: any) {
+        console.error("Error fetching users:", error);
+        throw new Error("Could not fetch user list.");
+    }
+}
+
+/**
+ * Sets the role for a specific user in Firestore.
+ * This is an admin-only action.
+ */
+export async function setUserRole(currentUserId: string, targetUserId: string, role: string) {
+     if (!await isSuperAdmin(currentUserId)) {
+        throw new Error("Permission Denied: You must be an admin to change roles.");
+    }
+
+    try {
+        const userRef = db.collection('users').doc(targetUserId);
+        await userRef.set({ role: role }, { merge: true });
+        return { success: true };
+    } catch (error: any) {
+        console.error("Error setting user role:", error);
+        throw new Error("Could not update user role.");
+    }
+}
+
 
 export async function refreshGlobalSystemStats() {
   // Use the verified admin pattern

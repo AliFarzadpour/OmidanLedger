@@ -4,7 +4,6 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "db:seed-and-dev": "npm run db:seed && npm run dev",
     "genkit:dev": "genkit start --tsx src/ai/dev.ts",
     "genkit:watch": "genkit start --tsx --watch src/ai/dev.ts",
     "build": "NODE_ENV=production next build",
