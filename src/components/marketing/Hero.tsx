@@ -1,4 +1,3 @@
-
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -15,10 +14,10 @@ export function Hero() {
               OmidanLedger is an automated bookkeeping and financial dashboard application designed for real estate investors and landlords. It helps users track rental income, manage property expenses, and generate financial reports to understand portfolio performance.
             </span>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tighter text-slate-900">
-            See Your Rental Cash Flow in Real Time — Without Spreadsheets
+            Your Schedule E, Automated. Start Your Free Ledger.
           </h1>
           <p className="text-lg md:text-xl text-slate-600">
-            OmidanLedger automatically organizes your rental income and expenses, shows property and portfolio performance, and generates tax-ready reports — all from your bank connections.
+            Tax season is coming. Don't spend it digging through receipts. OmidanLedger organizes your rental income and expenses automatically.
           </p>
           <ul className="space-y-3 text-md text-slate-700 inline-block text-left">
             <li className="flex items-center gap-2">
