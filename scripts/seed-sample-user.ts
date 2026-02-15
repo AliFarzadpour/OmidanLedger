@@ -29,13 +29,8 @@ function initializeAdminApp() {
   }
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
-
-// --- DATA GENERATION ---
-
 // Function to delete all data for a specific user
-async function deleteExistingData(userId: string) {
+async function deleteExistingData(userId: string, db: admin.firestore.Firestore) {
     console.log(`Deleting existing data for user ${userId}...`);
     const collectionsToDelete = ['properties', 'vendors', 'invoices', 'bills', 'tenantProfiles', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
     const batch = db.batch();
@@ -66,6 +61,9 @@ async function runSeeder() {
   console.log(`--- Starting Sample Data Seeder for ${TARGET_USER_EMAIL} ---`);
   initializeAdminApp();
 
+  const db = admin.firestore();
+  const auth = admin.auth();
+
   // 1. Find the user by email
   let userRecord;
   try {
@@ -83,7 +81,7 @@ async function runSeeder() {
   console.log(`Found user: ${userId}`);
   
   // 2. Clear any pre-existing data for this user to ensure a clean slate
-  await deleteExistingData(userId);
+  await deleteExistingData(userId, db);
 
   const batch = db.batch();
 
