@@ -39,7 +39,7 @@ const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 const uuid_1 = require("uuid");
 // --- CONFIGURATION ---
-const TARGET_USER_EMAIL = 'SampleData@Example.com';
+const TARGET_USER_EMAIL = 'sampledata@example.com';
 // 1. Initialize Firebase Admin SDK
 function initializeAdminApp() {
     const serviceAccountPath = path.join(process.cwd(), 'service-account.json');
@@ -61,11 +61,8 @@ function initializeAdminApp() {
         process.exit(1);
     }
 }
-const db = admin.firestore();
-const auth = admin.auth();
-// --- DATA GENERATION ---
 // Function to delete all data for a specific user
-async function deleteExistingData(userId) {
+async function deleteExistingData(userId, db) {
     console.log(`Deleting existing data for user ${userId}...`);
     const collectionsToDelete = ['properties', 'vendors', 'invoices', 'bills', 'tenantProfiles', 'opsThreads', 'opsTasks', 'opsWorkOrders'];
     const batch = db.batch();
@@ -91,6 +88,8 @@ async function deleteExistingData(userId) {
 async function runSeeder() {
     console.log(`--- Starting Sample Data Seeder for ${TARGET_USER_EMAIL} ---`);
     initializeAdminApp();
+    const db = admin.firestore();
+    const auth = admin.auth();
     // 1. Find the user by email
     let userRecord;
     try {
@@ -107,7 +106,7 @@ async function runSeeder() {
     const userId = userRecord.uid;
     console.log(`Found user: ${userId}`);
     // 2. Clear any pre-existing data for this user to ensure a clean slate
-    await deleteExistingData(userId);
+    await deleteExistingData(userId, db);
     const batch = db.batch();
     // 3. Create/Update User Document
     const userRef = db.collection('users').doc(userId);
