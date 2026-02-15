@@ -7,7 +7,7 @@ import { faker } from '@faker-js/faker';
 import { v4 as uuidv4 } from 'uuid';
 
 // --- CONFIGURATION ---
-const TARGET_USER_EMAIL = 'SampleData@Example.com';
+const TARGET_USER_EMAIL = 'sampledata@example.com';
 
 // 1. Initialize Firebase Admin SDK
 function initializeAdminApp() {
