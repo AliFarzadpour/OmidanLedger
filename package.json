@@ -12,6 +12,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:seed": "tsc --project tsconfig.scripts.json && node dist/seedGlobalRules.js",
+    "db:seed-sample": "tsc --project tsconfig.scripts.json && node dist/seed-sample-user.js",
     "db:migrate-user-rules": "tsc --project tsconfig.scripts.json && node dist/migrate-account-data.js",
     "db:migrate": "tsc --project tsconfig.scripts.json && node dist/normalize_l0_to_six_set.js",
     "db:analyze": "tsc --project tsconfig.scripts.json && node dist/analyze-categories.js"
@@ -64,6 +65,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "@faker-js/faker": "^8.4.1",
     "@tailwindcss/typography": "^0.5.14",
     "@types/jspdf": "^2.0.0",
     "@types/marked": "^6.0.0",

@@ -11,6 +11,6 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["scripts/**/*.ts", "scripts/**/*.js"],
+  "include": ["scripts/**/*.ts"],
   "exclude": ["node_modules"]
 }
