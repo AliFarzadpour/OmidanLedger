@@ -20,6 +20,7 @@ import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 const HERO_AI_VIDEO_URL =
   "https://firebasestorage.googleapis.com/v0/b/studio-7576922301-bac28.firebasestorage.app/o/logos%2FVideo_Generation_for_Fintech_AI.mp4?alt=media&token=7ff46a59-69ff-421f-b6b3-c27b815dbb03";
@@ -164,9 +165,9 @@ export default function MarketingHomePage() {
               <div className="flex flex-wrap gap-2">
                 {[
                   "What was my total income last month?",
-                  "What tax reports do I get for Schedule E?",
                   "Can it handle multiple properties and LLCs?",
                   "Can I export reports for my CPA?",
+                  "What tax reports do I get for Schedule E?",
                 ].map((q) => (
                   <button
                     key={q}
@@ -283,6 +284,12 @@ export default function MarketingHomePage() {
         <FinalCTA />
       </main>
       <Footer />
+       {/* Mobile Sticky Footer */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm p-4 border-t z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+          <Button asChild size="lg" className="w-full h-12 text-lg">
+              <Link href="/signup">Start My Free Ledger</Link>
+          </Button>
+      </div>
     </div>
   );
 }

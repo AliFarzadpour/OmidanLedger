@@ -42,7 +42,7 @@ export function Pricing() {
                 </li>
               </ul>
               <Button asChild size="lg" className="w-full text-lg h-12">
-                <Link href="/signup">Claim Your Free 6 Months</Link>
+                <Link href="/signup">Start My Free Ledger</Link>
               </Button>
             </CardContent>
           </Card>

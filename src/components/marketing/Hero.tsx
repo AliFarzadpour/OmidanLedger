@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, ShieldCheck } from 'lucide-react';
 import Link from 'next/link';
 
 export function Hero() {
@@ -38,6 +38,10 @@ export function Hero() {
                 <Link href="/signup">Start My Free Ledger</Link>
               </Button>
               <p className="text-sm text-muted-foreground mt-2">6 months free • No credit card required • Read-only bank access</p>
+              <div className="mt-4 flex items-center justify-center gap-2 text-sm text-slate-500">
+                <ShieldCheck className="h-4 w-4 text-green-600" />
+                <span>Bank-level security. Read-only access.</span>
+              </div>
           </div>
         </div>
       </div>
