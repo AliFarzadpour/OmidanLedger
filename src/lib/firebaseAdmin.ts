@@ -1,7 +1,9 @@
 
-import 'server-only';
+'use server-only';
 
+import admin from 'firebase-admin';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import fs from 'node:fs';
@@ -96,6 +98,11 @@ function ensureAdminInitialized() {
 export function getAdminDb() {
   ensureAdminInitialized();
   return getFirestore();
+}
+
+export function getAdminAuth() {
+  ensureAdminInitialized();
+  return getAuth();
 }
 
 export function getAdminStorage() {

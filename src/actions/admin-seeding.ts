@@ -1,7 +1,7 @@
 
 'use server';
 
-import { getAdminDb, getAuth } from '@/lib/firebase-admin-utils';
+import { getAdminDb, getAdminAuth } from '@/lib/firebaseAdmin';
 import { isSuperAdmin } from '@/lib/auth-utils';
 import { faker } from '@faker-js/faker';
 import { v4 as uuidv4 } from 'uuid';
@@ -56,7 +56,7 @@ export async function seedSampleData(currentUserId: string) {
         throw new Error('Permission Denied: You must be an admin to perform this action.');
     }
 
-    const adminAuth = getAuth();
+    const adminAuth = getAdminAuth();
     const db = getAdminDb();
 
     // 2. Find user
@@ -187,7 +187,7 @@ export async function seedSampleData(currentUserId: string) {
     createTx(checkingAccountId, 'City of Austin Utilities', -150, '2024-02-25', mfhId, {l0: 'OPERATING EXPENSE', l1: 'Property Operations (Rentals)', l2: 'Line 17: Utilities', l3: 'Downtown Apts - Common Area'});
     createTx(checkingAccountId, 'Home Depot', -250.78, '2024-02-20', sfhId, {l0: 'OPERATING EXPENSE', l1: 'Repairs', l2: 'Line 14: Repairs', l3: 'Plumbing parts'});
     createTx(checkingAccountId, 'AT&T Internet', -80, '2024-02-18', mfhId, {l0: 'OPERATING EXPENSE', l1: 'Property Operations (Rentals)', l2: 'Line 17: Utilities', l3: 'Common Area Internet'});
-    createTx(creditCardAccountId, 'Amazon - Supplies', -75.50, '2024-02-15', '', {l0: 'OPERATING EXPENSE', l1: 'Office & Administrative (Business)', l2: 'Schedule C, Line 22 — Supplies', l3: 'Office Supplies'});
+    createTx(creditCardAccountId, 'Amazon - Supplies', -75.50, '', {l0: 'OPERATING EXPENSE', l1: 'Office & Administrative (Business)', l2: 'Schedule C, Line 22 — Supplies', l3: 'Office Supplies'});
     createTx(creditCardAccountId, 'HEB Grocery', -124.30, '2024-02-14', '', {l0: 'EQUITY', l1: 'Owner / Shareholder Equity', l2: 'Owner Distributions', l3: 'Personal Groceries'});
     createTx(checkingAccountId, 'Online Payment to Amex', -500, '2024-02-28', '', {l0: 'ASSET', l1: 'Cash Movement', l2: 'Internal Transfer', l3: 'Credit Card Payment'});
   

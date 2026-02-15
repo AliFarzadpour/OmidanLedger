@@ -1,11 +1,8 @@
 
 'use server';
 
-import { getAdminDb, getAdminAuth } from '@/lib/firebase-admin-utils';
+import { getAdminDb, getAdminAuth } from '@/lib/firebaseAdmin';
 import { isSuperAdmin } from '@/lib/auth-utils';
-
-const db = getAdminDb();
-const auth = getAdminAuth();
 
 /**
  * Fetches all users from Firebase Auth and merges their role from Firestore.
@@ -17,6 +14,8 @@ export async function getAllUsers(currentUserId: string) {
     }
 
     try {
+        const auth = getAdminAuth();
+        const db = getAdminDb();
         const listUsersResult = await auth.listUsers(1000);
         const users = listUsersResult.users;
 
@@ -50,6 +49,7 @@ export async function setUserRole(currentUserId: string, targetUserId: string, r
     }
 
     try {
+        const db = getAdminDb();
         const userRef = db.collection('users').doc(targetUserId);
         await userRef.set({ role: role }, { merge: true });
         return { success: true };
@@ -61,13 +61,12 @@ export async function setUserRole(currentUserId: string, targetUserId: string, r
 
 
 export async function refreshGlobalSystemStats() {
-  // Use the verified admin pattern
+  const db = getAdminDb();
   if (!db) {
     throw new Error("Could not initialize Firebase Admin Database");
   }
 
   try {
-    // This function can now safely access collections like 'users' and 'properties'
     const usersSnapshot = await db.collection('users').get();
     const propertiesSnapshot = await db.collection('properties').get();
     
